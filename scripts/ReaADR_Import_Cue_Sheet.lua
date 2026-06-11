@@ -1,4 +1,4 @@
--- Import an ADR cue sheet and set up tracks, cue start markers, and regions.
+-- Import an ADR cue sheet and set up tracks, cue regions, and overlays.
 
 local function script_dir()
   local info = debug.getinfo(1, "S").source
@@ -36,21 +36,20 @@ if not summary then
   return
 end
 
+ReaADR.show_video_window()
+
 ReaADR.message(
-  ("Imported %d cue(s) for %d character(s).\n\nTracks: %d created, %d reused\nRegions: %d created, %d updated\nCue markers: %d created, %d updated\nCue audio: %d created, %d updated, %d skipped\nVideo overlays: %d created, %d updated, %d skipped"):format(
+  ("Imported %d cue(s) for %d character(s).\n\nPlace the picture on the ADR Source Video track. ReaADR Video Overlay was installed/updated as a Video Processor FX on that track.\n\nTracks: %d created, %d reused\nRegions: %d created, %d updated\nOld cue markers removed: %d\nCue audio: %d created, %d updated, %d skipped\nVideo overlay FX: %s"):format(
     summary.cue_count,
     summary.character_count,
     summary.tracks_created,
     summary.tracks_reused,
     summary.regions_created,
     summary.regions_updated,
-    summary.markers_created,
-    summary.markers_updated,
+    summary.markers_removed,
     summary.cue_audio_created,
     summary.cue_audio_updated,
     summary.cue_audio_skipped,
-    summary.overlays_created,
-    summary.overlays_updated,
-    summary.overlays_skipped
+    summary.overlay_fx_status
   )
 )

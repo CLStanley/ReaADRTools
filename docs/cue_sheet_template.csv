@@ -1,3 +1,3 @@
-cue_id,character,start,end,line,notes
-001,Alex,00:01:12:00,00:01:15:10,"We need to move now.","Urgent delivery"
-002,Sam,00:01:18.500,00:01:21.000,"Copy that.",""
+cue_id,character,start,end,line,direction,cue_type,notes
+001,Alex,00:01:12:00,00:01:15:10,"We need to move now.","Strong","Dialogue","Urgent delivery"
+002,Sam,00:01:18.500,00:01:21.000,"Copy that.","Whisper","Reaction",""
