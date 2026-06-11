@@ -27,14 +27,21 @@ if not cues then
   return
 end
 
+local progress = ReaADR.create_progress_window("Importing ADR Cue Sheet")
 local summary, setup_error = ReaADR.setup_project(cues, {
   cue_audio_path = cue_audio_path,
   overlay_settings = overlay_settings,
+  on_progress = progress.update,
 })
+
 if not summary then
-  ReaADR.message("Project setup failed:\n\n" .. tostring(setup_error))
+  progress.update("Import failed.", 1, 1)
+  progress.close()
+  ReaADR.message("Cue sheet import failed while populating the project:\n\n" .. tostring(setup_error))
   return
 end
+
+progress.close()
 
 ReaADR.show_video_window()
 

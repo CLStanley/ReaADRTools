@@ -1,2 +1,5 @@
 *.reapeaks
 assets/peaks/
+build/
+dist/
+vendor/

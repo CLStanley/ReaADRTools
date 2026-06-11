@@ -10,6 +10,12 @@ local base_dir = script_dir()
 
 local actions = {
   { label = "Import Cue Sheet", script = "ReaADR_Import_Cue_Sheet.lua" },
+  { label = "Export Cue Sheet", script = "ReaADR_Export_Cue_Sheet.lua" },
+  { label = "Next Cue", script = "ReaADR_Next_Cue.lua" },
+  { label = "Previous Cue", script = "ReaADR_Previous_Cue.lua" },
+  { label = "Jump To Cue", script = "ReaADR_Jump_To_Cue.lua" },
+  { label = "Generate Cues from Markers/Regions", script = "ReaADR_Generate_Cues.lua" },
+  { label = "Clean Generated Cue Items", script = "ReaADR_Clean_Generated_Cues.lua" },
   { label = "Overlay Settings", script = "ReaADR_Overlay_Settings.lua" },
 }
 

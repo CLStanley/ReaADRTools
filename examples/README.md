@@ -3,9 +3,10 @@
 Initial workflow:
 
 1. Open REAPER.
-2. Run `scripts/ReaADR_Menu.lua` as a ReaScript.
+2. Open the top-level `ReaADR Tools` menu.
 3. Choose `Overlay Settings` to configure which video overlays should be
-   generated, or choose `Import Cue Sheet` to import cues.
+   generated, choose `Import Cue Sheet` to import cues, or choose a
+   marker/region action for existing projects.
 4. Select a CSV matching `docs/cue_sheet_template.csv` when importing.
 5. Place the picture on `ADR Source Video`. The importer installs the ReaADR
    overlay as a Video Processor FX on that track.
@@ -37,13 +38,45 @@ After a cue sheet has been imported once, saving `Overlay Settings` refreshes
 only the `ReaADR Video Overlay` FX from cached cue data. The CSV does not need
 to be selected again unless cue content or timings change.
 
-Menu integration:
+Actions:
 
-1. In REAPER, open `Actions > Show action list`.
-2. Add `scripts/ReaADR_Menu.lua` as a ReaScript if it is not already listed.
-3. Open `Options > Customize menus/toolbars`.
-4. Choose the target menu, such as `Main file` or `Main extensions`.
-5. Add the action `Custom: ReaADR_Menu.lua` and name it `ReaADR`.
+- `Import Cue Sheet`: imports CSV cue sheets and populates the ADR project.
+- `Export Cue Sheet`: exports cached ReaADR cues or project markers/regions to
+  CSV for script writing, planning, or later re-import.
+- `Generate Cues from Markers/Regions`: scans existing project markers and
+  regions and generates cue aids from their start points.
+- `Clean Generated Cue Items`: removes generated cue audio items without
+  deleting user recordings or regions.
+- `Overlay Settings`: configures and refreshes the video overlay.
 
-That menu entry opens the ReaADR launcher with `Import Cue Sheet` and
-`Overlay Settings`.
+## Export Cue Sheet
+
+`Export Cue Sheet` is designed for users who want to spot cues inside REAPER
+first, then finish the script in a spreadsheet or text workflow.
+
+The exported CSV always includes these columns:
+
+```text
+cue_id,character,start,end,line,direction,cue_type,notes
+```
+
+Blank columns are allowed. A user can create only timed markers/regions in
+REAPER, export the CSV, fill in dialogue/direction/type/notes later, and then
+re-import the CSV with `Import Cue Sheet`.
+
+When exporting from existing ReaADR cue data, the saved ReaADR cue fields are
+used directly. When exporting from ordinary project markers or regions, the
+marker/region name is interpreted flexibly:
+
+- `AOI` exports as character `AOI` with blank dialogue.
+- `AOI: Fight them all off?` exports as character `AOI` and dialogue
+  `Fight them all off?`.
+- `AOI - Fight them all off?` exports the same way.
+- Empty marker/region names export with blank character and dialogue.
+
+This keeps quick spotting lightweight: name a region with just the character if
+that is all you know, or add `Character: Dialogue` when the line is already
+known.
+
+Menu integration is handled by the native extension. The bundled ReaScripts can
+still be run directly from the REAPER Action List if preferred.
