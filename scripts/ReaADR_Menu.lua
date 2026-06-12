@@ -14,6 +14,8 @@ local actions = {
   { label = "Next Cue", script = "ReaADR_Next_Cue.lua" },
   { label = "Previous Cue", script = "ReaADR_Previous_Cue.lua" },
   { label = "Jump To Cue", script = "ReaADR_Jump_To_Cue.lua" },
+  { label = "Set Cue Status", script = "ReaADR_Set_Cue_Status.lua" },
+  { label = "Character Filter", script = "ReaADR_Character_Filter.lua" },
   { label = "Generate Cues from Markers/Regions", script = "ReaADR_Generate_Cues.lua" },
   { label = "Clean Generated Cue Items", script = "ReaADR_Clean_Generated_Cues.lua" },
   { label = "Overlay Settings", script = "ReaADR_Overlay_Settings.lua" },

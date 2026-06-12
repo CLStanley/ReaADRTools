@@ -29,6 +29,14 @@ ReaADR.DEFAULT_OVERLAY_SETTINGS = {
 local ROLE_COLORS = {
   cues = { 235, 198, 80 },
   source_video = { 93, 173, 226 },
+  inactive = { 85, 85, 85 },
+}
+
+local STATUS_COLORS = {
+  ["not recorded"] = { 120, 120, 120 },
+  ["recorded"] = { 0, 174, 239 },
+  ["approved"] = { 0, 210, 90 },
+  ["needs retake"] = { 255, 0, 0 },
 }
 
 local CHARACTER_COLORS = {
@@ -55,8 +63,9 @@ end
 
 local function normalize_header(value)
   value = trim(value):lower()
-  value = value:gsub("^%s+", ""):gsub("%s+$", "")
-  value = value:gsub("[%s%-]+", "_")
+  value = value:gsub("[^%w]+", "_")
+  value = value:gsub("_+", "_")
+  value = value:gsub("^_+", ""):gsub("_+$", "")
   return value
 end
 
@@ -70,6 +79,35 @@ local function first_nonempty(...)
   return ""
 end
 
+local function header_has_any(headers, aliases)
+  local present = {}
+  for _, header in ipairs(headers or {}) do
+    present[header] = true
+  end
+  for _, alias in ipairs(aliases or {}) do
+    if present[alias] then
+      return true
+    end
+  end
+  return false
+end
+
+local function missing_required_csv_columns(headers)
+  local required = {
+    { label = "cue_id", aliases = { "cue_id", "cue_number", "cue_num", "cue_no", "cue", "id", "number" } },
+    { label = "character", aliases = { "character", "char", "actor", "speaker", "performer", "talent" } },
+    { label = "start", aliases = { "start", "start_time", "timecode", "tc", "in_time", "in" } },
+    { label = "end", aliases = { "end", "end_time", "out_time", "out" } },
+  }
+  local missing = {}
+  for _, spec in ipairs(required) do
+    if not header_has_any(headers, spec.aliases) then
+      missing[#missing + 1] = spec.label .. " (" .. table.concat(spec.aliases, ", ") .. ")"
+    end
+  end
+  return missing
+end
+
 local function native_color(rgb)
   return reaper.ColorToNative(rgb[1], rgb[2], rgb[3]) + 0x1000000
 end
@@ -81,6 +119,40 @@ local function character_color(character)
     hash = hash + string.byte(character, i)
   end
   return native_color(CHARACTER_COLORS[(hash % #CHARACTER_COLORS) + 1])
+end
+
+local function normalize_status(status)
+  status = trim(status)
+  if status == "" then
+    return "Not Recorded"
+  end
+  local lowered = status:lower():gsub("[%s_%-]+", " ")
+  if lowered == "not recorded" or lowered == "notrecorded" or lowered == "pending" then
+    return "Not Recorded"
+  end
+  if lowered == "recorded" then
+    return "Recorded"
+  end
+  if lowered == "approved" then
+    return "Approved"
+  end
+  if lowered == "needs retake" or lowered == "retake" or lowered == "needsretake" then
+    return "Needs Retake"
+  end
+  return status
+end
+
+local function status_color(status, fallback)
+  local normalized = normalize_status(status):lower()
+  local rgb = STATUS_COLORS[normalized]
+  if rgb then
+    return native_color(rgb)
+  end
+  return fallback
+end
+
+local function status_rgb(status)
+  return STATUS_COLORS[normalize_status(status):lower()] or STATUS_COLORS["not recorded"]
 end
 
 local function format_timecode(seconds, frame_rate)
@@ -166,6 +238,7 @@ local CUE_CACHE_FIELDS = {
   "direction",
   "cue_type",
   "source_line",
+  "status",
 }
 
 local function encode_cache_field(value)
@@ -315,6 +388,90 @@ function ReaADR.save_overlay_settings(settings)
   end
 end
 
+function ReaADR.configure_project_preroll(seconds)
+  seconds = math.max(0, tonumber(seconds) or ReaADR.DEFAULT_OVERLAY_SETTINGS.preroll_seconds)
+  local attempts = 0
+  local applied = 0
+
+  local function mark(result)
+    attempts = attempts + 1
+    if result ~= false and result ~= nil then
+      applied = applied + 1
+    end
+  end
+
+  local function set_config_string(name, value)
+    if type(reaper.set_config_var_string) ~= "function" then
+      return
+    end
+    local ok, result = pcall(reaper.set_config_var_string, name, tostring(value))
+    if ok then
+      mark(result)
+    else
+      attempts = attempts + 1
+    end
+  end
+
+  local function set_sws_double(name, value)
+    if type(reaper.SNM_SetDoubleConfigVar) ~= "function" then
+      return
+    end
+    local ok, result = pcall(reaper.SNM_SetDoubleConfigVar, name, value)
+    if ok then
+      mark(result)
+    else
+      attempts = attempts + 1
+    end
+  end
+
+  local function set_sws_int(name, value)
+    if type(reaper.SNM_SetIntConfigVar) ~= "function" then
+      return
+    end
+    local ok, result = pcall(reaper.SNM_SetIntConfigVar, name, value)
+    if ok then
+      mark(result)
+    else
+      attempts = attempts + 1
+    end
+  end
+
+  local seconds_text = ("%.6f"):format(seconds)
+
+  -- REAPER does not currently document pre-roll fields through GetSetProjectInfo.
+  -- These config variables are applied only when the host exposes them.
+  set_config_string("preroll", seconds_text)
+  set_sws_double("preroll", seconds)
+  set_config_string("prerollmeas", "0")
+  set_sws_int("prerollmeas", 0)
+
+  for _, key in ipairs({
+    "prerollplay",
+    "preroll_play",
+    "prerollplayback",
+    "preroll_playback",
+    "prerollrec",
+    "preroll_record",
+    "prerollrecord",
+    "preroll_recording",
+  }) do
+    set_config_string(key, "1")
+    set_sws_int(key, 1)
+  end
+
+  reaper.SetProjExtState(project(), ReaADR.EXT_NAMESPACE, "project_preroll_seconds", seconds_text)
+  if applied > 0 then
+    reaper.MarkProjectDirty(project())
+  end
+
+  return {
+    seconds = seconds,
+    attempts = attempts,
+    applied = applied,
+    status = applied > 0 and "configured" or "not_available",
+  }
+end
+
 function ReaADR.save_last_import_cues(cues)
   local lines = {}
   for _, cue in ipairs(cues or {}) do
@@ -357,6 +514,7 @@ function ReaADR.load_last_import_cues()
       cue.notes = cue.notes or ""
       cue.direction = cue.direction or ""
       cue.cue_type = cue.cue_type or ""
+      cue.status = normalize_status(cue.status)
       cues[#cues + 1] = cue
     end
   end
@@ -428,15 +586,19 @@ function ReaADR.parse_csv(path, frame_rate)
         for index, header in ipairs(fields) do
           headers[index] = normalize_header(header)
         end
+        local missing = missing_required_csv_columns(headers)
+        if #missing > 0 then
+          return nil, "Cue sheet is missing required column(s):\n\n" .. table.concat(missing, "\n")
+        end
       else
         local row = {}
         for index, header in ipairs(headers) do
           row[header] = trim(fields[index])
         end
 
-        local cue_id = first_nonempty(row.cue_id, row.id, row.cue, tostring(#cues + 1))
-        local character = first_nonempty(row.character, row.char, row.actor, "Unassigned")
-        local start_value = first_nonempty(row.start, row.start_time, row.in_time, row["in"])
+        local cue_id = first_nonempty(row.cue_id, row.cue_number, row.cue_num, row.cue_no, row.cue, row.id, row.number, tostring(#cues + 1))
+        local character = first_nonempty(row.character, row.char, row.actor, row.speaker, row.performer, row.talent, "Unassigned")
+        local start_value = first_nonempty(row.start, row.start_time, row.timecode, row.tc, row.in_time, row["in"])
         local end_value = first_nonempty(row["end"], row.end_time, row.out_time, row["out"])
         local cue_key = sanitize_token(cue_id)
         local start_seconds, start_error = ReaADR.parse_timecode(start_value, frame_rate)
@@ -465,10 +627,11 @@ function ReaADR.parse_csv(path, frame_rate)
           character = trim(character),
           start_time = start_seconds,
           end_time = end_seconds,
-          line = first_nonempty(row.line, row.dialogue, row.dialog, row.text),
+          line = first_nonempty(row.line, row.dialogue, row.dialog, row.text, row.script),
           notes = first_nonempty(row.notes, row.note),
           direction = first_nonempty(row.direction, row.performance_direction, row.perf_direction),
           cue_type = first_nonempty(row.cue_type, row.type, row.category),
+          status = normalize_status(first_nonempty(row.status, row.cue_status)),
           source_line = line_number,
         }
       end
@@ -505,6 +668,10 @@ local function set_track_color(track, color)
   if color then
     reaper.SetMediaTrackInfo_Value(track, "I_CUSTOMCOLOR", color)
   end
+end
+
+local function set_track_muted(track, muted)
+  reaper.SetMediaTrackInfo_Value(track, "B_MUTE", muted and 1 or 0)
 end
 
 local function get_track_name(track)
@@ -627,6 +794,162 @@ function ReaADR.cue_tag(cue)
   return ("%s:id=%s"):format(ReaADR.NAME_PREFIX, ReaADR.cue_key(cue))
 end
 
+function ReaADR.character_filter_key(character)
+  return sanitize_token(character):lower()
+end
+
+function ReaADR.encode_character_filter(characters)
+  local tokens = {}
+  for _, character in ipairs(characters or {}) do
+    local token = ReaADR.character_filter_key(character)
+    if token ~= "" then
+      tokens[#tokens + 1] = token
+    end
+  end
+  table.sort(tokens)
+  return table.concat(tokens, ",")
+end
+
+function ReaADR.active_character_filter()
+  local _, value = reaper.GetProjExtState(project(), ReaADR.EXT_NAMESPACE, "active_character_filter")
+  local active = {}
+  for token in tostring(value or ""):gmatch("([^,]+)") do
+    active[token] = true
+  end
+  return active, value
+end
+
+function ReaADR.set_active_character_filter(characters)
+  reaper.SetProjExtState(project(), ReaADR.EXT_NAMESPACE, "active_character_filter", ReaADR.encode_character_filter(characters))
+end
+
+function ReaADR.character_filter_hides_regions()
+  local _, value = reaper.GetProjExtState(project(), ReaADR.EXT_NAMESPACE, "character_filter_hide_regions")
+  return value == "1"
+end
+
+function ReaADR.set_character_filter_hides_regions(enabled)
+  reaper.SetProjExtState(project(), ReaADR.EXT_NAMESPACE, "character_filter_hide_regions", enabled and "1" or "0")
+end
+
+function ReaADR.character_filter_enabled()
+  local _, value = ReaADR.active_character_filter()
+  return value ~= nil and value ~= ""
+end
+
+function ReaADR.character_is_active(character)
+  local active, value = ReaADR.active_character_filter()
+  if value == nil or value == "" then
+    return true
+  end
+  return active[ReaADR.character_filter_key(character)] == true
+end
+
+function ReaADR.filter_cues_by_active_characters(cues)
+  if not ReaADR.character_filter_enabled() then
+    return cues or {}
+  end
+
+  local filtered = {}
+  for _, cue in ipairs(cues or {}) do
+    if ReaADR.character_is_active(cue.character) then
+      filtered[#filtered + 1] = cue
+    end
+  end
+  return filtered
+end
+
+function ReaADR.available_filter_characters()
+  local cues = ReaADR.load_last_import_cues()
+  if not cues then
+    cues = ReaADR.collect_project_marker_cues({
+      include_markers = true,
+      include_regions = true,
+      character = "",
+      cue_type = "",
+      flexible_export = true,
+    })
+  end
+  return ReaADR.collect_characters(cues or {})
+end
+
+function ReaADR.current_active_characters(characters)
+  characters = characters or ReaADR.available_filter_characters()
+  if not ReaADR.character_filter_enabled() then
+    local all = {}
+    for _, character in ipairs(characters) do
+      all[#all + 1] = character
+    end
+    return all
+  end
+
+  local active_characters = {}
+  for _, character in ipairs(characters) do
+    if ReaADR.character_is_active(character) then
+      active_characters[#active_characters + 1] = character
+    end
+  end
+  return active_characters
+end
+
+function ReaADR.apply_character_filter()
+  local cues = ReaADR.load_last_import_cues()
+  if not cues then
+    cues = ReaADR.collect_project_marker_cues({
+      include_markers = true,
+      include_regions = true,
+      character = "",
+      cue_type = "",
+      flexible_export = true,
+    })
+  end
+  cues = cues or {}
+
+  local muted_tracks = 0
+  local active_tracks = 0
+  local hidden_regions = 0
+  local visible_regions = 0
+  for i = 0, reaper.CountTracks(project()) - 1 do
+    local track = reaper.GetTrack(project(), i)
+    local role = track_ext(track, "ReaADR.role")
+    if role == "character" or role == "cue_character" then
+      local key = track_ext(track, "ReaADR.key")
+      local character_token = tostring(key or ""):match("^(.-)%.lane%d+$") or key
+      local active = not ReaADR.character_filter_enabled() or ReaADR.character_is_active(character_token)
+      set_track_muted(track, not active)
+      if active then
+        active_tracks = active_tracks + 1
+      else
+        muted_tracks = muted_tracks + 1
+      end
+    end
+  end
+
+  local hide_inactive_regions = ReaADR.character_filter_hides_regions()
+  for _, cue in ipairs(cues) do
+    local hide = hide_inactive_regions and not ReaADR.character_is_active(cue.character)
+    if ReaADR.set_region_hidden(cue, hide) then
+      if hide then
+        hidden_regions = hidden_regions + 1
+      else
+        visible_regions = visible_regions + 1
+      end
+    end
+  end
+
+  if hide_inactive_regions then
+    ReaADR.refresh_overlay_silent()
+  end
+  reaper.UpdateArrange()
+  return {
+    active_tracks = active_tracks,
+    muted_tracks = muted_tracks,
+    cue_count = #cues,
+    hidden_regions = hidden_regions,
+    visible_regions = visible_regions,
+  }
+end
+
 function ReaADR.region_name(cue)
   return ("%s ADR Cue %s - %s"):format(ReaADR.cue_tag(cue), cue.id, cue.character)
 end
@@ -715,6 +1038,37 @@ end
 
 local function ensure_region_with_index(index, cue, color)
   return upsert_project_marker_from_index(index, true, cue.start_time, cue.end_time, ReaADR.region_name(cue), color)
+end
+
+local function set_region_marker_value_by_name(region_name, parameter_name, value)
+  if not reaper.GetRegionOrMarker or not reaper.SetRegionOrMarkerInfo_Value then
+    return false
+  end
+
+  local existing = find_project_marker(region_name, true)
+  if not existing then
+    return false
+  end
+
+  local marker = reaper.GetRegionOrMarker(project(), existing.enum_index, "")
+  if not marker then
+    return false
+  end
+
+  local ok = pcall(reaper.SetRegionOrMarkerInfo_Value, project(), marker, parameter_name, tonumber(value) or 0)
+  return ok
+end
+
+local function set_region_lane_by_name(region_name, lane_number)
+  return set_region_marker_value_by_name(region_name, "I_LANENUMBER", lane_number)
+end
+
+function ReaADR.set_region_lane(cue, lane_number)
+  return set_region_lane_by_name(ReaADR.region_name(cue), lane_number)
+end
+
+function ReaADR.set_region_hidden(cue, hidden)
+  return set_region_marker_value_by_name(ReaADR.region_name(cue), "B_HIDDEN", hidden and 1 or 0)
 end
 
 function ReaADR.remove_start_markers()
@@ -897,6 +1251,7 @@ function ReaADR.collect_project_marker_cues(options)
         notes = "",
         direction = "",
         cue_type = cue_type,
+        status = "Not Recorded",
         source_line = i + 1,
       }
     end
@@ -964,7 +1319,23 @@ function ReaADR.jump_to_cue(cue)
     return false
   end
   reaper.SetEditCurPos(tonumber(cue.start_time) or 0, true, false)
+  ReaADR.set_active_overlay_cue(cue)
   return true
+end
+
+function ReaADR.active_overlay_cue_key()
+  return project_key_value(ReaADR.EXT_NAMESPACE, "active_overlay_cue_key")
+end
+
+function ReaADR.set_active_overlay_cue(cue)
+  local key = cue and ReaADR.cue_key(cue) or ""
+  reaper.SetProjExtState(project(), ReaADR.EXT_NAMESPACE, "active_overlay_cue_key", key)
+end
+
+function ReaADR.refresh_overlay_silent()
+  if ReaADR.refresh_overlay_fx_from_project then
+    pcall(ReaADR.refresh_overlay_fx_from_project)
+  end
 end
 
 function ReaADR.find_next_cue(cues, position)
@@ -1015,6 +1386,63 @@ function ReaADR.find_cue_by_id(cues, cue_id)
   return nil
 end
 
+function ReaADR.cue_statuses()
+  return {
+    "Not Recorded",
+    "Recorded",
+    "Approved",
+    "Needs Retake",
+  }
+end
+
+function ReaADR.normalize_status(status)
+  return normalize_status(status)
+end
+
+function ReaADR.find_cue_at_position(cues, position)
+  position = tonumber(position) or 0
+  for _, cue in ipairs(cues or {}) do
+    local start_time = tonumber(cue.start_time) or 0
+    local end_time = tonumber(cue.end_time) or start_time
+    if position >= start_time and position <= end_time then
+      return cue
+    end
+  end
+  return nil
+end
+
+function ReaADR.set_cue_status_at_position(status, position)
+  status = normalize_status(status)
+  position = tonumber(position) or ReaADR.current_timeline_position()
+
+  local cues, cue_error = ReaADR.load_last_import_cues()
+  if not cues then
+    cues = ReaADR.navigation_cues()
+  end
+  if not cues or #cues == 0 then
+    return nil, cue_error or "No cues were found."
+  end
+
+  local cue = ReaADR.find_cue_at_position(cues, position)
+  if not cue then
+    return nil, "Place the edit cursor inside a cue region before setting cue status."
+  end
+
+  cue.status = status
+  ReaADR.set_active_overlay_cue(cue)
+  ReaADR.save_last_import_cues(cues)
+  ReaADR.ensure_region(cue, character_color(cue.character))
+  ReaADR.ensure_character_ruler_lanes(cues)
+  local ruler_lanes = ReaADR.character_region_lanes(cues)
+  ReaADR.set_region_lane(cue, ruler_lanes[cue.character] or 0)
+  local overlay_status = nil
+  if ReaADR.refresh_overlay_fx_from_project then
+    overlay_status = ReaADR.refresh_overlay_fx_from_project()
+  end
+  reaper.UpdateArrange()
+  return cue, overlay_status
+end
+
 function ReaADR.selected_cue_key()
   local item_count = reaper.CountSelectedMediaItems(project())
   for i = 0, item_count - 1 do
@@ -1024,6 +1452,27 @@ function ReaADR.selected_cue_key()
       return key
     end
   end
+  return ""
+end
+
+function ReaADR.selected_region_cue_key()
+  if not reaper.GetRegionOrMarker or not reaper.GetRegionOrMarkerInfo_Value then
+    return ""
+  end
+
+  local _, marker_count, region_count = reaper.CountProjectMarkers(project())
+  local total = marker_count + region_count
+  for i = 0, total - 1 do
+    local ok, is_region, _, _, name = reaper.EnumProjectMarkers3(project(), i)
+    if ok and is_region then
+      local marker = reaper.GetRegionOrMarker(project(), i, "")
+      local selected = marker and reaper.GetRegionOrMarkerInfo_Value(project(), marker, "B_UISEL") or 0
+      if selected and selected ~= 0 then
+        return tostring(name or ""):match("%[ReaADR%]:id=([^%s]+)") or ""
+      end
+    end
+  end
+
   return ""
 end
 
@@ -1042,7 +1491,7 @@ function ReaADR.export_cues_to_csv(cues, path, options)
     return nil, "Could not write file: " .. tostring(path)
   end
 
-  local headers = { "cue_id", "character", "start", "end", "line", "direction", "cue_type", "notes" }
+  local headers = { "cue_id", "character", "start", "end", "line", "direction", "cue_type", "status", "notes" }
   file:write(table.concat(headers, ","), "\n")
 
   for index, cue in ipairs(cues or {}) do
@@ -1054,6 +1503,7 @@ function ReaADR.export_cues_to_csv(cues, path, options)
       cue.line or "",
       cue.direction or "",
       cue.cue_type or "",
+      cue.status or "Not Recorded",
       cue.notes or "",
     }
 
@@ -1132,6 +1582,25 @@ local function overlay_fx_code(cues, settings)
   if not frame_rate or frame_rate <= 0 then
     frame_rate = 24
   end
+  local selected_key = ReaADR.selected_region_cue_key()
+  if selected_key == "" then
+    selected_key = ReaADR.selected_cue_key()
+  end
+  local display_cues = {}
+  for index, cue in ipairs(cues or {}) do
+    display_cues[index] = cue
+  end
+  table.sort(display_cues, function(a, b)
+    local a_selected = selected_key ~= "" and ReaADR.cue_key(a) == selected_key
+    local b_selected = selected_key ~= "" and ReaADR.cue_key(b) == selected_key
+    if a_selected ~= b_selected then
+      return a_selected
+    end
+    if a.start_time == b.start_time then
+      return tostring(a.id) < tostring(b.id)
+    end
+    return (tonumber(a.start_time) or 0) < (tonumber(b.start_time) or 0)
+  end)
   local display_fps = math.max(1, math.floor(frame_rate + 0.5))
   local lines = {
     "// ReaADR generated source-track video overlay",
@@ -1147,17 +1616,25 @@ local function overlay_fx_code(cues, settings)
     "font_status = max(24, h * 0.034);",
     "margin = max(24, w * 0.035);",
     "pad = max(12, h * 0.018);",
+    "overlay_drawn = 0;",
+    "active_region_count = 0;",
     ("display_fps = %d;"):format(display_fps),
   }
+
+  for _, cue in ipairs(display_cues) do
+    local cue_start = tonumber(cue.start_time) or 0
+    local cue_end = tonumber(cue.end_time) or cue_start
+    lines[#lines + 1] = ("now >= %.6f && now <= %.6f ? (active_region_count += 1);"):format(cue_start, cue_end)
+  end
 
   if settings.show_project_timer then
     lines[#lines + 1] = "project_total_frames = floor(max(0, now) * display_fps + 0.5); project_frames = project_total_frames - floor(project_total_frames / display_fps) * display_fps; project_total_seconds = floor(project_total_frames / display_fps); project_seconds = project_total_seconds - floor(project_total_seconds / 60) * 60; project_total_minutes = floor(project_total_seconds / 60); project_minutes = project_total_minutes - floor(project_total_minutes / 60) * 60; project_hours = floor(project_total_minutes / 60); sprintf(#project_tc, \"%02d:%02d:%02d:%02d\", project_hours, project_minutes, project_seconds, project_frames);"
     lines[#lines + 1] = "gfx_setfont(font_timer, \"Arial\"); gfx_set(1, 1, 1, 0.96); gfx_str_measure(#project_tc, ptw, pth); gfx_str_draw(#project_tc, (w - ptw) * 0.5, margin * 0.65);"
   end
 
-  for _, cue in ipairs(cues) do
-    local cue_start = cue.start_time
-    local cue_end = cue.end_time
+  for _, cue in ipairs(display_cues) do
+    local cue_start = tonumber(cue.start_time) or 0
+    local cue_end = tonumber(cue.end_time) or cue_start
     local cue_timecode = format_timecode(cue_start, display_fps)
     local preroll = math.max(0, tonumber(settings.preroll_seconds) or 0)
     local item_start = math.max(0, cue_start - preroll)
@@ -1165,8 +1642,18 @@ local function overlay_fx_code(cues, settings)
     if direction ~= "" and not direction:match("^%b()$") then
       direction = "(" .. direction .. ")"
     end
+    local cue_status = normalize_status(cue.status)
+    local status_rgb_value = status_rgb(cue_status)
+    local cue_key = ReaADR.cue_key(cue)
+    local condition
+    if selected_key ~= "" and cue_key == selected_key then
+      condition = ("overlay_drawn == 0 && now >= %.6f && now <= %.6f"):format(item_start, cue_end)
+    else
+      condition = ("overlay_drawn == 0 && now >= %.6f && now <= %.6f && (now >= %.6f || active_region_count == 0)"):format(item_start, cue_end, cue_start)
+    end
 
-    lines[#lines + 1] = ("now >= %.6f && now <= %.6f ? ("):format(item_start, cue_end)
+    lines[#lines + 1] = condition .. " ? ("
+    lines[#lines + 1] = "overlay_drawn = 1;"
     lines[#lines + 1] = ("cue_start = %.6f; cue_end = %.6f;"):format(cue_start, cue_end)
     lines[#lines + 1] = "rel = now - cue_start; until_cue = cue_start - now;"
     lines[#lines + 1] = ("pre = max(0.001, %.6f);"):format(math.max(0.001, cue_start - item_start))
@@ -1211,8 +1698,10 @@ local function overlay_fx_code(cues, settings)
     end
 
     if settings.show_status then
-      lines[#lines + 1] = "rel < 0 ? #status = \"STANDBY\" : (now <= cue_end ? #status = \"TAKE\" : #status = \"CLEAR\");"
-      lines[#lines + 1] = "gfx_setfont(font_status, \"Arial\"); gfx_str_measure(#status, sw, sh); gfx_set(rel >= 0 && now <= cue_end ? 0.1 : 0.35, rel < 0 ? 0.45 : 0.7, rel < 0 ? 0.95 : 0.2, 0.88); gfx_fillrect((w - sw) * 0.5 - pad, h * 0.48 - sh * 1.7, sw + pad * 2, sh + pad); gfx_set(1, 1, 1, 1); gfx_str_draw(#status, (w - sw) * 0.5, h * 0.48 - sh * 1.2);"
+      lines[#lines + 1] = "#status = " .. eel_quote("Status: " .. cue_status) .. ";"
+      lines[#lines + 1] = "gfx_setfont(font_status, \"Arial\");"
+      lines[#lines + 1] = ("gfx_set(%.3f, %.3f, %.3f, 1);"):format(status_rgb_value[1] / 255, status_rgb_value[2] / 255, status_rgb_value[3] / 255)
+      lines[#lines + 1] = "gfx_str_draw(#status, margin, margin * 0.55 + font_cue + font_meta + pad * 1.4);"
     end
 
     if settings.show_direction and direction ~= "" then
@@ -1292,6 +1781,9 @@ function ReaADR.refresh_overlay_fx_from_project(settings)
   if not cues then
     return nil, cue_error
   end
+  if ReaADR.character_filter_hides_regions() then
+    cues = ReaADR.filter_cues_by_active_characters(cues)
+  end
 
   local source_video_track = ReaADR.find_track_by_ext("source_video", "source_video")
   if not source_video_track then
@@ -1316,10 +1808,120 @@ function ReaADR.collect_characters(cues)
   local characters = {}
   local seen = {}
   for _, cue in ipairs(cues) do
-    add_unique(characters, seen, cue.character)
+    add_unique(characters, seen, first_nonempty(cue.character, "Unassigned"))
   end
   table.sort(characters)
   return characters
+end
+
+function ReaADR.character_region_lanes(cues)
+  local lanes = {}
+  local characters = ReaADR.collect_characters(cues or {})
+  for index, character in ipairs(characters) do
+    lanes[character] = index - 1
+  end
+  return lanes
+end
+
+function ReaADR.ensure_character_ruler_lanes(cues)
+  if not reaper.GetSetProjectInfo then
+    return false
+  end
+
+  local characters = ReaADR.collect_characters(cues or {})
+  if #characters == 0 then
+    return false
+  end
+
+  local existing_count = tonumber(reaper.GetSetProjectInfo(project(), "RULER_LANE_COUNT", 0, false)) or 0
+  if existing_count < #characters then
+    pcall(reaper.GetSetProjectInfo, project(), "RULER_LANE_COUNT", #characters, true)
+  end
+
+  for index, character in ipairs(characters) do
+    local lane = index - 1
+    if reaper.GetSetProjectInfo_String then
+      pcall(reaper.GetSetProjectInfo_String, project(), "RULER_LANE_NAME:" .. tostring(lane), character, true)
+    end
+    pcall(reaper.GetSetProjectInfo, project(), "RULER_LANE_COLOR:" .. tostring(lane), character_color(character), true)
+    pcall(reaper.GetSetProjectInfo, project(), "RULER_LANE_HIDDEN:" .. tostring(lane), 0, true)
+  end
+
+  return true
+end
+
+local function character_lane_key(character, lane)
+  return sanitize_token(character) .. ".lane" .. tostring(lane)
+end
+
+local function character_lane_name(character, lane)
+  if lane <= 1 then
+    return character
+  end
+  return ("%s %d"):format(character, lane)
+end
+
+local function cue_track_name(character, lane)
+  if lane <= 1 then
+    return "Cue - " .. character
+  end
+  return ("Cue - %s %d"):format(character, lane)
+end
+
+local function setup_preroll_seconds(options)
+  options = options or {}
+  local preroll = tonumber(options.preroll_seconds)
+  if not preroll and options.overlay_settings then
+    preroll = tonumber(options.overlay_settings.preroll_seconds)
+  end
+  if not preroll then
+    preroll = tonumber(ReaADR.DEFAULT_OVERLAY_SETTINGS.preroll_seconds)
+  end
+  return math.max(0, preroll or 0)
+end
+
+local function assign_character_lanes(cues, preroll_seconds)
+  preroll_seconds = math.max(0, tonumber(preroll_seconds) or 0)
+  local sorted = {}
+  for index, cue in ipairs(cues or {}) do
+    sorted[index] = cue
+  end
+  table.sort(sorted, function(a, b)
+    if a.start_time == b.start_time then
+      return tostring(a.id) < tostring(b.id)
+    end
+    return (tonumber(a.start_time) or 0) < (tonumber(b.start_time) or 0)
+  end)
+
+  local lane_ends = {}
+  local lane_counts = {}
+  for _, cue in ipairs(sorted) do
+    local character = first_nonempty(cue.character, "Unassigned")
+    cue.character = character
+    lane_ends[character] = lane_ends[character] or {}
+    local lanes = lane_ends[character]
+    local start_time = tonumber(cue.start_time) or 0
+    local end_time = tonumber(cue.end_time) or start_time
+    local cue_window_start = math.max(0, start_time - preroll_seconds)
+    local assigned_lane = nil
+
+    for lane = 1, #lanes do
+      if cue_window_start >= lanes[lane] then
+        assigned_lane = lane
+        break
+      end
+    end
+
+    if not assigned_lane then
+      assigned_lane = #lanes + 1
+    end
+
+    lanes[assigned_lane] = math.max(lanes[assigned_lane] or 0, end_time)
+    lane_counts[character] = math.max(lane_counts[character] or 0, assigned_lane)
+    cue._reaadr_lane = assigned_lane
+  end
+
+  return lane_counts
 end
 
 function ReaADR.setup_project(cues, options)
@@ -1328,16 +1930,24 @@ function ReaADR.setup_project(cues, options)
   local use_existing_video_track = options.use_existing_video_track ~= false
   local create_character_tracks = options.create_character_tracks ~= false
   local create_cues_track = options.create_cues_track ~= false and options.cue_audio_path ~= nil
+  local preroll_seconds = setup_preroll_seconds(options)
+  local lane_counts = assign_character_lanes(cues, preroll_seconds)
+  ReaADR.ensure_character_ruler_lanes(cues)
+  local ruler_lanes = ReaADR.character_region_lanes(cues)
   local characters = ReaADR.collect_characters(cues)
+  local lane_total = 0
+  for _, character in ipairs(characters) do
+    lane_total = lane_total + math.max(1, tonumber(lane_counts[character]) or 1)
+  end
   local total_steps = 5 + #cues
   if create_source_video_track then
     total_steps = total_steps + 1
   end
   if create_cues_track then
-    total_steps = total_steps + 1
+    total_steps = total_steps + lane_total
   end
   if create_character_tracks then
-    total_steps = total_steps + #characters
+    total_steps = total_steps + lane_total
   end
   if options.overlay_settings and create_source_video_track then
     total_steps = total_steps + 1
@@ -1363,6 +1973,8 @@ function ReaADR.setup_project(cues, options)
     overlay_fx_status = "not_configured",
     cue_count = #cues,
     character_count = #characters,
+    cue_track_count = create_cues_track and lane_total or 0,
+    character_track_count = create_character_tracks and lane_total or 0,
   }
 
   reaper.Undo_BeginBlock()
@@ -1384,16 +1996,10 @@ function ReaADR.setup_project(cues, options)
     if create_source_video_track and not source_video_track then
       tracks[#tracks + 1] = { role = "source_video", name = "ADR Source Video", key = "source_video", color = native_color(ROLE_COLORS.source_video) }
     end
-    if create_cues_track then
-      tracks[#tracks + 1] = { role = "cues", name = "ADR Cues", key = "cues", color = native_color(ROLE_COLORS.cues) }
-    end
 
-    local cues_track
     for _, spec in ipairs(tracks) do
       local track, created = ReaADR.ensure_track(spec.role, spec.name, spec.key, spec.color)
-      if spec.role == "cues" then
-        cues_track = track
-      elseif spec.role == "source_video" then
+      if spec.role == "source_video" then
         source_video_track = track
       end
 
@@ -1409,33 +2015,57 @@ function ReaADR.setup_project(cues, options)
     progress("Removing old cue markers...")
     local existing_regions = project_markers_by_name(true)
     progress("Scanning existing regions...")
-    local existing_cue_audio_items = cues_track and cue_audio_items_by_key(cues_track) or {}
-    progress("Scanning existing cue audio...")
 
-    if create_character_tracks then
+    local cue_tracks = {}
+    local cue_audio_items = {}
+    if create_cues_track or create_character_tracks then
       for _, character in ipairs(characters) do
-        local key = sanitize_token(character)
-        local _, created = ReaADR.ensure_track("character", character, key, character_color(character))
-        if created then
-          summary.tracks_created = summary.tracks_created + 1
-        else
-          summary.tracks_reused = summary.tracks_reused + 1
+        local lane_count = math.max(1, tonumber(lane_counts[character]) or 1)
+        for lane = 1, lane_count do
+          local key = character_lane_key(character, lane)
+
+          if create_cues_track then
+            local track, created = ReaADR.ensure_track("cue_character", cue_track_name(character, lane), key, character_color(character))
+            cue_tracks[key] = track
+            cue_audio_items[key] = cue_audio_items_by_key(track)
+            if created then
+              summary.tracks_created = summary.tracks_created + 1
+            else
+              summary.tracks_reused = summary.tracks_reused + 1
+            end
+            progress("Creating cue track: " .. cue_track_name(character, lane))
+          end
+
+          if create_character_tracks then
+            local name = character_lane_name(character, lane)
+            local _, created = ReaADR.ensure_track("character", name, key, character_color(character))
+            if created then
+              summary.tracks_created = summary.tracks_created + 1
+            else
+              summary.tracks_reused = summary.tracks_reused + 1
+            end
+            progress("Creating character track: " .. name)
+          end
         end
-        progress("Creating character tracks: " .. character)
       end
     end
 
     for cue_index, cue in ipairs(cues) do
       local cue_color = character_color(cue.character)
       local _, region_created = ensure_region_with_index(existing_regions, cue, options.region_color or cue_color)
+      ReaADR.set_region_lane(cue, ruler_lanes[cue.character] or 0)
       if region_created then
         summary.regions_created = summary.regions_created + 1
       else
         summary.regions_updated = summary.regions_updated + 1
       end
 
-      if options.cue_audio_path and cues_track then
-        local _, cue_audio_status = ReaADR.ensure_cue_audio_item(cues_track, cue, options.cue_audio_path, existing_cue_audio_items)
+      if options.cue_audio_path and create_cues_track then
+        local lane = tonumber(cue._reaadr_lane) or 1
+        local key = character_lane_key(first_nonempty(cue.character, "Unassigned"), lane)
+        local cue_track = cue_tracks[key]
+        local existing_cue_audio_items = cue_audio_items[key]
+        local _, cue_audio_status = ReaADR.ensure_cue_audio_item(cue_track, cue, options.cue_audio_path, existing_cue_audio_items)
         if cue_audio_status == "created" then
           summary.cue_audio_created = summary.cue_audio_created + 1
         elseif cue_audio_status == "updated" then
@@ -1460,6 +2090,10 @@ function ReaADR.setup_project(cues, options)
     reaper.SetProjExtState(project(), ReaADR.EXT_NAMESPACE, "version", ReaADR.VERSION)
     reaper.SetProjExtState(project(), ReaADR.EXT_NAMESPACE, "last_import_cue_count", tostring(#cues))
     reaper.SetProjExtState(project(), ReaADR.EXT_NAMESPACE, "last_import_character_count", tostring(#characters))
+    if ReaADR.character_filter_enabled() then
+      progress("Applying character filter...")
+      ReaADR.apply_character_filter()
+    end
     call_progress(options.on_progress, "Finalizing...", total_steps, total_steps)
   end)
 

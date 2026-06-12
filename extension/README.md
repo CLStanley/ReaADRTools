@@ -47,6 +47,18 @@ Cue navigation actions:
 - `Next Cue`
 - `Previous Cue`
 - `Jump To Cue`
+- `Set Cue Status`
+- `Character Filter`
+
+## Character Filter
+
+`Character Filter` toggles which character cue/dialogue tracks are active for
+focused recording passes. Inactive ReaADR cue/dialogue tracks are muted. The
+filter does not affect cue navigation or export. The optional `Hide inactive
+ruler regions` checkbox hides generated cue regions for inactive characters
+using REAPER's per-region hidden flag and refreshes the video overlay to omit
+those hidden inactive cues. REAPER does not expose a scriptable
+whole-ruler-lane disable switch.
 
 ## Export Cue Sheet
 
@@ -54,7 +66,7 @@ The `Export Cue Sheet` action can export either saved ReaADR cue data or
 ordinary project markers/regions. It writes:
 
 ```text
-cue_id,character,start,end,line,direction,cue_type,notes
+cue_id,character,start,end,line,direction,cue_type,status,notes
 ```
 
 Blank CSV columns are valid. For marker/region exports, names are interpreted

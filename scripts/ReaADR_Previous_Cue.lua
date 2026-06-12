@@ -16,3 +16,4 @@ end
 
 local cue = ReaADR.find_previous_cue(cues, ReaADR.current_timeline_position())
 ReaADR.jump_to_cue(cue)
+ReaADR.refresh_overlay_silent()

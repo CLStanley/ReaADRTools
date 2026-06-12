@@ -26,3 +26,4 @@ if not cue then
 end
 
 ReaADR.jump_to_cue(cue)
+ReaADR.refresh_overlay_silent()

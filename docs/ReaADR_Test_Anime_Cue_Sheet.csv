@@ -1,0 +1,31 @@
+cue_id,start_timecode,end_timecode,character,cue_type,dialogue,direction,notes,status
+001,01:00:05:12,01:00:07:08,HARU,Dialogue,"Mika, wait! That gate isn't supposed to be open.",Urgent but controlled,"Opening scene; Haru enters frame from left",Not Recorded
+002,01:00:08:04,01:00:09:18,MIKA,Dialogue,"Then why does it feel like it's calling me?",Quiet awe,"Soft delivery; eyes locked on glowing gate",Not Recorded
+003,01:00:11:02,01:00:12:05,HARU,Reaction,"Huh?",Confused,"Small reaction before magic pulse",Not Recorded
+004,01:00:12:18,01:00:15:10,ELDER REN,Dialogue,"Because the mountain remembers every promise broken beneath it.",Grave / mystical,"Off-screen at first; reveal at end of line",Not Recorded
+005,01:00:16:00,01:00:17:06,MIKA,Dialogue,"Elder Ren... you knew about this?",Suspicious,"Hold back anger; still afraid",Not Recorded
+006,01:00:18:12,01:00:20:22,ELDER REN,Dialogue,"I hoped you would never have to.",Regretful,"Slow pace; heavy pause after 'hoped'",Not Recorded
+007,01:00:22:03,01:00:23:11,HARU,Effort,"Ngh!",Strained,"Shielding eyes from wind blast",Not Recorded
+008,01:00:23:16,01:00:25:05,MIKA,Dialogue,"The lights... they're turning into people.",Awestruck fear,"Whispered, almost not wanting it to be true",Not Recorded
+009,01:00:26:10,01:00:28:18,SPIRIT CHILD,Dialogue,"You came back late, Star Keeper.",Eerie / gentle,"Slight echo could be added later",Not Recorded
+010,01:00:29:02,01:00:30:14,MIKA,Dialogue,"I'm not the Star Keeper.",Defensive,"Immediate response; scared denial",Not Recorded
+011,01:00:31:00,01:00:33:12,SPIRIT CHILD,Dialogue,"That's what the last one said.",Calm / unsettling,"Do not play evil; innocent but ominous",Not Recorded
+012,01:00:34:08,01:00:35:20,HARU,Dialogue,"Mika, step away from it. Now.",Protective / firm,"Commanding but not shouting",Not Recorded
+013,01:00:36:06,01:00:38:00,MIKA,Dialogue,"I can't. My feet won't move.",Panic rising,"Breath catches before second sentence",Not Recorded
+014,01:00:38:12,01:00:39:06,HARU,Effort,"Mika!",Shout,"Short urgent call; cut off by impact",Not Recorded
+015,01:00:39:10,01:00:41:18,SFX_PLACEHOLDER,Reaction,"[Magic surge / impact reaction]",Impact,"Optional placeholder cue for effects or reference",Not Recorded
+016,01:00:42:04,01:00:44:14,ELDER REN,Dialogue,"The trial has begun. Do not interrupt it.",Authoritative,"Hard warning to Haru",Not Recorded
+017,01:00:45:02,01:00:46:20,HARU,Dialogue,"That's easy for you to say!",Angry,"Barks the line; frustration over fear",Not Recorded
+018,01:00:47:08,01:00:49:16,ELDER REN,Dialogue,"No. It is the hardest thing I have ever done.",Quiet pain,"Underplayed; reveals personal history",Not Recorded
+019,01:00:50:04,01:00:52:22,MIKA,Dialogue,"Someone is inside the gate... I can hear her crying.",Terrified / drawn in,"Voice small; almost trance-like",Not Recorded
+020,01:00:53:10,01:00:55:00,SPIRIT CHILD,Dialogue,"Then answer her.",Gentle command,"Line should feel simple and inevitable",Not Recorded
+021,01:00:56:06,01:00:58:12,MIKA,Dialogue,"I don't know what she wants from me.",Vulnerable,"Near tears but restrained",Not Recorded
+022,01:00:59:00,01:01:01:10,HARU,Dialogue,"Whatever it is, she doesn't get to take you.",Protective resolve,"Grounded heroic line; not too big",Not Recorded
+023,01:01:02:02,01:01:03:06,HARU,Effort,"Hah!",Attack effort,"Charging toward gate",Not Recorded
+024,01:01:03:12,01:01:04:18,HARU,Reaction,"Ah!",Pain,"Thrown backward by barrier",Not Recorded
+025,01:01:05:04,01:01:07:16,ELDER REN,Dialogue,"The gate cannot be forced open. It only answers truth.",Instructional / grave,"ADR timing can be relaxed here",Not Recorded
+026,01:01:08:02,01:01:10:20,MIKA,Dialogue,"Truth? Then tell it I'm scared.",Shaking courage,"Small but determined",Not Recorded
+027,01:01:11:08,01:01:12:22,SPIRIT CHILD,Dialogue,"It already knows.",Soft / close,"Almost whispered into Mika's ear",Not Recorded
+028,01:01:13:16,01:01:15:18,MIKA,Dialogue,"Then tell it I'm still going.",Resolve,"First real moment of bravery",Not Recorded
+029,01:01:16:06,01:01:17:10,HARU,Dialogue,"Mika...",Worried admiration,"Not stopping her now",Not Recorded
+030,01:01:18:00,01:01:21:00,ELDER REN,Dialogue,"Remember this feeling. It will be the light that brings you home.",Warm / solemn,"End of scene; allow emotional space",Not Recorded

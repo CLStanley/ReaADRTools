@@ -46,6 +46,8 @@ std::vector<ScriptAction> g_actions = {
   {"Next Cue", "ReaADRTools/scripts/ReaADR_Next_Cue.lua", 0},
   {"Previous Cue", "ReaADRTools/scripts/ReaADR_Previous_Cue.lua", 0},
   {"Jump To Cue", "ReaADRTools/scripts/ReaADR_Jump_To_Cue.lua", 0},
+  {"Set Cue Status", "ReaADRTools/scripts/ReaADR_Set_Cue_Status.lua", 0},
+  {"Character Filter", "ReaADRTools/scripts/ReaADR_Character_Filter.lua", 0},
   {"Generate Cues from Markers/Regions", "ReaADRTools/scripts/ReaADR_Generate_Cues.lua", 0},
   {"Clean Generated Cue Items", "ReaADRTools/scripts/ReaADR_Clean_Generated_Cues.lua", 0},
   {"Overlay Settings", "ReaADRTools/scripts/ReaADR_Overlay_Settings.lua", 0},

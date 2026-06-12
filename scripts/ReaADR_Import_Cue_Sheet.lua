@@ -10,6 +10,7 @@ local core_path = script_dir() .. "/ReaADR_Core.lua"
 local ReaADR = dofile(core_path)
 local cue_audio_path = script_dir() .. "/../assets/cue.wav"
 local overlay_settings = ReaADR.load_overlay_settings()
+local import_preroll_seconds = 3
 
 local ok, path = reaper.GetUserFileNameForRead("", "Import ADR cue sheet", "csv")
 if not ok or not path or path == "" then
@@ -27,10 +28,15 @@ if not cues then
   return
 end
 
+overlay_settings.preroll_seconds = import_preroll_seconds
+ReaADR.save_overlay_settings(overlay_settings)
+
 local progress = ReaADR.create_progress_window("Importing ADR Cue Sheet")
+local preroll_status = ReaADR.configure_project_preroll(import_preroll_seconds)
 local summary, setup_error = ReaADR.setup_project(cues, {
   cue_audio_path = cue_audio_path,
   overlay_settings = overlay_settings,
+  preroll_seconds = import_preroll_seconds,
   on_progress = progress.update,
 })
 
@@ -46,7 +52,7 @@ progress.close()
 ReaADR.show_video_window()
 
 ReaADR.message(
-  ("Imported %d cue(s) for %d character(s).\n\nPlace the picture on the ADR Source Video track. ReaADR Video Overlay was installed/updated as a Video Processor FX on that track.\n\nTracks: %d created, %d reused\nRegions: %d created, %d updated\nOld cue markers removed: %d\nCue audio: %d created, %d updated, %d skipped\nVideo overlay FX: %s"):format(
+  ("Imported %d cue(s) for %d character(s).\n\nPlace the picture on the ADR Source Video track. ReaADR Video Overlay was installed/updated as a Video Processor FX on that track.\n\nTracks: %d created, %d reused\nRegions: %d created, %d updated\nOld cue markers removed: %d\nCue audio: %d created, %d updated, %d skipped\nVideo overlay FX: %s\nPre-roll: %.1fs (%s)"):format(
     summary.cue_count,
     summary.character_count,
     summary.tracks_created,
@@ -57,6 +63,8 @@ ReaADR.message(
     summary.cue_audio_created,
     summary.cue_audio_updated,
     summary.cue_audio_skipped,
-    summary.overlay_fx_status
+    summary.overlay_fx_status,
+    preroll_status.seconds,
+    preroll_status.status
   )
 )

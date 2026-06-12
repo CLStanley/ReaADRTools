@@ -33,6 +33,8 @@ dist: all
 	cp ../scripts/ReaADR_Next_Cue.lua "$(DIST_DIR)/ReaADRTools/scripts/"
 	cp ../scripts/ReaADR_Previous_Cue.lua "$(DIST_DIR)/ReaADRTools/scripts/"
 	cp ../scripts/ReaADR_Jump_To_Cue.lua "$(DIST_DIR)/ReaADRTools/scripts/"
+	cp ../scripts/ReaADR_Set_Cue_Status.lua "$(DIST_DIR)/ReaADRTools/scripts/"
+	cp ../scripts/ReaADR_Character_Filter.lua "$(DIST_DIR)/ReaADRTools/scripts/"
 	cp ../scripts/ReaADR_Generate_Cues.lua "$(DIST_DIR)/ReaADRTools/scripts/"
 	cp ../scripts/ReaADR_Clean_Generated_Cues.lua "$(DIST_DIR)/ReaADRTools/scripts/"
 	cp ../scripts/ReaADR_Overlay_Settings.lua "$(DIST_DIR)/ReaADRTools/scripts/"

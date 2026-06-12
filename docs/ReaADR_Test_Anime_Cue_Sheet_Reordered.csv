@@ -1,0 +1,31 @@
+cue_id,character,start,end,line,direction,cue_type,status,notes
+001,ALEX,00:01:10:12,00:01:12:08,We need to move now.,"Urgent, hushed; trying not to panic.",Dialogue,Not Recorded,Opening line after alarm begins.
+002,MIRA,00:01:13:04,00:01:15:02,The gate is still sealed!,Fearful but focused; calling back over shoulder.,Dialogue,Not Recorded,Mouth flap starts quickly after Alex.
+003,ALEX,00:01:15:20,00:01:16:18,Then we break it.,Low determination.,Dialogue,Not Recorded,Short intense line.
+004,GUARD,00:01:17:10,00:01:18:06,Hah!,Sharp attack effort.,Effort,Not Recorded,Sword swing from offscreen.
+005,MIRA,00:01:18:16,00:01:20:00,"Alex, behind you!",Alarmed shout.,Dialogue,Not Recorded,Cut to Mira close-up.
+006,ALEX,00:01:20:08,00:01:21:12,Tch—!,Strained dodge reaction.,Reaction,Not Recorded,"Small mouth movement, fast."
+007,ALEX,00:01:22:00,00:01:24:04,I said I’d protect this city.,Grounded; vow-like intensity.,Dialogue,Not Recorded,Hero framing shot.
+008,MIRA,00:01:25:02,00:01:27:00,You don’t have to do it alone.,"Soft, supportive, emotional.",Dialogue,Not Recorded,Calm contrast after action.
+009,ALEX,00:01:27:18,00:01:29:05,Mira...,"Quiet, surprised realization.",Dialogue,Not Recorded,Name spoken softly.
+010,CAPTAIN REN,00:01:30:00,00:01:32:10,"Both of you, fall back to the eastern bridge!","Commanding, military urgency.",Dialogue,Not Recorded,Older commander voice.
+011,CROWD,00:01:33:00,00:01:36:00,Run! Get away from the tower!,Panicked background group.,Walla,Not Recorded,Multiple voices if possible.
+012,MIRA,00:01:36:12,00:01:38:16,The crystal is reacting to him.,"Amazed, nervous discovery.",Dialogue,Not Recorded,Looks at glowing crystal.
+013,ALEX,00:01:39:04,00:01:40:18,To me?,"Confused, almost disbelieving.",Dialogue,Not Recorded,Short questioning beat.
+014,SHADOW KNIGHT,00:01:41:08,00:01:44:08,"At last, the heir has awakened.","Calm, sinister, controlled.",Dialogue,Not Recorded,Villain reveal.
+015,ALEX,00:01:45:00,00:01:46:10,Who are you?,Defensive; trying to sound brave.,Dialogue,Not Recorded,Hold tension.
+016,SHADOW KNIGHT,00:01:47:00,00:01:50:12,A memory your kingdom tried to bury.,Elegant menace; slight smile.,Dialogue,Not Recorded,Slow pacing.
+017,MIRA,00:01:51:04,00:01:52:14,"Alex, don’t listen to him.","Protective, urgent whisper.",Dialogue,Not Recorded,Side profile shot.
+018,ALEX,00:01:53:02,00:01:54:20,No... I need answers.,Torn between fear and resolve.,Dialogue,Not Recorded,Internal conflict.
+019,CAPTAIN REN,00:01:55:10,00:01:56:08,Incoming!,Battle warning shout.,Dialogue,Not Recorded,Projectile appears.
+020,ALEX,00:01:56:18,00:01:58:00,Hrraaah!,Large exertion; shield impact.,Effort,Not Recorded,Big block effort.
+021,MIRA,00:01:58:12,00:02:00:12,He stopped it... with his bare hands.,Breathless wonder.,Dialogue,Not Recorded,Soft awe.
+022,SHADOW KNIGHT,00:02:01:02,00:02:03:00,Good. Remember that power.,"Pleased, ominous.",Dialogue,Not Recorded,Villain almost mentoring him.
+023,ALEX,00:02:03:20,00:02:05:18,This power doesn’t belong to you!,"Angry, heroic shout.",Dialogue,Not Recorded,Strong projection.
+024,SHADOW KNIGHT,00:02:06:08,00:02:08:18,No. It belongs to the one willing to use it.,Cold philosophy.,Dialogue,Not Recorded,Measured line.
+025,MIRA,00:02:09:06,00:02:10:12,Alex!,Fearful callout.,Reaction,Not Recorded,Mouth open on name.
+026,ALEX,00:02:11:00,00:02:13:00,I’m ending this now!,Determined battle cry.,Dialogue,Not Recorded,Start of charge.
+027,ALEX,00:02:13:10,00:02:15:00,Aaaaah!,Running attack effort.,Effort,Not Recorded,Sustained but not too long.
+028,SHADOW KNIGHT,00:02:15:12,00:02:16:20,Foolish boy.,"Dismissive, quiet.",Dialogue,Not Recorded,Barely moves.
+029,CAPTAIN REN,00:02:17:08,00:02:19:06,Everyone brace for impact!,Command shout.,Dialogue,Not Recorded,Explosion builds.
+030,CROWD,00:02:19:12,00:02:22:00,Whoa! Ahh! Look out!,Overlapping panic reactions.,Walla,Not Recorded,Crowd chaos after blast.
