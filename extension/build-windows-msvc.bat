@@ -34,7 +34,7 @@ cl /nologo /EHsc /O2 /LD ^
   /I"%WDL%" ^
   reaper_reaadr.cpp ^
   /Fe"%BUILD_DIR%\%TARGET%" ^
-  /link /DEF:reaper_reaadr.def
+  /link user32.lib /DEF:reaper_reaadr.def
 
 if errorlevel 1 (
   popd
