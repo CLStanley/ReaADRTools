@@ -111,6 +111,20 @@ void log_line(const std::string& message)
   std::fclose(file);
 }
 
+void initialize_log_path()
+{
+  const std::string root = plugin_directory();
+  const std::string bundled_log_path = join_path(root, "ReaADRTools/reaper_reaadr.log");
+  FILE* file = std::fopen(bundled_log_path.c_str(), "a");
+  if (file) {
+    g_log_path = bundled_log_path;
+    std::fclose(file);
+    return;
+  }
+
+  g_log_path = join_path(root, "reaper_reaadr.log");
+}
+
 void register_scripts()
 {
   const std::string root = plugin_directory();
@@ -189,9 +203,12 @@ void load_menu_functions()
 bool load(reaper_plugin_info_t* plugin)
 {
   g_plugin = plugin;
-  g_log_path = join_path(plugin_directory(), "ReaADRTools/reaper_reaadr.log");
+  initialize_log_path();
   log_line("Loading ReaADR extension.");
-  if (REAPERAPI_LoadAPI(plugin->GetFunc) != 0) return false;
+  if (REAPERAPI_LoadAPI(plugin->GetFunc) != 0) {
+    log_line("REAPERAPI_LoadAPI failed.");
+    return false;
+  }
   if (!AddRemoveReaScript) {
     log_line("AddRemoveReaScript API unavailable; cannot register ReaADR scripts.");
     return false;
