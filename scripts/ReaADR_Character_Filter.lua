@@ -8,21 +8,21 @@ end
 
 local ReaADR = dofile(script_dir() .. "/ReaADR_Core.lua")
 
-local characters = ReaADR.available_filter_characters()
-if not characters or #characters == 0 then
+local targets = ReaADR.available_filter_targets()
+if not targets or #targets == 0 then
   ReaADR.message("No characters were found to filter.")
   return
 end
 
 local selected = {}
-for _, character in ipairs(ReaADR.current_active_characters(characters)) do
-  selected[ReaADR.character_filter_key(character)] = true
+for _, target in ipairs(ReaADR.current_active_filter_targets(targets)) do
+  selected[target.key] = true
 end
 
 local function selected_count()
   local count = 0
-  for _, character in ipairs(characters) do
-    if selected[ReaADR.character_filter_key(character)] then
+  for _, target in ipairs(targets) do
+    if selected[target.key] then
       count = count + 1
     end
   end
@@ -31,15 +31,15 @@ end
 
 local state = {
   width = 420,
-  height = math.min(550, 156 + (#characters * 30)),
+  height = math.min(550, 156 + (#targets * 30)),
   last_mouse = 0,
   closed = false,
   hide_regions = ReaADR.character_filter_hides_regions(),
 }
 
 local rows = {}
-for index, character in ipairs(characters) do
-  rows[index] = { x = 24, y = 58 + ((index - 1) * 30), w = state.width - 48, h = 24, character = character }
+for index, target in ipairs(targets) do
+  rows[index] = { x = 24, y = 58 + ((index - 1) * 30), w = state.width - 48, h = 24, target = target }
 end
 
 local button_y = state.height - 46
@@ -70,13 +70,15 @@ end
 
 local function apply_filter()
   local active = {}
-  for _, character in ipairs(characters) do
-    if selected[ReaADR.character_filter_key(character)] then
-      active[#active + 1] = character
+  local active_labels = {}
+  for _, target in ipairs(targets) do
+    if selected[target.key] then
+      active[#active + 1] = target
+      active_labels[#active_labels + 1] = target.label
     end
   end
 
-  if #active == #characters then
+  if #active == #targets then
     ReaADR.set_active_character_filter({})
   elseif #active == 0 then
     ReaADR.set_active_character_filter({ "__none__" })
@@ -86,7 +88,7 @@ local function apply_filter()
   ReaADR.set_character_filter_hides_regions(state.hide_regions)
 
   local summary = ReaADR.apply_character_filter()
-  local label = #active == #characters and "All Characters" or (#active == 0 and "None" or table.concat(active, ", "))
+  local label = #active == #targets and "All Characters" or (#active == 0 and "None" or table.concat(active_labels, ", "))
   ReaADR.message(
     ("Character filter: %s\n\nActive cue/dialogue tracks: %d\nMuted cue/dialogue tracks: %d\nHidden ruler regions: %d\nVisible ruler regions: %d"):format(
       label,
@@ -123,10 +125,10 @@ local function frame()
   gfx.set(0.78, 0.80, 0.82, 1)
   gfx.x = 24
   gfx.y = 40
-  gfx.drawstr(("Selected: %d of %d"):format(selected_count(), #characters))
+  gfx.drawstr(("Selected: %d of %d"):format(selected_count(), #targets))
 
   for _, row in ipairs(rows) do
-    local key = ReaADR.character_filter_key(row.character)
+    local key = row.target.key
     local checked = selected[key] == true
     gfx.set(0.05, 0.05, 0.05, 1)
     gfx.rect(row.x, row.y, row.w, row.h, true)
@@ -140,7 +142,7 @@ local function frame()
     gfx.set(1, 1, 1, 1)
     gfx.x = row.x + 28
     gfx.y = row.y + 4
-    gfx.drawstr(row.character)
+    gfx.drawstr(row.target.label)
   end
 
   gfx.set(0.05, 0.05, 0.05, 1)
@@ -177,7 +179,7 @@ local function frame()
   if mouse == 1 and state.last_mouse == 0 then
     for _, row in ipairs(rows) do
       if inside(row, gfx.mouse_x, gfx.mouse_y) then
-        local key = ReaADR.character_filter_key(row.character)
+        local key = row.target.key
         selected[key] = not selected[key]
       end
     end
@@ -185,8 +187,8 @@ local function frame()
     if inside(hide_regions_row, gfx.mouse_x, gfx.mouse_y) then
       state.hide_regions = not state.hide_regions
     elseif inside(buttons.all, gfx.mouse_x, gfx.mouse_y) then
-      for _, character in ipairs(characters) do
-        selected[ReaADR.character_filter_key(character)] = true
+      for _, target in ipairs(targets) do
+        selected[target.key] = true
       end
     elseif inside(buttons.none, gfx.mouse_x, gfx.mouse_y) then
       selected = {}

@@ -794,14 +794,27 @@ function ReaADR.cue_tag(cue)
   return ("%s:id=%s"):format(ReaADR.NAME_PREFIX, ReaADR.cue_key(cue))
 end
 
+local character_lane_key
+local setup_preroll_seconds
+local assign_character_lanes
+
 function ReaADR.character_filter_key(character)
   return sanitize_token(character):lower()
+end
+
+function ReaADR.character_filter_target_key(character, lane)
+  return character_lane_key(first_nonempty(character, "Unassigned"), tonumber(lane) or 1):lower()
 end
 
 function ReaADR.encode_character_filter(characters)
   local tokens = {}
   for _, character in ipairs(characters or {}) do
-    local token = ReaADR.character_filter_key(character)
+    local token
+    if type(character) == "table" then
+      token = character.key or ReaADR.character_filter_target_key(character.character, character.lane)
+    else
+      token = ReaADR.character_filter_key(character)
+    end
     if token ~= "" then
       tokens[#tokens + 1] = token
     end
@@ -845,14 +858,30 @@ function ReaADR.character_is_active(character)
   return active[ReaADR.character_filter_key(character)] == true
 end
 
+function ReaADR.character_lane_is_active(character, lane)
+  local active, value = ReaADR.active_character_filter()
+  if value == nil or value == "" then
+    return true
+  end
+  local lane_key = ReaADR.character_filter_target_key(character, lane)
+  local character_key = ReaADR.character_filter_key(character)
+  return active[lane_key] == true or active[character_key] == true
+end
+
+local function assign_filter_lanes(cues)
+  local preroll_seconds = setup_preroll_seconds({ overlay_settings = ReaADR.load_overlay_settings() })
+  assign_character_lanes(cues or {}, preroll_seconds)
+end
+
 function ReaADR.filter_cues_by_active_characters(cues)
   if not ReaADR.character_filter_enabled() then
     return cues or {}
   end
 
+  assign_filter_lanes(cues)
   local filtered = {}
   for _, cue in ipairs(cues or {}) do
-    if ReaADR.character_is_active(cue.character) then
+    if ReaADR.character_lane_is_active(cue.character, cue._reaadr_lane) then
       filtered[#filtered + 1] = cue
     end
   end
@@ -871,6 +900,41 @@ function ReaADR.available_filter_characters()
     })
   end
   return ReaADR.collect_characters(cues or {})
+end
+
+function ReaADR.available_filter_targets()
+  local cues = ReaADR.load_last_import_cues()
+  if not cues then
+    cues = ReaADR.collect_project_marker_cues({
+      include_markers = true,
+      include_regions = true,
+      character = "",
+      cue_type = "",
+      flexible_export = true,
+    })
+  end
+  cues = cues or {}
+  assign_filter_lanes(cues)
+
+  local characters = ReaADR.collect_characters(cues)
+  local max_lanes = {}
+  for _, cue in ipairs(cues) do
+    local character = first_nonempty(cue.character, "Unassigned")
+    max_lanes[character] = math.max(max_lanes[character] or 1, tonumber(cue._reaadr_lane) or 1)
+  end
+
+  local targets = {}
+  for _, character in ipairs(characters) do
+    for lane = 1, math.max(1, max_lanes[character] or 1) do
+      targets[#targets + 1] = {
+        character = character,
+        lane = lane,
+        key = ReaADR.character_filter_target_key(character, lane),
+        label = lane <= 1 and character or ("%s #%d"):format(character, lane),
+      }
+    end
+  end
+  return targets
 end
 
 function ReaADR.current_active_characters(characters)
@@ -892,6 +956,25 @@ function ReaADR.current_active_characters(characters)
   return active_characters
 end
 
+function ReaADR.current_active_filter_targets(targets)
+  targets = targets or ReaADR.available_filter_targets()
+  if not ReaADR.character_filter_enabled() then
+    local all = {}
+    for _, target in ipairs(targets) do
+      all[#all + 1] = target
+    end
+    return all
+  end
+
+  local active_targets = {}
+  for _, target in ipairs(targets) do
+    if ReaADR.character_lane_is_active(target.character, target.lane) then
+      active_targets[#active_targets + 1] = target
+    end
+  end
+  return active_targets
+end
+
 function ReaADR.apply_character_filter()
   local cues = ReaADR.load_last_import_cues()
   if not cues then
@@ -904,6 +987,7 @@ function ReaADR.apply_character_filter()
     })
   end
   cues = cues or {}
+  assign_filter_lanes(cues)
 
   local muted_tracks = 0
   local active_tracks = 0
@@ -914,8 +998,8 @@ function ReaADR.apply_character_filter()
     local role = track_ext(track, "ReaADR.role")
     if role == "character" or role == "cue_character" then
       local key = track_ext(track, "ReaADR.key")
-      local character_token = tostring(key or ""):match("^(.-)%.lane%d+$") or key
-      local active = not ReaADR.character_filter_enabled() or ReaADR.character_is_active(character_token)
+      local character_token, lane = tostring(key or ""):match("^(.-)%.lane(%d+)$")
+      local active = not ReaADR.character_filter_enabled() or ReaADR.character_lane_is_active(character_token or key, tonumber(lane) or 1)
       set_track_muted(track, not active)
       if active then
         active_tracks = active_tracks + 1
@@ -927,7 +1011,7 @@ function ReaADR.apply_character_filter()
 
   local hide_inactive_regions = ReaADR.character_filter_hides_regions()
   for _, cue in ipairs(cues) do
-    local hide = hide_inactive_regions and not ReaADR.character_is_active(cue.character)
+    local hide = hide_inactive_regions and not ReaADR.character_lane_is_active(cue.character, cue._reaadr_lane)
     if ReaADR.set_region_hidden(cue, hide) then
       if hide then
         hidden_regions = hidden_regions + 1
@@ -1850,7 +1934,7 @@ function ReaADR.ensure_character_ruler_lanes(cues)
   return true
 end
 
-local function character_lane_key(character, lane)
+function character_lane_key(character, lane)
   return sanitize_token(character) .. ".lane" .. tostring(lane)
 end
 
@@ -1868,7 +1952,7 @@ local function cue_track_name(character, lane)
   return ("Cue - %s %d"):format(character, lane)
 end
 
-local function setup_preroll_seconds(options)
+function setup_preroll_seconds(options)
   options = options or {}
   local preroll = tonumber(options.preroll_seconds)
   if not preroll and options.overlay_settings then
@@ -1880,7 +1964,7 @@ local function setup_preroll_seconds(options)
   return math.max(0, preroll or 0)
 end
 
-local function assign_character_lanes(cues, preroll_seconds)
+function assign_character_lanes(cues, preroll_seconds)
   preroll_seconds = math.max(0, tonumber(preroll_seconds) or 0)
   local sorted = {}
   for index, cue in ipairs(cues or {}) do
