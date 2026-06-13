@@ -1,5 +1,5 @@
--- Compatibility entry point for older installs.
--- New installations should use ReaADR_Open_Manager.lua.
+-- Export ReaADR reporting data through the application framework.
+-- The current report format is the cue-sheet CSV export.
 
 local function script_dir()
   local info = debug.getinfo(1, "S").source
@@ -8,4 +8,4 @@ local function script_dir()
 end
 
 local App = dofile(script_dir() .. "/ReaADR_App.lua")
-App.open_manager()
+App.export_reports()

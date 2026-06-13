@@ -41,6 +41,17 @@ struct ScriptAction {
 };
 
 std::vector<ScriptAction> g_actions = {
+  {"Open Manager", "ReaADRTools/scripts/ReaADR_Open_Manager.lua", 0},
+  {"Quick Action 1", "ReaADRTools/scripts/ReaADR_Quick_Action_1.lua", 0},
+  {"Quick Action 2", "ReaADRTools/scripts/ReaADR_Quick_Action_2.lua", 0},
+  {"Quick Action 3", "ReaADRTools/scripts/ReaADR_Quick_Action_3.lua", 0},
+  {"Quick Action 4", "ReaADRTools/scripts/ReaADR_Quick_Action_4.lua", 0},
+};
+
+std::vector<ScriptAction> g_legacy_actions = {
+  {"Import Script", "ReaADRTools/scripts/ReaADR_Import_Script.lua", 0},
+  {"Export Reports", "ReaADRTools/scripts/ReaADR_Export_Reports.lua", 0},
+  {"Preferences", "ReaADRTools/scripts/ReaADR_Preferences.lua", 0},
   {"Import Cue Sheet", "ReaADRTools/scripts/ReaADR_Import_Cue_Sheet.lua", 0},
   {"Export Cue Sheet", "ReaADRTools/scripts/ReaADR_Export_Cue_Sheet.lua", 0},
   {"Next Cue", "ReaADRTools/scripts/ReaADR_Next_Cue.lua", 0},
@@ -52,9 +63,7 @@ std::vector<ScriptAction> g_actions = {
   {"Clean Generated Cue Items", "ReaADRTools/scripts/ReaADR_Clean_Generated_Cues.lua", 0},
   {"Overlay Settings", "ReaADRTools/scripts/ReaADR_Overlay_Settings.lua", 0},
   {"Open ReaADR Menu", "ReaADRTools/scripts/ReaADR_Menu.lua", 0},
-};
-
-std::vector<ScriptAction> g_legacy_actions = {
+  {"Start Recording Workflow", "ReaADRTools/scripts/ReaADR_Start_Recording_Workflow.lua", 0},
   {"Monitor New Markers/Regions", "ReaADRTools/scripts/ReaADR_Monitor_Markers.lua", 0},
   {"Jump To Selected Cue", "ReaADRTools/scripts/ReaADR_Jump_To_Selected_Cue.lua", 0},
 };
@@ -157,9 +166,7 @@ void hook_custom_menu(const char* menu_id, void* menu, int flag)
   int position = 0;
   if (g_top_level_menu_added) return;
   for (const ScriptAction& action : g_actions) {
-    if (std::strcmp(action.label, "Open ReaADR Menu") != 0) {
-      add_menu_item(static_cast<HMENU>(menu), position++, action);
-    }
+    add_menu_item(static_cast<HMENU>(menu), position++, action);
   }
   g_top_level_menu_added = true;
   log_line("Added top-level ReaADR Tools menu.");

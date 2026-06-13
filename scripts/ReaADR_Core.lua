@@ -23,6 +23,8 @@ ReaADR.DEFAULT_OVERLAY_SETTINGS = {
   show_streamer = true,
   show_flash = true,
   show_status = true,
+  show_metadata = false,
+  metadata_fields = "PGID,MID,Media Time,Watermark Timestamp,Asset Date Code,Project Name",
   preroll_seconds = 3,
 }
 
@@ -79,6 +81,20 @@ local function first_nonempty(...)
   return ""
 end
 
+local ADR_FIELD_ALIASES = {
+  cue_id = { "cue_id", "cue_number", "cue_num", "cue_no", "cue", "id", "number" },
+  character = { "character", "char", "actor", "speaker", "performer", "talent", "role" },
+  start = { "start", "start_time", "timecode", "tc", "in_time", "in" },
+  ["end"] = { "end", "end_time", "out_time", "out" },
+  line = { "line", "dialogue", "dialog", "text", "script" },
+  notes = { "notes", "note" },
+  direction = { "direction", "performance_direction", "perf_direction" },
+  cue_type = { "cue_type", "type", "category" },
+  status = { "status", "cue_status" },
+}
+
+local REQUIRED_ADR_FIELDS = { "cue_id", "character", "start", "end" }
+
 local function header_has_any(headers, aliases)
   local present = {}
   for _, header in ipairs(headers or {}) do
@@ -93,16 +109,11 @@ local function header_has_any(headers, aliases)
 end
 
 local function missing_required_csv_columns(headers)
-  local required = {
-    { label = "cue_id", aliases = { "cue_id", "cue_number", "cue_num", "cue_no", "cue", "id", "number" } },
-    { label = "character", aliases = { "character", "char", "actor", "speaker", "performer", "talent" } },
-    { label = "start", aliases = { "start", "start_time", "timecode", "tc", "in_time", "in" } },
-    { label = "end", aliases = { "end", "end_time", "out_time", "out" } },
-  }
   local missing = {}
-  for _, spec in ipairs(required) do
-    if not header_has_any(headers, spec.aliases) then
-      missing[#missing + 1] = spec.label .. " (" .. table.concat(spec.aliases, ", ") .. ")"
+  for _, field in ipairs(REQUIRED_ADR_FIELDS) do
+    local aliases = ADR_FIELD_ALIASES[field] or {}
+    if not header_has_any(headers, aliases) then
+      missing[#missing + 1] = field .. " (" .. table.concat(aliases, ", ") .. ")"
     end
   end
   return missing
@@ -167,7 +178,8 @@ local function format_timecode(seconds, frame_rate)
   return ("%02d:%02d:%02d:%02d"):format(hours, display_minutes, display_seconds, frames)
 end
 
-local function csv_split(line)
+local function delimited_split(line, delimiter)
+  delimiter = delimiter or ","
   local fields = {}
   local field = {}
   local in_quotes = false
@@ -184,7 +196,7 @@ local function csv_split(line)
       else
         in_quotes = not in_quotes
       end
-    elseif char == "," and not in_quotes then
+    elseif char == delimiter and not in_quotes then
       fields[#fields + 1] = table.concat(field)
       field = {}
     else
@@ -198,6 +210,29 @@ local function csv_split(line)
   return fields
 end
 
+local function csv_split(line)
+  return delimited_split(line, ",")
+end
+
+local function delimiter_for_content(content, path)
+  local extension = tostring(path or ""):lower():match("%.([^%.\\/]+)$")
+  if extension == "tsv" or extension == "tab" then
+    return "\t"
+  end
+
+  local first_line = tostring(content or ""):match("([^\n\r]+)") or ""
+  local tabs = select(2, first_line:gsub("\t", ""))
+  local commas = select(2, first_line:gsub(",", ""))
+  if tabs > commas then
+    return "\t"
+  end
+  return ","
+end
+
+local function delimiter_name(delimiter)
+  return delimiter == "\t" and "TSV" or "CSV"
+end
+
 local function csv_escape(value)
   value = tostring(value or "")
   local needs_quotes = value:find('[,"\r\n]') ~= nil
@@ -206,6 +241,17 @@ local function csv_escape(value)
     return '"' .. value .. '"'
   end
   return value
+end
+
+local function split_list(value)
+  local list = {}
+  for item in tostring(value or ""):gmatch("([^,]+)") do
+    item = trim(item)
+    if item ~= "" then
+      list[#list + 1] = item
+    end
+  end
+  return list
 end
 
 local function read_file(path)
@@ -239,6 +285,7 @@ local CUE_CACHE_FIELDS = {
   "cue_type",
   "source_line",
   "status",
+  "metadata",
 }
 
 local function encode_cache_field(value)
@@ -251,6 +298,37 @@ local function decode_cache_field(value)
   return tostring(value or ""):gsub("%%(%x%x)", function(hex)
     return string.char(tonumber(hex, 16))
   end)
+end
+
+local function serialize_metadata(metadata)
+  if type(metadata) ~= "table" then
+    return ""
+  end
+  local keys = {}
+  for key, value in pairs(metadata) do
+    if trim(value) ~= "" then
+      keys[#keys + 1] = key
+    end
+  end
+  table.sort(keys)
+
+  local fields = {}
+  for _, key in ipairs(keys) do
+    fields[#fields + 1] = encode_cache_field(key) .. "=" .. encode_cache_field(metadata[key])
+  end
+  return table.concat(fields, "&")
+end
+
+local function deserialize_metadata(value)
+  local metadata = {}
+  for pair in tostring(value or ""):gmatch("([^&]+)") do
+    local key, raw_value = pair:match("^([^=]*)=(.*)$")
+    key = decode_cache_field(key or "")
+    if key ~= "" then
+      metadata[key] = decode_cache_field(raw_value or "")
+    end
+  end
+  return metadata
 end
 
 local function bool_to_string(value)
@@ -388,6 +466,41 @@ function ReaADR.save_overlay_settings(settings)
   end
 end
 
+function ReaADR.save_column_mapping_preset(name, mapping)
+  name = sanitize_token(name)
+  if name == "" then
+    name = "last"
+  end
+  local fields = {}
+  for key, value in pairs(mapping or {}) do
+    if trim(value) ~= "" then
+      fields[#fields + 1] = encode_cache_field(key) .. "=" .. encode_cache_field(value)
+    end
+  end
+  table.sort(fields)
+  reaper.SetExtState(ReaADR.EXT_NAMESPACE, "column_mapping." .. name, table.concat(fields, "&"), true)
+end
+
+function ReaADR.load_column_mapping_preset(name)
+  name = sanitize_token(name)
+  if name == "" then
+    name = "last"
+  end
+  local value = reaper.GetExtState(ReaADR.EXT_NAMESPACE, "column_mapping." .. name)
+  if value == "" then
+    return {}
+  end
+  local mapping = {}
+  for pair in value:gmatch("([^&]+)") do
+    local key, raw_value = pair:match("^([^=]*)=(.*)$")
+    key = decode_cache_field(key or "")
+    if key ~= "" then
+      mapping[key] = decode_cache_field(raw_value or "")
+    end
+  end
+  return mapping
+end
+
 function ReaADR.configure_project_preroll(seconds)
   seconds = math.max(0, tonumber(seconds) or ReaADR.DEFAULT_OVERLAY_SETTINGS.preroll_seconds)
   local attempts = 0
@@ -477,7 +590,8 @@ function ReaADR.save_last_import_cues(cues)
   for _, cue in ipairs(cues or {}) do
     local fields = {}
     for index, key in ipairs(CUE_CACHE_FIELDS) do
-      fields[index] = encode_cache_field(cue[key])
+      local value = key == "metadata" and serialize_metadata(cue.metadata) or cue[key]
+      fields[index] = encode_cache_field(value)
     end
     lines[#lines + 1] = table.concat(fields, "\t")
   end
@@ -515,6 +629,7 @@ function ReaADR.load_last_import_cues()
       cue.direction = cue.direction or ""
       cue.cue_type = cue.cue_type or ""
       cue.status = normalize_status(cue.status)
+      cue.metadata = deserialize_metadata(cue.metadata)
       cues[#cues + 1] = cue
     end
   end
@@ -560,17 +675,58 @@ function ReaADR.parse_timecode(value, frame_rate)
   return nil, "Unsupported time format: " .. value
 end
 
-function ReaADR.parse_csv(path, frame_rate)
-  local content, read_error = read_file(path)
-  if not content then
-    return nil, read_error
+local function normalized_header_map(headers)
+  local map = {}
+  for _, header in ipairs(headers or {}) do
+    local normalized = normalize_header(header)
+    if normalized ~= "" and not map[normalized] then
+      map[normalized] = normalized
+    end
   end
+  return map
+end
 
-  content = content:gsub("\r\n", "\n"):gsub("\r", "\n")
+local function mapping_from_aliases(headers)
+  local present = normalized_header_map(headers)
+  local mapping = {}
+  for field, aliases in pairs(ADR_FIELD_ALIASES) do
+    for _, alias in ipairs(aliases) do
+      if present[alias] then
+        mapping[field] = alias
+        break
+      end
+    end
+  end
+  return mapping
+end
 
+local function normalize_mapping(mapping)
+  local normalized = {}
+  for field, source in pairs(mapping or {}) do
+    local normalized_source = normalize_header(source)
+    if normalized_source ~= "" then
+      normalized[field] = normalized_source
+    end
+  end
+  return normalized
+end
+
+local function missing_required_mapping(mapping)
+  local missing = {}
+  for _, field in ipairs(REQUIRED_ADR_FIELDS) do
+    if not mapping[field] or mapping[field] == "" then
+      missing[#missing + 1] = field
+    end
+  end
+  return missing
+end
+
+local function parse_delimited_content(content, path)
+  content = tostring(content or ""):gsub("\r\n", "\n"):gsub("\r", "\n")
+  local delimiter = delimiter_for_content(content, path)
   local headers
-  local cues = {}
-  local seen_cue_keys = {}
+  local rows = {}
+  local raw_headers = {}
   local line_number = 0
 
   content = content .. "\n"
@@ -579,61 +735,25 @@ function ReaADR.parse_csv(path, frame_rate)
     local line = raw_line:gsub("^\239\187\191", "")
 
     if trim(line) ~= "" then
-      local fields = csv_split(line)
+      local fields = delimited_split(line, delimiter)
 
       if not headers then
         headers = {}
         for index, header in ipairs(fields) do
+          raw_headers[index] = trim(header)
           headers[index] = normalize_header(header)
         end
-        local missing = missing_required_csv_columns(headers)
-        if #missing > 0 then
-          return nil, "Cue sheet is missing required column(s):\n\n" .. table.concat(missing, "\n")
-        end
       else
-        local row = {}
+        local row = { _line_number = line_number, _raw = {} }
         for index, header in ipairs(headers) do
-          row[header] = trim(fields[index])
+          local value = trim(fields[index])
+          row[header] = value
+          row._raw[header] = {
+            value = value,
+            label = raw_headers[index] ~= "" and raw_headers[index] or header,
+          }
         end
-
-        local cue_id = first_nonempty(row.cue_id, row.cue_number, row.cue_num, row.cue_no, row.cue, row.id, row.number, tostring(#cues + 1))
-        local character = first_nonempty(row.character, row.char, row.actor, row.speaker, row.performer, row.talent, "Unassigned")
-        local start_value = first_nonempty(row.start, row.start_time, row.timecode, row.tc, row.in_time, row["in"])
-        local end_value = first_nonempty(row["end"], row.end_time, row.out_time, row["out"])
-        local cue_key = sanitize_token(cue_id)
-        local start_seconds, start_error = ReaADR.parse_timecode(start_value, frame_rate)
-        local end_seconds, end_error = ReaADR.parse_timecode(end_value, frame_rate)
-
-        if cue_key == "" then
-          return nil, ("Line %d: cue_id is required"):format(line_number)
-        end
-        if seen_cue_keys[cue_key] then
-          return nil, ("Line %d cue %s: duplicate cue_id"):format(line_number, cue_id)
-        end
-
-        if not start_seconds then
-          return nil, ("Line %d cue %s: %s"):format(line_number, cue_id, start_error)
-        end
-        if not end_seconds then
-          return nil, ("Line %d cue %s: %s"):format(line_number, cue_id, end_error)
-        end
-        if end_seconds <= start_seconds then
-          return nil, ("Line %d cue %s: end must be after start"):format(line_number, cue_id)
-        end
-
-        seen_cue_keys[cue_key] = true
-        cues[#cues + 1] = {
-          id = trim(cue_id),
-          character = trim(character),
-          start_time = start_seconds,
-          end_time = end_seconds,
-          line = first_nonempty(row.line, row.dialogue, row.dialog, row.text, row.script),
-          notes = first_nonempty(row.notes, row.note),
-          direction = first_nonempty(row.direction, row.performance_direction, row.perf_direction),
-          cue_type = first_nonempty(row.cue_type, row.type, row.category),
-          status = normalize_status(first_nonempty(row.status, row.cue_status)),
-          source_line = line_number,
-        }
+        rows[#rows + 1] = row
       end
     end
   end
@@ -641,11 +761,127 @@ function ReaADR.parse_csv(path, frame_rate)
   if not headers then
     return nil, "Cue sheet is empty"
   end
+
+  return {
+    headers = headers,
+    raw_headers = raw_headers,
+    rows = rows,
+    delimiter = delimiter,
+    delimiter_name = delimiter_name(delimiter),
+  }
+end
+
+function ReaADR.inspect_script_file(path)
+  local content, read_error = read_file(path)
+  if not content then
+    return nil, read_error
+  end
+  return parse_delimited_content(content, path)
+end
+
+function ReaADR.default_column_mapping(headers)
+  return mapping_from_aliases(headers or {})
+end
+
+function ReaADR.required_mapping_missing(mapping)
+  return missing_required_mapping(normalize_mapping(mapping or {}))
+end
+
+function ReaADR.parse_script_file(path, frame_rate, mapping)
+  local table_data, read_error = ReaADR.inspect_script_file(path)
+  if not table_data then
+    return nil, read_error
+  end
+
+  mapping = normalize_mapping(mapping or mapping_from_aliases(table_data.headers))
+  local missing_mapping = missing_required_mapping(mapping)
+  if #missing_mapping > 0 then
+    local missing = missing_required_csv_columns(table_data.headers)
+    if #missing > 0 then
+      return nil, "Cue sheet is missing required column mapping(s):\n\n" .. table.concat(missing, "\n"), {
+        code = "missing_required_mapping",
+        headers = table_data.raw_headers,
+        normalized_headers = table_data.headers,
+        mapping = mapping,
+        delimiter_name = table_data.delimiter_name,
+      }
+    end
+    return nil, "Cue sheet is missing required column mapping(s):\n\n" .. table.concat(missing_mapping, "\n"), {
+      code = "missing_required_mapping",
+      headers = table_data.raw_headers,
+      normalized_headers = table_data.headers,
+      mapping = mapping,
+      delimiter_name = table_data.delimiter_name,
+    }
+  end
+
+  local cues = {}
+  local seen_cue_keys = {}
+
+  for _, row in ipairs(table_data.rows) do
+    local cue_id = first_nonempty(row[mapping.cue_id], tostring(#cues + 1))
+    local character = first_nonempty(row[mapping.character], "Unassigned")
+    local start_value = row[mapping.start]
+    local end_value = row[mapping["end"]]
+    local cue_key = sanitize_token(cue_id)
+    local start_seconds, start_error = ReaADR.parse_timecode(start_value, frame_rate)
+    local end_seconds, end_error = ReaADR.parse_timecode(end_value, frame_rate)
+    local line_number = row._line_number or 0
+
+    if cue_key == "" then
+      return nil, ("Line %d: cue_id is required"):format(line_number)
+    end
+    if seen_cue_keys[cue_key] then
+      return nil, ("Line %d cue %s: duplicate cue_id"):format(line_number, cue_id)
+    end
+
+    if not start_seconds then
+      return nil, ("Line %d cue %s: %s"):format(line_number, cue_id, start_error)
+    end
+    if not end_seconds then
+      return nil, ("Line %d cue %s: %s"):format(line_number, cue_id, end_error)
+    end
+    if end_seconds <= start_seconds then
+      return nil, ("Line %d cue %s: end must be after start"):format(line_number, cue_id)
+    end
+
+    local used_headers = {}
+    for _, source in pairs(mapping) do
+      used_headers[source] = true
+    end
+
+    local metadata = {}
+    for header, raw in pairs(row._raw or {}) do
+      if not used_headers[header] and raw.value ~= "" then
+        metadata[raw.label or header] = raw.value
+      end
+    end
+
+    seen_cue_keys[cue_key] = true
+    cues[#cues + 1] = {
+      id = trim(cue_id),
+      character = trim(character),
+      start_time = start_seconds,
+      end_time = end_seconds,
+      line = mapping.line and row[mapping.line] or "",
+      notes = mapping.notes and row[mapping.notes] or "",
+      direction = mapping.direction and row[mapping.direction] or "",
+      cue_type = mapping.cue_type and row[mapping.cue_type] or "",
+      status = normalize_status(mapping.status and row[mapping.status] or ""),
+      source_line = line_number,
+      metadata = metadata,
+    }
+  end
+
   if #cues == 0 then
     return nil, "Cue sheet contains no cues"
   end
 
   return cues
+end
+
+function ReaADR.parse_csv(path, frame_rate)
+  return ReaADR.parse_script_file(path, frame_rate)
 end
 
 local function track_ext(track, key)
@@ -1470,6 +1706,204 @@ function ReaADR.find_cue_by_id(cues, cue_id)
   return nil
 end
 
+function ReaADR.cue_duration(cue)
+  if not cue then
+    return 0
+  end
+  return math.max(0, (tonumber(cue.end_time) or 0) - (tonumber(cue.start_time) or 0))
+end
+
+function ReaADR.cue_metadata_value(cue, key)
+  if not cue or type(cue.metadata) ~= "table" then
+    return ""
+  end
+  local wanted = normalize_header(key)
+  for metadata_key, value in pairs(cue.metadata) do
+    if normalize_header(metadata_key) == wanted then
+      return tostring(value or "")
+    end
+  end
+  return ""
+end
+
+function ReaADR.visible_metadata_pairs(cue, settings)
+  settings = settings or ReaADR.load_overlay_settings()
+  local pairs = {}
+  for _, key in ipairs(split_list(settings.metadata_fields)) do
+    local value = ReaADR.cue_metadata_value(cue, key)
+    if value ~= "" then
+      pairs[#pairs + 1] = { key = key, value = value }
+    end
+  end
+  return pairs
+end
+
+function ReaADR.count_recorded_takes_for_cue(cue)
+  if not cue then
+    return 0
+  end
+  if not reaper or not reaper.CountTracks then
+    return 0
+  end
+  local cue_start = tonumber(cue.start_time) or 0
+  local cue_end = tonumber(cue.end_time) or cue_start
+  local character = sanitize_token(cue.character):lower()
+  local count = 0
+
+  for track_index = 0, reaper.CountTracks(project()) - 1 do
+    local track = reaper.GetTrack(project(), track_index)
+    local role = track_ext(track, "ReaADR.role")
+    local key = track_ext(track, "ReaADR.key")
+    local track_character = tostring(key or ""):match("^(.-)%.lane%d+$") or key
+    if role == "character" and (character == "" or tostring(track_character):lower() == character) then
+      for item_index = 0, reaper.CountTrackMediaItems(track) - 1 do
+        local item = reaper.GetTrackMediaItem(track, item_index)
+        local item_start = reaper.GetMediaItemInfo_Value(item, "D_POSITION")
+        local item_end = item_start + reaper.GetMediaItemInfo_Value(item, "D_LENGTH")
+        if item_end > cue_start and item_start < cue_end then
+          count = count + math.max(1, reaper.CountTakes(item))
+        end
+      end
+    end
+  end
+
+  return count
+end
+
+function ReaADR.active_cue()
+  local cues = ReaADR.load_last_import_cues()
+  if not cues then
+    cues = ReaADR.navigation_cues()
+  end
+  cues = cues or {}
+  local position = ReaADR.current_timeline_position()
+  return ReaADR.find_cue_at_position(cues, position) or ReaADR.find_next_cue(cues, position), cues
+end
+
+function ReaADR.session_cues()
+  local cues, source = ReaADR.load_last_import_cues()
+  if cues then
+    return cues, "cached ReaADR session"
+  end
+  cues, source = ReaADR.navigation_cues()
+  return cues or {}, source or "project"
+end
+
+function ReaADR.validate_cues(cues, options)
+  options = options or {}
+  local preroll = math.max(0, tonumber(options.preroll_seconds) or ReaADR.DEFAULT_OVERLAY_SETTINGS.preroll_seconds)
+  local result = {
+    cue_count = #(cues or {}),
+    character_count = 0,
+    missing_character = 0,
+    missing_dialogue = 0,
+    invalid_time = 0,
+    overlap_conflicts = 0,
+    metadata_fields = 0,
+    characters = {},
+    warnings = {},
+  }
+
+  local characters = {}
+  local metadata_keys = {}
+  local active_windows = {}
+  local sorted = {}
+  for index, cue in ipairs(cues or {}) do
+    sorted[index] = cue
+  end
+  table.sort(sorted, function(a, b)
+    return (tonumber(a.start_time) or 0) < (tonumber(b.start_time) or 0)
+  end)
+
+  for _, cue in ipairs(sorted) do
+    local character = trim(cue.character)
+    if character == "" or character == "Unassigned" then
+      result.missing_character = result.missing_character + 1
+    else
+      characters[character] = true
+    end
+    if trim(cue.line) == "" then
+      result.missing_dialogue = result.missing_dialogue + 1
+    end
+    if (tonumber(cue.end_time) or 0) <= (tonumber(cue.start_time) or 0) then
+      result.invalid_time = result.invalid_time + 1
+    end
+    for key, value in pairs(cue.metadata or {}) do
+      if trim(value) ~= "" then
+        metadata_keys[key] = true
+      end
+    end
+
+    character = first_nonempty(character, "Unassigned")
+    active_windows[character] = active_windows[character] or {}
+    local cue_start = tonumber(cue.start_time) or 0
+    local cue_end = tonumber(cue.end_time) or cue_start
+    local window_start = math.max(0, cue_start - preroll)
+    for _, window_end in ipairs(active_windows[character]) do
+      if window_start < window_end then
+        result.overlap_conflicts = result.overlap_conflicts + 1
+        break
+      end
+    end
+    active_windows[character][#active_windows[character] + 1] = cue_end
+  end
+
+  for character in pairs(characters) do
+    result.characters[#result.characters + 1] = character
+  end
+  table.sort(result.characters)
+  result.character_count = #result.characters
+
+  for _ in pairs(metadata_keys) do
+    result.metadata_fields = result.metadata_fields + 1
+  end
+
+  if result.missing_character > 0 then
+    result.warnings[#result.warnings + 1] = tostring(result.missing_character) .. " cue(s) have no character."
+  end
+  if result.missing_dialogue > 0 then
+    result.warnings[#result.warnings + 1] = tostring(result.missing_dialogue) .. " cue(s) have blank dialogue."
+  end
+  if result.invalid_time > 0 then
+    result.warnings[#result.warnings + 1] = tostring(result.invalid_time) .. " cue(s) have invalid timing."
+  end
+  if result.overlap_conflicts > 0 then
+    result.warnings[#result.warnings + 1] = tostring(result.overlap_conflicts) .. " cue(s) need overlap lane splitting."
+  end
+
+  return result
+end
+
+function ReaADR.validation_summary_text(validation)
+  validation = validation or {}
+  local lines = {
+    "Import validation",
+    "",
+    "Cues: " .. tostring(validation.cue_count or 0),
+    "Characters: " .. tostring(validation.character_count or 0),
+    "Overlap splits: " .. tostring(validation.overlap_conflicts or 0),
+    "Blank dialogue: " .. tostring(validation.missing_dialogue or 0),
+    "Missing character: " .. tostring(validation.missing_character or 0),
+    "Metadata fields: " .. tostring(validation.metadata_fields or 0),
+  }
+
+  if validation.characters and #validation.characters > 0 then
+    lines[#lines + 1] = ""
+    lines[#lines + 1] = "Characters: " .. table.concat(validation.characters, ", ")
+  end
+  if validation.warnings and #validation.warnings > 0 then
+    lines[#lines + 1] = ""
+    lines[#lines + 1] = "Warnings:"
+    for _, warning in ipairs(validation.warnings) do
+      lines[#lines + 1] = "- " .. warning
+    end
+  end
+
+  lines[#lines + 1] = ""
+  lines[#lines + 1] = "Build this ADR session?"
+  return table.concat(lines, "\n")
+end
+
 function ReaADR.cue_statuses()
   return {
     "Not Recorded",
@@ -1604,6 +2038,115 @@ function ReaADR.export_cues_to_csv(cues, path, options)
   return true
 end
 
+function ReaADR.export_timing_report(cues, path, options)
+  options = options or {}
+  local frame_rate = tonumber(options.frame_rate)
+  if not frame_rate and reaper and reaper.TimeMap_curFrameRate then
+    frame_rate = reaper.TimeMap_curFrameRate(project())
+  end
+  frame_rate = frame_rate or 24
+  local file = io.open(path, "w")
+  if not file then
+    return nil, "Could not write file: " .. tostring(path)
+  end
+
+  file:write("cue_id,character,start_smpte,end_smpte,length_seconds,line,status\n")
+  for _, cue in ipairs(cues or {}) do
+    local row = {
+      cue.id or "",
+      cue.character or "",
+      format_timecode(cue.start_time, frame_rate),
+      format_timecode(cue.end_time, frame_rate),
+      ("%.3f"):format(ReaADR.cue_duration(cue)),
+      cue.line or "",
+      cue.status or "Not Recorded",
+    }
+    for index, value in ipairs(row) do
+      if index > 1 then
+        file:write(",")
+      end
+      file:write(csv_escape(value))
+    end
+    file:write("\n")
+  end
+
+  file:close()
+  return true
+end
+
+function ReaADR.export_recording_report(cues, path, options)
+  options = options or {}
+  local frame_rate = tonumber(options.frame_rate)
+  if not frame_rate and reaper and reaper.TimeMap_curFrameRate then
+    frame_rate = reaper.TimeMap_curFrameRate(project())
+  end
+  frame_rate = frame_rate or 24
+  local file = io.open(path, "w")
+  if not file then
+    return nil, "Could not write file: " .. tostring(path)
+  end
+
+  file:write("cue_id,character,start_smpte,end_smpte,status,take_count,line,notes\n")
+  for _, cue in ipairs(cues or {}) do
+    local row = {
+      cue.id or "",
+      cue.character or "",
+      format_timecode(cue.start_time, frame_rate),
+      format_timecode(cue.end_time, frame_rate),
+      cue.status or "Not Recorded",
+      tostring(ReaADR.count_recorded_takes_for_cue(cue)),
+      cue.line or "",
+      cue.notes or "",
+    }
+    for index, value in ipairs(row) do
+      if index > 1 then
+        file:write(",")
+      end
+      file:write(csv_escape(value))
+    end
+    file:write("\n")
+  end
+
+  file:close()
+  return true
+end
+
+function ReaADR.export_session_metadata_report(cues, path)
+  local metadata_keys = {}
+  local seen = {}
+  for _, cue in ipairs(cues or {}) do
+    for key, value in pairs(cue.metadata or {}) do
+      if trim(value) ~= "" and not seen[key] then
+        seen[key] = true
+        metadata_keys[#metadata_keys + 1] = key
+      end
+    end
+  end
+  table.sort(metadata_keys)
+
+  local file = io.open(path, "w")
+  if not file then
+    return nil, "Could not write file: " .. tostring(path)
+  end
+
+  file:write("cue_id,character")
+  for _, key in ipairs(metadata_keys) do
+    file:write(",", csv_escape(key))
+  end
+  file:write("\n")
+
+  for _, cue in ipairs(cues or {}) do
+    file:write(csv_escape(cue.id or ""), ",", csv_escape(cue.character or ""))
+    for _, key in ipairs(metadata_keys) do
+      file:write(",", csv_escape(ReaADR.cue_metadata_value(cue, key)))
+    end
+    file:write("\n")
+  end
+
+  file:close()
+  return true
+end
+
 function ReaADR.generated_item_roles()
   return {
     cue_audio = true,
@@ -1713,7 +2256,8 @@ local function overlay_fx_code(cues, settings)
 
   if settings.show_project_timer then
     lines[#lines + 1] = "project_total_frames = floor(max(0, now) * display_fps + 0.5); project_frames = project_total_frames - floor(project_total_frames / display_fps) * display_fps; project_total_seconds = floor(project_total_frames / display_fps); project_seconds = project_total_seconds - floor(project_total_seconds / 60) * 60; project_total_minutes = floor(project_total_seconds / 60); project_minutes = project_total_minutes - floor(project_total_minutes / 60) * 60; project_hours = floor(project_total_minutes / 60); sprintf(#project_tc, \"%02d:%02d:%02d:%02d\", project_hours, project_minutes, project_seconds, project_frames);"
-    lines[#lines + 1] = "gfx_setfont(font_timer, \"Arial\"); gfx_set(1, 1, 1, 0.96); gfx_str_measure(#project_tc, ptw, pth); gfx_str_draw(#project_tc, (w - ptw) * 0.5, margin * 0.65);"
+    lines[#lines + 1] = "#timeline_label = \"Timeline SMPTE\"; gfx_setfont(font_status, \"Arial\"); gfx_set(0.72, 0.78, 0.84, 0.96); gfx_str_measure(#timeline_label, tlw, tlh); gfx_str_draw(#timeline_label, (w - tlw) * 0.5, margin * 0.40);"
+    lines[#lines + 1] = "gfx_setfont(font_timer, \"Arial\"); gfx_set(1, 1, 1, 0.96); gfx_str_measure(#project_tc, ptw, pth); gfx_str_draw(#project_tc, (w - ptw) * 0.5, margin * 0.40 + font_status);"
   end
 
   for _, cue in ipairs(display_cues) do
@@ -1771,14 +2315,34 @@ local function overlay_fx_code(cues, settings)
 
     if settings.show_cue_timecode then
       lines[#lines + 1] = "#cue_tc = " .. eel_quote(cue_timecode) .. ";"
-      lines[#lines + 1] = "gfx_setfont(font_timer, \"Arial\"); gfx_set(1, 1, 1, 1); gfx_str_measure(#cue_tc, ctw, cth); gfx_str_draw(#cue_tc, w - margin - ctw, margin * 0.75);"
+      lines[#lines + 1] = "#cue_tc_label = \"Cue SMPTE\";"
+      lines[#lines + 1] = "gfx_setfont(font_status, \"Arial\"); gfx_set(0.72, 0.78, 0.84, 1); gfx_str_measure(#cue_tc_label, ctlw, ctlh); gfx_str_draw(#cue_tc_label, w - margin - ctlw, margin * 0.50);"
+      lines[#lines + 1] = "gfx_setfont(font_timer, \"Arial\"); gfx_set(1, 1, 1, 1); gfx_str_measure(#cue_tc, ctw, cth); gfx_str_draw(#cue_tc, w - margin - ctw, margin * 0.50 + font_status);"
     else
       lines[#lines + 1] = "cth = 0;"
+    end
+
+    local media_time = ReaADR.cue_metadata_value(cue, "Media Time")
+    if media_time ~= "" then
+      lines[#lines + 1] = "#media_time_label = \"Media Time\";"
+      lines[#lines + 1] = "#media_time = " .. eel_quote(media_time) .. ";"
+      lines[#lines + 1] = "gfx_setfont(font_status, \"Arial\"); gfx_set(0.72, 0.78, 0.84, 1); gfx_str_measure(#media_time_label, mtlabelw, mtlabelh); gfx_str_draw(#media_time_label, w - margin - mtlabelw, margin * 0.50 + font_status + font_timer + pad * 0.70);"
+      lines[#lines + 1] = "gfx_setfont(font_meta, \"Arial\"); gfx_set(1, 1, 1, 1); gfx_str_measure(#media_time, mtw, mth); gfx_str_draw(#media_time, w - margin - mtw, margin * 0.50 + font_status + font_timer + font_status + pad);"
     end
 
     if settings.show_cue_type and cue.cue_type ~= "" then
       lines[#lines + 1] = "#cue_type = " .. eel_quote(cue.cue_type) .. ";"
       lines[#lines + 1] = "gfx_setfont(font_status, \"Arial\"); gfx_str_measure(#cue_type, typew, typeh); gfx_set(0.0, 0.50, 0.95, 0.82); gfx_fillrect(w - margin - typew - pad * 2, margin * 0.75 + cth + pad * 0.6, typew + pad * 2, typeh + pad); gfx_set(1, 1, 1, 1); gfx_str_draw(#cue_type, w - margin - typew - pad, margin * 0.75 + cth + pad * 1.1);"
+    end
+
+    if settings.show_metadata then
+      local metadata_pairs = ReaADR.visible_metadata_pairs(cue, settings)
+      for index, pair in ipairs(metadata_pairs) do
+        if index <= 5 then
+          lines[#lines + 1] = ("#metadata_%d = %s;"):format(index, eel_quote(pair.key .. ": " .. pair.value))
+          lines[#lines + 1] = ("gfx_setfont(font_status, \"Arial\"); gfx_set(0.82, 0.88, 0.94, 0.95); gfx_str_measure(#metadata_%d, mdw, mdh); gfx_str_draw(#metadata_%d, w - margin - mdw, margin * 0.75 + cth + pad * %.1f);"):format(index, index, 2.0 + (index * 1.25))
+        end
+      end
     end
 
     if settings.show_status then
@@ -2020,8 +2584,14 @@ function ReaADR.setup_project(cues, options)
   local ruler_lanes = ReaADR.character_region_lanes(cues)
   local characters = ReaADR.collect_characters(cues)
   local lane_total = 0
+  local overlap_conflicts = 0
   for _, character in ipairs(characters) do
     lane_total = lane_total + math.max(1, tonumber(lane_counts[character]) or 1)
+  end
+  for _, cue in ipairs(cues or {}) do
+    if (tonumber(cue._reaadr_lane) or 1) > 1 then
+      overlap_conflicts = overlap_conflicts + 1
+    end
   end
   local total_steps = 5 + #cues
   if create_source_video_track then
@@ -2059,6 +2629,7 @@ function ReaADR.setup_project(cues, options)
     character_count = #characters,
     cue_track_count = create_cues_track and lane_total or 0,
     character_track_count = create_character_tracks and lane_total or 0,
+    overlap_conflicts = overlap_conflicts,
   }
 
   reaper.Undo_BeginBlock()

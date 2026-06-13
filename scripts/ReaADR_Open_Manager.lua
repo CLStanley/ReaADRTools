@@ -1,5 +1,4 @@
--- Compatibility entry point for older installs.
--- New installations should use ReaADR_Open_Manager.lua.
+-- Open the unified ReaADR Tools manager.
 
 local function script_dir()
   local info = debug.getinfo(1, "S").source

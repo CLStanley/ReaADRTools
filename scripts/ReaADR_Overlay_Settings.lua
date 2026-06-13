@@ -22,6 +22,7 @@ local rows = {
   { key = "show_streamer", label = "Streamer bar" },
   { key = "show_flash", label = "Flash at cue start" },
   { key = "show_status", label = "Standby / take / clear status" },
+  { key = "show_metadata", label = "Studio metadata" },
 }
 
 local mouse_was_down = false
@@ -29,7 +30,7 @@ local dirty = false
 local saved_message_until = 0
 local saved_message = "Saved"
 
-gfx.init("ReaADR Overlay Settings", 500, 610)
+gfx.init("ReaADR Overlay Settings", 640, 740)
 
 local function save()
   ReaADR.save_overlay_settings(settings)
@@ -76,6 +77,123 @@ local function draw_button(x, y, w, h, label)
   return hovered
 end
 
+local metadata_field_labels = {
+  "PGID",
+  "MID",
+  "Media Time",
+  "Watermark Timestamp",
+  "Asset Date Code",
+  "Project Name",
+}
+
+local function split_metadata_fields(value)
+  local fields = {}
+  for field in tostring(value or ""):gmatch("([^,]+)") do
+    field = field:match("^%s*(.-)%s*$")
+    if field ~= "" then
+      fields[#fields + 1] = field
+    end
+  end
+  for index = 1, #metadata_field_labels do
+    if fields[index] == nil then
+      fields[index] = metadata_field_labels[index]
+    end
+  end
+  return fields
+end
+
+local function edit_metadata_fields()
+  local fields = split_metadata_fields(settings.metadata_fields)
+  local ok, values = reaper.GetUserInputs(
+    "Studio Metadata Overlay Fields",
+    #metadata_field_labels,
+    table.concat(metadata_field_labels, ","),
+    table.concat(fields, ",")
+  )
+  if not ok then
+    return false
+  end
+
+  local updated = {}
+  for value in (values .. ","):gmatch("([^,]*),") do
+    value = value:match("^%s*(.-)%s*$")
+    if value ~= "" then
+      updated[#updated + 1] = value
+    end
+  end
+  settings.metadata_fields = table.concat(updated, ",")
+  return true
+end
+
+local function apply_profile(name)
+  local profiles = {
+    actor = {
+      enabled = true,
+      show_cue_id = true,
+      show_character = true,
+      show_dialogue = true,
+      show_cue_timecode = true,
+      show_project_timer = true,
+      show_visual_cue = true,
+      show_direction = true,
+      show_cue_type = false,
+      show_streamer = true,
+      show_flash = true,
+      show_status = true,
+      show_metadata = false,
+    },
+    engineer = {
+      enabled = true,
+      show_cue_id = true,
+      show_character = true,
+      show_dialogue = true,
+      show_cue_timecode = true,
+      show_project_timer = true,
+      show_visual_cue = true,
+      show_direction = true,
+      show_cue_type = true,
+      show_streamer = true,
+      show_flash = true,
+      show_status = true,
+      show_metadata = true,
+    },
+    studio = {
+      enabled = true,
+      show_cue_id = true,
+      show_character = true,
+      show_dialogue = true,
+      show_cue_timecode = true,
+      show_project_timer = true,
+      show_visual_cue = true,
+      show_direction = false,
+      show_cue_type = true,
+      show_streamer = true,
+      show_flash = true,
+      show_status = true,
+      show_metadata = true,
+    },
+    minimal = {
+      enabled = true,
+      show_cue_id = true,
+      show_character = false,
+      show_dialogue = true,
+      show_cue_timecode = false,
+      show_project_timer = true,
+      show_visual_cue = true,
+      show_direction = false,
+      show_cue_type = false,
+      show_streamer = true,
+      show_flash = false,
+      show_status = false,
+      show_metadata = false,
+    },
+  }
+
+  for key, value in pairs(profiles[name] or {}) do
+    settings[key] = value
+  end
+end
+
 local function loop()
   gfx.set(0.08, 0.09, 0.10, 1)
   gfx.rect(0, 0, gfx.w, gfx.h, 1)
@@ -90,7 +208,22 @@ local function loop()
   local mouse_down = gfx.mouse_cap % 2 == 1
   local clicked = mouse_down and not mouse_was_down
 
-  local y = 64
+  local profile_y = 56
+  local profile_buttons = {
+    { x = 24, y = profile_y, w = 92, h = 30, label = "Actor", key = "actor" },
+    { x = 126, y = profile_y, w = 102, h = 30, label = "Engineer", key = "engineer" },
+    { x = 238, y = profile_y, w = 92, h = 30, label = "Studio", key = "studio" },
+    { x = 340, y = profile_y, w = 92, h = 30, label = "Minimal", key = "minimal" },
+  }
+  for _, profile in ipairs(profile_buttons) do
+    local hovered = draw_button(profile.x, profile.y, profile.w, profile.h, profile.label)
+    if clicked and hovered then
+      apply_profile(profile.key)
+      dirty = true
+    end
+  end
+
+  local y = 102
   for _, row in ipairs(rows) do
     draw_checkbox(24, y, settings[row.key], row.label)
     if clicked and hit(20, y - 4, 360, 28) then
@@ -103,21 +236,21 @@ local function loop()
   gfx.set(0.72, 0.72, 0.72, 1)
   gfx.x = 24
   gfx.y = y + 2
-  gfx.drawstr("Preroll seconds")
-
-  local minus_hover = draw_button(182, y - 5, 36, 30, "-")
-  gfx.set(0.92, 0.92, 0.92, 1)
-  gfx.x = 232
+  gfx.drawstr("Metadata fields")
+  local metadata_hover = draw_button(182, y - 5, 118, 30, "Edit Fields")
+  gfx.set(0.84, 0.84, 0.84, 1)
+  gfx.x = 316
   gfx.y = y + 2
-  gfx.drawstr(string.format("%.1f", settings.preroll_seconds))
-  local plus_hover = draw_button(294, y - 5, 36, 30, "+")
+  local fields = tostring(settings.metadata_fields or "")
+  if #fields > 44 then
+    fields = fields:sub(1, 41) .. "..."
+  end
+  gfx.drawstr(fields)
 
-  if clicked and minus_hover then
-    settings.preroll_seconds = math.max(0, settings.preroll_seconds - 0.5)
-    dirty = true
-  elseif clicked and plus_hover then
-    settings.preroll_seconds = math.min(10, settings.preroll_seconds + 0.5)
-    dirty = true
+  if clicked and metadata_hover then
+    if edit_metadata_fields() then
+      dirty = true
+    end
   end
 
   local footer_y = gfx.h - 64

@@ -2,8 +2,33 @@
 
 This wrapper keeps the ADR implementation in Lua and uses a small native REAPER extension for low-friction installation:
 
-1. The extension registers the bundled Lua scripts as main-section REAPER actions.
-2. It adds a top-level `ReaADR Tools` menu for import, export, cue navigation, cue generation, cleanup, and overlay settings.
+1. The extension registers a small set of application entry-point actions.
+2. It adds a top-level `ReaADR Tools` menu for the unified manager, import, reports, and preferences.
+3. Feature scripts remain bundled as internal Lua modules used by the manager.
+
+## Application Framework
+
+ReaADR is transitioning from many standalone actions into a manager-first Lua
+application framework:
+
+```text
+ReaADR Tools Manager
+  Import Module
+  Cue Management Module
+  Session Tools Module
+  Reports Module
+  Preferences Module
+  ReaADR Core / REAPER API helpers
+```
+
+The current production implementation remains Lua/ReaScript. The native
+extension is intentionally thin: it installs the top-level menu, registers the
+limited public actions, and launches the Lua application.
+
+Additional documentation:
+
+- `docs/USER_GUIDE.md`
+- `docs/CODE_ARCHITECTURE.md`
 
 ## Build
 
@@ -38,17 +63,28 @@ No manual ReaScript action import or menu customization is required.
 
 ## Keyboard Shortcuts
 
-The extension registers each tool as a normal REAPER main-section action. Users
-can assign or change shortcuts from `Actions > Show action list` by searching
-for `ReaADR`.
+The extension registers a limited set of normal REAPER main-section actions.
+Users can assign or change shortcuts from `Actions > Show action list` by
+searching for `ReaADR`.
 
-Cue navigation actions:
+Public actions:
 
-- `Next Cue`
-- `Previous Cue`
-- `Jump To Cue`
-- `Set Cue Status`
-- `Character Filter`
+- `Open Manager`
+- `Quick Action 1`
+- `Quick Action 2`
+- `Quick Action 3`
+- `Quick Action 4`
+
+Older standalone utility actions are unregistered by the extension and remain
+available internally through `Open Manager`.
+
+Quick actions are configurable from `Open Manager > Preferences > Configure
+Quick Actions`. The native menu labels stay stable, but each slot can run
+commonly used tools such as Import Cue Sheet, Cue Manager, Export Reports,
+Overlay Settings, Character Filter, Refresh Video Overlay, or cue navigation.
+
+The manager also includes hover hints and a Help tab with searchable workflow
+guidance.
 
 ## Character Filter
 
@@ -59,6 +95,63 @@ ruler regions` checkbox hides generated cue regions for inactive characters
 using REAPER's per-region hidden flag and refreshes the video overlay to omit
 those hidden inactive cues. REAPER does not expose a scriptable
 whole-ruler-lane disable switch.
+
+## Import Script
+
+`Import Script` accepts comma-delimited CSV and tab-delimited TSV files. The
+importer reads column headers, so columns can appear in any order.
+
+Recognized default aliases include:
+
+- Cue ID: `cue_id`, `cue_number`, `cue`, `id`, `number`
+- Character: `character`, `actor`, `speaker`, `role`
+- Start: `start`, `start_time`, `timecode`, `tc`, `in_time`, `in`
+- End: `end`, `end_time`, `out_time`, `out`
+- Dialogue: `line`, `dialogue`, `text`, `script`
+
+If required columns cannot be detected automatically, ReaADR prompts for a
+column mapping. The last successful custom mapping is saved and offered as the
+default for future imports. Extra unmapped columns are preserved in the cached
+cue metadata where possible, which supports studio fields such as `PGID`,
+`MID`, `Watermark Timestamp`, and asset/date codes.
+
+## Cue Information And Recording
+
+The manager includes a `Cue Information Panel` under Cue Management. It shows
+the current/next cue, character, SMPTE start/end, cue length, current timeline
+position, countdown to cue start, line text, status, and current take count
+based on recorded items on matching ReaADR character tracks.
+
+For recording pre-roll, use REAPER's native project/metronome pre-roll
+settings. A practical ADR default is 3 measures. ReaADR keeps its own internal
+3-second cue-aid timing for streamers, beeps, and overlap splitting, but it no
+longer exposes a separate pre-roll preference because that setting does not
+control REAPER's transport pre-roll.
+
+## Studio Metadata Overlay
+
+Overlay settings include an optional `Studio metadata` display. The metadata
+fields are edited as individual fields and stored internally as a
+comma-separated list, for example:
+
+```text
+PGID,MID,Media Time,Watermark Timestamp,Asset Date Code,Project Name
+```
+
+Only imported metadata fields with values are shown.
+
+## Reports
+
+`Export Reports` can write:
+
+- Cue sheet CSV
+- Recording report CSV
+- Timing report CSV
+- Session metadata CSV
+
+Recording reports include cue status and a take count. Timing reports include
+SMPTE start/end and cue length. Session metadata reports preserve extra columns
+imported from studio cue sheets.
 
 ## Export Cue Sheet
 
