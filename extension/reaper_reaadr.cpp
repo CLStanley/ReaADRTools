@@ -76,14 +76,21 @@ std::string parent_path(const std::string& path)
   return path.substr(0, slash);
 }
 
-std::string plugin_directory()
-{
 #ifdef _WIN32
+std::string module_directory_from_instance(REAPER_PLUGIN_HINSTANCE instance)
+{
   char path[MAX_PATH] = {};
-  if (g_instance && GetModuleFileNameA(g_instance, path, static_cast<DWORD>(sizeof(path))) > 0) {
+  if (instance && GetModuleFileNameA(instance, path, static_cast<DWORD>(sizeof(path))) > 0) {
     return parent_path(path);
   }
   return ".";
+}
+#endif
+
+std::string plugin_directory()
+{
+#ifdef _WIN32
+  return module_directory_from_instance(g_instance);
 #else
   Dl_info info = {};
   if (dladdr(reinterpret_cast<void*>(&plugin_directory), &info) && info.dli_fname) {
@@ -110,6 +117,18 @@ void log_line(const std::string& message)
   std::fputc('\n', file);
   std::fclose(file);
 }
+
+#ifdef _WIN32
+void log_windows_dll_load(REAPER_PLUGIN_HINSTANCE instance)
+{
+  const std::string path = join_path(module_directory_from_instance(instance), "reaper_reaadr_dll_load.log");
+  FILE* file = std::fopen(path.c_str(), "a");
+  if (!file) return;
+
+  std::fputs("DllMain process attach reached.\n", file);
+  std::fclose(file);
+}
+#endif
 
 void initialize_log_path()
 {
@@ -250,6 +269,17 @@ extern "C" REAPER_PLUGIN_DLL_EXPORT int REAPER_PLUGIN_ENTRYPOINT(REAPER_PLUGIN_H
   g_instance = instance;
   return load(plugin) ? 1 : 0;
 }
+
+#ifdef _WIN32
+BOOL WINAPI DllMain(HINSTANCE instance, DWORD reason, LPVOID)
+{
+  if (reason == DLL_PROCESS_ATTACH) {
+    g_instance = instance;
+    log_windows_dll_load(instance);
+  }
+  return TRUE;
+}
+#endif
 
 #ifndef _WIN32
 extern "C" REAPER_PLUGIN_DLL_EXPORT int SWELL_dllMain(HINSTANCE, DWORD call_mode, LPVOID get_func)

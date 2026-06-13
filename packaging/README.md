@@ -52,9 +52,45 @@ packages can be assembled with these installer scripts, but they will not show
 the top-level ReaADR Tools menu until platform-native binaries are built and
 included.
 
-## Building The Windows DLL
+## Building The Windows DLL With MSVC
 
-Recommended build environment: MSYS2 UCRT64 on Windows.
+Recommended build environment: Microsoft Visual Studio Build Tools on Windows.
+The REAPER SDK warns that Windows plug-ins need the MSVC-compatible C++ ABI, so
+prefer this MSVC build over MinGW/MSYS2 for the release DLL.
+
+1. Install Visual Studio Build Tools with the `Desktop development with C++`
+   workload.
+2. Open `x64 Native Tools Command Prompt for VS`.
+3. From the repo root, run:
+
+```bat
+extension\build-windows-msvc.bat
+```
+
+Expected output:
+
+```text
+dist\UserPlugins\reaper_reaadr.dll
+```
+
+Verify the DLL exports REAPER's entrypoint:
+
+```bat
+dumpbin /exports dist\UserPlugins\reaper_reaadr.dll | findstr ReaperPluginEntry
+```
+
+Install `dist\UserPlugins\reaper_reaadr.dll` directly into:
+
+```text
+%APPDATA%\REAPER\UserPlugins
+```
+
+Then restart REAPER.
+
+## Alternative MinGW Build
+
+MSYS2 UCRT64 can compile a DLL, but that DLL may not load in Windows REAPER on
+all systems. Use this only for diagnostics or if the MSVC build is unavailable.
 
 1. Install MSYS2 from <https://www.msys2.org/>.
 2. Open the `MSYS2 UCRT64` terminal, not the plain MSYS terminal.
@@ -86,13 +122,13 @@ make -f Makefile.windows dist
 Expected output:
 
 ```text
-dist/UserPlugins/reaper_reaadr-x64.dll
+dist/UserPlugins/reaper_reaadr.dll
 ```
 
 Verify the DLL exports REAPER's real entrypoint name:
 
 ```sh
-objdump -p ../dist/UserPlugins/reaper_reaadr-x64.dll | grep ReaperPluginEntry
+objdump -p ../dist/UserPlugins/reaper_reaadr.dll | grep ReaperPluginEntry
 ```
 
 `REAPER_PLUGIN_ENTRYPOINT` is a C/C++ macro name. The symbol REAPER needs to
@@ -108,7 +144,7 @@ packaging/create-release-packages.sh
 The Windows zip should then contain:
 
 ```text
-ReaADRTools-windows/UserPlugins/reaper_reaadr-x64.dll
+ReaADRTools-windows/UserPlugins/reaper_reaadr.dll
 ```
 
 That DLL is what makes the top-level `ReaADR Tools` menu appear in Windows

@@ -1,6 +1,6 @@
 REAPER_SDK := ../vendor/reaper-sdk
 WDL := ../vendor/WDL/WDL
-TARGET := reaper_reaadr-x64.dll
+TARGET := reaper_reaadr.dll
 BUILD_DIR := ../build/extension/windows-x64
 DIST_DIR := ../dist/UserPlugins
 
