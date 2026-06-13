@@ -25,6 +25,7 @@ $(BUILD_DIR)/$(TARGET): reaper_reaadr.cpp
 	$(CXX) $(CPPFLAGS) $(CXXFLAGS) $< -o $@ $(LDFLAGS)
 
 dist: all
+	rm -rf "$(DIST_DIR)"
 	@mkdir -p "$(DIST_DIR)/ReaADRTools/scripts" "$(DIST_DIR)/ReaADRTools/assets"
 	cp "$(BUILD_DIR)/$(TARGET)" "$(DIST_DIR)/$(TARGET)"
 	cp ../scripts/ReaADR_App.lua "$(DIST_DIR)/ReaADRTools/scripts/"

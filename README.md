@@ -55,6 +55,32 @@ make dist
 
 The distributable is created under `dist/UserPlugins`.
 
+## Installer Packages
+
+Installer launchers live in `packaging/`:
+
+- Windows: `install-windows.bat`
+- macOS: `install-macos.command`
+- Linux: `install-linux.sh`
+
+Create zip packages with:
+
+```sh
+packaging/create-release-packages.sh
+```
+
+The installer copies the bundled `UserPlugins` payload into the user's REAPER
+resource folder and asks them to restart REAPER. The Lua scripts are
+cross-platform, but the native menu extension must be built separately for each
+platform:
+
+- Windows: `reaper_reaadr*.dll`
+- macOS: `reaper_reaadr*.dylib`
+- Linux: `reaper_reaadr*.so`
+
+The current local Makefile builds the Linux `.so`; Windows and macOS packages
+need their native binaries added before public release.
+
 ## Development Notes
 
 The current production UI uses REAPER `gfx` windows. ReaImGui remains the
