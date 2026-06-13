@@ -52,6 +52,7 @@ Current module groups:
 - Cue Management
 - Session Tools
 - Reports
+- Video Overlays
 - Preferences
 - Help
 
@@ -65,7 +66,7 @@ Responsibilities:
 - Cue cache serialization in project extstate.
 - Timecode parsing/formatting.
 - Track and region creation.
-- Cue audio item generation.
+- Project-local cue WAV generation and cue audio item placement.
 - Overlay video processor generation.
 - Character filtering state.
 - Cue status handling.
@@ -81,6 +82,7 @@ Feature scripts should remain thin and call into `ReaADR_Core` or
 Examples:
 
 - `ReaADR_Import_Cue_Sheet.lua`
+- `ReaADR_Detect_Dialogue.lua`
 - `ReaADR_Cue_Manager.lua`
 - `ReaADR_Character_Filter.lua`
 - `ReaADR_Overlay_Settings.lua`
@@ -136,6 +138,19 @@ Generated cue audio items use media item extstate:
 5. Cues are validated.
 6. User confirms import preview.
 7. Tracks, regions, cue audio, ruler lanes, cache, and overlay are built.
+
+Import and marker/region cue generation require an existing video item in the
+project. `setup_project()` marks that track as `source_video` and installs the
+Video Processor overlay there.
+
+## Dialogue Detection Flow
+
+`ReaADR_Detect_Dialogue.lua` analyzes the active take of the first selected
+media item using REAPER audio accessor APIs. It detects threshold-based
+speech-like regions, creates sequential editable cues, saves them to the normal
+session cache, and calls the same project setup path used by imported cue
+sheets. The generated cues are intentionally reviewable rather than final
+transcription data.
 
 ## Overlay Flow
 

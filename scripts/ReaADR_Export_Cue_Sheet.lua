@@ -150,14 +150,25 @@ local function path_dialog(default_path, on_done)
     last_mouse = 0,
     width = 860,
     height = 174,
+    min_width = 720,
+    min_height = 174,
     closed = false,
     focused = true,
   }
 
-  local field = { x = 24, y = 70, w = 640, h = 32 }
-  local browse = { x = 680, y = 70, w = 74, h = 32, label = "Browse" }
-  local export = { x = 634, y = 122, w = 100, h = 32, label = "Export" }
-  local cancel = { x = 746, y = 122, w = 90, h = 32, label = "Cancel" }
+  local field = {}
+  local browse = {}
+  local export = {}
+  local cancel = {}
+
+  local function layout()
+    state.width = math.max(state.min_width, gfx.w or state.width)
+    state.height = math.max(state.min_height, gfx.h or state.height)
+    field = { x = 24, y = 70, w = state.width - 220, h = 32 }
+    browse = { x = state.width - 180, y = 70, w = 74, h = 32, label = "Browse" }
+    export = { x = state.width - 226, y = state.height - 52, w = 100, h = 32, label = "Export" }
+    cancel = { x = state.width - 114, y = state.height - 52, w = 90, h = 32, label = "Cancel" }
+  end
 
   local function inside(rect, x, y)
     return x >= rect.x and x <= rect.x + rect.w and y >= rect.y and y <= rect.y + rect.h
@@ -206,6 +217,7 @@ local function path_dialog(default_path, on_done)
   end
 
   local function frame()
+    layout()
     gfx.set(0.12, 0.12, 0.12, 1)
     gfx.rect(0, 0, state.width, state.height, true)
 

@@ -8,7 +8,7 @@ end
 
 local base_dir = script_dir()
 local ReaADR = dofile(base_dir .. "/ReaADR_Core.lua")
-local cue_audio_path = base_dir .. "/../assets/cue.wav"
+local cue_audio_path = ReaADR.project_cue_audio_path()
 
 local cues = ReaADR.collect_project_marker_cues({
   include_markers = true,
@@ -31,9 +31,22 @@ if answer ~= 6 then
 end
 
 local progress = ReaADR.create_progress_window("Generating ADR Cues")
+local overlay_settings = ReaADR.load_overlay_settings()
+local frame_rate = reaper.TimeMap_curFrameRate(0)
+if not frame_rate or frame_rate <= 0 then
+  frame_rate = 24
+end
+local generated_cue_path, generated_cue_error = ReaADR.generate_project_cue_wav(cue_audio_path, frame_rate)
+if not generated_cue_path then
+  progress.close()
+  ReaADR.message("Cue generation failed while creating project cue audio:\n\n" .. tostring(generated_cue_error))
+  return
+end
 local summary, setup_error = ReaADR.setup_project(cues, {
   cue_audio_path = cue_audio_path,
-  create_source_video_track = false,
+  overlay_settings = overlay_settings,
+  create_source_video_track = true,
+  require_video_track = true,
   create_character_tracks = false,
   create_cues_track = true,
   on_progress = progress.update,

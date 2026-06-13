@@ -32,24 +32,32 @@ end
 local state = {
   width = 420,
   height = math.min(550, 156 + (#targets * 30)),
+  min_width = 360,
+  min_height = 260,
   last_mouse = 0,
   closed = false,
   hide_regions = ReaADR.character_filter_hides_regions(),
 }
 
 local rows = {}
-for index, target in ipairs(targets) do
-  rows[index] = { x = 24, y = 58 + ((index - 1) * 30), w = state.width - 48, h = 24, target = target }
-end
+local hide_regions_row = {}
+local buttons = {}
 
-local button_y = state.height - 46
-local hide_regions_row = { x = 24, y = button_y - 34, w = state.width - 48, h = 24 }
-local buttons = {
-  all = { x = 24, y = button_y, w = 70, h = 28, label = "All" },
-  none = { x = 104, y = button_y, w = 70, h = 28, label = "None" },
-  apply = { x = state.width - 178, y = button_y, w = 74, h = 28, label = "Apply" },
-  cancel = { x = state.width - 94, y = button_y, w = 70, h = 28, label = "Cancel" },
-}
+local function layout()
+  state.width = math.max(state.min_width, gfx.w or state.width)
+  state.height = math.max(state.min_height, gfx.h or state.height)
+  for index, target in ipairs(targets) do
+    rows[index] = { x = 24, y = 58 + ((index - 1) * 30), w = state.width - 48, h = 24, target = target }
+  end
+  local button_y = state.height - 46
+  hide_regions_row = { x = 24, y = button_y - 34, w = state.width - 48, h = 24 }
+  buttons = {
+    all = { x = 24, y = button_y, w = 70, h = 28, label = "All" },
+    none = { x = 104, y = button_y, w = 70, h = 28, label = "None" },
+    apply = { x = state.width - 178, y = button_y, w = 74, h = 28, label = "Apply" },
+    cancel = { x = state.width - 94, y = button_y, w = 70, h = 28, label = "Cancel" },
+  }
+end
 
 local function inside(rect, x, y)
   return x >= rect.x and x <= rect.x + rect.w and y >= rect.y and y <= rect.y + rect.h
@@ -112,6 +120,7 @@ local function close(apply)
 end
 
 local function frame()
+  layout()
   gfx.set(0.12, 0.12, 0.12, 1)
   gfx.rect(0, 0, state.width, state.height, true)
 

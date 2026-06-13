@@ -17,6 +17,7 @@ ReaADR Tools Manager
   Cue Management Module
   Session Tools Module
   Reports Module
+  Video Overlays Module
   Preferences Module
   ReaADR Core / REAPER API helpers
 ```
@@ -84,6 +85,9 @@ Cue Manager, Export Reports, Overlay Settings, Character Filter, Refresh Video
 Overlay, or validation. Restart REAPER after changing quick actions if the
 native top-menu labels have not refreshed yet.
 
+Video overlay settings are also available directly inside `Open Manager > Video
+Overlays`, which is the preferred UI path.
+
 The manager also includes hover hints and a Help tab with searchable workflow
 guidance.
 
@@ -101,6 +105,14 @@ whole-ruler-lane disable switch.
 
 `Import Script` accepts comma-delimited CSV and tab-delimited TSV files. The
 importer reads column headers, so columns can appear in any order.
+
+The project must already contain a video item. ReaADR uses the existing video
+track as the overlay target instead of creating an empty video track.
+
+`Detect Dialogue From Selected Media` can also create a cue session from one
+selected audio/video item. It uses threshold-based audio detection to create
+editable cue regions and then runs the same overlap, cue audio, and overlay
+setup path as script import.
 
 Recognized default aliases include:
 
@@ -128,6 +140,12 @@ settings. A practical ADR default is 3 measures. ReaADR keeps its own internal
 3-second cue-aid timing for streamers, beeps, and overlap splitting, but it no
 longer exposes a separate pre-roll preference because that setting does not
 control REAPER's transport pre-roll.
+
+Cue audio is generated per project as `reaadr_cue.wav` using the project frame
+rate. The generated cue WAV contains three one-frame beeps spaced 1 second
+apart, with 1 second of silence after the third beep before the cue point.
+Existing correctly timed project cue WAV files are reused so repeated imports
+do not duplicate the project-local cue audio.
 
 ## Studio Metadata Overlay
 

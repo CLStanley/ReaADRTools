@@ -356,11 +356,42 @@ function ReaADR.message(text)
   reaper.ShowMessageBox(tostring(text), "ReaADR", 0)
 end
 
+function ReaADR.bump_session_revision()
+  local _, value = reaper.GetProjExtState(project(), ReaADR.EXT_NAMESPACE, "session_revision")
+  local revision = (tonumber(value) or 0) + 1
+  reaper.SetProjExtState(project(), ReaADR.EXT_NAMESPACE, "session_revision", tostring(revision))
+  return revision
+end
+
+function ReaADR.session_revision()
+  local _, value = reaper.GetProjExtState(project(), ReaADR.EXT_NAMESPACE, "session_revision")
+  return tonumber(value) or 0
+end
+
+function ReaADR.set_cue_info_launch_options(options)
+  options = options or {}
+  reaper.SetProjExtState(project(), ReaADR.EXT_NAMESPACE, "cue_info_open_edit", options.edit and "1" or "")
+  reaper.SetProjExtState(project(), ReaADR.EXT_NAMESPACE, "cue_info_close_on_save", options.close_on_save and "1" or "")
+end
+
+function ReaADR.consume_cue_info_launch_options()
+  local _, edit = reaper.GetProjExtState(project(), ReaADR.EXT_NAMESPACE, "cue_info_open_edit")
+  local _, close_on_save = reaper.GetProjExtState(project(), ReaADR.EXT_NAMESPACE, "cue_info_close_on_save")
+  reaper.SetProjExtState(project(), ReaADR.EXT_NAMESPACE, "cue_info_open_edit", "")
+  reaper.SetProjExtState(project(), ReaADR.EXT_NAMESPACE, "cue_info_close_on_save", "")
+  return {
+    edit = edit == "1",
+    close_on_save = close_on_save == "1",
+  }
+end
+
 function ReaADR.create_progress_window(title)
   local state = {
     title = title or "ReaADR",
     width = 460,
     height = 128,
+    min_width = 360,
+    min_height = 110,
     last_message = "",
     closed = false,
   }
@@ -372,6 +403,8 @@ function ReaADR.create_progress_window(title)
     if state.closed then
       return
     end
+    state.width = math.max(state.min_width, gfx.w or state.width)
+    state.height = math.max(state.min_height, gfx.h or state.height)
 
     current = math.max(0, tonumber(current) or 0)
     total = math.max(1, tonumber(total) or 1)
@@ -597,6 +630,7 @@ function ReaADR.save_last_import_cues(cues)
   end
 
   reaper.SetProjExtState(project(), ReaADR.EXT_NAMESPACE, "last_import_cues_v1", table.concat(lines, "\n"))
+  ReaADR.bump_session_revision()
 end
 
 function ReaADR.load_last_import_cues()
@@ -976,6 +1010,161 @@ function ReaADR.mark_source_video_track(track, color)
   set_track_color(track, color or native_color(ROLE_COLORS.source_video))
 end
 
+function ReaADR.require_existing_video_track()
+  local track = ReaADR.find_existing_video_track()
+  if not track then
+    return nil, "No video item was found in the project. Import or place the video in the timeline before building ReaADR cues."
+  end
+  ReaADR.mark_source_video_track(track, native_color(ROLE_COLORS.source_video))
+  return track
+end
+
+local function le16(value)
+  value = math.floor(value or 0)
+  return string.char(value % 256, math.floor(value / 256) % 256)
+end
+
+local function le32(value)
+  value = math.floor(value or 0)
+  return string.char(
+    value % 256,
+    math.floor(value / 256) % 256,
+    math.floor(value / 65536) % 256,
+    math.floor(value / 16777216) % 256
+  )
+end
+
+function ReaADR.project_cue_audio_path()
+  local project_path = reaper.GetProjectPath("")
+  if not project_path or project_path == "" then
+    project_path = reaper.GetResourcePath() or "."
+  end
+  return project_path .. "/reaadr_cue.wav"
+end
+
+local function file_exists(path)
+  local file = path and io.open(path, "rb")
+  if file then
+    file:close()
+    return true
+  end
+  return false
+end
+
+local function read_le32(blob, offset)
+  local b1, b2, b3, b4 = blob:byte(offset, offset + 3)
+  if not b1 or not b2 or not b3 or not b4 then
+    return nil
+  end
+  return b1 + (b2 * 256) + (b3 * 65536) + (b4 * 16777216)
+end
+
+local function wav_duration_seconds(path)
+  local file = path and io.open(path, "rb")
+  if not file then
+    return nil
+  end
+  local header = file:read(44)
+  file:close()
+  if not header or #header < 44 or header:sub(1, 4) ~= "RIFF" or header:sub(9, 12) ~= "WAVE" then
+    return nil
+  end
+  local channels = header:byte(23) + (header:byte(24) * 256)
+  local sample_rate = read_le32(header, 25)
+  local bits = header:byte(35) + (header:byte(36) * 256)
+  local data_size = read_le32(header, 41)
+  if not channels or not sample_rate or not bits or not data_size or channels <= 0 or sample_rate <= 0 or bits <= 0 then
+    return nil
+  end
+  return data_size / (sample_rate * channels * (bits / 8))
+end
+
+function ReaADR.generate_project_cue_wav(path, frame_rate)
+  path = path or ReaADR.project_cue_audio_path()
+  frame_rate = tonumber(frame_rate)
+  if not frame_rate or frame_rate <= 0 then
+    frame_rate = reaper.TimeMap_curFrameRate(project())
+  end
+  if not frame_rate or frame_rate <= 0 then
+    frame_rate = 24
+  end
+
+  local sample_rate = 48000
+  local channels = 1
+  local bits = 16
+  local beep_seconds = 1 / frame_rate
+  local interval_seconds = 1.0
+  local total_seconds = 3.0
+  local starts = { 0, interval_seconds, interval_seconds * 2 }
+  if file_exists(path) then
+    local duration = wav_duration_seconds(path)
+    if duration and math.abs(duration - total_seconds) <= 0.02 then
+      return path, {
+        status = "skipped",
+        reason = "exists",
+        total_seconds = duration,
+      }
+    end
+  end
+
+  local total_samples = math.max(1, math.floor(total_seconds * sample_rate + 0.5))
+  local beep_samples = math.max(1, math.floor(beep_seconds * sample_rate + 0.5))
+  local amplitude = 0.72
+  local frequency = 1000
+  local sample_values = {}
+
+  for i = 1, total_samples do
+    sample_values[i] = 0
+  end
+  for _, start_seconds in ipairs(starts) do
+    local start_sample = math.floor(start_seconds * sample_rate + 0.5) + 1
+    local end_sample = math.min(total_samples, start_sample + beep_samples - 1)
+    for sample = start_sample, end_sample do
+      local t = (sample - start_sample) / sample_rate
+      sample_values[sample] = math.sin(2 * math.pi * frequency * t) * amplitude
+    end
+  end
+
+  local data = {}
+  for i = 1, total_samples do
+    local value = math.max(-1, math.min(1, sample_values[i] or 0))
+    local int_value = math.floor(value * 32767)
+    if int_value < 0 then
+      int_value = int_value + 65536
+    end
+    data[#data + 1] = le16(int_value)
+  end
+  local data_blob = table.concat(data)
+  local byte_rate = sample_rate * channels * bits / 8
+  local block_align = channels * bits / 8
+  local file = io.open(path, "wb")
+  if not file then
+    return nil, "Could not write cue WAV: " .. tostring(path)
+  end
+
+  file:write("RIFF")
+  file:write(le32(36 + #data_blob))
+  file:write("WAVEfmt ")
+  file:write(le32(16))
+  file:write(le16(1))
+  file:write(le16(channels))
+  file:write(le32(sample_rate))
+  file:write(le32(byte_rate))
+  file:write(le16(block_align))
+  file:write(le16(bits))
+  file:write("data")
+  file:write(le32(#data_blob))
+  file:write(data_blob)
+  file:close()
+  return path, {
+    status = "created",
+    frame_rate = frame_rate,
+    beep_seconds = beep_seconds,
+    interval_seconds = interval_seconds,
+    total_seconds = total_seconds,
+  }
+end
+
 function ReaADR.find_track_by_ext(role, key)
   key = key or ""
   for i = 0, reaper.CountTracks(project()) - 1 do
@@ -1070,6 +1259,7 @@ end
 
 function ReaADR.set_active_character_filter(characters)
   reaper.SetProjExtState(project(), ReaADR.EXT_NAMESPACE, "active_character_filter", ReaADR.encode_character_filter(characters))
+  ReaADR.bump_session_revision()
 end
 
 function ReaADR.character_filter_hides_regions()
@@ -1079,6 +1269,7 @@ end
 
 function ReaADR.set_character_filter_hides_regions(enabled)
   reaper.SetProjExtState(project(), ReaADR.EXT_NAMESPACE, "character_filter_hide_regions", enabled and "1" or "0")
+  ReaADR.bump_session_revision()
 end
 
 function ReaADR.character_filter_enabled()
@@ -1984,7 +2175,7 @@ function ReaADR.set_cue_status_at_position(status, position)
   ReaADR.ensure_region(cue, character_color(cue.character))
   ReaADR.ensure_character_ruler_lanes(cues)
   local ruler_lanes = ReaADR.character_region_lanes(cues)
-  ReaADR.set_region_lane(cue, ruler_lanes[cue.character] or 0)
+  ReaADR.set_region_lane(cue, ReaADR.region_lane_for_cue(cue, ruler_lanes))
   local overlay_status = nil
   if ReaADR.refresh_overlay_fx_from_project then
     overlay_status = ReaADR.refresh_overlay_fx_from_project()
@@ -2015,6 +2206,11 @@ function ReaADR.update_cached_cue(updated_cue)
       cue.cue_type = updated_cue.cue_type or cue.cue_type or ""
       cue.status = normalize_status(updated_cue.status or cue.status)
       cue.notes = updated_cue.notes or cue.notes or ""
+      cue.start_time = tonumber(updated_cue.start_time) or cue.start_time
+      cue.end_time = tonumber(updated_cue.end_time) or cue.end_time
+      if cue.end_time <= cue.start_time then
+        cue.end_time = cue.start_time + 0.1
+      end
       local existing_region = find_project_marker(old_region_name, true)
       if existing_region then
         reaper.SetProjectMarker4(
@@ -2041,11 +2237,236 @@ function ReaADR.update_cached_cue(updated_cue)
   ReaADR.ensure_region(updated, character_color(updated.character))
   ReaADR.ensure_character_ruler_lanes(cues)
   local ruler_lanes = ReaADR.character_region_lanes(cues)
-  ReaADR.set_region_lane(updated, ruler_lanes[updated.character] or 0)
+  ReaADR.set_region_lane(updated, ReaADR.region_lane_for_cue(updated, ruler_lanes))
   ReaADR.set_manager_selected_cue(updated)
   ReaADR.refresh_overlay_silent()
   reaper.UpdateArrange()
   return updated
+end
+
+function ReaADR.sync_cached_cues_from_project_regions()
+  local cues, cue_error = ReaADR.load_last_import_cues()
+  if not cues then
+    return nil, cue_error or "No cached ReaADR session was found."
+  end
+
+  local updated = 0
+  local missing = 0
+  for _, cue in ipairs(cues) do
+    local region = find_project_marker(ReaADR.region_name(cue), true)
+    if region then
+      local start_time = tonumber(region.pos) or tonumber(cue.start_time) or 0
+      local end_time = tonumber(region.region_end) or tonumber(cue.end_time) or start_time
+      if end_time <= start_time then
+        end_time = start_time + 0.1
+      end
+      if math.abs((tonumber(cue.start_time) or 0) - start_time) > 0.0005 or math.abs((tonumber(cue.end_time) or 0) - end_time) > 0.0005 then
+        cue.start_time = start_time
+        cue.end_time = end_time
+        updated = updated + 1
+      end
+    else
+      missing = missing + 1
+    end
+  end
+
+  ReaADR.save_last_import_cues(cues)
+  ReaADR.ensure_character_ruler_lanes(cues)
+  local ruler_lanes = ReaADR.character_region_lanes(cues)
+  for _, cue in ipairs(cues) do
+    ReaADR.set_region_lane(cue, ReaADR.region_lane_for_cue(cue, ruler_lanes))
+  end
+  return {
+    cues = cues,
+    updated = updated,
+    missing = missing,
+    cue_count = #cues,
+  }
+end
+
+function ReaADR.add_cached_cue(cue)
+  cue = cue or {}
+  local cues = ReaADR.load_last_import_cues()
+  if not cues then
+    cues = ReaADR.navigation_cues()
+  end
+  cues = cues or {}
+
+  cue.id = first_nonempty(cue.id, tostring(#cues + 1))
+  cue.character = first_nonempty(cue.character, "ADR")
+  cue.start_time = tonumber(cue.start_time) or ReaADR.current_timeline_position()
+  cue.end_time = tonumber(cue.end_time) or (cue.start_time + 2.0)
+  if cue.end_time <= cue.start_time then
+    cue.end_time = cue.start_time + 2.0
+  end
+  cue.line = cue.line or ""
+  cue.direction = cue.direction or ""
+  cue.cue_type = cue.cue_type or "Dialogue"
+  cue.status = normalize_status(cue.status)
+  cue.notes = cue.notes or ""
+  cue.source_line = cue.source_line or (#cues + 1)
+
+  cues[#cues + 1] = cue
+  table.sort(cues, function(a, b)
+    if a.start_time == b.start_time then
+      return tostring(a.id) < tostring(b.id)
+    end
+    return (tonumber(a.start_time) or 0) < (tonumber(b.start_time) or 0)
+  end)
+  ReaADR.save_last_import_cues(cues)
+  ReaADR.set_manager_selected_cue(cue)
+  return cue, cues
+end
+
+function ReaADR.rebuild_cached_session(options)
+  options = options or {}
+  local cues, err = ReaADR.load_last_import_cues()
+  if not cues then
+    return nil, err or "No cached ReaADR session was found."
+  end
+
+  local frame_rate = reaper.TimeMap_curFrameRate(project())
+  if not frame_rate or frame_rate <= 0 then
+    frame_rate = 24
+  end
+  local cue_audio_path = options.cue_audio_path or ReaADR.project_cue_audio_path()
+  local generated, generated_error = ReaADR.generate_project_cue_wav(cue_audio_path, frame_rate)
+  if not generated then
+    return nil, generated_error
+  end
+
+  if options.clear_generated_items then
+    ReaADR.delete_generated_cue_audio_items()
+  end
+
+  return ReaADR.setup_project(cues, {
+    cue_audio_path = cue_audio_path,
+    overlay_settings = options.overlay_settings or ReaADR.load_overlay_settings(),
+    require_video_track = options.require_video_track ~= false,
+    create_source_video_track = options.create_source_video_track ~= false,
+    create_character_tracks = options.create_character_tracks ~= false,
+    create_cues_track = options.create_cues_track ~= false,
+    on_progress = options.on_progress,
+  })
+end
+
+function ReaADR.detect_dialogue_cues_from_selected_media(options)
+  options = options or {}
+  local selected_count = reaper.CountSelectedMediaItems(project())
+  if selected_count <= 0 then
+    return nil, "Select one audio or video media item to analyze."
+  end
+
+  local item = reaper.GetSelectedMediaItem(project(), 0)
+  local take = item and reaper.GetActiveTake(item)
+  if not take then
+    return nil, "The selected media item does not have an active take."
+  end
+
+  if not reaper.CreateTakeAudioAccessor or not reaper.GetAudioAccessorSamples then
+    return nil, "This REAPER build does not expose the audio accessor APIs needed for dialogue detection."
+  end
+
+  local accessor = reaper.CreateTakeAudioAccessor(take)
+  if not accessor then
+    return nil, "Could not create an audio accessor for the selected media."
+  end
+
+  local sample_rate = math.floor(tonumber(options.sample_rate) or 12000)
+  local channels = 1
+  local block_seconds = tonumber(options.block_seconds) or 0.025
+  local block_samples = math.max(64, math.floor(sample_rate * block_seconds + 0.5))
+  local threshold_db = tonumber(options.threshold_db) or -42
+  local threshold = 10 ^ (threshold_db / 20)
+  local min_speech = tonumber(options.min_speech_seconds) or 0.25
+  local min_silence = tonumber(options.min_silence_seconds) or 0.35
+  local pad = tonumber(options.pad_seconds) or 0.05
+  local character = first_nonempty(options.character, "ADR")
+  local cue_type = first_nonempty(options.cue_type, "Dialogue")
+  local item_position = tonumber(reaper.GetMediaItemInfo_Value(item, "D_POSITION")) or 0
+  local item_length = tonumber(reaper.GetMediaItemInfo_Value(item, "D_LENGTH")) or 0
+  local item_end = item_position + item_length
+  local start_time = reaper.GetAudioAccessorStartTime(accessor)
+  local end_time = reaper.GetAudioAccessorEndTime(accessor)
+  local buffer = reaper.new_array(block_samples * channels)
+  local raw_segments = {}
+  local active_start = nil
+  local last_loud_end = nil
+  local t = start_time
+
+  local function item_timeline_time(accessor_time)
+    return item_position + math.max(0, (tonumber(accessor_time) or start_time) - start_time)
+  end
+
+  while t < end_time do
+    buffer.clear()
+    local ok = reaper.GetAudioAccessorSamples(accessor, sample_rate, channels, t, block_samples, buffer)
+    local loud = false
+    if ok == 1 then
+      local samples = buffer.table()
+      local sum = 0
+      local count = #samples
+      for _, sample in ipairs(samples) do
+        sum = sum + (sample * sample)
+      end
+      local rms = count > 0 and math.sqrt(sum / count) or 0
+      loud = rms >= threshold
+    end
+
+    local block_end = math.min(end_time, t + (block_samples / sample_rate))
+    if loud then
+      if not active_start then
+        active_start = t
+      end
+      last_loud_end = block_end
+    elseif active_start and last_loud_end and (t - last_loud_end) >= min_silence then
+      if (last_loud_end - active_start) >= min_speech then
+        local detected_start = item_timeline_time(active_start - pad)
+        local detected_end = item_timeline_time(last_loud_end + pad)
+        raw_segments[#raw_segments + 1] = {
+          start_time = math.max(item_position, detected_start),
+          end_time = math.min(item_end, detected_end),
+        }
+      end
+      active_start = nil
+      last_loud_end = nil
+    end
+
+    t = block_end
+  end
+
+  if active_start and last_loud_end and (last_loud_end - active_start) >= min_speech then
+    local detected_start = item_timeline_time(active_start - pad)
+    local detected_end = item_timeline_time(last_loud_end + pad)
+    raw_segments[#raw_segments + 1] = {
+      start_time = math.max(item_position, detected_start),
+      end_time = math.min(item_end, detected_end),
+    }
+  end
+
+  reaper.DestroyAudioAccessor(accessor)
+
+  if #raw_segments == 0 then
+    return {}, "No dialogue regions were detected. Try a lower threshold such as -48 dB."
+  end
+
+  local cues = {}
+  for index, segment in ipairs(raw_segments) do
+    cues[#cues + 1] = {
+      id = ("%03d"):format(index),
+      character = character,
+      start_time = segment.start_time,
+      end_time = segment.end_time,
+      line = "",
+      notes = "Detected from selected media",
+      direction = "",
+      cue_type = cue_type,
+      status = "Not Recorded",
+      source_line = index,
+    }
+  end
+
+  return cues
 end
 
 function ReaADR.selected_cue_key()
@@ -2240,12 +2661,9 @@ function ReaADR.generated_item_roles()
   }
 end
 
-function ReaADR.cleanup_generated_items()
+function ReaADR.delete_generated_cue_audio_items()
   local removed_items = 0
   local generated_roles = ReaADR.generated_item_roles()
-
-  reaper.Undo_BeginBlock()
-  reaper.PreventUIRefresh(1)
 
   for track_index = 0, reaper.CountTracks(project()) - 1 do
     local track = reaper.GetTrack(project(), track_index)
@@ -2258,6 +2676,17 @@ function ReaADR.cleanup_generated_items()
       end
     end
   end
+
+  return removed_items
+end
+
+function ReaADR.cleanup_generated_items()
+  local removed_items = 0
+
+  reaper.Undo_BeginBlock()
+  reaper.PreventUIRefresh(1)
+
+  removed_items = ReaADR.delete_generated_cue_audio_items()
 
   reaper.PreventUIRefresh(-1)
   reaper.TrackList_AdjustWindows(false)
@@ -2553,10 +2982,28 @@ function ReaADR.collect_characters(cues)
 end
 
 function ReaADR.character_region_lanes(cues)
+  cues = cues or {}
+  if assign_character_lanes then
+    assign_character_lanes(cues, setup_preroll_seconds({ overlay_settings = ReaADR.load_overlay_settings() }))
+  end
   local lanes = {}
-  local characters = ReaADR.collect_characters(cues or {})
+  local characters = ReaADR.collect_characters(cues)
+  local max_lanes = {}
+  for _, cue in ipairs(cues) do
+    local character = first_nonempty(cue.character, "Unassigned")
+    max_lanes[character] = math.max(max_lanes[character] or 1, tonumber(cue._reaadr_lane) or 1)
+  end
+  local lane_index = 0
   for index, character in ipairs(characters) do
-    lanes[character] = index - 1
+    local lane_count = math.max(1, tonumber(max_lanes[character]) or 1)
+    for lane = 1, lane_count do
+      local key = character_lane_key(character, lane)
+      lanes[key] = lane_index
+      if lane == 1 then
+        lanes[character] = lane_index
+      end
+      lane_index = lane_index + 1
+    end
   end
   return lanes
 end
@@ -2566,26 +3013,54 @@ function ReaADR.ensure_character_ruler_lanes(cues)
     return false
   end
 
-  local characters = ReaADR.collect_characters(cues or {})
+  cues = cues or {}
+  if assign_character_lanes then
+    assign_character_lanes(cues, setup_preroll_seconds({ overlay_settings = ReaADR.load_overlay_settings() }))
+  end
+  local characters = ReaADR.collect_characters(cues)
   if #characters == 0 then
     return false
   end
-
-  local existing_count = tonumber(reaper.GetSetProjectInfo(project(), "RULER_LANE_COUNT", 0, false)) or 0
-  if existing_count < #characters then
-    pcall(reaper.GetSetProjectInfo, project(), "RULER_LANE_COUNT", #characters, true)
+  local max_lanes = {}
+  for _, cue in ipairs(cues) do
+    local character = first_nonempty(cue.character, "Unassigned")
+    max_lanes[character] = math.max(max_lanes[character] or 1, tonumber(cue._reaadr_lane) or 1)
   end
 
-  for index, character in ipairs(characters) do
+  local lane_specs = {}
+  for _, character in ipairs(characters) do
+    local lane_count = math.max(1, tonumber(max_lanes[character]) or 1)
+    for lane = 1, lane_count do
+      lane_specs[#lane_specs + 1] = {
+        character = character,
+        lane = lane,
+        label = lane <= 1 and character or ("%s #%d"):format(character, lane),
+      }
+    end
+  end
+
+  local existing_count = tonumber(reaper.GetSetProjectInfo(project(), "RULER_LANE_COUNT", 0, false)) or 0
+  if existing_count < #lane_specs then
+    pcall(reaper.GetSetProjectInfo, project(), "RULER_LANE_COUNT", #lane_specs, true)
+  end
+
+  for index, spec in ipairs(lane_specs) do
     local lane = index - 1
     if reaper.GetSetProjectInfo_String then
-      pcall(reaper.GetSetProjectInfo_String, project(), "RULER_LANE_NAME:" .. tostring(lane), character, true)
+      pcall(reaper.GetSetProjectInfo_String, project(), "RULER_LANE_NAME:" .. tostring(lane), spec.label, true)
     end
-    pcall(reaper.GetSetProjectInfo, project(), "RULER_LANE_COLOR:" .. tostring(lane), character_color(character), true)
+    pcall(reaper.GetSetProjectInfo, project(), "RULER_LANE_COLOR:" .. tostring(lane), character_color(spec.character), true)
     pcall(reaper.GetSetProjectInfo, project(), "RULER_LANE_HIDDEN:" .. tostring(lane), 0, true)
   end
 
   return true
+end
+
+function ReaADR.region_lane_for_cue(cue, lanes)
+  local character = first_nonempty(cue and cue.character, "Unassigned")
+  local lane = tonumber(cue and cue._reaadr_lane) or 1
+  local key = character_lane_key(character, lane)
+  return (lanes or {})[key] or (lanes or {})[character] or 0
 end
 
 function character_lane_key(character, lane)
@@ -2738,6 +3213,10 @@ function ReaADR.setup_project(cues, options)
       end
     end
 
+    if create_source_video_track and options.require_video_track and not source_video_track then
+      error("No video item was found in the project. Place the video in the timeline before building ReaADR cues.")
+    end
+
     if create_source_video_track and not source_video_track then
       tracks[#tracks + 1] = { role = "source_video", name = "ADR Source Video", key = "source_video", color = native_color(ROLE_COLORS.source_video) }
     end
@@ -2798,7 +3277,7 @@ function ReaADR.setup_project(cues, options)
     for cue_index, cue in ipairs(cues) do
       local cue_color = character_color(cue.character)
       local _, region_created = ensure_region_with_index(existing_regions, cue, options.region_color or cue_color)
-      ReaADR.set_region_lane(cue, ruler_lanes[cue.character] or 0)
+      ReaADR.set_region_lane(cue, ReaADR.region_lane_for_cue(cue, ruler_lanes))
       if region_created then
         summary.regions_created = summary.regions_created + 1
       else

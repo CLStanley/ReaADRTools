@@ -8,7 +8,7 @@ end
 
 local core_path = script_dir() .. "/ReaADR_Core.lua"
 local ReaADR = dofile(core_path)
-local cue_audio_path = script_dir() .. "/../assets/cue.wav"
+local cue_audio_path = ReaADR.project_cue_audio_path()
 local overlay_settings = ReaADR.load_overlay_settings()
 local import_preroll_seconds = 3
 
@@ -107,11 +107,18 @@ overlay_settings.preroll_seconds = import_preroll_seconds
 ReaADR.save_overlay_settings(overlay_settings)
 
 local progress = ReaADR.create_progress_window("Importing ADR Cue Sheet")
+local generated_cue_path, generated_cue_error = ReaADR.generate_project_cue_wav(cue_audio_path, frame_rate)
+if not generated_cue_path then
+  progress.close()
+  ReaADR.message("Cue sheet import failed while creating project cue audio:\n\n" .. tostring(generated_cue_error))
+  return
+end
 local preroll_status = ReaADR.configure_project_preroll(import_preroll_seconds)
 local summary, setup_error = ReaADR.setup_project(cues, {
   cue_audio_path = cue_audio_path,
   overlay_settings = overlay_settings,
   preroll_seconds = import_preroll_seconds,
+  require_video_track = true,
   on_progress = progress.update,
 })
 

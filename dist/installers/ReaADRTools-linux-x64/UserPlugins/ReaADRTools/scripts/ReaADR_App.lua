@@ -17,6 +17,7 @@ App.modules = {
     title = "Import",
     actions = {
       { label = "Import Cue Sheet", script = "ReaADR_Import_Cue_Sheet.lua", hint = "Import CSV or TSV script data, map columns, create tracks, regions, cue audio, and overlay metadata." },
+      { label = "Detect Dialogue From Selected Media", script = "ReaADR_Detect_Dialogue.lua", hint = "Analyze selected audio/video media and create editable ADR cues from detected speech regions." },
       { label = "Generate Cues from Markers/Regions", script = "ReaADR_Generate_Cues.lua", hint = "Create ADR cue items from existing project markers or regions without importing a cue sheet." },
     },
   },
@@ -24,15 +25,12 @@ App.modules = {
     title = "Cue Management",
     actions = {
       { label = "Open Cue Manager", script = "ReaADR_Cue_Manager.lua", hint = "Browse cues, jump around the session, update cue status, and refresh the active overlay." },
-      { label = "Character Filter", script = "ReaADR_Character_Filter.lua", hint = "Enable or disable character tracks for focused recording passes." },
     },
   },
   session = {
     title = "Session Tools",
     actions = {
-      { label = "Open Cue Manager", script = "ReaADR_Cue_Manager.lua", hint = "Review the generated cue list and make cue-level changes." },
       { label = "Validate Session", app_action = "validate_session", hint = "Check cue timing, missing fields, overlap splits, and preserved metadata." },
-      { label = "Refresh Video Overlay", app_action = "refresh_overlay", hint = "Rebuild only the video overlay from the current project/session data." },
       { label = "Rebuild Session From Cache", app_action = "rebuild_session", hint = "Recreate tracks, regions, cue audio, and overlays from the last imported session cache." },
       { label = "Clean Generated Cue Items", script = "ReaADR_Clean_Generated_Cues.lua", hint = "Remove ReaADR-generated cue items without deleting user recordings." },
     },
@@ -43,12 +41,13 @@ App.modules = {
       { label = "Export Cue Sheet CSV", script = "ReaADR_Export_Cue_Sheet.lua", hint = "Export regions and cues to a flexible CSV for editing or reimporting later." },
     },
   },
+  overlay = {
+    title = "Video Overlays",
+    actions = {},
+  },
   preferences = {
     title = "Preferences",
-    actions = {
-      { label = "Overlay Settings", script = "ReaADR_Overlay_Settings.lua", hint = "Choose which cue, timecode, visual cue, dialogue, status, and metadata fields appear over video." },
-      { label = "Configure Quick Actions", app_action = "configure_quick_actions", hint = "Choose what the top-level ReaADR Tools quick-action menu slots run." },
-    },
+    actions = {},
   },
   help = {
     title = "Help",
@@ -63,13 +62,31 @@ App.modules = {
   },
 }
 
-App.manager_order = { "import", "cues", "session", "reports", "preferences", "help" }
+App.manager_order = { "import", "cues", "session", "reports", "overlay", "preferences", "help" }
+
+App.overlay_rows = {
+  { key = "enabled", label = "Enable video overlays" },
+  { key = "show_cue_id", label = "Cue ID" },
+  { key = "show_character", label = "Character name" },
+  { key = "show_cue_timecode", label = "Cue timecode" },
+  { key = "show_project_timer", label = "Live project timer" },
+  { key = "show_dialogue", label = "Dialogue line" },
+  { key = "show_direction", label = "Performance direction" },
+  { key = "show_cue_type", label = "Cue type" },
+  { key = "show_visual_cue", label = "Visual cue indicator" },
+  { key = "show_streamer", label = "Streamer bar" },
+  { key = "show_flash", label = "Flash at cue start" },
+  { key = "show_status", label = "Standby / take / clear status" },
+  { key = "show_metadata", label = "Studio metadata" },
+}
+
+App.metadata_field_labels = { "PGID", "MID", "Media Time", "Watermark Timestamp", "Asset Date Code", "Project Name" }
 
 App.quick_action_choices = {
   { key = "import", label = "Import Cue Sheet", script = "ReaADR_Import_Cue_Sheet.lua" },
   { key = "cue_manager", label = "Open Cue Manager", script = "ReaADR_Cue_Manager.lua" },
   { key = "export_reports", label = "Export Reports", app_action = "export_reports" },
-  { key = "overlay_settings", label = "Overlay Settings", script = "ReaADR_Overlay_Settings.lua" },
+  { key = "overlay_settings", label = "Video Overlays Tab", app_action = "open_overlay_manager" },
   { key = "character_filter", label = "Character Filter", script = "ReaADR_Character_Filter.lua" },
   { key = "refresh_overlay", label = "Refresh Video Overlay", app_action = "refresh_overlay" },
   { key = "validate", label = "Validate Session", app_action = "validate_session" },
@@ -195,19 +212,30 @@ function App.run_quick_action(slot)
   return run_action(action)
 end
 
+function App.open_overlay_manager()
+  return App.open_manager("overlay")
+end
+
 function App.configure_quick_actions()
   local state = {
     width = 620,
     height = 360,
+    min_width = 520,
+    min_height = 320,
     last_mouse = 0,
   }
 
   local rows = {}
-  for slot = 1, 4 do
-    rows[slot] = { x = 24, y = 82 + ((slot - 1) * 48), w = 560, h = 34, slot = slot }
-  end
+  local done = {}
 
-  local done = { x = 470, y = 294, w = 114, h = 34, label = "Done" }
+  local function layout()
+    state.width = math.max(state.min_width, gfx.w or state.width)
+    state.height = math.max(state.min_height, gfx.h or state.height)
+    for slot = 1, 4 do
+      rows[slot] = { x = 24, y = 82 + ((slot - 1) * 48), w = state.width - 60, h = 34, slot = slot }
+    end
+    done = { x = state.width - 150, y = state.height - 66, w = 114, h = 34, label = "Done" }
+  end
 
   local function inside(rect, x, y)
     return x >= rect.x and x <= rect.x + rect.w and y >= rect.y and y <= rect.y + rect.h
@@ -244,6 +272,7 @@ function App.configure_quick_actions()
   end
 
   local function frame()
+    layout()
     gfx.set(0.10, 0.11, 0.12, 1)
     gfx.rect(0, 0, state.width, state.height, true)
     gfx.setfont(1, "Arial", 22)
@@ -289,6 +318,99 @@ function App.configure_quick_actions()
   gfx.init("Configure ReaADR Quick Actions", state.width, state.height)
   frame()
   return true
+end
+
+local function split_metadata_fields(value)
+  local fields = {}
+  for field in tostring(value or ""):gmatch("([^,]+)") do
+    field = field:match("^%s*(.-)%s*$")
+    if field ~= "" then
+      fields[#fields + 1] = field
+    end
+  end
+  for index = 1, #App.metadata_field_labels do
+    if fields[index] == nil then
+      fields[index] = App.metadata_field_labels[index]
+    end
+  end
+  return fields
+end
+
+local function edit_metadata_fields(settings)
+  local fields = split_metadata_fields(settings.metadata_fields)
+  local ok, values = reaper.GetUserInputs(
+    "Studio Metadata Overlay Fields",
+    #App.metadata_field_labels,
+    table.concat(App.metadata_field_labels, ","),
+    table.concat(fields, ",")
+  )
+  if not ok then
+    return false
+  end
+  local updated = {}
+  for value in (values .. ","):gmatch("([^,]*),") do
+    value = value:match("^%s*(.-)%s*$")
+    if value ~= "" then
+      updated[#updated + 1] = value
+    end
+  end
+  settings.metadata_fields = table.concat(updated, ",")
+  return true
+end
+
+local function apply_overlay_profile(settings, name)
+  local profiles = {
+    actor = {
+      enabled = true, show_cue_id = true, show_character = true, show_dialogue = true,
+      show_cue_timecode = true, show_project_timer = true, show_visual_cue = true,
+      show_direction = true, show_cue_type = false, show_streamer = true,
+      show_flash = true, show_status = true, show_metadata = false,
+    },
+    engineer = {
+      enabled = true, show_cue_id = true, show_character = true, show_dialogue = true,
+      show_cue_timecode = true, show_project_timer = true, show_visual_cue = true,
+      show_direction = true, show_cue_type = true, show_streamer = true,
+      show_flash = true, show_status = true, show_metadata = true,
+    },
+    studio = {
+      enabled = true, show_cue_id = true, show_character = true, show_dialogue = true,
+      show_cue_timecode = true, show_project_timer = true, show_visual_cue = true,
+      show_direction = false, show_cue_type = true, show_streamer = true,
+      show_flash = true, show_status = true, show_metadata = true,
+    },
+    minimal = {
+      enabled = true, show_cue_id = true, show_character = false, show_dialogue = true,
+      show_cue_timecode = false, show_project_timer = true, show_visual_cue = true,
+      show_direction = false, show_cue_type = false, show_streamer = true,
+      show_flash = false, show_status = false, show_metadata = false,
+    },
+  }
+  for key, value in pairs(profiles[name] or {}) do
+    settings[key] = value
+  end
+end
+
+local function save_overlay_settings(settings)
+  App.ReaADR.save_overlay_settings(settings)
+  return App.ReaADR.refresh_overlay_fx_from_project(settings)
+end
+
+local function choose_quick_action(slot)
+  local labels = {}
+  local current = App.get_quick_action(slot)
+  for index, action in ipairs(App.quick_action_choices) do
+    labels[index] = (current and action.key == current.key and "!" or "") .. action.label
+  end
+  local mouse_x, mouse_y = reaper.GetMousePosition()
+  gfx.x = mouse_x
+  gfx.y = mouse_y
+  local choice = gfx.showmenu(table.concat(labels, "|"))
+  local selected = App.quick_action_choices[choice]
+  if selected then
+    reaper.SetExtState("ReaADRTools", quick_action_key(slot), selected.key, true)
+    return true
+  end
+  return false
 end
 
 local function show_help_topic(topic)
@@ -503,15 +625,21 @@ local function draw_button(rect)
   return hover
 end
 
-function App.open_manager()
+function App.open_manager(initial_tab)
   local ReaADR = App.ReaADR
   local summary = session_summary(ReaADR)
   local state = {
-    width = 880,
-    height = 600,
-    tab = "import",
+    width = 980,
+    height = 680,
+    min_width = 900,
+    min_height = 600,
+    tab = initial_tab or "import",
     last_mouse = 0,
     closed = false,
+    overlay_settings = ReaADR.load_overlay_settings(),
+    overlay_dirty = false,
+    overlay_message = "",
+    overlay_message_until = 0,
   }
 
   local tab_rects = {}
@@ -532,7 +660,10 @@ function App.open_manager()
   end
 
   local function frame()
+    state.width = math.max(state.min_width, gfx.w or state.width)
+    state.height = math.max(state.min_height, gfx.h or state.height)
     local hover_hint = ""
+    local special_click = {}
     gfx.set(0.11, 0.12, 0.13, 1)
     gfx.rect(0, 0, state.width, state.height, true)
 
@@ -583,29 +714,106 @@ function App.open_manager()
       end
     end
 
-    if state.tab == "cues" and #summary.characters > 0 then
+    if state.tab == "cues" then
       gfx.setfont(1, "Arial", 14)
       gfx.set(0.78, 0.81, 0.84, 1)
       gfx.x = 382
       gfx.y = 166
-      gfx.drawstr("Characters")
+      gfx.drawstr("Project Cue Summary")
       gfx.x = 382
       gfx.y = 190
-      gfx.drawstr(table.concat(summary.characters, ", "))
+      gfx.drawstr(("Cues: %d"):format(summary.cue_count))
+      gfx.x = 382
+      gfx.y = 214
+      gfx.drawstr(("Characters: %d"):format(summary.character_count))
+      if #summary.characters > 0 then
+        gfx.x = 382
+        gfx.y = 238
+        local characters = table.concat(summary.characters, ", ")
+        if #characters > 78 then
+          characters = characters:sub(1, 75) .. "..."
+        end
+        gfx.drawstr(characters)
+      end
     end
 
     local quick_y = 166
     if state.tab == "preferences" then
       gfx.setfont(1, "Arial", 14)
       gfx.set(0.78, 0.81, 0.84, 1)
-      gfx.x = 382
+      gfx.x = 24
       gfx.y = quick_y
-      gfx.drawstr("Current quick actions")
+      gfx.drawstr("Quick Access Menu")
       for slot = 1, 4 do
         local action = App.get_quick_action(slot)
-        gfx.x = 382
-        gfx.y = quick_y + (slot * 24)
-        gfx.drawstr(("Quick Action %d: %s"):format(slot, action and action.label or "Not configured"))
+        local rect = { x = 24, y = quick_y + 24 + ((slot - 1) * 44), w = 420, h = 34, label = ("Quick Action %d: %s"):format(slot, action and action.label or "Not configured") }
+        special_click[#special_click + 1] = { rect = rect, kind = "quick", slot = slot }
+        if draw_button(rect) then
+          hover_hint = "Choose which action this top-menu quick slot runs."
+        end
+      end
+      gfx.setfont(1, "Arial", 13)
+      gfx.set(0.72, 0.76, 0.80, 1)
+      gfx.x = 24
+      gfx.y = quick_y + 214
+      gfx.drawstr("Restart REAPER after changing quick actions if the native menu labels do not update immediately.")
+    elseif state.tab == "overlay" then
+      local settings = state.overlay_settings
+      local profile_buttons = {
+        { x = 24, y = 166, w = 92, h = 30, label = "Actor", profile = "actor" },
+        { x = 126, y = 166, w = 102, h = 30, label = "Engineer", profile = "engineer" },
+        { x = 238, y = 166, w = 92, h = 30, label = "Studio", profile = "studio" },
+        { x = 340, y = 166, w = 92, h = 30, label = "Minimal", profile = "minimal" },
+      }
+      for _, rect in ipairs(profile_buttons) do
+        special_click[#special_click + 1] = { rect = rect, kind = "profile", profile = rect.profile }
+        if draw_button(rect) then
+          hover_hint = "Apply a common overlay visibility preset."
+        end
+      end
+
+      local row_y = 218
+      for index, row in ipairs(App.overlay_rows) do
+        local x = index <= 7 and 24 or 360
+        local y_row = row_y + (((index - 1) % 7) * 32)
+        local rect = { x = x, y = y_row - 4, w = 300, h = 26 }
+        special_click[#special_click + 1] = { rect = rect, kind = "overlay_toggle", key = row.key }
+        gfx.set(0.15, 0.16, 0.18, 1)
+        gfx.rect(x, y_row, 18, 18, false)
+        if settings[row.key] then
+          gfx.set(0.1, 0.75, 1, 1)
+          gfx.rect(x + 4, y_row + 4, 10, 10, true)
+        end
+        gfx.setfont(1, "Arial", 14)
+        gfx.set(0.92, 0.92, 0.92, 1)
+        gfx.x = x + 30
+        gfx.y = y_row - 1
+        gfx.drawstr(row.label)
+      end
+
+      local metadata_rect = { x = 24, y = 470, w = 132, h = 32, label = "Edit Fields" }
+      local save_rect = { x = 24, y = 542, w = 132, h = 34, label = "Save Overlay" }
+      special_click[#special_click + 1] = { rect = metadata_rect, kind = "metadata" }
+      special_click[#special_click + 1] = { rect = save_rect, kind = "overlay_save" }
+      draw_button(metadata_rect)
+      draw_button(save_rect)
+      gfx.setfont(1, "Arial", 13)
+      gfx.set(0.78, 0.82, 0.86, 1)
+      gfx.x = 170
+      gfx.y = 478
+      local fields = tostring(settings.metadata_fields or "")
+      if #fields > 70 then
+        fields = fields:sub(1, 67) .. "..."
+      end
+      gfx.drawstr("Metadata: " .. fields)
+      gfx.x = 170
+      gfx.y = 552
+      if state.overlay_dirty then
+        gfx.set(1, 0.78, 0.2, 1)
+        gfx.drawstr("Unsaved overlay changes")
+      elseif reaper.time_precise() < state.overlay_message_until then
+        gfx.set(0.36, 0.95, 0.55, 1)
+        gfx.drawstr(state.overlay_message)
       end
     elseif state.tab == "help" then
       gfx.setfont(1, "Arial", 14)
@@ -654,6 +862,28 @@ function App.open_manager()
           close()
           run_action(button.action)
           return
+        end
+      end
+      for _, entry in ipairs(special_click) do
+        if inside(entry.rect, gfx.mouse_x, gfx.mouse_y) then
+          if entry.kind == "quick" then
+            choose_quick_action(entry.slot)
+          elseif entry.kind == "profile" then
+            apply_overlay_profile(state.overlay_settings, entry.profile)
+            state.overlay_dirty = true
+          elseif entry.kind == "overlay_toggle" then
+            state.overlay_settings[entry.key] = not state.overlay_settings[entry.key]
+            state.overlay_dirty = true
+          elseif entry.kind == "metadata" then
+            if edit_metadata_fields(state.overlay_settings) then
+              state.overlay_dirty = true
+            end
+          elseif entry.kind == "overlay_save" then
+            local status = save_overlay_settings(state.overlay_settings)
+            state.overlay_dirty = false
+            state.overlay_message = status and ("Saved: " .. tostring(status)) or "Saved"
+            state.overlay_message_until = reaper.time_precise() + 2.0
+          end
         end
       end
     end

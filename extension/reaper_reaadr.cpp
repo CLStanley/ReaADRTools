@@ -197,7 +197,7 @@ std::string quick_action_label(int slot)
   if (action_key == "import" || (action_key.empty() && slot == 1)) return "Quick Action 1: Import Cue Sheet";
   if (action_key == "cue_manager" || (action_key.empty() && slot == 2)) return "Quick Action 2: Cue Manager";
   if (action_key == "export_reports" || (action_key.empty() && slot == 3)) return "Quick Action 3: Export Reports";
-  if (action_key == "overlay_settings" || (action_key.empty() && slot == 4)) return "Quick Action 4: Overlay Settings";
+  if (action_key == "overlay_settings" || (action_key.empty() && slot == 4)) return "Quick Action 4: Video Overlays";
   if (action_key == "character_filter") return "Quick Action " + std::to_string(slot) + ": Character Filter";
   if (action_key == "refresh_overlay") return "Quick Action " + std::to_string(slot) + ": Refresh Overlay";
   if (action_key == "validate") return "Quick Action " + std::to_string(slot) + ": Validate Session";
