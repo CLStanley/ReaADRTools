@@ -24,12 +24,7 @@ App.modules = {
     title = "Cue Management",
     actions = {
       { label = "Open Cue Manager", script = "ReaADR_Cue_Manager.lua", hint = "Browse cues, jump around the session, update cue status, and refresh the active overlay." },
-      { label = "Next Cue", script = "ReaADR_Next_Cue.lua", hint = "Move the edit cursor to the next active cue." },
-      { label = "Previous Cue", script = "ReaADR_Previous_Cue.lua", hint = "Move the edit cursor to the previous active cue." },
-      { label = "Jump To Cue", script = "ReaADR_Jump_To_Cue.lua", hint = "Type a cue number and jump directly to it." },
-      { label = "Set Cue Status", script = "ReaADR_Set_Cue_Status.lua", hint = "Set the selected or current cue to Not Recorded, Recorded, Approved, or Needs Retake." },
       { label = "Character Filter", script = "ReaADR_Character_Filter.lua", hint = "Enable or disable character tracks for focused recording passes." },
-      { label = "Cue Information Panel", script = "ReaADR_Cue_Info_Panel.lua", hint = "Open a large readable cue panel with current and next cue information." },
     },
   },
   session = {
@@ -77,9 +72,6 @@ App.quick_action_choices = {
   { key = "overlay_settings", label = "Overlay Settings", script = "ReaADR_Overlay_Settings.lua" },
   { key = "character_filter", label = "Character Filter", script = "ReaADR_Character_Filter.lua" },
   { key = "refresh_overlay", label = "Refresh Video Overlay", app_action = "refresh_overlay" },
-  { key = "next_cue", label = "Next Cue", script = "ReaADR_Next_Cue.lua" },
-  { key = "previous_cue", label = "Previous Cue", script = "ReaADR_Previous_Cue.lua" },
-  { key = "set_status", label = "Set Cue Status", script = "ReaADR_Set_Cue_Status.lua" },
   { key = "validate", label = "Validate Session", app_action = "validate_session" },
 }
 
@@ -135,7 +127,7 @@ App.help_topics = {
     body = table.concat({
       "The top-level ReaADR Tools menu keeps Open Manager first, followed by four configurable quick-action slots.",
       "",
-      "Use Manager > Preferences > Configure Quick Actions to choose what each slot runs. The menu slot names stay stable, but their behavior is user configurable.",
+      "Use Manager > Preferences > Configure Quick Actions to choose what each slot runs. Restart REAPER after changing them if you want the native menu labels to update.",
     }, "\n"),
   },
 }
@@ -204,22 +196,98 @@ function App.run_quick_action(slot)
 end
 
 function App.configure_quick_actions()
+  local state = {
+    width = 620,
+    height = 360,
+    last_mouse = 0,
+  }
+
+  local rows = {}
   for slot = 1, 4 do
+    rows[slot] = { x = 24, y = 82 + ((slot - 1) * 48), w = 560, h = 34, slot = slot }
+  end
+
+  local done = { x = 470, y = 294, w = 114, h = 34, label = "Done" }
+
+  local function inside(rect, x, y)
+    return x >= rect.x and x <= rect.x + rect.w and y >= rect.y and y <= rect.y + rect.h
+  end
+
+  local function draw_rect_button(rect, label)
+    local hover = inside(rect, gfx.mouse_x, gfx.mouse_y)
+    gfx.set(hover and 0.22 or 0.18, hover and 0.34 or 0.24, hover and 0.40 or 0.28, 1)
+    gfx.rect(rect.x, rect.y, rect.w, rect.h, true)
+    gfx.set(0.62, 0.66, 0.70, 1)
+    gfx.rect(rect.x, rect.y, rect.w, rect.h, false)
+    gfx.setfont(1, "Arial", 15)
+    gfx.set(1, 1, 1, 1)
+    gfx.x = rect.x + 10
+    gfx.y = rect.y + 8
+    gfx.drawstr(label)
+    return hover
+  end
+
+  local function choose_slot(slot)
     local labels = {}
     local current = App.get_quick_action(slot)
     for index, action in ipairs(App.quick_action_choices) do
       labels[index] = (current and action.key == current.key and "!" or "") .. action.label
     end
     local mouse_x, mouse_y = reaper.GetMousePosition()
-    gfx.init("Configure Quick Action " .. tostring(slot), 0, 0, 0, mouse_x, mouse_y)
+    gfx.x = mouse_x
+    gfx.y = mouse_y
     local choice = gfx.showmenu(table.concat(labels, "|"))
-    gfx.quit()
     local selected = App.quick_action_choices[choice]
     if selected then
       reaper.SetExtState("ReaADRTools", quick_action_key(slot), selected.key, true)
     end
   end
-  App.ReaADR.message("Quick actions updated.\n\nRestart REAPER if the top-level ReaADR Tools menu is already open and does not immediately reflect the latest installed extension build.")
+
+  local function frame()
+    gfx.set(0.10, 0.11, 0.12, 1)
+    gfx.rect(0, 0, state.width, state.height, true)
+    gfx.setfont(1, "Arial", 22)
+    gfx.set(1, 1, 1, 1)
+    gfx.x = 24
+    gfx.y = 20
+    gfx.drawstr("Configure Quick Actions")
+    gfx.setfont(1, "Arial", 13)
+    gfx.set(0.76, 0.80, 0.84, 1)
+    gfx.x = 24
+    gfx.y = 50
+    gfx.drawstr("Click a slot to choose the action it runs. Restart REAPER for top-menu label changes.")
+
+    for slot, rect in ipairs(rows) do
+      local action = App.get_quick_action(slot)
+      draw_rect_button(rect, ("Quick Action %d: %s"):format(slot, action and action.label or "Not configured"))
+    end
+    draw_rect_button(done, "Done")
+
+    gfx.update()
+    local char = gfx.getchar()
+    if char < 0 or char == 27 then
+      gfx.quit()
+      return
+    end
+
+    local mouse = gfx.mouse_cap % 2
+    if mouse == 1 and state.last_mouse == 0 then
+      if inside(done, gfx.mouse_x, gfx.mouse_y) then
+        gfx.quit()
+        return
+      end
+      for slot, rect in ipairs(rows) do
+        if inside(rect, gfx.mouse_x, gfx.mouse_y) then
+          choose_slot(slot)
+        end
+      end
+    end
+    state.last_mouse = mouse
+    reaper.defer(frame)
+  end
+
+  gfx.init("Configure ReaADR Quick Actions", state.width, state.height)
+  frame()
   return true
 end
 

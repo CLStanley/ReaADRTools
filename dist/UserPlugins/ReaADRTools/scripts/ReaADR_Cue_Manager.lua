@@ -23,6 +23,41 @@ local state = {
   closed = false,
 }
 
+local function cue_index_by_key(key)
+  if not key or key == "" then
+    return nil
+  end
+  for index, cue in ipairs(cues or {}) do
+    if ReaADR.cue_key(cue) == key then
+      return index
+    end
+  end
+  return nil
+end
+
+local function cue_index_at_position(position)
+  local cue = ReaADR.find_cue_at_position(cues, position)
+  if cue then
+    return cue_index_by_key(ReaADR.cue_key(cue))
+  end
+  return nil
+end
+
+local function sync_scroll_to_selection(visible_rows)
+  visible_rows = visible_rows or 14
+  if state.selected <= state.scroll then
+    state.scroll = math.max(0, state.selected - 1)
+  elseif state.selected > state.scroll + visible_rows then
+    state.scroll = math.max(0, state.selected - visible_rows)
+  end
+end
+
+local selected_key = ReaADR.selected_region_cue_key()
+if selected_key == "" then
+  selected_key = ReaADR.manager_selected_cue_key()
+end
+state.selected = cue_index_by_key(selected_key) or cue_index_at_position(ReaADR.current_timeline_position()) or 1
+
 local function inside(rect, x, y)
   return x >= rect.x and x <= rect.x + rect.w and y >= rect.y and y <= rect.y + rect.h
 end
@@ -58,6 +93,19 @@ local function refresh_cues()
   end
 end
 
+local function select_cue(index, jump)
+  if not cues[index] then
+    return
+  end
+  state.selected = index
+  local cue = cues[state.selected]
+  ReaADR.set_manager_selected_cue(cue)
+  if jump then
+    ReaADR.jump_to_cue(cue)
+  end
+  ReaADR.refresh_overlay_silent()
+end
+
 local function set_status_for_selected()
   local cue = cues[state.selected]
   if not cue then
@@ -69,6 +117,65 @@ local function set_status_for_selected()
   end
   ReaADR.set_cue_status_at_position(status, cue.start_time)
   refresh_cues()
+end
+
+local function edit_text_field(title, label, current)
+  local ok, value = reaper.GetUserInputs(title, 1, label .. ":", tostring(current or ""))
+  if not ok then
+    return nil
+  end
+  return value
+end
+
+local function edit_details_for_selected()
+  local cue = cues[state.selected]
+  if not cue then
+    return
+  end
+
+  local fields = {
+    { label = "Cue Number", key = "id" },
+    { label = "Character", key = "character" },
+    { label = "Dialogue", key = "line" },
+    { label = "Direction", key = "direction" },
+    { label = "Cue Type", key = "cue_type" },
+    { label = "Notes", key = "notes" },
+  }
+  local labels = {}
+  for index, field in ipairs(fields) do
+    labels[index] = field.label
+  end
+
+  local mouse_x, mouse_y = reaper.GetMousePosition()
+  gfx.x = mouse_x
+  gfx.y = mouse_y
+  local choice = gfx.showmenu(table.concat(labels, "|"))
+  local field = fields[choice]
+  if not field then
+    return
+  end
+
+  local value = edit_text_field("Edit " .. field.label, field.label, cue[field.key])
+  if value == nil then
+    return
+  end
+
+  local updated = {}
+  for key, existing in pairs(cue) do
+    updated[key] = existing
+  end
+  updated._original_key = ReaADR.cue_key(cue)
+  updated[field.key] = value
+  local saved, err = ReaADR.update_cached_cue(updated)
+  if not saved then
+    ReaADR.message("Cue update failed:\n\n" .. tostring(err))
+    return
+  end
+  refresh_cues()
+  local index = cue_index_by_key(ReaADR.cue_key(saved))
+  if index then
+    state.selected = index
+  end
 end
 
 local function frame()
@@ -100,8 +207,9 @@ local function frame()
     prev = { x = 124, y = buttons_y, w = 92, h = 32, label = "Previous", hint = "Select the previous cue in the list." },
     next = { x = 226, y = buttons_y, w = 92, h = 32, label = "Next", hint = "Select the next cue in the list." },
     status = { x = 328, y = buttons_y, w = 110, h = 32, label = "Set Status", hint = "Update the selected cue status and refresh cue data." },
-    overlay = { x = 448, y = buttons_y, w = 128, h = 32, label = "Refresh Overlay", hint = "Refresh the video overlay for the selected/current cue state." },
-    info = { x = 586, y = buttons_y, w = 112, h = 32, label = "Info Panel", hint = "Open the large cue information panel for booth visibility." },
+    edit = { x = 448, y = buttons_y, w = 112, h = 32, label = "Edit Details", hint = "Edit cue number, character, dialogue, direction, type, or notes." },
+    overlay = { x = 570, y = buttons_y, w = 128, h = 32, label = "Refresh Overlay", hint = "Refresh the video overlay for the selected/current cue state." },
+    info = { x = 708, y = buttons_y, w = 112, h = 32, label = "Info Panel", hint = "Open the large cue information panel for the selected cue." },
   }
 
   local header_y = 78
@@ -191,15 +299,11 @@ local function frame()
     gfx.quit()
     return
   elseif char == 30064 then
-    state.selected = math.max(1, state.selected - 1)
-    if state.selected <= state.scroll then
-      state.scroll = math.max(0, state.scroll - 1)
-    end
+    select_cue(math.max(1, state.selected - 1), true)
+    sync_scroll_to_selection(visible_rows)
   elseif char == 1685026670 then
-    state.selected = math.min(#cues, state.selected + 1)
-    if state.selected > state.scroll + visible_rows then
-      state.scroll = state.scroll + 1
-    end
+    select_cue(math.min(#cues, state.selected + 1), true)
+    sync_scroll_to_selection(visible_rows)
   end
 
   local wheel = gfx.mouse_wheel
@@ -214,24 +318,28 @@ local function frame()
       local cue_index = state.scroll + row
       local rect = { x = 22, y = list_y + ((row - 1) * row_h), w = 936, h = row_h - 2 }
       if cues[cue_index] and inside(rect, gfx.mouse_x, gfx.mouse_y) then
-        state.selected = cue_index
+        select_cue(cue_index, true)
       end
     end
 
     local cue = cues[state.selected]
     if cue and inside(buttons.jump, gfx.mouse_x, gfx.mouse_y) then
-      ReaADR.jump_to_cue(cue)
-      ReaADR.refresh_overlay_silent()
+      select_cue(state.selected, true)
     elseif inside(buttons.prev, gfx.mouse_x, gfx.mouse_y) then
-      state.selected = math.max(1, state.selected - 1)
+      select_cue(math.max(1, state.selected - 1), true)
     elseif inside(buttons.next, gfx.mouse_x, gfx.mouse_y) then
-      state.selected = math.min(#cues, state.selected + 1)
+      select_cue(math.min(#cues, state.selected + 1), true)
     elseif cue and inside(buttons.status, gfx.mouse_x, gfx.mouse_y) then
       set_status_for_selected()
+    elseif cue and inside(buttons.edit, gfx.mouse_x, gfx.mouse_y) then
+      edit_details_for_selected()
     elseif inside(buttons.overlay, gfx.mouse_x, gfx.mouse_y) then
       ReaADR.refresh_overlay_silent()
-    elseif inside(buttons.info, gfx.mouse_x, gfx.mouse_y) then
+    elseif cue and inside(buttons.info, gfx.mouse_x, gfx.mouse_y) then
+      ReaADR.set_manager_selected_cue(cue)
+      gfx.quit()
       dofile(script_dir() .. "/ReaADR_Cue_Info_Panel.lua")
+      return
     end
   end
   state.last_mouse = mouse

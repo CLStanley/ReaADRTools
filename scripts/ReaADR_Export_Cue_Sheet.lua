@@ -66,6 +66,18 @@ local function browse_for_save_path(current_path)
     file = "reaadr_cue_sheet.csv"
   end
 
+  if reaper.GetUserFileName then
+    local initial = current_path
+    if initial == "" then
+      initial = join_path(folder, file)
+    end
+    local ok, selected = reaper.GetUserFileName(0, "Export ADR cue sheet", initial, "CSV files|*.csv|All files|*.*")
+    if ok and selected and selected ~= "" then
+      return selected
+    end
+    return current_path
+  end
+
   if reaper.JS_Dialog_BrowseForSaveFile then
     local success, ok, selected = pcall(
       reaper.JS_Dialog_BrowseForSaveFile,
@@ -271,10 +283,8 @@ local function path_dialog(default_path, on_done)
         set_cursor_from_mouse()
       elseif inside(browse, gfx.mouse_x, gfx.mouse_y) then
         state.focused = false
-        gfx.quit()
         state.path = browse_for_save_path(state.path)
         state.cursor = #state.path
-        gfx.init("Export ADR Cue Sheet", state.width, state.height)
       elseif inside(export, gfx.mouse_x, gfx.mouse_y) then
         finish(state.path)
         return

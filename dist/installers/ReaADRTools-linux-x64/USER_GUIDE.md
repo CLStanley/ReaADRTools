@@ -12,7 +12,8 @@ organization without leaving REAPER.
 
 The menu contains `Open Manager` plus four configurable quick-action slots.
 Open Manager is the main workspace. Quick actions can be changed from
-`Open Manager > Preferences > Configure Quick Actions`.
+`Open Manager > Preferences > Configure Quick Actions`. Restart REAPER after
+changing quick actions if you want the native top-menu labels to refresh.
 
 ## Recommended REAPER Setup
 
@@ -67,16 +68,16 @@ Open `ReaADR Tools > Open Manager`, then choose Cue Management.
 Useful tools:
 
 - Open Cue Manager
-- Next Cue
-- Previous Cue
-- Jump To Cue
-- Set Cue Status
 - Character Filter
-- Cue Information Panel
 
 The Cue Manager shows cue rows with cue ID, character, SMPTE start/end, status,
-and dialogue. Select a row to jump, update status, refresh overlays, or open
-the information panel.
+and dialogue. Select a row to jump to the start of its region. Use the Cue
+Manager buttons to move previous/next, update cue status, edit cue details,
+refresh overlays, or open the information panel for the selected cue.
+
+Editable cue details include cue number, character, dialogue, direction, cue
+type, and notes. Edits update the cached session, generated region, and video
+overlay.
 
 ## Character Filter
 

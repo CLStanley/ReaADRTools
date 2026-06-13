@@ -79,9 +79,10 @@ Older standalone utility actions are unregistered by the extension and remain
 available internally through `Open Manager`.
 
 Quick actions are configurable from `Open Manager > Preferences > Configure
-Quick Actions`. The native menu labels stay stable, but each slot can run
-commonly used tools such as Import Cue Sheet, Cue Manager, Export Reports,
-Overlay Settings, Character Filter, Refresh Video Overlay, or cue navigation.
+Quick Actions`. Each slot can run commonly used tools such as Import Cue Sheet,
+Cue Manager, Export Reports, Overlay Settings, Character Filter, Refresh Video
+Overlay, or validation. Restart REAPER after changing quick actions if the
+native top-menu labels have not refreshed yet.
 
 The manager also includes hover hints and a Help tab with searchable workflow
 guidance.

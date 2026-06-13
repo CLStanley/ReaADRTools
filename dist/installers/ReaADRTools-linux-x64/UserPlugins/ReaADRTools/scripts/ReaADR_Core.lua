@@ -1640,6 +1640,7 @@ function ReaADR.jump_to_cue(cue)
   end
   reaper.SetEditCurPos(tonumber(cue.start_time) or 0, true, false)
   ReaADR.set_active_overlay_cue(cue)
+  ReaADR.set_manager_selected_cue(cue)
   return true
 end
 
@@ -1650,6 +1651,16 @@ end
 function ReaADR.set_active_overlay_cue(cue)
   local key = cue and ReaADR.cue_key(cue) or ""
   reaper.SetProjExtState(project(), ReaADR.EXT_NAMESPACE, "active_overlay_cue_key", key)
+end
+
+function ReaADR.manager_selected_cue_key()
+  return project_key_value(ReaADR.EXT_NAMESPACE, "manager_selected_cue_key")
+end
+
+function ReaADR.set_manager_selected_cue(cue)
+  local key = cue and ReaADR.cue_key(cue) or ""
+  reaper.SetProjExtState(project(), ReaADR.EXT_NAMESPACE, "manager_selected_cue_key", key)
+  ReaADR.set_active_overlay_cue(cue)
 end
 
 function ReaADR.refresh_overlay_silent()
@@ -1776,6 +1787,27 @@ function ReaADR.active_cue()
     cues = ReaADR.navigation_cues()
   end
   cues = cues or {}
+  cues = ReaADR.filter_cues_by_active_characters(cues)
+
+  local selected_key = ReaADR.manager_selected_cue_key()
+  if selected_key ~= "" then
+    for _, cue in ipairs(cues) do
+      if ReaADR.cue_key(cue) == selected_key then
+        return cue, cues
+      end
+    end
+  end
+
+  selected_key = ReaADR.selected_region_cue_key()
+  if selected_key ~= "" then
+    for _, cue in ipairs(cues) do
+      if ReaADR.cue_key(cue) == selected_key then
+        ReaADR.set_manager_selected_cue(cue)
+        return cue, cues
+      end
+    end
+  end
+
   local position = ReaADR.current_timeline_position()
   return ReaADR.find_cue_at_position(cues, position) or ReaADR.find_next_cue(cues, position), cues
 end
@@ -1783,10 +1815,10 @@ end
 function ReaADR.session_cues()
   local cues, source = ReaADR.load_last_import_cues()
   if cues then
-    return cues, "cached ReaADR session"
+    return ReaADR.filter_cues_by_active_characters(cues), "cached ReaADR session"
   end
   cues, source = ReaADR.navigation_cues()
-  return cues or {}, source or "project"
+  return ReaADR.filter_cues_by_active_characters(cues or {}), source or "project"
 end
 
 function ReaADR.validate_cues(cues, options)
@@ -1959,6 +1991,61 @@ function ReaADR.set_cue_status_at_position(status, position)
   end
   reaper.UpdateArrange()
   return cue, overlay_status
+end
+
+function ReaADR.update_cached_cue(updated_cue)
+  if not updated_cue then
+    return nil, "No cue was provided."
+  end
+
+  local cues, cue_error = ReaADR.load_last_import_cues()
+  if not cues then
+    return nil, cue_error or "No cached ReaADR session was found."
+  end
+
+  local key = updated_cue._original_key or ReaADR.cue_key(updated_cue)
+  local updated = nil
+  for _, cue in ipairs(cues) do
+    if ReaADR.cue_key(cue) == key then
+      local old_region_name = ReaADR.region_name(cue)
+      cue.id = first_nonempty(updated_cue.id, cue.id)
+      cue.character = first_nonempty(updated_cue.character, cue.character)
+      cue.line = updated_cue.line or cue.line or ""
+      cue.direction = updated_cue.direction or cue.direction or ""
+      cue.cue_type = updated_cue.cue_type or cue.cue_type or ""
+      cue.status = normalize_status(updated_cue.status or cue.status)
+      cue.notes = updated_cue.notes or cue.notes or ""
+      local existing_region = find_project_marker(old_region_name, true)
+      if existing_region then
+        reaper.SetProjectMarker4(
+          project(),
+          existing_region.id,
+          true,
+          tonumber(cue.start_time) or existing_region.pos,
+          tonumber(cue.end_time) or existing_region.region_end,
+          ReaADR.region_name(cue),
+          character_color(cue.character),
+          0
+        )
+      end
+      updated = cue
+      break
+    end
+  end
+
+  if not updated then
+    return nil, "Cue was not found in the cached ReaADR session."
+  end
+
+  ReaADR.save_last_import_cues(cues)
+  ReaADR.ensure_region(updated, character_color(updated.character))
+  ReaADR.ensure_character_ruler_lanes(cues)
+  local ruler_lanes = ReaADR.character_region_lanes(cues)
+  ReaADR.set_region_lane(updated, ruler_lanes[updated.character] or 0)
+  ReaADR.set_manager_selected_cue(updated)
+  ReaADR.refresh_overlay_silent()
+  reaper.UpdateArrange()
+  return updated
 end
 
 function ReaADR.selected_cue_key()
@@ -2212,6 +2299,9 @@ local function overlay_fx_code(cues, settings)
   local selected_key = ReaADR.selected_region_cue_key()
   if selected_key == "" then
     selected_key = ReaADR.selected_cue_key()
+  end
+  if selected_key == "" then
+    selected_key = ReaADR.active_overlay_cue_key()
   end
   local display_cues = {}
   for index, cue in ipairs(cues or {}) do
