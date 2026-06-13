@@ -1,0 +1,3 @@
+LIBRARY reaper_reaadr-x64
+EXPORTS
+  ReaperPluginEntry

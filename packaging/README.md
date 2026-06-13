@@ -89,6 +89,15 @@ Expected output:
 dist/UserPlugins/reaper_reaadr-x64.dll
 ```
 
+Verify the DLL exports REAPER's real entrypoint name:
+
+```sh
+objdump -p ../dist/UserPlugins/reaper_reaadr-x64.dll | grep ReaperPluginEntry
+```
+
+`REAPER_PLUGIN_ENTRYPOINT` is a C/C++ macro name. The symbol REAPER needs to
+see in the compiled DLL is `ReaperPluginEntry`.
+
 7. Rebuild the release packages:
 
 ```sh
@@ -104,3 +113,12 @@ ReaADRTools-windows/UserPlugins/reaper_reaadr-x64.dll
 
 That DLL is what makes the top-level `ReaADR Tools` menu appear in Windows
 REAPER after install and restart.
+
+If the Action List does not show `ReaADR`, check:
+
+```text
+%APPDATA%\REAPER\UserPlugins\ReaADRTools\reaper_reaadr.log
+```
+
+If actions appear but the top-level menu does not, the DLL loaded but REAPER did
+not provide the customizable-menu hook expected by this extension build.

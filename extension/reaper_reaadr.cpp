@@ -192,12 +192,21 @@ bool load(reaper_plugin_info_t* plugin)
   g_log_path = join_path(plugin_directory(), "ReaADRTools/reaper_reaadr.log");
   log_line("Loading ReaADR extension.");
   if (REAPERAPI_LoadAPI(plugin->GetFunc) != 0) return false;
-  if (!AddCustomizableMenu || !AddRemoveReaScript) return false;
+  if (!AddRemoveReaScript) {
+    log_line("AddRemoveReaScript API unavailable; cannot register ReaADR scripts.");
+    return false;
+  }
 
-  AddCustomizableMenu(kReaADRMenuId, kReaADRMenuId, nullptr, true);
+  if (AddCustomizableMenu) {
+    AddCustomizableMenu(kReaADRMenuId, kReaADRMenuId, nullptr, true);
+  } else {
+    log_line("AddCustomizableMenu API unavailable; actions will register without the top-level menu.");
+  }
   register_scripts();
   load_menu_functions();
-  plugin->Register("hookcustommenu", reinterpret_cast<void*>(hook_custom_menu));
+  if (AddCustomizableMenu) {
+    plugin->Register("hookcustommenu", reinterpret_cast<void*>(hook_custom_menu));
+  }
   return true;
 }
 
