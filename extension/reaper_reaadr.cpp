@@ -28,12 +28,13 @@ REAPER_PLUGIN_HINSTANCE g_instance = nullptr;
 using CreatePopupMenuFn = HMENU (*)();
 using GetMenuItemCountFn = int (*)(HMENU);
 using InsertMenuItemFn = void (*)(HMENU, int, BOOL, MENUITEMINFO*);
+using SetMenuItemInfoFn = BOOL (*)(HMENU, UINT, BOOL, MENUITEMINFO*);
 
 CreatePopupMenuFn g_create_popup_menu = nullptr;
 GetMenuItemCountFn g_get_menu_item_count = nullptr;
 InsertMenuItemFn g_insert_menu_item = nullptr;
+SetMenuItemInfoFn g_set_menu_item_info = nullptr;
 std::string g_log_path;
-bool g_top_level_menu_added = false;
 
 struct ScriptAction {
   const char* label;
@@ -194,12 +195,12 @@ std::string quick_action_label(int slot)
   const char* value = GetExtState("ReaADRTools", key.c_str());
   const std::string action_key = value ? value : "";
 
-  if (action_key == "import" || (action_key.empty() && slot == 1)) return "Quick Action 1: Import Cue Sheet";
-  if (action_key == "cue_manager" || (action_key.empty() && slot == 2)) return "Quick Action 2: Cue Manager";
-  if (action_key == "export_reports" || (action_key.empty() && slot == 3)) return "Quick Action 3: Export Reports";
-  if (action_key == "overlay_settings" || (action_key.empty() && slot == 4)) return "Quick Action 4: Video Overlays";
+  if (action_key == "import" || (action_key.empty() && slot == 1)) return "Quick Action " + std::to_string(slot) + ": Import Cue Sheet";
+  if (action_key == "cue_manager" || (action_key.empty() && slot == 2)) return "Quick Action " + std::to_string(slot) + ": Open Cue Manager";
+  if (action_key == "export_reports" || (action_key.empty() && slot == 3)) return "Quick Action " + std::to_string(slot) + ": Export Reports";
+  if (action_key == "overlay_settings" || (action_key.empty() && slot == 4)) return "Quick Action " + std::to_string(slot) + ": Video Overlays Tab";
   if (action_key == "character_filter") return "Quick Action " + std::to_string(slot) + ": Character Filter";
-  if (action_key == "refresh_overlay") return "Quick Action " + std::to_string(slot) + ": Refresh Overlay";
+  if (action_key == "refresh_overlay") return "Quick Action " + std::to_string(slot) + ": Refresh Video Overlay";
   if (action_key == "validate") return "Quick Action " + std::to_string(slot) + ": Validate Session";
   return "Quick Action " + std::to_string(slot);
 }
@@ -217,6 +218,19 @@ void add_menu_item_with_label(HMENU menu, int position, const ScriptAction& acti
   g_insert_menu_item(menu, position, TRUE, &item);
 }
 
+void update_menu_item_label(HMENU menu, int position, const ScriptAction& action, const std::string& label)
+{
+  if (!action.command_id || !g_set_menu_item_info) return;
+
+  MENUITEMINFO item = {};
+  item.cbSize = sizeof(item);
+  item.fMask = MIIM_TYPE | MIIM_ID;
+  item.fType = MFT_STRING;
+  item.wID = static_cast<UINT>(action.command_id);
+  item.dwTypeData = const_cast<char*>(label.c_str());
+  g_set_menu_item_info(menu, static_cast<UINT>(position), TRUE, &item);
+}
+
 void hook_custom_menu(const char* menu_id, void* menu, int flag)
 
 {
@@ -228,17 +242,30 @@ void hook_custom_menu(const char* menu_id, void* menu, int flag)
     return;
   }
 
+  HMENU hmenu = static_cast<HMENU>(menu);
   int position = 0;
-  if (g_top_level_menu_added) return;
-  for (std::size_t i = 0; i < g_actions.size(); ++i) {
-    if (i == 0) {
-      add_menu_item(static_cast<HMENU>(menu), position++, g_actions[i]);
+  const int existing_items = g_get_menu_item_count ? g_get_menu_item_count(hmenu) : 0;
+
+  if (existing_items <= 0) {
+    for (std::size_t i = 0; i < g_actions.size(); ++i) {
+      if (i == 0) {
+        add_menu_item(hmenu, position++, g_actions[i]);
+      } else {
+        add_menu_item_with_label(hmenu, position++, g_actions[i], quick_action_label(static_cast<int>(i)));
+      }
+    }
+    log_line("Added top-level ReaADR Tools menu.");
+    return;
+  }
+
+  for (std::size_t i = 1; i < g_actions.size(); ++i) {
+    if (static_cast<int>(i) < existing_items) {
+      update_menu_item_label(hmenu, static_cast<int>(i), g_actions[i], quick_action_label(static_cast<int>(i)));
     } else {
-      add_menu_item_with_label(static_cast<HMENU>(menu), position++, g_actions[i], quick_action_label(static_cast<int>(i)));
+      add_menu_item_with_label(hmenu, position++, g_actions[i], quick_action_label(static_cast<int>(i)));
     }
   }
-  g_top_level_menu_added = true;
-  log_line("Added top-level ReaADR Tools menu.");
+  log_line("Updated top-level ReaADR quick-action labels.");
 }
 
 void load_menu_functions()
@@ -249,10 +276,14 @@ void load_menu_functions()
   g_insert_menu_item = [](HMENU menu, int position, BOOL by_position, MENUITEMINFO* item) {
     InsertMenuItem(menu, position, by_position, item);
   };
+  g_set_menu_item_info = [](HMENU menu, UINT item, BOOL by_position, MENUITEMINFO* info) -> BOOL {
+    return SetMenuItemInfoA(menu, item, by_position, info);
+  };
 #endif
   log_line(std::string("CreatePopupMenu available: ") + (g_create_popup_menu ? "yes" : "no"));
   log_line(std::string("GetMenuItemCount available: ") + (g_get_menu_item_count ? "yes" : "no"));
   log_line(std::string("InsertMenuItem available: ") + (g_insert_menu_item ? "yes" : "no"));
+  log_line(std::string("SetMenuItemInfo available: ") + (g_set_menu_item_info ? "yes" : "no"));
 }
 
 bool load(reaper_plugin_info_t* plugin)
@@ -289,7 +320,6 @@ void unload()
     g_plugin->Register("-hookcustommenu", reinterpret_cast<void*>(hook_custom_menu));
   }
   unregister_scripts();
-  g_top_level_menu_added = false;
   g_plugin = nullptr;
 }
 

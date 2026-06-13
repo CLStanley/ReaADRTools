@@ -34,12 +34,19 @@ changes for every feature.
 
 Older standalone scripts remain packaged as internal manager modules, but the
 extension unregisters them as public actions to keep REAPER's Action List clean.
-Quick actions are configured from `Open Manager > Preferences > Configure Quick
-Actions`. Overlay settings are available directly in `Open Manager > Video
+Quick actions are configured from `Open Manager > Preferences` with inline
+dropdowns. Overlay settings are available directly in `Open Manager > Video
 Overlays`.
+
+The manager launcher supports up to three concurrent ReaADR manager windows.
 
 The manager includes hover hints for its controls and a Help tab with searchable
 workflow guidance.
+
+Cue Manager now prefers a ReaImGui interface when ReaImGui is installed and
+falls back to the legacy `gfx` manager otherwise. Cue editing, cue removal with
+renumbering, and overlay refresh behavior remain available through the shared
+Lua session layer.
 
 ## Documentation
 
@@ -86,6 +93,10 @@ need their native binaries added before public release.
 
 ## Development Notes
 
-The current production UI uses REAPER `gfx` windows. ReaImGui remains the
-preferred future UI layer for a richer professional manager interface, but it is
-not required by the current build.
+The current UI stack is mixed:
+
+- ReaImGui-first Cue Manager
+- `gfx` utility windows and legacy Cue Manager fallback
+
+Most workflow logic should continue to live in `scripts/ReaADR_Core.lua` so UI
+migration does not fork behavior between interfaces.

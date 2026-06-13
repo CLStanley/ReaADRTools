@@ -1,4 +1,4 @@
--- Live ADR cue information panel with an expanded cue editor.
+-- Live ADR cue information panel.
 
 local function script_dir()
   local info = debug.getinfo(1, "S").source
@@ -106,13 +106,14 @@ local function draw_button(rect)
 end
 
 local function draw_label(label, value, x, y)
+  local theme = ReaADR.ui_theme()
   gfx.setfont(1, "Arial", 14)
-  gfx.set(0.62, 0.66, 0.70, 1)
+  ReaADR.set_gfx_color(theme.muted)
   gfx.x = x
   gfx.y = y
   gfx.drawstr(label)
   gfx.setfont(1, "Arial", 22)
-  gfx.set(1, 1, 1, 1)
+  ReaADR.set_gfx_color(theme.text)
   gfx.x = x
   gfx.y = y + 18
   gfx.drawstr(tostring(value or ""))
@@ -405,7 +406,8 @@ local function handle_text_input(char)
 end
 
 local function draw_info(cue)
-  gfx.set(0.10, 0.11, 0.12, 1)
+  local theme = ReaADR.ui_theme()
+  ReaADR.set_gfx_color(theme.bg)
   gfx.rect(0, 0, state.width, state.height, true)
 
   local frame_rate = reaper.TimeMap_curFrameRate(0)
@@ -413,51 +415,62 @@ local function draw_info(cue)
     frame_rate = 24
   end
 
-  gfx.setfont(1, "Arial", 24)
-  gfx.set(1, 1, 1, 1)
-  gfx.x = 24
-  gfx.y = 20
-  gfx.drawstr("ADR Cue Information")
-
-  local buttons = {
-    edit = { x = state.width - 256, y = 28, w = 106, h = 32, label = "Edit" },
-    refresh = { x = state.width - 134, y = 28, w = 106, h = 32, label = "Refresh" },
-  }
+  local header = ReaADR.draw_window_header(
+    "ADR Cue Information",
+    cue and ("Cue %s | %s"):format(tostring(cue.id or ""), tostring(cue.character or "")) or "No cue selected",
+    { x = 24, y = 20, width = state.width - 48, height = 76 }
+  )
 
   if cue then
     local now = ReaADR.current_timeline_position()
     local cue_start = tonumber(cue.start_time) or 0
     local countdown = math.max(0, cue_start - now)
     local take_count = ReaADR.count_recorded_takes_for_cue(cue)
+    local info_top = math.max(118, header.content_y + 8)
+    local row_gap = 66
+    local row1_y = info_top
+    local row2_y = row1_y + row_gap
+    local row3_y = row2_y + row_gap
 
-    draw_label("Cue", cue.id or "", 24, 70)
-    draw_label("Character", cue.character or "", 180, 70)
-    draw_label("Status", cue.status or "Not Recorded", 452, 70)
-    draw_label("Start", ReaADR.format_timecode(cue.start_time, frame_rate), 24, 136)
-    draw_label("End", ReaADR.format_timecode(cue.end_time, frame_rate), 260, 136)
-    draw_label("Length", ("%.2fs"):format(ReaADR.cue_duration(cue)), 496, 136)
-    draw_label("Countdown", ("%.2fs"):format(countdown), 24, 202)
-    draw_label("Take Count", tostring(take_count), 260, 202)
-    draw_label("Current Position", ReaADR.format_timecode(now, frame_rate), 496, 202)
+    draw_label("Cue", cue.id or "", 24, row1_y)
+    draw_label("Character", cue.character or "", 180, row1_y)
+    draw_label("Status", cue.status or "Not Recorded", 452, row1_y)
+    draw_label("Cue Type", cue.cue_type or "", 760, row1_y)
+    draw_label("Start", ReaADR.format_timecode(cue.start_time, frame_rate), 24, row2_y)
+    draw_label("End", ReaADR.format_timecode(cue.end_time, frame_rate), 260, row2_y)
+    draw_label("Length", ("%.2fs"):format(ReaADR.cue_duration(cue)), 496, row2_y)
+    draw_label("Countdown", ("%.2fs"):format(countdown), 24, row3_y)
+    draw_label("Take Count", tostring(take_count), 260, row3_y)
+    draw_label("Current Position", ReaADR.format_timecode(now, frame_rate), 496, row3_y)
 
     gfx.setfont(1, "Arial", 16)
-    gfx.set(0.62, 0.66, 0.70, 1)
+    ReaADR.set_gfx_color(theme.muted)
     gfx.x = 24
-    gfx.y = 278
-    gfx.drawstr("Line")
+    local dialogue_label_y = row3_y + 76
+    gfx.y = dialogue_label_y
+    gfx.drawstr("Dialogue")
     gfx.setfont(1, "Arial", 22)
-    gfx.set(1, 1, 1, 1)
-    draw_wrapped_text(tostring(cue.line or ""), 24, 302, state.width - 56, 26, math.max(3, math.floor((state.height - 330) / 26)))
-    draw_button(buttons.edit)
-    draw_button(buttons.refresh)
+    ReaADR.set_gfx_color(theme.text)
+    local notes_y = state.height - 176
+    local dialogue_text_y = dialogue_label_y + 24
+    local dialogue_max_lines = math.max(3, math.floor((notes_y - dialogue_text_y - 16) / 26))
+    draw_wrapped_text(tostring(cue.line or ""), 24, dialogue_text_y, state.width - 56, 26, dialogue_max_lines)
+
+    gfx.setfont(1, "Arial", 16)
+    ReaADR.set_gfx_color(theme.muted)
+    gfx.x = 24
+    gfx.y = notes_y
+    gfx.drawstr("Notes")
+    gfx.setfont(1, "Arial", 18)
+    ReaADR.set_gfx_color(theme.text)
+    draw_wrapped_text(tostring(cue.notes or ""), 24, notes_y + 24, state.width - 56, 22, math.max(2, math.floor((state.height - notes_y - 32) / 22)))
   else
     gfx.setfont(1, "Arial", 18)
-    gfx.set(0.86, 0.88, 0.90, 1)
+    ReaADR.set_gfx_color(theme.text)
     gfx.x = 24
     gfx.y = 82
     gfx.drawstr("No ADR cues were found.")
   end
-  return buttons
 end
 
 local function frame()
@@ -470,6 +483,7 @@ local function frame()
     gfx.update()
     local char = gfx.getchar()
     if char < 0 or char == 27 then
+      ReaADR.save_window_state("cue_info")
       end_edit()
       return
     end
@@ -485,6 +499,7 @@ local function frame()
       if inside(save_button, gfx.mouse_x, gfx.mouse_y) then
         if save_edit(cue) then
           if state.close_on_save then
+            ReaADR.save_window_state("cue_info")
             gfx.quit()
             return
           else
@@ -500,28 +515,21 @@ local function frame()
     return
   end
 
-  buttons = draw_info(cue)
+  draw_info(cue)
   gfx.update()
   local char = gfx.getchar()
   if char < 0 or char == 27 then
+    ReaADR.save_window_state("cue_info")
     gfx.quit()
     return
   end
-
-  local mouse = gfx.mouse_cap % 2
-  if mouse == 1 and state.last_mouse == 0 then
-    if cue and inside(buttons.edit, gfx.mouse_x, gfx.mouse_y) then
-      begin_edit(cue)
-    elseif inside(buttons.refresh, gfx.mouse_x, gfx.mouse_y) then
-      ReaADR.refresh_overlay_silent()
-    end
-  end
-  state.last_mouse = mouse
   reaper.defer(frame)
 end
 
-gfx.init("ReaADR Cue Information", state.width, state.height)
-if launch_options.edit then
-  begin_edit(ReaADR.active_cue())
-end
+local restored = ReaADR.init_persistent_window("cue_info", "ReaADR Cue Information", {
+  width = state.width,
+  height = state.height,
+})
+state.width = restored.width
+state.height = restored.height
 frame()

@@ -71,13 +71,30 @@ App.overlay_rows = {
   { key = "show_cue_timecode", label = "Cue timecode" },
   { key = "show_project_timer", label = "Live project timer" },
   { key = "show_dialogue", label = "Dialogue line" },
-  { key = "show_direction", label = "Performance direction" },
+  { key = "show_direction", label = "Notes" },
   { key = "show_cue_type", label = "Cue type" },
   { key = "show_visual_cue", label = "Visual cue indicator" },
   { key = "show_streamer", label = "Streamer bar" },
   { key = "show_flash", label = "Flash at cue start" },
   { key = "show_status", label = "Standby / take / clear status" },
   { key = "show_metadata", label = "Studio metadata" },
+}
+
+App.overlay_background_rows = {
+  { key = "bg_project_timer", label = "Timeline SMPTE background" },
+  { key = "bg_cue_id", label = "Cue ID background" },
+  { key = "bg_character", label = "Character background" },
+  { key = "bg_cue_timecode", label = "Cue timecode background" },
+  { key = "bg_dialogue", label = "Dialogue background" },
+  { key = "bg_direction", label = "Notes background" },
+  { key = "bg_cue_type", label = "Cue type background" },
+  { key = "bg_status", label = "Status background" },
+  { key = "bg_metadata", label = "Metadata background" },
+}
+
+App.overlay_text_color_choices = {
+  { key = "white", label = "White" },
+  { key = "yellow", label = "Yellow" },
 }
 
 App.metadata_field_labels = { "PGID", "MID", "Media Time", "Watermark Timestamp", "Asset Date Code", "Project Name" }
@@ -144,7 +161,7 @@ App.help_topics = {
     body = table.concat({
       "The top-level ReaADR Tools menu keeps Open Manager first, followed by four configurable quick-action slots.",
       "",
-      "Use Manager > Preferences > Configure Quick Actions to choose what each slot runs. Restart REAPER after changing them if you want the native menu labels to update.",
+      "Use Manager > Preferences to choose what each slot runs with the inline dropdowns.",
     }, "\n"),
   },
 }
@@ -213,7 +230,62 @@ function App.run_quick_action(slot)
 end
 
 function App.open_overlay_manager()
-  return App.open_manager("overlay")
+  return App.launch_manager("overlay")
+end
+
+local function manager_slot_key(slot, suffix)
+  return ("ui.manager_slot.%d.%s"):format(slot, suffix)
+end
+
+local function set_manager_launch_tab(slot, tab)
+  reaper.SetProjExtState(0, "ReaADRTools", manager_slot_key(slot, "launch_tab"), tostring(tab or ""))
+end
+
+function App.consume_manager_launch_tab(slot)
+  local _, tab = reaper.GetProjExtState(0, "ReaADRTools", manager_slot_key(slot, "launch_tab"))
+  reaper.SetProjExtState(0, "ReaADRTools", manager_slot_key(slot, "launch_tab"), "")
+  return tab ~= "" and tab or nil
+end
+
+local function claim_manager_slot(max_slots)
+  max_slots = max_slots or 3
+  local now = reaper.time_precise()
+  for slot = 1, max_slots do
+    local _, heartbeat = reaper.GetProjExtState(0, "ReaADRTools", manager_slot_key(slot, "heartbeat"))
+    local _, active = reaper.GetProjExtState(0, "ReaADRTools", manager_slot_key(slot, "active"))
+    local _, launching = reaper.GetProjExtState(0, "ReaADRTools", manager_slot_key(slot, "launching"))
+    local last_seen = tonumber(heartbeat) or 0
+    local launch_seen = tonumber(launching) or 0
+    local slot_busy = active == "1" and (now - last_seen) <= 2.0
+    local slot_launching = launch_seen > 0 and (now - launch_seen) <= 2.0
+    if not slot_busy and not slot_launching then
+      reaper.SetProjExtState(0, "ReaADRTools", manager_slot_key(slot, "active"), "1")
+      reaper.SetProjExtState(0, "ReaADRTools", manager_slot_key(slot, "heartbeat"), tostring(now))
+      reaper.SetProjExtState(0, "ReaADRTools", manager_slot_key(slot, "launching"), tostring(now))
+      return slot
+    end
+  end
+  return nil
+end
+
+function App.launch_manager(initial_tab)
+  local slot = claim_manager_slot(3)
+  if not slot then
+    App.ReaADR.message("Three ReaADR manager windows are already open. Close one before opening another.")
+    return false
+  end
+  set_manager_launch_tab(slot, initial_tab)
+  local path = App.base_dir .. "/ReaADR_Open_Manager_" .. tostring(slot) .. ".lua"
+  local command_id = reaper.AddRemoveReaScript(true, 0, path, true)
+  if command_id and command_id > 0 then
+    reaper.Main_OnCommand(command_id, 0)
+    return true
+  end
+  reaper.SetProjExtState(0, "ReaADRTools", manager_slot_key(slot, "active"), "")
+  reaper.SetProjExtState(0, "ReaADRTools", manager_slot_key(slot, "heartbeat"), "")
+  reaper.SetProjExtState(0, "ReaADRTools", manager_slot_key(slot, "launching"), "")
+  App.ReaADR.message("Could not open the ReaADR manager.")
+  return false
 end
 
 function App.configure_quick_actions()
@@ -365,24 +437,36 @@ local function apply_overlay_profile(settings, name)
       show_cue_timecode = true, show_project_timer = true, show_visual_cue = true,
       show_direction = true, show_cue_type = false, show_streamer = true,
       show_flash = true, show_status = true, show_metadata = false,
+      bg_project_timer = false, bg_cue_id = false, bg_character = false,
+      bg_cue_timecode = false, bg_dialogue = true, bg_direction = false,
+      bg_cue_type = false, bg_status = false, bg_metadata = false,
     },
     engineer = {
       enabled = true, show_cue_id = true, show_character = true, show_dialogue = true,
       show_cue_timecode = true, show_project_timer = true, show_visual_cue = true,
       show_direction = true, show_cue_type = true, show_streamer = true,
       show_flash = true, show_status = true, show_metadata = true,
+      bg_project_timer = true, bg_cue_id = false, bg_character = false,
+      bg_cue_timecode = true, bg_dialogue = true, bg_direction = false,
+      bg_cue_type = false, bg_status = false, bg_metadata = false,
     },
     studio = {
       enabled = true, show_cue_id = true, show_character = true, show_dialogue = true,
       show_cue_timecode = true, show_project_timer = true, show_visual_cue = true,
       show_direction = false, show_cue_type = true, show_streamer = true,
       show_flash = true, show_status = true, show_metadata = true,
+      bg_project_timer = true, bg_cue_id = false, bg_character = false,
+      bg_cue_timecode = true, bg_dialogue = true, bg_direction = false,
+      bg_cue_type = false, bg_status = false, bg_metadata = false,
     },
     minimal = {
       enabled = true, show_cue_id = true, show_character = false, show_dialogue = true,
       show_cue_timecode = false, show_project_timer = true, show_visual_cue = true,
       show_direction = false, show_cue_type = false, show_streamer = true,
       show_flash = false, show_status = false, show_metadata = false,
+      bg_project_timer = false, bg_cue_id = false, bg_character = false,
+      bg_cue_timecode = false, bg_dialogue = true, bg_direction = false,
+      bg_cue_type = false, bg_status = false, bg_metadata = false,
     },
   }
   for key, value in pairs(profiles[name] or {}) do
@@ -483,7 +567,7 @@ function App.import_script()
 end
 
 function App.preferences()
-  return App.run_named_action("Overlay Settings")
+  return App.launch_manager("preferences")
 end
 
 function App.export_reports()
@@ -612,27 +696,29 @@ local function inside(rect, x, y)
 end
 
 local function draw_button(rect)
+  local ReaADR = App.ReaADR
+  local theme = ReaADR.ui_theme()
   local hover = inside(rect, gfx.mouse_x, gfx.mouse_y)
-  gfx.set(hover and 0.22 or 0.20, hover and 0.32 or 0.22, hover and 0.38 or 0.24, 1)
+  ReaADR.set_gfx_color(hover and theme.accent_blue or theme.panel_alt)
   gfx.rect(rect.x, rect.y, rect.w, rect.h, true)
-  gfx.set(0.62, 0.66, 0.70, 1)
+  ReaADR.set_gfx_color(theme.border)
   gfx.rect(rect.x, rect.y, rect.w, rect.h, false)
   gfx.setfont(1, "Arial", 15)
-  gfx.set(1, 1, 1, 1)
+  ReaADR.set_gfx_color(theme.text)
   gfx.x = rect.x + 12
   gfx.y = rect.y + 8
   gfx.drawstr(rect.label)
   return hover
 end
 
-function App.open_manager(initial_tab)
+function App.open_manager(initial_tab, instance_slot)
   local ReaADR = App.ReaADR
   local summary = session_summary(ReaADR)
   local state = {
     width = 980,
-    height = 680,
+    height = 860,
     min_width = 900,
-    min_height = 600,
+    min_height = 820,
     tab = initial_tab or "import",
     last_mouse = 0,
     closed = false,
@@ -640,6 +726,9 @@ function App.open_manager(initial_tab)
     overlay_dirty = false,
     overlay_message = "",
     overlay_message_until = 0,
+    quick_action_dropdown = nil,
+    last_heartbeat = 0,
+    instance_slot = tonumber(instance_slot),
   }
 
   local tab_rects = {}
@@ -647,7 +736,7 @@ function App.open_manager(initial_tab)
   for _, key in ipairs(App.manager_order) do
     local module = App.modules[key]
     local w = math.max(104, (#module.title * 8) + 26)
-    tab_rects[#tab_rects + 1] = { key = key, x = tab_x, y = 70, w = w, h = 30, label = module.title }
+    tab_rects[#tab_rects + 1] = { key = key, x = tab_x, y = 110, w = w, h = 30, label = module.title }
     tab_x = tab_x + w + 8
   end
 
@@ -656,38 +745,46 @@ function App.open_manager(initial_tab)
       return
     end
     state.closed = true
+    if state.instance_slot then
+      reaper.SetProjExtState(0, "ReaADRTools", manager_slot_key(state.instance_slot, "active"), "")
+      reaper.SetProjExtState(0, "ReaADRTools", manager_slot_key(state.instance_slot, "heartbeat"), "")
+      reaper.SetProjExtState(0, "ReaADRTools", manager_slot_key(state.instance_slot, "launching"), "")
+      reaper.SetProjExtState(0, "ReaADRTools", manager_slot_key(state.instance_slot, "launch_tab"), "")
+    end
+    ReaADR.save_window_state("manager")
     gfx.quit()
   end
 
   local function frame()
     state.width = math.max(state.min_width, gfx.w or state.width)
     state.height = math.max(state.min_height, gfx.h or state.height)
+    if state.instance_slot and (reaper.time_precise() - state.last_heartbeat) >= 0.5 then
+      state.last_heartbeat = reaper.time_precise()
+      reaper.SetProjExtState(0, "ReaADRTools", manager_slot_key(state.instance_slot, "active"), "1")
+      reaper.SetProjExtState(0, "ReaADRTools", manager_slot_key(state.instance_slot, "heartbeat"), tostring(state.last_heartbeat))
+      reaper.SetProjExtState(0, "ReaADRTools", manager_slot_key(state.instance_slot, "launching"), "")
+    end
     local hover_hint = ""
     local special_click = {}
-    gfx.set(0.11, 0.12, 0.13, 1)
+    local theme = ReaADR.ui_theme()
+    ReaADR.set_gfx_color(theme.bg)
     gfx.rect(0, 0, state.width, state.height, true)
 
-    gfx.setfont(1, "Arial", 22)
-    gfx.set(1, 1, 1, 1)
-    gfx.x = 24
-    gfx.y = 20
-    gfx.drawstr("ReaADR Tools Manager")
-
-    gfx.setfont(1, "Arial", 14)
-    gfx.set(0.78, 0.81, 0.84, 1)
-    gfx.x = 24
-    gfx.y = 48
-    gfx.drawstr(("Session: %d cues, %d characters"):format(summary.cue_count, summary.character_count))
+    local header = ReaADR.draw_window_header(
+      "ReaADR Tools Manager",
+      ("Session: %d cues, %d characters"):format(summary.cue_count, summary.character_count),
+      { x = 24, y = 20, width = state.width - 48, height = 78 }
+    )
 
     for _, tab in ipairs(tab_rects) do
       local active = tab.key == state.tab
       local hovered = inside(tab, gfx.mouse_x, gfx.mouse_y)
-      gfx.set(active and 0.28 or 0.17, active and 0.32 or 0.19, active and 0.36 or 0.21, 1)
+      ReaADR.set_gfx_color(active and theme.accent_blue or theme.panel_alt)
       gfx.rect(tab.x, tab.y, tab.w, tab.h, true)
-      gfx.set(0.58, 0.62, 0.66, 1)
+      ReaADR.set_gfx_color(theme.border)
       gfx.rect(tab.x, tab.y, tab.w, tab.h, false)
       gfx.setfont(1, "Arial", 14)
-      gfx.set(1, 1, 1, 1)
+      ReaADR.set_gfx_color(theme.text)
       gfx.x = tab.x + 12
       gfx.y = tab.y + 8
       gfx.drawstr(tab.label)
@@ -698,9 +795,9 @@ function App.open_manager(initial_tab)
 
     local module = App.modules[state.tab]
     local buttons = {}
-    local y = 128
+    local y = math.max(156, header.content_y + 6)
     gfx.setfont(1, "Arial", 18)
-    gfx.set(1, 1, 1, 1)
+    ReaADR.set_gfx_color(theme.text)
     gfx.x = 24
     gfx.y = y
     gfx.drawstr(module.title)
@@ -716,7 +813,7 @@ function App.open_manager(initial_tab)
 
     if state.tab == "cues" then
       gfx.setfont(1, "Arial", 14)
-      gfx.set(0.78, 0.81, 0.84, 1)
+      ReaADR.set_gfx_color(theme.muted)
       gfx.x = 382
       gfx.y = 166
       gfx.drawstr("Project Cue Summary")
@@ -737,10 +834,10 @@ function App.open_manager(initial_tab)
       end
     end
 
-    local quick_y = 166
+    local quick_y = y
     if state.tab == "preferences" then
       gfx.setfont(1, "Arial", 14)
-      gfx.set(0.78, 0.81, 0.84, 1)
+      ReaADR.set_gfx_color(theme.muted)
       gfx.x = 24
       gfx.y = quick_y
       gfx.drawstr("Quick Access Menu")
@@ -751,19 +848,61 @@ function App.open_manager(initial_tab)
         if draw_button(rect) then
           hover_hint = "Choose which action this top-menu quick slot runs."
         end
+        if state.quick_action_dropdown == slot then
+          for index, choice in ipairs(App.quick_action_choices) do
+            local option_rect = {
+              x = rect.x + rect.w + 12,
+              y = rect.y + ((index - 1) * 30),
+              w = 240,
+              h = 26,
+              label = choice.label,
+            }
+            special_click[#special_click + 1] = { rect = option_rect, kind = "quick_option", slot = slot, action_key = choice.key }
+            draw_button(option_rect)
+          end
+        end
       end
       gfx.setfont(1, "Arial", 13)
-      gfx.set(0.72, 0.76, 0.80, 1)
+      ReaADR.set_gfx_color(theme.muted)
       gfx.x = 24
       gfx.y = quick_y + 214
-      gfx.drawstr("Restart REAPER after changing quick actions if the native menu labels do not update immediately.")
+      gfx.drawstr("Quick-action labels update when REAPER rebuilds the native ReaADR menu.")
+      local remember_layout = ReaADR.window_layout_enabled()
+      local remember_rect = { x = 24, y = quick_y + 258, w = 340, h = 26 }
+      local hover_preview = ReaADR.cue_hover_preview_enabled()
+      local hover_preview_rect = { x = 24, y = quick_y + 294, w = 340, h = 26 }
+      special_click[#special_click + 1] = { rect = remember_rect, kind = "remember_layout" }
+      special_click[#special_click + 1] = { rect = hover_preview_rect, kind = "hover_preview" }
+      ReaADR.set_gfx_color(theme.panel_alt)
+      gfx.rect(remember_rect.x, remember_rect.y, 18, 18, false)
+      if remember_layout then
+        ReaADR.set_gfx_color(theme.accent_gold)
+        gfx.rect(remember_rect.x + 4, remember_rect.y + 4, 10, 10, true)
+      end
+      gfx.setfont(1, "Arial", 14)
+      ReaADR.set_gfx_color(theme.text)
+      gfx.x = remember_rect.x + 30
+      gfx.y = remember_rect.y - 1
+      gfx.drawstr("Remember ReaADR window layout per project")
+      ReaADR.set_gfx_color(theme.panel_alt)
+      gfx.rect(hover_preview_rect.x, hover_preview_rect.y, 18, 18, false)
+      if hover_preview then
+        ReaADR.set_gfx_color(theme.accent_gold)
+        gfx.rect(hover_preview_rect.x + 4, hover_preview_rect.y + 4, 10, 10, true)
+      end
+      gfx.setfont(1, "Arial", 14)
+      ReaADR.set_gfx_color(theme.text)
+      gfx.x = hover_preview_rect.x + 30
+      gfx.y = hover_preview_rect.y - 1
+      gfx.drawstr("Show cue text preview on hover")
     elseif state.tab == "overlay" then
       local settings = state.overlay_settings
+      local overlay_y = y
       local profile_buttons = {
-        { x = 24, y = 166, w = 92, h = 30, label = "Actor", profile = "actor" },
-        { x = 126, y = 166, w = 102, h = 30, label = "Engineer", profile = "engineer" },
-        { x = 238, y = 166, w = 92, h = 30, label = "Studio", profile = "studio" },
-        { x = 340, y = 166, w = 92, h = 30, label = "Minimal", profile = "minimal" },
+        { x = 24, y = overlay_y, w = 92, h = 30, label = "Actor", profile = "actor" },
+        { x = 126, y = overlay_y, w = 102, h = 30, label = "Engineer", profile = "engineer" },
+        { x = 238, y = overlay_y, w = 92, h = 30, label = "Studio", profile = "studio" },
+        { x = 340, y = overlay_y, w = 92, h = 30, label = "Minimal", profile = "minimal" },
       }
       for _, rect in ipairs(profile_buttons) do
         special_click[#special_click + 1] = { rect = rect, kind = "profile", profile = rect.profile }
@@ -772,52 +911,107 @@ function App.open_manager(initial_tab)
         end
       end
 
-      local row_y = 218
+      local row_y = overlay_y + 52
       for index, row in ipairs(App.overlay_rows) do
         local x = index <= 7 and 24 or 360
         local y_row = row_y + (((index - 1) % 7) * 32)
         local rect = { x = x, y = y_row - 4, w = 300, h = 26 }
         special_click[#special_click + 1] = { rect = rect, kind = "overlay_toggle", key = row.key }
-        gfx.set(0.15, 0.16, 0.18, 1)
+        ReaADR.set_gfx_color(theme.panel_alt)
         gfx.rect(x, y_row, 18, 18, false)
         if settings[row.key] then
-          gfx.set(0.1, 0.75, 1, 1)
+          ReaADR.set_gfx_color(theme.accent_gold)
           gfx.rect(x + 4, y_row + 4, 10, 10, true)
         end
         gfx.setfont(1, "Arial", 14)
-        gfx.set(0.92, 0.92, 0.92, 1)
+        ReaADR.set_gfx_color(theme.text)
         gfx.x = x + 30
         gfx.y = y_row - 1
         gfx.drawstr(row.label)
       end
 
-      local metadata_rect = { x = 24, y = 470, w = 132, h = 32, label = "Edit Fields" }
-      local save_rect = { x = 24, y = 542, w = 132, h = 34, label = "Save Overlay" }
+      gfx.setfont(1, "Arial", 14)
+      ReaADR.set_gfx_color(theme.muted)
+      gfx.x = 24
+      gfx.y = row_y + (7 * 32) + 6
+      gfx.drawstr("Text Backgrounds")
+
+      local bg_row_y = row_y + (7 * 32) + 36
+      for index, row in ipairs(App.overlay_background_rows) do
+        local x = index <= 5 and 24 or 360
+        local y_row = bg_row_y + (((index - 1) % 5) * 32)
+        local rect = { x = x, y = y_row - 4, w = 300, h = 26 }
+        special_click[#special_click + 1] = { rect = rect, kind = "overlay_toggle", key = row.key }
+        ReaADR.set_gfx_color(theme.panel_alt)
+        gfx.rect(x, y_row, 18, 18, false)
+        if settings[row.key] then
+          ReaADR.set_gfx_color(theme.accent_gold)
+          gfx.rect(x + 4, y_row + 4, 10, 10, true)
+        end
+        gfx.setfont(1, "Arial", 14)
+        ReaADR.set_gfx_color(theme.text)
+        gfx.x = x + 30
+        gfx.y = y_row - 1
+        gfx.drawstr(row.label)
+      end
+
+      local controls_y = bg_row_y + (5 * 32) + 10
+      local metadata_rect = { x = 24, y = controls_y + 22, w = 132, h = 32, label = "Edit Fields" }
+      local white_rect = { x = 220, y = controls_y + 22, w = 170, h = 26, label = "White general text" }
+      local yellow_rect = { x = 220, y = controls_y + 54, w = 170, h = 26, label = "Yellow general text" }
+      local save_rect = { x = 24, y = controls_y + 94, w = 132, h = 34, label = "Save Overlay" }
       special_click[#special_click + 1] = { rect = metadata_rect, kind = "metadata" }
+      special_click[#special_click + 1] = { rect = white_rect, kind = "text_color", value = "white" }
+      special_click[#special_click + 1] = { rect = yellow_rect, kind = "text_color", value = "yellow" }
       special_click[#special_click + 1] = { rect = save_rect, kind = "overlay_save" }
       draw_button(metadata_rect)
       draw_button(save_rect)
       gfx.setfont(1, "Arial", 13)
-      gfx.set(0.78, 0.82, 0.86, 1)
-      gfx.x = 170
-      gfx.y = 478
-      local fields = tostring(settings.metadata_fields or "")
-      if #fields > 70 then
-        fields = fields:sub(1, 67) .. "..."
+      ReaADR.set_gfx_color(theme.muted)
+      gfx.x = 24
+      gfx.y = controls_y
+      gfx.drawstr("Metadata fields")
+      gfx.x = 220
+      gfx.y = controls_y
+      gfx.drawstr("General overlay text color")
+      gfx.setfont(1, "Arial", 14)
+      for _, option in ipairs({
+        { rect = white_rect, value = "white", label = "White general text" },
+        { rect = yellow_rect, value = "yellow", label = "Yellow general text" },
+      }) do
+        local selected_color = ReaADR.overlay_text_mode(settings) == option.value
+        ReaADR.set_gfx_color(theme.panel_alt)
+        gfx.circle(option.rect.x + 10, option.rect.y + 13, 8, false, true)
+        if selected_color then
+          ReaADR.set_gfx_color(theme.accent_gold)
+          gfx.circle(option.rect.x + 10, option.rect.y + 13, 4, true, true)
+        end
+        ReaADR.set_gfx_color(theme.text)
+        gfx.x = option.rect.x + 24
+        gfx.y = option.rect.y + 4
+        gfx.drawstr(option.label)
       end
-      gfx.drawstr("Metadata: " .. fields)
-      gfx.x = 170
-      gfx.y = 552
+      gfx.setfont(1, "Arial", 13)
+      ReaADR.set_gfx_color(theme.muted)
+      gfx.x = 24
+      gfx.y = metadata_rect.y + 42
+      local fields = tostring(settings.metadata_fields or "")
+      if #fields > 62 then
+        fields = fields:sub(1, 59) .. "..."
+      end
+      gfx.drawstr("Current: " .. fields)
+      gfx.x = 24
+      gfx.y = save_rect.y + 10
       if state.overlay_dirty then
-        gfx.set(1, 0.78, 0.2, 1)
+        ReaADR.set_gfx_color(theme.accent_gold)
         gfx.drawstr("Unsaved overlay changes")
       elseif reaper.time_precise() < state.overlay_message_until then
-        gfx.set(0.36, 0.95, 0.55, 1)
+        ReaADR.set_gfx_color(theme.accent_green)
         gfx.drawstr(state.overlay_message)
       end
     elseif state.tab == "help" then
       gfx.setfont(1, "Arial", 14)
-      gfx.set(0.78, 0.81, 0.84, 1)
+      ReaADR.set_gfx_color(theme.muted)
       gfx.x = 382
       gfx.y = quick_y
       gfx.drawstr("Search by action, workflow, or keyword.")
@@ -827,12 +1021,12 @@ function App.open_manager(initial_tab)
     end
 
     if hover_hint ~= "" then
-      gfx.set(0.08, 0.09, 0.10, 1)
+      ReaADR.set_gfx_color(theme.panel)
       gfx.rect(18, state.height - 54, state.width - 36, 34, true)
-      gfx.set(0.35, 0.40, 0.45, 1)
+      ReaADR.set_gfx_color(theme.border)
       gfx.rect(18, state.height - 54, state.width - 36, 34, false)
       gfx.setfont(1, "Arial", 13)
-      gfx.set(0.86, 0.90, 0.94, 1)
+      ReaADR.set_gfx_color(theme.text)
       gfx.x = 28
       gfx.y = state.height - 44
       local hint = hover_hint
@@ -867,7 +1061,14 @@ function App.open_manager(initial_tab)
       for _, entry in ipairs(special_click) do
         if inside(entry.rect, gfx.mouse_x, gfx.mouse_y) then
           if entry.kind == "quick" then
-            choose_quick_action(entry.slot)
+            state.quick_action_dropdown = state.quick_action_dropdown == entry.slot and nil or entry.slot
+          elseif entry.kind == "quick_option" then
+            reaper.SetExtState("ReaADRTools", quick_action_key(entry.slot), entry.action_key, true)
+            state.quick_action_dropdown = nil
+          elseif entry.kind == "remember_layout" then
+            ReaADR.set_window_layout_enabled(not ReaADR.window_layout_enabled())
+          elseif entry.kind == "hover_preview" then
+            ReaADR.set_cue_hover_preview_enabled(not ReaADR.cue_hover_preview_enabled())
           elseif entry.kind == "profile" then
             apply_overlay_profile(state.overlay_settings, entry.profile)
             state.overlay_dirty = true
@@ -876,6 +1077,11 @@ function App.open_manager(initial_tab)
             state.overlay_dirty = true
           elseif entry.kind == "metadata" then
             if edit_metadata_fields(state.overlay_settings) then
+              state.overlay_dirty = true
+            end
+          elseif entry.kind == "text_color" then
+            if state.overlay_settings.text_color ~= entry.value then
+              state.overlay_settings.text_color = entry.value
               state.overlay_dirty = true
             end
           elseif entry.kind == "overlay_save" then
@@ -892,7 +1098,12 @@ function App.open_manager(initial_tab)
     reaper.defer(frame)
   end
 
-  gfx.init("ReaADR Tools Manager", state.width, state.height)
+  local restored = ReaADR.init_persistent_window("manager", "ReaADR Tools Manager", {
+    width = state.width,
+    height = state.height,
+  })
+  state.width = restored.width
+  state.height = restored.height
   frame()
 end
 

@@ -24,9 +24,193 @@ ReaADR.DEFAULT_OVERLAY_SETTINGS = {
   show_flash = true,
   show_status = true,
   show_metadata = false,
+  bg_cue_id = false,
+  bg_character = false,
+  bg_cue_timecode = false,
+  bg_project_timer = false,
+  bg_dialogue = true,
+  bg_direction = false,
+  bg_cue_type = false,
+  bg_status = false,
+  bg_metadata = false,
+  text_color = "white",
   metadata_fields = "PGID,MID,Media Time,Watermark Timestamp,Asset Date Code,Project Name",
   preroll_seconds = 3,
 }
+
+ReaADR.UI_THEME = {
+  bg = { 0.09, 0.08, 0.07, 1.0 },
+  panel = { 0.13, 0.12, 0.11, 1.0 },
+  panel_alt = { 0.17, 0.16, 0.15, 1.0 },
+  border = { 0.42, 0.35, 0.28, 1.0 },
+  text = { 0.93, 0.88, 0.78, 1.0 },
+  muted = { 0.74, 0.68, 0.60, 1.0 },
+  accent_blue = { 0.57, 0.50, 0.39, 1.0 },
+  accent_green = { 0.22, 0.32, 0.25, 1.0 },
+  accent_red = { 0.42, 0.20, 0.16, 1.0 },
+  accent_gold = { 0.76, 0.67, 0.52, 1.0 },
+  highlight = { 0.57, 0.50, 0.39, 1.0 },
+}
+
+local logo_image_slot = 987
+local logo_image_loaded = false
+local logo_image_available = false
+
+local function script_file_dir()
+  local info = debug.getinfo(1, "S").source
+  local path = info:sub(1, 1) == "@" and info:sub(2) or info
+  return path:match("^(.*)[/\\]") or "."
+end
+
+local function logo_image_paths()
+  local base = script_file_dir()
+  local candidates = {
+    base .. "/../assets/logo.png",
+    base .. "\\..\\assets\\logo.png",
+    base .. "/../assets/logo.bmp",
+    base .. "\\..\\assets\\logo.bmp",
+  }
+  local paths = {}
+  for _, path in ipairs(candidates) do
+    local file = io.open(path, "rb")
+    if file then
+      file:close()
+      paths[#paths + 1] = path
+    end
+  end
+  return paths
+end
+
+function ReaADR.ui_theme()
+  return ReaADR.UI_THEME
+end
+
+function ReaADR.set_gfx_color(rgba)
+  if not rgba then
+    return
+  end
+  gfx.set(rgba[1] or 0, rgba[2] or 0, rgba[3] or 0, rgba[4] or 1)
+end
+
+function ReaADR.ensure_logo_image()
+  if logo_image_loaded then
+    return logo_image_available, logo_image_slot
+  end
+  logo_image_loaded = true
+  if not gfx or type(gfx.loadimg) ~= "function" or type(gfx.getimgdim) ~= "function" then
+    return false, nil
+  end
+
+  for _, path in ipairs(logo_image_paths()) do
+    local ok, loaded = pcall(function()
+      return gfx.loadimg(logo_image_slot, path)
+    end)
+    if ok and loaded ~= nil and loaded >= 0 then
+      logo_image_slot = tonumber(loaded) or logo_image_slot
+      local dim_ok, width, height = pcall(function()
+        return gfx.getimgdim(logo_image_slot)
+      end)
+      if dim_ok and (width or 0) > 0 and (height or 0) > 0 then
+        logo_image_available = true
+        return true, logo_image_slot
+      end
+    end
+  end
+  return logo_image_available, logo_image_slot
+end
+
+function ReaADR.draw_logo(x, y, size)
+  local ok, slot = ReaADR.ensure_logo_image()
+  local theme = ReaADR.ui_theme()
+  if ok then
+    local dim_ok, width, height = pcall(function()
+      return gfx.getimgdim(slot)
+    end)
+    if dim_ok and width and height and width > 0 and height > 0 then
+      size = math.max(16, tonumber(size) or 32)
+      local scale = math.min(size / width, size / height)
+      local draw_w = width * scale
+      local draw_h = height * scale
+      gfx.blit(slot, 1, 0, 0, 0, width, height, x, y, draw_w, draw_h)
+      return draw_w
+    end
+  end
+
+  size = math.max(16, tonumber(size) or 32)
+  local mid_x = x + (size * 0.5)
+  local top_y = y
+  local bot_y = y + size
+  local left_x = x
+  local right_x = x + size
+  local shoulder_y = y + (size * 0.28)
+
+  ReaADR.set_gfx_color(theme.panel_alt)
+  gfx.triangle(mid_x, top_y, right_x, shoulder_y, right_x - (size * 0.10), bot_y - (size * 0.08), mid_x, bot_y)
+  gfx.triangle(mid_x, top_y, left_x, shoulder_y, left_x + (size * 0.10), bot_y - (size * 0.08), mid_x, bot_y)
+  ReaADR.set_gfx_color(theme.border)
+  gfx.line(mid_x, top_y, right_x, shoulder_y)
+  gfx.line(right_x, shoulder_y, right_x - (size * 0.10), bot_y - (size * 0.08))
+  gfx.line(right_x - (size * 0.10), bot_y - (size * 0.08), mid_x, bot_y)
+  gfx.line(mid_x, bot_y, left_x + (size * 0.10), bot_y - (size * 0.08))
+  gfx.line(left_x + (size * 0.10), bot_y - (size * 0.08), left_x, shoulder_y)
+  gfx.line(left_x, shoulder_y, mid_x, top_y)
+
+  ReaADR.set_gfx_color(theme.accent_green)
+  gfx.triangle(mid_x, y + (size * 0.10), left_x + (size * 0.12), shoulder_y + (size * 0.04), mid_x - (size * 0.04), bot_y - (size * 0.12))
+  ReaADR.set_gfx_color(theme.accent_blue)
+  gfx.triangle(mid_x, y + (size * 0.10), right_x - (size * 0.12), shoulder_y + (size * 0.04), mid_x + (size * 0.04), bot_y - (size * 0.12))
+  ReaADR.set_gfx_color(theme.accent_red)
+  gfx.triangle(mid_x - (size * 0.02), y + (size * 0.34), right_x - (size * 0.16), bot_y - (size * 0.14), mid_x + (size * 0.02), bot_y - (size * 0.10))
+
+  ReaADR.set_gfx_color(theme.border)
+  gfx.setfont(1, "Arial", math.max(10, math.floor(size * 0.24)))
+  ReaADR.set_gfx_color(theme.text)
+  gfx.x = x + math.floor(size * 0.18)
+  gfx.y = y + math.floor(size * 0.34)
+  gfx.drawstr("ADR")
+
+  ReaADR.set_gfx_color(theme.text)
+  local wave_y = y + (size * 0.76)
+  gfx.line(x + (size * 0.16), wave_y, x + (size * 0.30), wave_y - (size * 0.04))
+  gfx.line(x + (size * 0.30), wave_y - (size * 0.04), x + (size * 0.42), wave_y + (size * 0.03))
+  gfx.line(x + (size * 0.42), wave_y + (size * 0.03), x + (size * 0.54), wave_y - (size * 0.08))
+  gfx.line(x + (size * 0.54), wave_y - (size * 0.08), x + (size * 0.68), wave_y + (size * 0.02))
+  gfx.line(x + (size * 0.68), wave_y + (size * 0.02), x + (size * 0.82), wave_y - (size * 0.02))
+
+  return size
+end
+
+function ReaADR.draw_window_header(title, subtitle, options)
+  options = options or {}
+  local theme = ReaADR.ui_theme()
+  local x = tonumber(options.x) or 20
+  local y = tonumber(options.y) or 16
+  local width = tonumber(options.width) or (gfx.w or 800) - (x * 2)
+  local height = tonumber(options.height) or 74
+
+  ReaADR.set_gfx_color(theme.panel)
+  gfx.rect(x - 6, y - 8, width, height, true)
+
+  local logo_w = ReaADR.draw_logo(x, y, height - 10)
+  gfx.setfont(1, "Arial", options.title_size or 22)
+  ReaADR.set_gfx_color(theme.text)
+  gfx.x = x + logo_w + 14
+  gfx.y = y + 2
+  gfx.drawstr(title or "")
+
+  if subtitle and subtitle ~= "" then
+    gfx.setfont(1, "Arial", options.subtitle_size or 13)
+    ReaADR.set_gfx_color(theme.muted)
+    gfx.x = x + logo_w + 14
+    gfx.y = y + 30
+    gfx.drawstr(subtitle)
+  end
+
+  return {
+    content_y = y + height + 10,
+    logo_w = logo_w,
+  }
+end
 
 local ROLE_COLORS = {
   cues = { 235, 198, 80 },
@@ -467,6 +651,119 @@ end
 
 function ReaADR.set_setting(key, value)
   reaper.SetProjExtState(project(), ReaADR.EXT_NAMESPACE, "overlay." .. key, tostring(value))
+end
+
+function ReaADR.overlay_text_mode(settings)
+  local value = trim(settings and settings.text_color or ReaADR.get_setting("text_color", ReaADR.DEFAULT_OVERLAY_SETTINGS.text_color))
+  value = value:lower()
+  if value ~= "yellow" then
+    value = "white"
+  end
+  return value
+end
+
+function ReaADR.overlay_text_rgba_expr(settings)
+  if ReaADR.overlay_text_mode(settings) == "yellow" then
+    return "1, 0.93, 0.48, 1"
+  end
+  return "1, 1, 1, 1"
+end
+
+function ReaADR.window_layout_enabled()
+  local _, value = reaper.GetProjExtState(project(), ReaADR.EXT_NAMESPACE, "ui.remember_window_layout")
+  if value == "" then
+    return false
+  end
+  return value == "1" or value == "true" or value == "yes"
+end
+
+function ReaADR.set_window_layout_enabled(enabled)
+  reaper.SetProjExtState(project(), ReaADR.EXT_NAMESPACE, "ui.remember_window_layout", enabled and "1" or "0")
+end
+
+function ReaADR.cue_hover_preview_enabled()
+  local _, value = reaper.GetProjExtState(project(), ReaADR.EXT_NAMESPACE, "ui.cue_hover_preview")
+  if value == "" then
+    return true
+  end
+  return value == "1" or value == "true" or value == "yes"
+end
+
+function ReaADR.set_cue_hover_preview_enabled(enabled)
+  reaper.SetProjExtState(project(), ReaADR.EXT_NAMESPACE, "ui.cue_hover_preview", enabled and "1" or "0")
+end
+
+local function ui_window_key(window_id, field)
+  return ("ui.window.%s.%s"):format(sanitize_token(window_id), field)
+end
+
+function ReaADR.load_window_state(window_id, defaults)
+  defaults = defaults or {}
+  local state = {
+    width = tonumber(defaults.width) or 800,
+    height = tonumber(defaults.height) or 600,
+    dock = tonumber(defaults.dock) or 0,
+    x = tonumber(defaults.x),
+    y = tonumber(defaults.y),
+  }
+  if not ReaADR.window_layout_enabled() then
+    return state
+  end
+
+  local _, width = reaper.GetProjExtState(project(), ReaADR.EXT_NAMESPACE, ui_window_key(window_id, "width"))
+  local _, height = reaper.GetProjExtState(project(), ReaADR.EXT_NAMESPACE, ui_window_key(window_id, "height"))
+  local _, dock = reaper.GetProjExtState(project(), ReaADR.EXT_NAMESPACE, ui_window_key(window_id, "dock"))
+  local _, x = reaper.GetProjExtState(project(), ReaADR.EXT_NAMESPACE, ui_window_key(window_id, "x"))
+  local _, y = reaper.GetProjExtState(project(), ReaADR.EXT_NAMESPACE, ui_window_key(window_id, "y"))
+
+  state.width = tonumber(width) or state.width
+  state.height = tonumber(height) or state.height
+  state.dock = tonumber(dock) or state.dock
+  state.x = tonumber(x) or state.x
+  state.y = tonumber(y) or state.y
+  return state
+end
+
+function ReaADR.init_persistent_window(window_id, title, defaults)
+  local state = ReaADR.load_window_state(window_id, defaults)
+  gfx.init(title, state.width, state.height, state.dock, state.x, state.y)
+  return state
+end
+
+function ReaADR.save_window_geometry(window_id, geometry)
+  geometry = geometry or {}
+  reaper.SetProjExtState(project(), ReaADR.EXT_NAMESPACE, ui_window_key(window_id, "dock"), tostring(tonumber(geometry.dock) or 0))
+  reaper.SetProjExtState(project(), ReaADR.EXT_NAMESPACE, ui_window_key(window_id, "x"), tostring(tonumber(geometry.x) or 0))
+  reaper.SetProjExtState(project(), ReaADR.EXT_NAMESPACE, ui_window_key(window_id, "y"), tostring(tonumber(geometry.y) or 0))
+  reaper.SetProjExtState(project(), ReaADR.EXT_NAMESPACE, ui_window_key(window_id, "width"), tostring(tonumber(geometry.width) or 0))
+  reaper.SetProjExtState(project(), ReaADR.EXT_NAMESPACE, ui_window_key(window_id, "height"), tostring(tonumber(geometry.height) or 0))
+  return true
+end
+
+function ReaADR.save_window_state(window_id)
+  if not ReaADR.window_layout_enabled() then
+    return false
+  end
+  if not gfx or not gfx.w or not gfx.h or not gfx.dock then
+    return false
+  end
+
+  local ok, dock, x, y, width, height = pcall(gfx.dock, -1, 0, 0, 0, 0)
+  if not ok then
+    dock = 0
+    x = 0
+    y = 0
+    width = gfx.w
+    height = gfx.h
+  end
+
+  return ReaADR.save_window_geometry(window_id, {
+    dock = dock,
+    x = x,
+    y = y,
+    width = tonumber(width) or gfx.w or 0,
+    height = tonumber(height) or gfx.h or 0,
+  })
 end
 
 function ReaADR.load_overlay_settings()
@@ -1451,6 +1748,7 @@ function ReaADR.apply_character_filter()
   if hide_inactive_regions then
     ReaADR.refresh_overlay_silent()
   end
+  ReaADR.bump_session_revision()
   reaper.UpdateArrange()
   return {
     active_tracks = active_tracks,
@@ -1510,6 +1808,14 @@ local function project_markers_by_name(is_region)
   end
 
   return markers
+end
+
+local function delete_project_marker_by_name(name, is_region)
+  local existing = find_project_marker(name, is_region)
+  if not existing then
+    return false
+  end
+  return reaper.DeleteProjectMarker(project(), existing.id, is_region) == true
 end
 
 local function upsert_project_marker(is_region, start_time, end_time, name, color)
@@ -1597,6 +1903,27 @@ function ReaADR.remove_start_markers()
   local removed = 0
   for _, marker_id in ipairs(marker_ids) do
     if reaper.DeleteProjectMarker(project(), marker_id, false) then
+      removed = removed + 1
+    end
+  end
+  return removed
+end
+
+function ReaADR.delete_generated_cue_regions()
+  local region_ids = {}
+  local _, marker_count, region_count = reaper.CountProjectMarkers(project())
+  local total = marker_count + region_count
+
+  for i = 0, total - 1 do
+    local ok, is_region, _, _, name, marker_id = reaper.EnumProjectMarkers3(project(), i)
+    if ok and is_region and name:find(ReaADR.NAME_PREFIX, 1, true) and name:find("ADR Cue", 1, true) then
+      region_ids[#region_ids + 1] = marker_id
+    end
+  end
+
+  local removed = 0
+  for _, marker_id in ipairs(region_ids) do
+    if reaper.DeleteProjectMarker(project(), marker_id, true) then
       removed = removed + 1
     end
   end
@@ -1938,6 +2265,34 @@ function ReaADR.visible_metadata_pairs(cue, settings)
     end
   end
   return pairs
+end
+
+local function renumber_cue_id(cue, index, width)
+  local padded = tostring(index)
+  if width and width > 1 then
+    padded = ("%0" .. tostring(width) .. "d"):format(index)
+  end
+  cue.id = padded
+end
+
+local function renumber_cues_in_order(cues)
+  local numeric_only = true
+  local width = 1
+  for _, cue in ipairs(cues or {}) do
+    local id = trim(cue.id)
+    if id == "" or not id:match("^%d+$") then
+      numeric_only = false
+      break
+    end
+    width = math.max(width, #id)
+  end
+  if not numeric_only then
+    width = 0
+  end
+  for index, cue in ipairs(cues or {}) do
+    renumber_cue_id(cue, index, width)
+    cue.source_line = index
+  end
 end
 
 function ReaADR.count_recorded_takes_for_cue(cue)
@@ -2318,6 +2673,51 @@ function ReaADR.add_cached_cue(cue)
   return cue, cues
 end
 
+function ReaADR.remove_cached_cue(target_cue, options)
+  options = options or {}
+  if not target_cue then
+    return nil, "No cue was provided."
+  end
+
+  local cues, cue_error = ReaADR.load_last_import_cues()
+  if not cues then
+    return nil, cue_error or "No cached ReaADR session was found."
+  end
+
+  local key = target_cue._original_key or ReaADR.cue_key(target_cue)
+  local removed = nil
+  for index, cue in ipairs(cues) do
+    if ReaADR.cue_key(cue) == key then
+      removed = cue
+      table.remove(cues, index)
+      break
+    end
+  end
+
+  if not removed then
+    return nil, "Cue was not found in the cached ReaADR session."
+  end
+
+  delete_project_marker_by_name(ReaADR.region_name(removed), true)
+  if options.renumber ~= false then
+    renumber_cues_in_order(cues)
+  end
+
+  ReaADR.save_last_import_cues(cues)
+
+  local selected = cues[math.min(#cues, math.max(1, tonumber(options.select_index) or 1))]
+  ReaADR.set_manager_selected_cue(selected)
+  ReaADR.ensure_character_ruler_lanes(cues)
+  ReaADR.refresh_overlay_silent()
+  reaper.UpdateArrange()
+
+  return {
+    removed = removed,
+    cues = cues,
+    selected = selected,
+  }
+end
+
 function ReaADR.rebuild_cached_session(options)
   options = options or {}
   local cues, err = ReaADR.load_last_import_cues()
@@ -2337,6 +2737,9 @@ function ReaADR.rebuild_cached_session(options)
 
   if options.clear_generated_items then
     ReaADR.delete_generated_cue_audio_items()
+  end
+  if options.clear_generated_regions then
+    ReaADR.delete_generated_cue_regions()
   end
 
   return ReaADR.setup_project(cues, {
@@ -2766,6 +3169,48 @@ local function overlay_fx_code(cues, settings)
     "active_region_count = 0;",
     ("display_fps = %d;"):format(display_fps),
   }
+  local base_text_rgba = ReaADR.overlay_text_rgba_expr(settings)
+
+  local function wrap_overlay_text(text, max_chars)
+    text = trim(text)
+    max_chars = math.max(16, tonumber(max_chars) or 48)
+    if text == "" then
+      return {}
+    end
+
+    local wrapped = {}
+    local current = ""
+    for word in text:gmatch("%S+") do
+      local candidate = current == "" and word or (current .. " " .. word)
+      if #candidate <= max_chars then
+        current = candidate
+      else
+        if current ~= "" then
+          wrapped[#wrapped + 1] = current
+        end
+        while #word > max_chars do
+          wrapped[#wrapped + 1] = word:sub(1, max_chars)
+          word = word:sub(max_chars + 1)
+        end
+        current = word
+      end
+    end
+    if current ~= "" then
+      wrapped[#wrapped + 1] = current
+    end
+    return wrapped
+  end
+
+  local function append_text_draw(text_var, font_var, color_expr, x_expr, y_expr, measure_w_var, measure_h_var, bg_enabled, pad_x_expr, pad_y_expr)
+    lines[#lines + 1] = ("gfx_setfont(%s, \"Arial\");"):format(font_var)
+    lines[#lines + 1] = ("gfx_str_measure(%s, %s, %s);"):format(text_var, measure_w_var, measure_h_var)
+    if bg_enabled then
+      lines[#lines + 1] = ("gfx_set(0, 0, 0, 0.62); gfx_fillrect(max(0, (%s) - (%s)), (%s) - (%s), min(w, %s + ((%s) * 2)), %s + ((%s) * 2));"):format(
+        x_expr, pad_x_expr, y_expr, pad_y_expr, measure_w_var, pad_x_expr, measure_h_var, pad_y_expr
+      )
+    end
+    lines[#lines + 1] = ("gfx_set(%s); gfx_str_draw(%s, %s, %s);"):format(color_expr, text_var, x_expr, y_expr)
+  end
 
   for _, cue in ipairs(display_cues) do
     local cue_start = tonumber(cue.start_time) or 0
@@ -2775,8 +3220,9 @@ local function overlay_fx_code(cues, settings)
 
   if settings.show_project_timer then
     lines[#lines + 1] = "project_total_frames = floor(max(0, now) * display_fps + 0.5); project_frames = project_total_frames - floor(project_total_frames / display_fps) * display_fps; project_total_seconds = floor(project_total_frames / display_fps); project_seconds = project_total_seconds - floor(project_total_seconds / 60) * 60; project_total_minutes = floor(project_total_seconds / 60); project_minutes = project_total_minutes - floor(project_total_minutes / 60) * 60; project_hours = floor(project_total_minutes / 60); sprintf(#project_tc, \"%02d:%02d:%02d:%02d\", project_hours, project_minutes, project_seconds, project_frames);"
-    lines[#lines + 1] = "#timeline_label = \"Timeline SMPTE\"; gfx_setfont(font_status, \"Arial\"); gfx_set(0.72, 0.78, 0.84, 0.96); gfx_str_measure(#timeline_label, tlw, tlh); gfx_str_draw(#timeline_label, (w - tlw) * 0.5, margin * 0.40);"
-    lines[#lines + 1] = "gfx_setfont(font_timer, \"Arial\"); gfx_set(1, 1, 1, 0.96); gfx_str_measure(#project_tc, ptw, pth); gfx_str_draw(#project_tc, (w - ptw) * 0.5, margin * 0.40 + font_status);"
+    lines[#lines + 1] = "#timeline_label = \"Timeline SMPTE\";"
+    append_text_draw("#timeline_label", "font_status", base_text_rgba, "(w - tlw) * 0.5", "margin * 0.40", "tlw", "tlh", settings.bg_project_timer, "pad * 0.9", "pad * 0.45")
+    append_text_draw("#project_tc", "font_timer", base_text_rgba, "(w - ptw) * 0.5", "margin * 0.40 + font_status", "ptw", "pth", settings.bg_project_timer, "pad * 1.1", "pad * 0.55")
   end
 
   for _, cue in ipairs(display_cues) do
@@ -2785,9 +3231,9 @@ local function overlay_fx_code(cues, settings)
     local cue_timecode = format_timecode(cue_start, display_fps)
     local preroll = math.max(0, tonumber(settings.preroll_seconds) or 0)
     local item_start = math.max(0, cue_start - preroll)
-    local direction = cue.direction
-    if direction ~= "" and not direction:match("^%b()$") then
-      direction = "(" .. direction .. ")"
+    local note_text = trim(first_nonempty(cue.notes, cue.direction))
+    if note_text ~= "" and not note_text:match("^%b()$") then
+      note_text = "(" .. note_text .. ")"
     end
     local cue_status = normalize_status(cue.status)
     local status_rgb_value = status_rgb(cue_status)
@@ -2820,23 +3266,19 @@ local function overlay_fx_code(cues, settings)
 
     if settings.show_cue_id then
       lines[#lines + 1] = "#cue_number = " .. eel_quote("Cue #" .. cue.id) .. ";"
-      lines[#lines + 1] = "gfx_setfont(font_cue, \"Arial\");"
-      lines[#lines + 1] = "gfx_set(1, 1, 1, 1);"
-      lines[#lines + 1] = "gfx_str_draw(#cue_number, margin, margin * 0.55);"
+      append_text_draw("#cue_number", "font_cue", base_text_rgba, "margin", "margin * 0.55", "cuew", "cueh", settings.bg_cue_id, "pad * 1.2", "pad * 0.6")
     end
 
     if settings.show_character then
       lines[#lines + 1] = "#character = " .. eel_quote(cue.character) .. ";"
-      lines[#lines + 1] = "gfx_setfont(font_meta, \"Arial\");"
-      lines[#lines + 1] = "gfx_set(0.75, 0.92, 1, 1);"
-      lines[#lines + 1] = "gfx_str_draw(#character, margin, margin * 0.55 + font_cue + pad * 0.4);"
+      append_text_draw("#character", "font_meta", "0.75, 0.92, 1, 1", "margin", "margin * 0.55 + font_cue + pad * 0.4", "charw", "charh", settings.bg_character, "pad * 1.0", "pad * 0.45")
     end
 
     if settings.show_cue_timecode then
       lines[#lines + 1] = "#cue_tc = " .. eel_quote(cue_timecode) .. ";"
       lines[#lines + 1] = "#cue_tc_label = \"Cue SMPTE\";"
-      lines[#lines + 1] = "gfx_setfont(font_status, \"Arial\"); gfx_set(0.72, 0.78, 0.84, 1); gfx_str_measure(#cue_tc_label, ctlw, ctlh); gfx_str_draw(#cue_tc_label, w - margin - ctlw, margin * 0.50);"
-      lines[#lines + 1] = "gfx_setfont(font_timer, \"Arial\"); gfx_set(1, 1, 1, 1); gfx_str_measure(#cue_tc, ctw, cth); gfx_str_draw(#cue_tc, w - margin - ctw, margin * 0.50 + font_status);"
+      append_text_draw("#cue_tc_label", "font_status", base_text_rgba, "w - margin - ctlw", "margin * 0.50", "ctlw", "ctlh", settings.bg_cue_timecode, "pad * 0.9", "pad * 0.45")
+      append_text_draw("#cue_tc", "font_timer", base_text_rgba, "w - margin - ctw", "margin * 0.50 + font_status", "ctw", "cth", settings.bg_cue_timecode, "pad * 1.1", "pad * 0.55")
     else
       lines[#lines + 1] = "cth = 0;"
     end
@@ -2845,13 +3287,17 @@ local function overlay_fx_code(cues, settings)
     if media_time ~= "" then
       lines[#lines + 1] = "#media_time_label = \"Media Time\";"
       lines[#lines + 1] = "#media_time = " .. eel_quote(media_time) .. ";"
-      lines[#lines + 1] = "gfx_setfont(font_status, \"Arial\"); gfx_set(0.72, 0.78, 0.84, 1); gfx_str_measure(#media_time_label, mtlabelw, mtlabelh); gfx_str_draw(#media_time_label, w - margin - mtlabelw, margin * 0.50 + font_status + font_timer + pad * 0.70);"
-      lines[#lines + 1] = "gfx_setfont(font_meta, \"Arial\"); gfx_set(1, 1, 1, 1); gfx_str_measure(#media_time, mtw, mth); gfx_str_draw(#media_time, w - margin - mtw, margin * 0.50 + font_status + font_timer + font_status + pad);"
+      append_text_draw("#media_time_label", "font_status", "0.72, 0.78, 0.84, 1", "w - margin - mtlabelw", "margin * 0.50 + font_status + font_timer + pad * 0.70", "mtlabelw", "mtlabelh", settings.bg_metadata, "pad * 0.9", "pad * 0.45")
+      append_text_draw("#media_time", "font_meta", base_text_rgba, "w - margin - mtw", "margin * 0.50 + font_status + font_timer + font_status + pad", "mtw", "mth", settings.bg_metadata, "pad * 1.0", "pad * 0.45")
     end
 
     if settings.show_cue_type and cue.cue_type ~= "" then
       lines[#lines + 1] = "#cue_type = " .. eel_quote(cue.cue_type) .. ";"
-      lines[#lines + 1] = "gfx_setfont(font_status, \"Arial\"); gfx_str_measure(#cue_type, typew, typeh); gfx_set(0.0, 0.50, 0.95, 0.82); gfx_fillrect(w - margin - typew - pad * 2, margin * 0.75 + cth + pad * 0.6, typew + pad * 2, typeh + pad); gfx_set(1, 1, 1, 1); gfx_str_draw(#cue_type, w - margin - typew - pad, margin * 0.75 + cth + pad * 1.1);"
+      if settings.bg_cue_type then
+        lines[#lines + 1] = "gfx_setfont(font_status, \"Arial\"); gfx_str_measure(#cue_type, typew, typeh); type_y = margin * 0.50 + font_status + font_timer + pad * 1.65; gfx_set(0, 0, 0, 0.62); gfx_fillrect(max(0, w - margin - typew - pad * 1.8), type_y - pad * 0.30, min(w, typew + pad * 2.2), typeh + pad * 0.75); gfx_set(1, 1, 1, 1); gfx_str_draw(#cue_type, w - margin - typew - pad * 0.9, type_y);"
+      else
+        lines[#lines + 1] = "gfx_setfont(font_status, \"Arial\"); gfx_str_measure(#cue_type, typew, typeh); type_y = margin * 0.50 + font_status + font_timer + pad * 1.65; gfx_set(0.0, 0.50, 0.95, 0.82); gfx_fillrect(w - margin - typew - pad * 1.6, type_y - pad * 0.25, typew + pad * 1.8, typeh + pad * 0.65); gfx_set(1, 1, 1, 1); gfx_str_draw(#cue_type, w - margin - typew - pad * 0.8, type_y);"
+      end
     end
 
     if settings.show_metadata then
@@ -2859,31 +3305,52 @@ local function overlay_fx_code(cues, settings)
       for index, pair in ipairs(metadata_pairs) do
         if index <= 5 then
           lines[#lines + 1] = ("#metadata_%d = %s;"):format(index, eel_quote(pair.key .. ": " .. pair.value))
-          lines[#lines + 1] = ("gfx_setfont(font_status, \"Arial\"); gfx_set(0.82, 0.88, 0.94, 0.95); gfx_str_measure(#metadata_%d, mdw, mdh); gfx_str_draw(#metadata_%d, w - margin - mdw, margin * 0.75 + cth + pad * %.1f);"):format(index, index, 2.0 + (index * 1.25))
+          append_text_draw(("#metadata_%d"):format(index), "font_status", base_text_rgba, "w - margin - mdw", ("margin * 0.75 + cth + pad * %.1f"):format(2.0 + (index * 1.25)), "mdw", "mdh", settings.bg_metadata, "pad * 0.9", "pad * 0.40")
         end
       end
     end
 
     if settings.show_status then
       lines[#lines + 1] = "#status = " .. eel_quote("Status: " .. cue_status) .. ";"
-      lines[#lines + 1] = "gfx_setfont(font_status, \"Arial\");"
-      lines[#lines + 1] = ("gfx_set(%.3f, %.3f, %.3f, 1);"):format(status_rgb_value[1] / 255, status_rgb_value[2] / 255, status_rgb_value[3] / 255)
-      lines[#lines + 1] = "gfx_str_draw(#status, margin, margin * 0.55 + font_cue + font_meta + pad * 1.4);"
+      append_text_draw("#status", "font_status", ("%.3f, %.3f, %.3f, 1"):format(status_rgb_value[1] / 255, status_rgb_value[2] / 255, status_rgb_value[3] / 255), "margin", "margin * 0.55 + font_cue + font_meta + pad * 1.4", "statusw", "statush", settings.bg_status, "pad * 0.9", "pad * 0.40")
     end
 
-    if settings.show_direction and direction ~= "" then
-      lines[#lines + 1] = "#direction = " .. eel_quote(direction) .. ";"
-      lines[#lines + 1] = "gfx_setfont(font_direction, \"Arial\"); gfx_set(1, 0.86, 0.35, 1); gfx_str_measure(#direction, dirw, dirh); gfx_str_draw(#direction, (w - dirw) * 0.5, h * 0.66);"
+    if settings.show_direction and note_text ~= "" then
+      lines[#lines + 1] = "#direction = " .. eel_quote(note_text) .. ";"
+      append_text_draw("#direction", "font_direction", base_text_rgba, "(w - dirw) * 0.5", "h * 0.66", "dirw", "dirh", settings.bg_direction, "pad * 1.1", "pad * 0.50")
     end
 
     if settings.show_dialogue and cue.line ~= "" then
-      lines[#lines + 1] = "#dialogue = " .. eel_quote(cue.line) .. ";"
-      lines[#lines + 1] = "gfx_setfont(font_dialogue, \"Arial\");"
-      lines[#lines + 1] = "gfx_str_measure(#dialogue, dw, dh);"
-      lines[#lines + 1] = "dialogue_x = max(margin, (w - dw) * 0.5); dialogue_y = h * 0.80;"
-      lines[#lines + 1] = "gfx_set(0, 0, 0, 0.62); gfx_fillrect(max(0, dialogue_x - pad * 1.5), dialogue_y - pad, min(w, dw + pad * 3), dh + pad * 2);"
-      lines[#lines + 1] = "gfx_set(1, 1, 1, 1);"
-      lines[#lines + 1] = "gfx_str_draw(#dialogue, dialogue_x, dialogue_y);"
+      local dialogue_lines = wrap_overlay_text(cue.line, 52)
+      lines[#lines + 1] = ("dialogue_base_y = h * 0.80 - ((%d - 1) * (font_dialogue * 0.46));"):format(#dialogue_lines)
+      lines[#lines + 1] = "dialogue_box_w = 0; dialogue_box_h = 0;"
+      for index, dialogue_line in ipairs(dialogue_lines) do
+        lines[#lines + 1] = ("#dialogue_%d = %s;"):format(index, eel_quote(dialogue_line))
+        lines[#lines + 1] = ("gfx_setfont(font_dialogue, \"Arial\"); gfx_str_measure(#dialogue_%d, dlgw_%d, dlgh_%d); dialogue_box_w = max(dialogue_box_w, dlgw_%d); dialogue_box_h = max(dialogue_box_h, ((%d - 1) * (font_dialogue * 0.92)) + dlgh_%d);"):format(
+          index, index, index, index, index, index
+        )
+      end
+      if settings.bg_dialogue then
+        lines[#lines + 1] = "dialogue_box_x = max(0, max(margin, (w - dialogue_box_w) * 0.5) - pad * 1.5);"
+        lines[#lines + 1] = "dialogue_box_y = dialogue_base_y - pad;"
+        lines[#lines + 1] = "dialogue_box_draw_w = min(w - dialogue_box_x, dialogue_box_w + pad * 3);"
+        lines[#lines + 1] = "dialogue_box_draw_h = dialogue_box_h + pad * 2;"
+        lines[#lines + 1] = "gfx_set(0, 0, 0, 0.62); gfx_fillrect(dialogue_box_x, dialogue_box_y, dialogue_box_draw_w, dialogue_box_draw_h);"
+      end
+      for index, _ in ipairs(dialogue_lines) do
+        append_text_draw(
+          ("#dialogue_%d"):format(index),
+          "font_dialogue",
+          base_text_rgba,
+          ("max(margin, (w - dw) * 0.5)"),
+          ("dialogue_base_y + ((%d - 1) * (font_dialogue * 0.92))"):format(index),
+          "dw",
+          "dh",
+          false,
+          "pad * 1.5",
+          "pad"
+        )
+      end
     end
 
     lines[#lines + 1] = ");"

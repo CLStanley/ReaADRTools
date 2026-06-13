@@ -8,4 +8,4 @@ local function script_dir()
 end
 
 local App = dofile(script_dir() .. "/ReaADR_App.lua")
-App.open_manager()
+App.launch_manager()

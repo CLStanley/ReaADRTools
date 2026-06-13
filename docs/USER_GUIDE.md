@@ -12,8 +12,15 @@ organization without leaving REAPER.
 
 The menu contains `Open Manager` plus four configurable quick-action slots.
 Open Manager is the main workspace. Quick actions can be changed from
-`Open Manager > Preferences > Configure Quick Actions`. Restart REAPER after
-changing quick actions if you want the native top-menu labels to refresh.
+`Open Manager > Preferences` using the inline dropdowns. Open Manager can keep
+up to three manager windows open at once.
+
+If you enable `Open Manager > Preferences > Remember ReaADR window layout per project`,
+ReaADR saves the size and placement of its utility windows in the current
+project so they reopen where you left them.
+
+In the overlay settings, most informational text can be switched between white
+and yellow while cue-type and status colors stay specialized.
 
 ## Recommended REAPER Setup
 
@@ -105,28 +112,37 @@ Useful tools:
 - Open Cue Manager
 
 The Cue Manager shows cue rows with cue ID, character, SMPTE start/end, status,
-and dialogue. Select a row to jump to the start of its region. Use the Cue
-Manager buttons to jump by cue number, move previous/next, add cues at the
-current timeline position, open Character Filter, refresh overlays, or open the
-information panel for the selected cue. The selected cue status field is a
-dropdown; changing it refreshes the cue data and overlay. If Character Filter
-is applied while Cue Manager is open, Cue Manager updates its visible cue list
-to show only active character targets.
+and dialogue. ReaADR now prefers a ReaImGui-based Cue Manager when ReaImGui is
+installed, and falls back to the legacy REAPER `gfx` version if it is not.
+Select a row to jump to the start of its region. Use the Cue Manager buttons to
+jump by cue number, move previous/next, add cues at the current timeline
+position, remove cues, open Character Filter, refresh overlays, or open the
+information panel for the selected cue. If Character Filter is applied while
+Cue Manager is open, Cue Manager updates its visible cue list to show only
+active character targets.
+
+Double-click a cell in Cue Manager to edit that field inline. Press `Enter` or
+click away to commit the change back to the cached session, generated region,
+and overlay. This is intended to make Cue Manager the main script-building
+workspace instead of forcing every small edit through a separate panel. Cue
+status is not edited inline; use the status dropdown for the selected cue.
+
+Cue Manager includes a Notes column. If dialogue or notes text is too long for
+the table cell, hover the cell to preview the full text. In the legacy `gfx`
+Cue Manager, the hover preview now wraps and expands near the cursor, and it
+can be disabled from `Open Manager > Preferences`.
 
 If you manually move or resize generated regions in REAPER, press `Sync Regions`
 in Cue Manager. This applies the current region positions back to ReaADR's cue
 cache, rebuilds cue beep items, reapplies overlap lane logic, updates ruler
 lanes such as `ALEX #2`, and refreshes the overlay.
 
-Cue details are edited from the Cue Information Panel. Editable fields include
-cue number, character, dialogue, direction, cue type, and notes. Edits update
-the cached session, generated region, and video overlay while the window stays
-open. The edit mode expands to show larger dialogue and notes fields for long
-lines or monologues.
+If you remove a cue from Cue Manager, ReaADR deletes the cached cue, rebuilds
+generated regions and cue audio, and renumbers the remaining cues in order.
 
-Double-click a cue row in Cue Manager to open that cue directly in edit mode.
-When opened this way, the Cue Information window closes automatically after a
-successful save.
+Cue Information Panel is now a read-only detail view for the selected cue. Use
+it when you want a larger dialogue/notes display plus timing, countdown, take
+count, status, and cue type context without changing the cue there.
 
 ## Character Filter
 
@@ -156,6 +172,11 @@ Overlay options include:
 - Streamer/visual cue/flash
 - Studio metadata
 
+Each text field can also use an optional black background panel. Dialogue keeps
+its dark backing by default, and the other overlay fields can enable their own
+backgrounds individually from the Video Overlays tab. The former performance
+direction overlay slot now displays cue notes.
+
 Profile buttons provide quick setups:
 
 - Actor
@@ -166,6 +187,9 @@ Profile buttons provide quick setups:
 Studio metadata fields are edited as individual fields and shown only when the
 imported cue has matching metadata. Common fields include `PGID`, `MID`,
 `Media Time`, `Watermark Timestamp`, `Asset Date Code`, and `Project Name`.
+
+Long dialogue lines are automatically wrapped into multiple centered lines so
+they stay readable on screen instead of running off the frame.
 
 ## Reports
 

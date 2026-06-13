@@ -40,6 +40,7 @@ File: `scripts/ReaADR_App.lua`
 Responsibilities:
 
 - Define manager modules.
+- Dispatch up to three concurrent manager instances through dedicated launcher scripts.
 - Route manager buttons to scripts or application actions.
 - Store and execute configurable quick-action menu slots.
 - Provide hover hint text and searchable built-in help topics.
@@ -65,11 +66,13 @@ Responsibilities:
 - CSV/TSV parsing and column mapping.
 - Cue cache serialization in project extstate.
 - Timecode parsing/formatting.
+- Project-scoped UI state such as window geometry/layout preferences.
 - Track and region creation.
 - Project-local cue WAV generation and cue audio item placement.
 - Overlay video processor generation.
 - Character filtering state.
 - Cue status handling.
+- Cached cue add/update/remove helpers.
 - Validation/report export helpers.
 
 Most shared behavior belongs here instead of inside feature scripts.
@@ -84,6 +87,8 @@ Examples:
 - `ReaADR_Import_Cue_Sheet.lua`
 - `ReaADR_Detect_Dialogue.lua`
 - `ReaADR_Cue_Manager.lua`
+- `ReaADR_Cue_Manager_ImGui.lua`
+- `ReaADR_Cue_Manager_Gfx.lua`
 - `ReaADR_Character_Filter.lua`
 - `ReaADR_Overlay_Settings.lua`
 - `ReaADR_Export_Cue_Sheet.lua`
@@ -160,6 +165,28 @@ ADR Source Video track.
 Overlay code is regenerated when settings change, cue status changes, character
 filtering hides regions, or the user refreshes the overlay.
 
+Overlay settings now include per-field background toggles for the major text
+elements. Dialogue is wrapped into multiple lines before code generation so
+long cue text remains visible in-frame. The legacy direction overlay slot is
+now used to display cue notes when notes are present.
+
+## Cue Manager UI Flow
+
+`ReaADR_Cue_Manager.lua` is now a lightweight entry point. It prefers the
+ReaImGui manager and falls back to the legacy `gfx` manager if ReaImGui is not
+available or the newer UI fails during startup.
+
+The shared cue-management behaviors remain in `ReaADR_Core.lua`:
+
+- session cue loading and filtering
+- selected cue tracking
+- cue add/update/remove operations
+- region sync back into cached cues
+- overlay refresh and character lane rebuilds
+
+This keeps the migration to a richer UI layer from duplicating core workflow
+logic.
+
 ## Performance Guidance
 
 Prefer cached cue data over project-wide scans. Scan REAPER tracks/items only
@@ -174,8 +201,13 @@ Batch project edits inside:
 Avoid adding new standalone public actions unless there is a strong workflow
 reason. Prefer adding manager controls.
 
-## Future UI Direction
+## UI Direction
 
-Current UI uses REAPER `gfx`. ReaImGui should be evaluated for the next major
-manager revision because cue tables, filters, status dropdowns, and import
-mapping views will be easier to build and maintain there.
+The manager stack is now hybrid:
+
+- ReaImGui-first for Cue Manager
+- `gfx` for the legacy Cue Manager fallback and the remaining utility windows
+
+The intended direction is to continue moving complex editing surfaces toward
+ReaImGui while keeping workflow logic in `ReaADR_Core.lua` so both UI layers
+can share the same session behavior during migration.

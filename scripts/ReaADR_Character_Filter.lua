@@ -31,9 +31,9 @@ end
 
 local state = {
   width = 420,
-  height = math.min(550, 156 + (#targets * 30)),
+  height = math.min(860, math.max(440, 210 + (#targets * 34))),
   min_width = 360,
-  min_height = 260,
+  min_height = 420,
   last_mouse = 0,
   closed = false,
   hide_regions = ReaADR.character_filter_hides_regions(),
@@ -43,11 +43,12 @@ local rows = {}
 local hide_regions_row = {}
 local buttons = {}
 
-local function layout()
+local function layout(content_top)
+  content_top = tonumber(content_top) or 108
   state.width = math.max(state.min_width, gfx.w or state.width)
   state.height = math.max(state.min_height, gfx.h or state.height)
   for index, target in ipairs(targets) do
-    rows[index] = { x = 24, y = 58 + ((index - 1) * 30), w = state.width - 48, h = 24, target = target }
+    rows[index] = { x = 24, y = content_top + ((index - 1) * 32), w = state.width - 48, h = 26, target = target }
   end
   local button_y = state.height - 46
   hide_regions_row = { x = 24, y = button_y - 34, w = state.width - 48, h = 24 }
@@ -64,12 +65,13 @@ local function inside(rect, x, y)
 end
 
 local function draw_button(rect)
-  gfx.set(0.22, 0.24, 0.26, 1)
+  local theme = ReaADR.ui_theme()
+  ReaADR.set_gfx_color(theme.panel_alt)
   gfx.rect(rect.x, rect.y, rect.w, rect.h, true)
-  gfx.set(0.72, 0.76, 0.80, 1)
+  ReaADR.set_gfx_color(theme.border)
   gfx.rect(rect.x, rect.y, rect.w, rect.h, false)
   gfx.setfont(1, "Arial", 14)
-  gfx.set(1, 1, 1, 1)
+  ReaADR.set_gfx_color(theme.text)
   local tw, th = gfx.measurestr(rect.label)
   gfx.x = rect.x + (rect.w - tw) * 0.5
   gfx.y = rect.y + (rect.h - th) * 0.5
@@ -108,62 +110,55 @@ local function apply_filter()
   )
 end
 
-local function close(apply)
+local function close()
   if state.closed then
     return
   end
   state.closed = true
+  ReaADR.save_window_state("character_filter")
   gfx.quit()
-  if apply then
-    apply_filter()
-  end
 end
 
 local function frame()
-  layout()
-  gfx.set(0.12, 0.12, 0.12, 1)
+  local theme = ReaADR.ui_theme()
+  ReaADR.set_gfx_color(theme.bg)
   gfx.rect(0, 0, state.width, state.height, true)
 
-  gfx.setfont(1, "Arial", 20)
-  gfx.set(1, 1, 1, 1)
-  gfx.x = 24
-  gfx.y = 18
-  gfx.drawstr("Character Filter")
-
-  gfx.setfont(1, "Arial", 13)
-  gfx.set(0.78, 0.80, 0.82, 1)
-  gfx.x = 24
-  gfx.y = 40
-  gfx.drawstr(("Selected: %d of %d"):format(selected_count(), #targets))
+  local header = ReaADR.draw_window_header(
+    "Character Filter",
+    ("Selected: %d of %d"):format(selected_count(), #targets),
+    { x = 24, y = 18, width = state.width - 48, height = 74 }
+  )
+  layout(math.max(108, header.content_y + 4))
 
   for _, row in ipairs(rows) do
     local key = row.target.key
     local checked = selected[key] == true
-    gfx.set(0.05, 0.05, 0.05, 1)
+    ReaADR.set_gfx_color(theme.panel)
     gfx.rect(row.x, row.y, row.w, row.h, true)
-    gfx.set(0.50, 0.54, 0.58, 1)
+    ReaADR.set_gfx_color(theme.border)
     gfx.rect(row.x, row.y, row.w, row.h, false)
-    gfx.set(checked and 0.20 or 0.18, checked and 0.70 or 0.18, checked and 0.32 or 0.18, 1)
+    ReaADR.set_gfx_color(checked and theme.accent_gold or theme.panel_alt)
     gfx.rect(row.x + 6, row.y + 5, 14, 14, true)
-    gfx.set(0.85, 0.88, 0.90, 1)
+    ReaADR.set_gfx_color(theme.border)
     gfx.rect(row.x + 6, row.y + 5, 14, 14, false)
     gfx.setfont(1, "Arial", 15)
-    gfx.set(1, 1, 1, 1)
+    ReaADR.set_gfx_color(theme.text)
     gfx.x = row.x + 28
     gfx.y = row.y + 4
     gfx.drawstr(row.target.label)
   end
 
-  gfx.set(0.05, 0.05, 0.05, 1)
+  ReaADR.set_gfx_color(theme.panel)
   gfx.rect(hide_regions_row.x, hide_regions_row.y, hide_regions_row.w, hide_regions_row.h, true)
-  gfx.set(0.50, 0.54, 0.58, 1)
+  ReaADR.set_gfx_color(theme.border)
   gfx.rect(hide_regions_row.x, hide_regions_row.y, hide_regions_row.w, hide_regions_row.h, false)
-  gfx.set(state.hide_regions and 0.20 or 0.18, state.hide_regions and 0.70 or 0.18, state.hide_regions and 0.32 or 0.18, 1)
+  ReaADR.set_gfx_color(state.hide_regions and theme.accent_gold or theme.panel_alt)
   gfx.rect(hide_regions_row.x + 6, hide_regions_row.y + 5, 14, 14, true)
-  gfx.set(0.85, 0.88, 0.90, 1)
+  ReaADR.set_gfx_color(theme.border)
   gfx.rect(hide_regions_row.x + 6, hide_regions_row.y + 5, 14, 14, false)
   gfx.setfont(1, "Arial", 15)
-  gfx.set(1, 1, 1, 1)
+  ReaADR.set_gfx_color(theme.text)
   gfx.x = hide_regions_row.x + 28
   gfx.y = hide_regions_row.y + 4
   gfx.drawstr("Hide inactive ruler regions")
@@ -177,10 +172,10 @@ local function frame()
 
   local char = gfx.getchar()
   if char < 0 or char == 27 then
-    close(false)
+    close()
     return
   elseif char == 13 then
-    close(true)
+    apply_filter()
     return
   end
 
@@ -202,10 +197,9 @@ local function frame()
     elseif inside(buttons.none, gfx.mouse_x, gfx.mouse_y) then
       selected = {}
     elseif inside(buttons.apply, gfx.mouse_x, gfx.mouse_y) then
-      close(true)
-      return
+      apply_filter()
     elseif inside(buttons.cancel, gfx.mouse_x, gfx.mouse_y) then
-      close(false)
+      close()
       return
     end
   end
@@ -214,5 +208,10 @@ local function frame()
   reaper.defer(frame)
 end
 
-gfx.init("ReaADR Character Filter", state.width, state.height)
+local restored = ReaADR.init_persistent_window("character_filter", "ReaADR Character Filter", {
+  width = state.width,
+  height = state.height,
+})
+state.width = restored.width
+state.height = restored.height
 frame()

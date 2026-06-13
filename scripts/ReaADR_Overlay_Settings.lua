@@ -16,7 +16,7 @@ local rows = {
   { key = "show_cue_timecode", label = "Cue timecode" },
   { key = "show_project_timer", label = "Live project timer" },
   { key = "show_dialogue", label = "Dialogue line" },
-  { key = "show_direction", label = "Performance direction" },
+  { key = "show_direction", label = "Notes" },
   { key = "show_cue_type", label = "Cue type" },
   { key = "show_visual_cue", label = "Visual cue indicator" },
   { key = "show_streamer", label = "Streamer bar" },
@@ -25,12 +25,27 @@ local rows = {
   { key = "show_metadata", label = "Studio metadata" },
 }
 
+local background_rows = {
+  { key = "bg_project_timer", label = "Timeline SMPTE background" },
+  { key = "bg_cue_id", label = "Cue ID background" },
+  { key = "bg_character", label = "Character background" },
+  { key = "bg_cue_timecode", label = "Cue timecode background" },
+  { key = "bg_dialogue", label = "Dialogue background" },
+  { key = "bg_direction", label = "Notes background" },
+  { key = "bg_cue_type", label = "Cue type background" },
+  { key = "bg_status", label = "Status background" },
+  { key = "bg_metadata", label = "Metadata background" },
+}
+
 local mouse_was_down = false
 local dirty = false
 local saved_message_until = 0
 local saved_message = "Saved"
 
-gfx.init("ReaADR Overlay Settings", 640, 740)
+local window_state = ReaADR.init_persistent_window("overlay_settings", "ReaADR Overlay Settings", {
+  width = 760,
+  height = 820,
+})
 
 local function save()
   ReaADR.save_overlay_settings(settings)
@@ -45,13 +60,14 @@ local function save()
 end
 
 local function draw_checkbox(x, y, checked, label)
-  gfx.set(0.15, 0.16, 0.18, 1)
+  local theme = ReaADR.ui_theme()
+  ReaADR.set_gfx_color(theme.panel_alt)
   gfx.rect(x, y, 18, 18, 0)
   if checked then
-    gfx.set(0.1, 0.75, 1, 1)
+    ReaADR.set_gfx_color(theme.accent_gold)
     gfx.rect(x + 4, y + 4, 10, 10, 1)
   end
-  gfx.set(0.92, 0.92, 0.92, 1)
+  ReaADR.set_gfx_color(theme.text)
   gfx.x = x + 30
   gfx.y = y - 1
   gfx.drawstr(label)
@@ -62,14 +78,11 @@ local function hit(x, y, w, h)
 end
 
 local function draw_button(x, y, w, h, label)
+  local theme = ReaADR.ui_theme()
   local hovered = hit(x, y, w, h)
-  if hovered then
-    gfx.set(0.18, 0.42, 0.55, 1)
-  else
-    gfx.set(0.12, 0.26, 0.34, 1)
-  end
+  ReaADR.set_gfx_color(hovered and theme.accent_blue or theme.panel_alt)
   gfx.rect(x, y, w, h, 1)
-  gfx.set(1, 1, 1, 1)
+  ReaADR.set_gfx_color(theme.text)
   local text_w = gfx.measurestr(label)
   gfx.x = x + math.floor((w - text_w) / 2)
   gfx.y = y + 8
@@ -141,6 +154,15 @@ local function apply_profile(name)
       show_flash = true,
       show_status = true,
       show_metadata = false,
+      bg_project_timer = false,
+      bg_cue_id = false,
+      bg_character = false,
+      bg_cue_timecode = false,
+      bg_dialogue = true,
+      bg_direction = false,
+      bg_cue_type = false,
+      bg_status = false,
+      bg_metadata = false,
     },
     engineer = {
       enabled = true,
@@ -156,6 +178,15 @@ local function apply_profile(name)
       show_flash = true,
       show_status = true,
       show_metadata = true,
+      bg_project_timer = true,
+      bg_cue_id = false,
+      bg_character = false,
+      bg_cue_timecode = true,
+      bg_dialogue = true,
+      bg_direction = false,
+      bg_cue_type = false,
+      bg_status = false,
+      bg_metadata = false,
     },
     studio = {
       enabled = true,
@@ -171,6 +202,15 @@ local function apply_profile(name)
       show_flash = true,
       show_status = true,
       show_metadata = true,
+      bg_project_timer = true,
+      bg_cue_id = false,
+      bg_character = false,
+      bg_cue_timecode = true,
+      bg_dialogue = true,
+      bg_direction = false,
+      bg_cue_type = false,
+      bg_status = false,
+      bg_metadata = false,
     },
     minimal = {
       enabled = true,
@@ -186,6 +226,15 @@ local function apply_profile(name)
       show_flash = false,
       show_status = false,
       show_metadata = false,
+      bg_project_timer = false,
+      bg_cue_id = false,
+      bg_character = false,
+      bg_cue_timecode = false,
+      bg_dialogue = true,
+      bg_direction = false,
+      bg_cue_type = false,
+      bg_status = false,
+      bg_metadata = false,
     },
   }
 
@@ -195,20 +244,21 @@ local function apply_profile(name)
 end
 
 local function loop()
-  gfx.set(0.08, 0.09, 0.10, 1)
+  local theme = ReaADR.ui_theme()
+  ReaADR.set_gfx_color(theme.bg)
   gfx.rect(0, 0, gfx.w, gfx.h, 1)
 
-  gfx.setfont(1, "Arial", 20)
-  gfx.set(1, 1, 1, 1)
-  gfx.x = 20
-  gfx.y = 18
-  gfx.drawstr("ReaADR Video Overlay Settings")
+  local header = ReaADR.draw_window_header(
+    "ReaADR Video Overlay Settings",
+    "Configure visible fields, backgrounds, and presets.",
+    { x = 20, y = 18, width = gfx.w - 40, height = 74 }
+  )
 
   gfx.setfont(1, "Arial", 16)
   local mouse_down = gfx.mouse_cap % 2 == 1
   local clicked = mouse_down and not mouse_was_down
 
-  local profile_y = 56
+  local profile_y = math.max(100, header.content_y)
   local profile_buttons = {
     { x = 24, y = profile_y, w = 92, h = 30, label = "Actor", key = "actor" },
     { x = 126, y = profile_y, w = 102, h = 30, label = "Engineer", key = "engineer" },
@@ -233,40 +283,88 @@ local function loop()
     y = y + 32
   end
 
-  gfx.set(0.72, 0.72, 0.72, 1)
+  ReaADR.set_gfx_color(theme.muted)
+  gfx.x = 24
+  gfx.y = y + 4
+  gfx.drawstr("Text backgrounds")
+  local background_y = y + 34
+
+  for index, row in ipairs(background_rows) do
+    local x = index <= 5 and 24 or 386
+    local row_y = background_y + (((index - 1) % 5) * 32)
+    draw_checkbox(x, row_y, settings[row.key], row.label)
+    if clicked and hit(x - 4, row_y - 4, 340, 28) then
+      settings[row.key] = not settings[row.key]
+      dirty = true
+    end
+  end
+
+  y = background_y + (5 * 32)
+
+  ReaADR.set_gfx_color(theme.muted)
   gfx.x = 24
   gfx.y = y + 2
   gfx.drawstr("Metadata fields")
   local metadata_hover = draw_button(182, y - 5, 118, 30, "Edit Fields")
-  gfx.set(0.84, 0.84, 0.84, 1)
-  gfx.x = 316
+  local white_rect = { x = 314, y = y - 5, w = 170, h = 24, value = "white", label = "White general text" }
+  local yellow_rect = { x = 314, y = y + 25, w = 170, h = 24, value = "yellow", label = "Yellow general text" }
+  ReaADR.set_gfx_color(theme.text)
+  gfx.x = 516
   gfx.y = y + 2
   local fields = tostring(settings.metadata_fields or "")
-  if #fields > 44 then
-    fields = fields:sub(1, 41) .. "..."
+  if #fields > 26 then
+    fields = fields:sub(1, 23) .. "..."
   end
   gfx.drawstr(fields)
+  gfx.x = 314
+  gfx.y = y - 28
+  ReaADR.set_gfx_color(theme.muted)
+  gfx.drawstr("General overlay text color")
+  gfx.setfont(1, "Arial", 14)
+  for _, option in ipairs({ white_rect, yellow_rect }) do
+    local selected_color = ReaADR.overlay_text_mode(settings) == option.value
+    ReaADR.set_gfx_color(theme.panel_alt)
+    gfx.circle(option.x + 10, option.y + 11, 8, false, true)
+    if selected_color then
+      ReaADR.set_gfx_color(theme.accent_gold)
+      gfx.circle(option.x + 10, option.y + 11, 4, true, true)
+    end
+    ReaADR.set_gfx_color(theme.text)
+    gfx.x = option.x + 24
+    gfx.y = option.y + 2
+    gfx.drawstr(option.label)
+  end
 
   if clicked and metadata_hover then
     if edit_metadata_fields() then
       dirty = true
     end
+  elseif hit(white_rect.x, white_rect.y, white_rect.w, white_rect.h) then
+    if settings.text_color ~= "white" then
+      settings.text_color = "white"
+      dirty = true
+    end
+  elseif hit(yellow_rect.x, yellow_rect.y, yellow_rect.w, yellow_rect.h) then
+    if settings.text_color ~= "yellow" then
+      settings.text_color = "yellow"
+      dirty = true
+    end
   end
 
   local footer_y = gfx.h - 64
-  gfx.set(0.12, 0.13, 0.15, 1)
+  ReaADR.set_gfx_color(theme.panel)
   gfx.rect(0, footer_y - 14, gfx.w, gfx.h - footer_y + 14, 1)
 
   local save_hover = draw_button(24, footer_y, 112, 36, "Save")
   local close_hover = draw_button(150, footer_y, 112, 36, "Close")
 
   if dirty then
-    gfx.set(1, 0.78, 0.2, 1)
+    ReaADR.set_gfx_color(theme.accent_gold)
     gfx.x = 284
     gfx.y = footer_y + 10
     gfx.drawstr("Unsaved changes")
   elseif reaper.time_precise() < saved_message_until then
-    gfx.set(0.36, 0.95, 0.55, 1)
+    ReaADR.set_gfx_color(theme.accent_green)
     gfx.x = 284
     gfx.y = footer_y + 10
     gfx.drawstr(saved_message)
@@ -276,6 +374,7 @@ local function loop()
     save()
   elseif clicked and close_hover then
     save()
+    ReaADR.save_window_state("overlay_settings")
     gfx.quit()
     return
   end
@@ -285,6 +384,9 @@ local function loop()
     reaper.defer(loop)
   elseif dirty then
     save()
+    ReaADR.save_window_state("overlay_settings")
+  else
+    ReaADR.save_window_state("overlay_settings")
   end
 end
 
