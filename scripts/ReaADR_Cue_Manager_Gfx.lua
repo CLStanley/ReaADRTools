@@ -8,7 +8,16 @@ end
 
 local ReaADR = dofile(script_dir() .. "/ReaADR_Core.lua")
 
-local all_cues, source = ReaADR.session_cues()
+local function manager_source_cues()
+  local loaded = ReaADR.load_last_import_cues()
+  if loaded then
+    return loaded, "cached ReaADR session"
+  end
+  local navigated, nav_source = ReaADR.navigation_cues()
+  return navigated or {}, nav_source or "project"
+end
+
+local all_cues, source = manager_source_cues()
 if not all_cues or #all_cues == 0 then
   ReaADR.message("No ADR cues were found. Import a script or generate cues first.")
   return
@@ -111,7 +120,7 @@ end
 local function refresh_cues()
   local selected = cues[state.selected]
   local selected_key = selected and ReaADR.cue_key(selected) or ReaADR.manager_selected_cue_key()
-  all_cues, source = ReaADR.session_cues()
+  all_cues, source = manager_source_cues()
   all_cues = all_cues or {}
   cues = ReaADR.filter_cues_by_active_characters(all_cues)
   local restored = cue_index_by_key(selected_key)

@@ -957,9 +957,9 @@ function App.open_manager(initial_tab, instance_slot)
 
       local controls_y = bg_row_y + (5 * 32) + 10
       local metadata_rect = { x = 24, y = controls_y + 22, w = 132, h = 32, label = "Edit Fields" }
-      local white_rect = { x = 220, y = controls_y + 22, w = 170, h = 26, label = "White general text" }
-      local yellow_rect = { x = 220, y = controls_y + 54, w = 170, h = 26, label = "Yellow general text" }
-      local save_rect = { x = 24, y = controls_y + 94, w = 132, h = 34, label = "Save Overlay" }
+      local white_rect = { x = 24, y = controls_y + 98, w = 170, h = 26, label = "White general text" }
+      local yellow_rect = { x = 24, y = controls_y + 130, w = 170, h = 26, label = "Yellow general text" }
+      local save_rect = { x = 24, y = controls_y + 170, w = 132, h = 34, label = "Save Overlay" }
       special_click[#special_click + 1] = { rect = metadata_rect, kind = "metadata" }
       special_click[#special_click + 1] = { rect = white_rect, kind = "text_color", value = "white" }
       special_click[#special_click + 1] = { rect = yellow_rect, kind = "text_color", value = "yellow" }
@@ -971,8 +971,15 @@ function App.open_manager(initial_tab, instance_slot)
       gfx.x = 24
       gfx.y = controls_y
       gfx.drawstr("Metadata fields")
-      gfx.x = 220
-      gfx.y = controls_y
+      gfx.x = 24
+      gfx.y = metadata_rect.y + 42
+      local fields = tostring(settings.metadata_fields or "")
+      if #fields > 62 then
+        fields = fields:sub(1, 59) .. "..."
+      end
+      gfx.drawstr("Current: " .. fields)
+      gfx.x = 24
+      gfx.y = controls_y + 74
       gfx.drawstr("General overlay text color")
       gfx.setfont(1, "Arial", 14)
       for _, option in ipairs({
@@ -991,17 +998,8 @@ function App.open_manager(initial_tab, instance_slot)
         gfx.y = option.rect.y + 4
         gfx.drawstr(option.label)
       end
-      gfx.setfont(1, "Arial", 13)
-      ReaADR.set_gfx_color(theme.muted)
       gfx.x = 24
-      gfx.y = metadata_rect.y + 42
-      local fields = tostring(settings.metadata_fields or "")
-      if #fields > 62 then
-        fields = fields:sub(1, 59) .. "..."
-      end
-      gfx.drawstr("Current: " .. fields)
-      gfx.x = 24
-      gfx.y = save_rect.y + 10
+      gfx.y = save_rect.y - 26
       if state.overlay_dirty then
         ReaADR.set_gfx_color(theme.accent_gold)
         gfx.drawstr("Unsaved overlay changes")
