@@ -34,6 +34,7 @@ App.modules = {
       { label = "Validate Session", app_action = "validate_session", hint = "Check cue timing, missing fields, overlap splits, and preserved metadata." },
       { label = "Rebuild Session From Cache", app_action = "rebuild_session", hint = "Recreate tracks, regions, cue audio, and overlays from the last imported session cache." },
       { label = "Clear Character Cues",      script = "ReaADR_Clean_Generated_Cues.lua", hint = "Select characters whose cues, regions, and cue tracks should be removed after their recording session is complete. Recording tracks and takes are preserved." },
+      { label = "Toggle QA Mode", app_action = "toggle_qa_mode", hint = "Enable or disable verbose console logging for imports, refreshes, deletions, and errors. Disabled by default in production." },
     },
   },
   reports = {
@@ -628,6 +629,21 @@ function App.export_reports()
   end
 
   ReaADR.message(("Exported %s:\n\n%s"):format(report.label, value))
+  return true
+end
+
+function App.toggle_qa_mode()
+  local ReaADR = App.ReaADR
+  local currently_on = ReaADR.qa_mode_enabled()
+  ReaADR.set_qa_mode(not currently_on)
+  ReaADR.message(
+    ("QA mode %s.\n\n%s"):format(
+      not currently_on and "enabled" or "disabled",
+      not currently_on
+        and "Verbose logging is now active. Import, refresh, delete, and error events will be written to the REAPER console."
+        or  "Logging is now limited to warnings and errors only."
+    )
+  )
   return true
 end
 

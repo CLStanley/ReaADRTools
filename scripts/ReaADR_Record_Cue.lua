@@ -66,25 +66,28 @@ do
 end
 
 local IDLE      = "idle"
+local PREROLL   = "preroll"    -- playing through preroll; will punch in at cue_start
 local RECORDING = "recording"
 local LOOP_WAIT = "loop_wait"  -- stop sent, waiting for transport to settle
 
 local state = {
-  mode       = IDLE,
-  loop       = false,
-  take_count = 0,
-  width      = 540,
-  height     = 290,
-  min_width  = 460,
-  min_height = 250,
-  last_mouse = 0,
-  status_msg = "",
+  mode              = IDLE,
+  loop              = false,
+  preroll_on_repeat = true,
+  take_count        = 0,
+  width             = 570,
+  height            = 300,
+  min_width         = 530,
+  min_height        = 260,
+  last_mouse        = 0,
+  status_msg        = "",
 }
 
-local theme    = ReaADR.ui_theme()
-local btn_rec  = {}
-local btn_loop = {}
-local btn_stop = {}
+local theme       = ReaADR.ui_theme()
+local btn_rec     = {}
+local btn_loop    = {}
+local btn_preroll = {}
+local btn_stop    = {}
 local last_layout_w, last_layout_h = 0, 0
 
 local function layout()
@@ -94,12 +97,15 @@ local function layout()
   last_layout_w, last_layout_h = w, h
   state.width, state.height = w, h
 
-  local bw = 128
-  local bh = 34
-  local by = h - 58
-  btn_rec  = { x = 24,        y = by, w = bw, h = bh }
-  btn_loop = { x = 24+bw+14,  y = by, w = bw, h = bh }
-  btn_stop = { x = w-bw-24,   y = by, w = bw, h = bh }
+  local bw  = 106  -- standard button width
+  local bwp = 128  -- wider for "Pre-roll: OFF" label
+  local bh  = 34
+  local gap = 10
+  local by  = h - 60
+  btn_rec     = { x = 24,                      y = by, w = bw,  h = bh }
+  btn_loop    = { x = 24 + bw + gap,           y = by, w = bw,  h = bh }
+  btn_preroll = { x = 24 + bw*2 + gap*2,       y = by, w = bwp, h = bh }
+  btn_stop    = { x = w - bw - 24,             y = by, w = bw,  h = bh }
 end
 
 local function inside(r, x, y)
@@ -160,12 +166,20 @@ local function stop_take(loop_after)
 end
 
 local function start_take()
-  reaper.SetEditCurPos(record_start, true, false)
+  local use_preroll = state.take_count == 0 or state.preroll_on_repeat
+  local pos = (use_preroll and record_start < cue_start) and record_start or cue_start
+  reaper.SetEditCurPos(pos, true, false)
   arm_tracks()
-  reaper.Main_OnCommand(1013, 0)  -- Record
-  state.mode       = RECORDING
-  state.take_count = state.take_count + 1
-  state.status_msg = ("Recording take %d\xe2\x80\xa6"):format(state.take_count)
+  if use_preroll and pos < cue_start then
+    reaper.Main_OnCommand(1007, 0)  -- Play; will punch in at cue_start
+    state.mode       = PREROLL
+    state.status_msg = "Pre-roll\xe2\x80\xa6"
+  else
+    reaper.Main_OnCommand(1013, 0)  -- Record immediately
+    state.mode       = RECORDING
+    state.take_count = state.take_count + 1
+    state.status_msg = ("Recording take %d\xe2\x80\xa6"):format(state.take_count)
+  end
   ReaADR.set_active_overlay_cue(cue)
   ReaADR.refresh_overlay_silent()
 end
@@ -215,7 +229,10 @@ local function frame()
   -- Status
   gfx.setfont(1, "Arial", 14)
   gfx.x, gfx.y = 24, y
-  if state.mode == RECORDING then
+  if state.mode == PREROLL then
+    ReaADR.set_gfx_color(theme.accent_gold)
+    gfx.drawstr("\xe2\x96\xb8 " .. state.status_msg)
+  elseif state.mode == RECORDING then
     ReaADR.set_gfx_color(theme.accent_red)
     gfx.drawstr("\xe2\x97\x8f " .. state.status_msg)
   elseif state.mode == LOOP_WAIT then
@@ -228,15 +245,30 @@ local function frame()
 
   -- Buttons
   draw_btn(btn_rec,  "Record",
-    state.mode == RECORDING and { 0.55, 0.10, 0.10, 1.0 } or nil)
-  draw_btn(btn_loop, state.loop and "Loop: ON" or "Loop: OFF",
-    state.loop and theme.accent_green or nil)
+    state.mode == RECORDING and { 0.55, 0.10, 0.10, 1.0 } or
+    state.mode == PREROLL   and { 0.45, 0.35, 0.05, 1.0 } or nil)
+  draw_btn(btn_loop,    state.loop              and "Loop: ON"     or "Loop: OFF",
+    state.loop              and theme.accent_green  or nil)
+  draw_btn(btn_preroll, state.preroll_on_repeat and "Pre-roll: ON" or "Pre-roll: OFF",
+    state.preroll_on_repeat and theme.accent_blue   or nil)
   draw_btn(btn_stop, "Stop")
 
   gfx.update()
 
   -- Transport monitoring
-  if state.mode == RECORDING then
+  if state.mode == PREROLL then
+    local play_state = reaper.GetPlayState()
+    if play_state == 0 then
+      -- Stopped externally during preroll.
+      state.mode = IDLE
+      disarm_tracks()
+    elseif reaper.GetPlayPosition() >= cue_start then
+      reaper.Main_OnCommand(1013, 0)  -- Punch in to record at cue_start
+      state.mode       = RECORDING
+      state.take_count = state.take_count + 1
+      state.status_msg = ("Recording take %d\xe2\x80\xa6"):format(state.take_count)
+    end
+  elseif state.mode == RECORDING then
     local play_state = reaper.GetPlayState()
     if play_state == 0 then
       -- Transport stopped externally; don't re-send Stop.
@@ -253,7 +285,11 @@ local function frame()
   -- Close / Escape
   local char = gfx.getchar()
   if char < 0 or char == 27 then
-    if state.mode ~= IDLE then
+    if state.mode == PREROLL then
+      reaper.Main_OnCommand(1016, 0)  -- Stop
+      disarm_tracks()
+      state.mode = IDLE
+    elseif state.mode ~= IDLE then
       stop_take(false)
     end
     ReaADR.save_window_state("record_cue")
@@ -268,8 +304,16 @@ local function frame()
       if state.mode == IDLE then start_take() end
     elseif inside(btn_loop, gfx.mouse_x, gfx.mouse_y) then
       state.loop = not state.loop
+    elseif inside(btn_preroll, gfx.mouse_x, gfx.mouse_y) then
+      state.preroll_on_repeat = not state.preroll_on_repeat
     elseif inside(btn_stop, gfx.mouse_x, gfx.mouse_y) then
-      if state.mode ~= IDLE then stop_take(false) end
+      if state.mode == PREROLL then
+        reaper.Main_OnCommand(1016, 0)  -- Stop
+        disarm_tracks()
+        state.mode = IDLE
+      elseif state.mode ~= IDLE then
+        stop_take(false)
+      end
     end
   end
   state.last_mouse = mouse

@@ -560,6 +560,51 @@ function ReaADR.session_revision()
   return tonumber(value) or 0
 end
 
+-- ---------------------------------------------------------------------------
+-- Structured logging  (SRS Addendum F §7, §10)
+-- ---------------------------------------------------------------------------
+
+-- Returns true when QA/verbose mode is active for the current project.
+function ReaADR.qa_mode_enabled()
+  local _, val = reaper.GetProjExtState(project(), ReaADR.EXT_NAMESPACE, "qa_mode")
+  return val == "1"
+end
+
+-- Enable or disable QA/verbose logging for the current project.
+function ReaADR.set_qa_mode(enabled)
+  reaper.SetProjExtState(project(), ReaADR.EXT_NAMESPACE, "qa_mode", enabled and "1" or "0")
+  if enabled then
+    reaper.ShowConsoleMsg("[ReaADR] QA mode enabled — verbose logging is now active for this project.\n")
+  else
+    reaper.ShowConsoleMsg("[ReaADR] QA mode disabled.\n")
+  end
+end
+
+-- Write a structured log line to the REAPER console.
+--   level:     "INFO", "WARN", or "ERROR"
+--   operation: short tag, e.g. "REFRESH", "IMPORT", "DELETE", "FILTER"
+--   message:   human-readable description
+--   context:   optional table — recognised keys: script_id, character, cue_id, count, detail
+-- INFO entries are suppressed unless QA mode is enabled.
+-- WARN and ERROR are always shown.
+function ReaADR.log(level, operation, message, context)
+  level = tostring(level or "INFO"):upper()
+  if level == "INFO" and not ReaADR.qa_mode_enabled() then return end
+  local timestamp = os.date("%H:%M:%S")
+  local ctx_parts = {}
+  if context then
+    if context.script_id then ctx_parts[#ctx_parts + 1] = "script="  .. tostring(context.script_id) end
+    if context.character then ctx_parts[#ctx_parts + 1] = "char="    .. tostring(context.character) end
+    if context.cue_id    then ctx_parts[#ctx_parts + 1] = "cue="     .. tostring(context.cue_id)    end
+    if context.count     then ctx_parts[#ctx_parts + 1] = "count="   .. tostring(context.count)     end
+    if context.detail    then ctx_parts[#ctx_parts + 1] = tostring(context.detail)                  end
+  end
+  local ctx_str = #ctx_parts > 0 and (" [" .. table.concat(ctx_parts, " ") .. "]") or ""
+  reaper.ShowConsoleMsg(("[ReaADR %s] %s | %s: %s%s\n"):format(
+    timestamp, level, operation, tostring(message or ""), ctx_str
+  ))
+end
+
 function ReaADR.set_cue_info_launch_options(options)
   options = options or {}
   reaper.SetProjExtState(project(), ReaADR.EXT_NAMESPACE, "cue_info_open_edit", options.edit and "1" or "")
@@ -1708,6 +1753,8 @@ function ReaADR.current_active_filter_targets(targets)
 end
 
 function ReaADR.apply_character_filter()
+  ReaADR.log("INFO", "FILTER", "Applying character filter")
+  reaper.Undo_BeginBlock()
   local cues = ReaADR.load_last_import_cues()
   if not cues then
     cues = ReaADR.collect_project_marker_cues({
@@ -1758,13 +1805,18 @@ function ReaADR.apply_character_filter()
   end
   ReaADR.bump_session_revision()
   reaper.UpdateArrange()
-  return {
-    active_tracks = active_tracks,
-    muted_tracks = muted_tracks,
-    cue_count = #cues,
-    hidden_regions = hidden_regions,
+  reaper.Undo_EndBlock("ReaADR: apply character filter", -1)
+  local result = {
+    active_tracks   = active_tracks,
+    muted_tracks    = muted_tracks,
+    cue_count       = #cues,
+    hidden_regions  = hidden_regions,
     visible_regions = visible_regions,
   }
+  ReaADR.log("INFO", "FILTER", ("Filter applied: %d active, %d muted, %d hidden regions"):format(
+    result.active_tracks, result.muted_tracks, result.hidden_regions
+  ))
+  return result
 end
 
 function ReaADR.region_name(cue)
@@ -2744,8 +2796,10 @@ function ReaADR.rebuild_cached_session(options)
   options = options or {}
   local cues, err = ReaADR.load_last_import_cues()
   if not cues then
+    ReaADR.log("ERROR", "REBUILD", "No cached session: " .. tostring(err or "unknown"))
     return nil, err or "No cached ReaADR session was found."
   end
+  ReaADR.log("INFO", "REBUILD", ("Starting rebuild from cache: %d cues"):format(#cues))
 
   local frame_rate = reaper.TimeMap_curFrameRate(project())
   if not frame_rate or frame_rate <= 0 then
@@ -2780,18 +2834,34 @@ end
 -- react.  This is the single function all "Refresh Session" controls should call.
 function ReaADR.refresh_session(options)
   options = options or {}
+  ReaADR.log("INFO", "REFRESH", "Starting session refresh")
+  reaper.Undo_BeginBlock()
+
   local sync_summary, sync_err = ReaADR.sync_cached_cues_from_project_regions()
   if not sync_summary then
+    reaper.Undo_EndBlock("ReaADR: refresh session (failed)", -1)
+    ReaADR.log("ERROR", "REFRESH", "Region sync failed: " .. tostring(sync_err))
     return nil, sync_err
   end
+
   local rebuild_summary, rebuild_err = ReaADR.rebuild_cached_session({
     clear_generated_items = options.clear_generated_items ~= false,
   })
   if not rebuild_summary then
+    reaper.Undo_EndBlock("ReaADR: refresh session (failed)", -1)
+    ReaADR.log("ERROR", "REFRESH", "Session rebuild failed: " .. tostring(rebuild_err))
     return nil, rebuild_err
   end
+
   ReaADR.refresh_overlay_silent()
   ReaADR.bump_session_revision()
+  reaper.Undo_EndBlock("ReaADR: refresh session", -1)
+
+  ReaADR.log("INFO", "REFRESH", ("Refresh complete: %d cues, %d regions updated, %d tracks"):format(
+    rebuild_summary.cue_count or 0,
+    (rebuild_summary.regions_created or 0) + (rebuild_summary.regions_updated or 0),
+    (rebuild_summary.tracks_created or 0) + (rebuild_summary.tracks_reused or 0)
+  ))
   return {
     sync    = sync_summary,
     rebuild = rebuild_summary,
@@ -3371,6 +3441,12 @@ function ReaADR.clear_cues_for_characters(character_list)
     char_set[c] = true
   end
 
+  local char_names = {}
+  for c in pairs(char_set) do char_names[#char_names + 1] = c end
+  ReaADR.log("INFO", "DELETE", ("Clearing cues for %d character(s): %s"):format(
+    #char_names, table.concat(char_names, ", ")
+  ))
+
   local cached = ReaADR.load_last_import_cues() or {}
   local remaining = {}
   local to_clear = {}
@@ -3383,6 +3459,7 @@ function ReaADR.clear_cues_for_characters(character_list)
   end
 
   if #to_clear == 0 then
+    ReaADR.log("INFO", "DELETE", "No cues matched the selected characters — nothing to remove")
     return { cues_removed = 0, regions_removed = 0, tracks_removed = 0 }
   end
 
@@ -3477,11 +3554,15 @@ function ReaADR.clear_cues_for_characters(character_list)
   end
   ReaADR.bump_session_revision()
 
-  return {
-    cues_removed   = #to_clear,
+  local result = {
+    cues_removed    = #to_clear,
     regions_removed = regions_removed,
     tracks_removed  = tracks_removed,
   }
+  ReaADR.log("INFO", "DELETE", ("Clear complete: %d cues, %d regions, %d tracks removed"):format(
+    result.cues_removed, result.regions_removed, result.tracks_removed
+  ))
+  return result
 end
 
 function ReaADR.marker_decision_key(is_region, marker_id)
@@ -4189,6 +4270,114 @@ function ReaADR.show_video_window()
   if reaper.GetToggleCommandState(command_id) ~= 1 then
     reaper.Main_OnCommand(command_id, 0)
   end
+end
+
+-- ---------------------------------------------------------------------------
+-- Whisper transcription helpers (§3 — Transcription-Assisted Cue Generation)
+-- ---------------------------------------------------------------------------
+
+local function srt_time_to_sec(ts)
+  local h, m, s, ms = ts:match("(%d+):(%d+):(%d+)[,%.](%d+)")
+  if not h then return 0 end
+  return tonumber(h) * 3600 + tonumber(m) * 60 + tonumber(s) + tonumber(ms) / 1000
+end
+
+local function parse_srt_segments(content)
+  local segs = {}
+  content = content:gsub("\r\n", "\n"):gsub("\r", "\n")
+  for block in (content .. "\n\n"):gmatch("(.-)%s*\n%s*\n") do
+    if block:match("%S") then
+      local lines = {}
+      for line in (block .. "\n"):gmatch("(.-)\n") do
+        if line:match("%S") then lines[#lines + 1] = line end
+      end
+      if #lines >= 3 then
+        local s_ts, e_ts = lines[2]:match(
+          "(%d+:%d+:%d+[,%.]%d+)%s*%-%->%s*(%d+:%d+:%d+[,%.]%d+)"
+        )
+        if s_ts then
+          local texts = {}
+          for i = 3, #lines do texts[#texts + 1] = lines[i] end
+          segs[#segs + 1] = {
+            start_time = srt_time_to_sec(s_ts),
+            end_time   = srt_time_to_sec(e_ts),
+            text       = table.concat(texts, " "):match("^%s*(.-)%s*$") or "",
+          }
+        end
+      end
+    end
+  end
+  return segs
+end
+
+-- Returns the Whisper CLI command prefix if Whisper is installed, or nil.
+function ReaADR.detect_whisper()
+  local cmds = { "whisper", "python -m whisper", "python3 -m whisper" }
+  for _, cmd in ipairs(cmds) do
+    local h = io.popen(cmd .. " --help 2>&1")
+    if h then
+      local out = h:read("*a"); h:close()
+      if out and out:lower():find("input") and out:lower():find("model") then
+        return cmd
+      end
+    end
+  end
+  return nil
+end
+
+-- Run Whisper on source_path; return a list of {start_time, end_time, text} segments
+-- where times are seconds relative to the beginning of the source audio file.
+-- options: { model = "base", language = "" }
+-- Returns (segments, nil) on success or (nil, error_message) on failure.
+function ReaADR.transcribe_media_segments(source_path, options)
+  options = options or {}
+  if not source_path or source_path == "" then
+    return nil, "No source file path provided."
+  end
+
+  local whisper_cmd = ReaADR.detect_whisper()
+  if not whisper_cmd then
+    return nil, "Whisper CLI not found.\n\nInstall with:  pip install openai-whisper"
+  end
+
+  local temp_dir = reaper.GetProjectPath("")
+  if temp_dir == "" then
+    temp_dir = os.getenv("TEMP") or os.getenv("TMP") or os.getenv("TMPDIR") or "/tmp"
+  end
+
+  local model    = tostring(options.model or "base")
+  local language = tostring(options.language or "")
+  local lang_arg = (language ~= "") and (' --language "' .. language .. '"') or ""
+
+  local q_src = '"' .. source_path:gsub('"', '\\"') .. '"'
+  local q_dir = '"' .. temp_dir:gsub('"', '\\"') .. '"'
+  local cmd   = ('%s %s --model %s --output_format srt --output_dir %s%s 2>&1'):format(
+    whisper_cmd, q_src, model, q_dir, lang_arg
+  )
+
+  local h = io.popen(cmd)
+  if not h then return nil, "Could not start Whisper process." end
+  local stdout = h:read("*a"); h:close()
+
+  local base     = (source_path:match("[^/\\]+$") or ""):gsub("%.[^%.]*$", "")
+  local sep      = (temp_dir:sub(-1) == "/" or temp_dir:sub(-1) == "\\") and "" or "/"
+  local srt_path = temp_dir .. sep .. base .. ".srt"
+
+  local f = io.open(srt_path, "r")
+  if not f then
+    return nil, (
+      "Whisper produced no SRT output.\n\nExpected: " .. srt_path ..
+      "\n\nWhisper output:\n" .. (stdout or ""):sub(1, 500)
+    )
+  end
+  local srt_content = f:read("*a"); f:close()
+  os.remove(srt_path)
+
+  local segs = parse_srt_segments(srt_content)
+  if #segs == 0 then
+    return nil, "Whisper produced an empty transcript."
+  end
+  return segs
 end
 
 return ReaADR
