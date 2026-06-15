@@ -3058,6 +3058,212 @@ function ReaADR.export_session_metadata_report(cues, path)
   return true
 end
 
+-- JSON session export (SRS Addendum B §5)
+
+local function json_str_escape(s)
+  s = tostring(s or "")
+  s = s:gsub('\\', '\\\\')
+  s = s:gsub('"',  '\\"')
+  s = s:gsub('\n', '\\n')
+  s = s:gsub('\r', '\\r')
+  s = s:gsub('\t', '\\t')
+  return '"' .. s .. '"'
+end
+
+local function json_encode(value, depth)
+  depth = depth or 0
+  local vt = type(value)
+  if value == nil then
+    return "null"
+  elseif vt == "boolean" then
+    return value and "true" or "false"
+  elseif vt == "number" then
+    if value ~= value or value == math.huge or value == -math.huge then
+      return "null"
+    end
+    if value == math.floor(value) and math.abs(value) < 1e15 then
+      return tostring(math.floor(value))
+    end
+    return ("%.10g"):format(value)
+  elseif vt == "string" then
+    return json_str_escape(value)
+  elseif vt == "table" then
+    local pad   = string.rep("  ", depth)
+    local inner = string.rep("  ", depth + 1)
+
+    -- Detect sequential array (no holes, keys 1..n).
+    local n = #value
+    local is_array = n > 0
+    if is_array then
+      for k in pairs(value) do
+        if type(k) ~= "number" or k < 1 or k > n or k ~= math.floor(k) then
+          is_array = false
+          break
+        end
+      end
+    end
+
+    if is_array then
+      local parts = {}
+      for i = 1, n do
+        parts[i] = inner .. json_encode(value[i], depth + 1)
+      end
+      return "[\n" .. table.concat(parts, ",\n") .. "\n" .. pad .. "]"
+    else
+      local keys = {}
+      for k in pairs(value) do
+        if type(k) == "string" then keys[#keys + 1] = k end
+      end
+      table.sort(keys)
+      if #keys == 0 then return "{}" end
+      local parts = {}
+      for _, k in ipairs(keys) do
+        parts[#parts + 1] = inner .. json_str_escape(k) .. ": " .. json_encode(value[k], depth + 1)
+      end
+      return "{\n" .. table.concat(parts, ",\n") .. "\n" .. pad .. "}"
+    end
+  end
+  return "null"
+end
+
+function ReaADR.export_session_json(cues, path, options)
+  options = options or {}
+  cues = cues or {}
+
+  local frame_rate = tonumber(options.frame_rate)
+  if not frame_rate or frame_rate <= 0 then
+    if reaper and reaper.TimeMap_curFrameRate then
+      frame_rate = reaper.TimeMap_curFrameRate(project())
+    end
+  end
+  if not frame_rate or frame_rate <= 0 then frame_rate = 24 end
+
+  local project_name = ""
+  if reaper and reaper.GetProjectName then
+    project_name = reaper.GetProjectName(project(), "") or ""
+  end
+
+  local timestamp = (os and os.date) and tostring(os.date("%Y-%m-%dT%H:%M:%S")) or ""
+
+  local status_counts = {}
+  local cue_list = {}
+  for _, cue in ipairs(cues) do
+    local s = normalize_status(cue.status)
+    status_counts[s] = (status_counts[s] or 0) + 1
+
+    local takes = (reaper and ReaADR.count_recorded_takes_for_cue(cue)) or 0
+    cue_list[#cue_list + 1] = {
+      character   = cue.character or "",
+      cue_id      = cue.id or "",
+      cue_type    = cue.cue_type or "",
+      dialogue    = cue.line or "",
+      direction   = cue.direction or "",
+      duration    = ReaADR.cue_duration(cue),
+      end_smpte   = format_timecode(cue.end_time, frame_rate),
+      end_time    = cue.end_time,
+      metadata    = type(cue.metadata) == "table" and cue.metadata or {},
+      notes       = cue.notes or "",
+      start_smpte = format_timecode(cue.start_time, frame_rate),
+      start_time  = cue.start_time,
+      status      = cue.status or "Not Recorded",
+      take_count  = takes,
+    }
+  end
+
+  local session = {
+    characters      = ReaADR.collect_characters(cues),
+    cue_count       = #cues,
+    cues            = cue_list,
+    export_timestamp = timestamp,
+    project         = { frame_rate = frame_rate, name = project_name },
+    reaadr_version  = ReaADR.VERSION,
+    status_summary  = status_counts,
+  }
+
+  local file = io.open(path, "w")
+  if not file then
+    return nil, "Could not write file: " .. tostring(path)
+  end
+  file:write(json_encode(session) .. "\n")
+  file:close()
+  return true
+end
+
+-- EDL export — CMX 3600 format (SRS Addendum B §6)
+
+function ReaADR.export_cues_to_edl(cues, path, options)
+  options = options or {}
+
+  local frame_rate = tonumber(options.frame_rate)
+  if not frame_rate or frame_rate <= 0 then
+    if reaper and reaper.TimeMap_curFrameRate then
+      frame_rate = reaper.TimeMap_curFrameRate(project())
+    end
+  end
+  if not frame_rate or frame_rate <= 0 then
+    frame_rate = 24
+  end
+  local fr_int = math.max(1, math.floor(frame_rate + 0.5))
+
+  local project_name = options.project_name or ""
+  if project_name == "" and reaper and reaper.GetProjectName then
+    project_name = reaper.GetProjectName(project(), "") or ""
+  end
+  if project_name == "" then
+    project_name = "ADR Session"
+  end
+
+  -- Drop-frame only applies to 29.97 (30000/1001)
+  local is_drop = math.abs(frame_rate - 29.97) < 0.02
+  local fcm = is_drop and "DROP FRAME" or "NON-DROP FRAME"
+
+  -- Record track offset: place cues on a 01:00:00:00 programme start
+  local rec_offset = 3600.0
+
+  local file = io.open(path, "w")
+  if not file then
+    return nil, "Could not write file: " .. tostring(path)
+  end
+
+  file:write("TITLE: " .. project_name .. "\n")
+  file:write("FCM: " .. fcm .. "\n")
+  file:write("\n")
+
+  for edit_num, cue in ipairs(cues or {}) do
+    local src_in  = format_timecode(cue.start_time, fr_int)
+    local src_out = format_timecode(cue.end_time,   fr_int)
+    local rec_in  = format_timecode(cue.start_time + rec_offset, fr_int)
+    local rec_out = format_timecode(cue.end_time   + rec_offset, fr_int)
+
+    -- Reel name: 8 chars, left-justified, padded with spaces
+    local reel = ("%-8s"):format(("ADR%03d"):format(edit_num):sub(1, 8))
+
+    file:write(("%03d  %s AA    C        %s %s %s %s\n"):format(
+      edit_num, reel, src_in, src_out, rec_in, rec_out
+    ))
+
+    local clip_name = (cue.id or tostring(edit_num)) .. " - " .. (cue.character or "")
+    file:write("* FROM CLIP NAME: " .. clip_name .. "\n")
+
+    if trim(cue.line or "") ~= "" then
+      file:write("* DIALOGUE: " .. cue.line .. "\n")
+    end
+
+    if trim(cue.status or "") ~= "" and cue.status ~= "Not Recorded" then
+      file:write("* STATUS: " .. cue.status .. "\n")
+    end
+
+    if trim(cue.cue_type or "") ~= "" then
+      file:write("* CUE TYPE: " .. cue.cue_type .. "\n")
+    end
+
+    file:write("\n")
+  end
+
+  file:close()
+  return true
+end
+
 function ReaADR.generated_item_roles()
   return {
     cue_audio = true,
@@ -3461,7 +3667,7 @@ function ReaADR.character_region_lanes(cues)
     max_lanes[character] = math.max(max_lanes[character] or 1, tonumber(cue._reaadr_lane) or 1)
   end
   local lane_index = 0
-  for index, character in ipairs(characters) do
+  for _, character in ipairs(characters) do
     local lane_count = math.max(1, tonumber(max_lanes[character]) or 1)
     for lane = 1, lane_count do
       local key = character_lane_key(character, lane)

@@ -24,7 +24,8 @@ App.modules = {
   cues = {
     title = "Cue Management",
     actions = {
-      { label = "Open Cue Manager", script = "ReaADR_Cue_Manager.lua", hint = "Browse cues, jump around the session, update cue status, and refresh the active overlay." },
+      { label = "Open Cue Manager",   script = "ReaADR_Cue_Manager.lua",  hint = "Browse cues, jump around the session, update cue status, and refresh the active overlay." },
+      { label = "Record Current Cue", script = "ReaADR_Record_Cue.lua",   hint = "Position at preroll, arm the character recording track, and record the active ADR cue. Stops automatically at cue end. Supports loop mode for repeated takes." },
     },
   },
   session = {
@@ -43,7 +44,10 @@ App.modules = {
   },
   overlay = {
     title = "Video Overlays",
-    actions = {},
+    actions = {
+      { label = "Refresh Video Overlay", script = "ReaADR_Overlay.lua",         hint = "Rebuild the video overlay FX from the current session cue data." },
+      { label = "Overlay Settings",      script = "ReaADR_Overlay_Settings.lua", hint = "Configure which elements appear in the video overlay." },
+    },
   },
   preferences = {
     title = "Preferences",
@@ -100,13 +104,14 @@ App.overlay_text_color_choices = {
 App.metadata_field_labels = { "PGID", "MID", "Media Time", "Watermark Timestamp", "Asset Date Code", "Project Name" }
 
 App.quick_action_choices = {
-  { key = "import", label = "Import Cue Sheet", script = "ReaADR_Import_Cue_Sheet.lua" },
-  { key = "cue_manager", label = "Open Cue Manager", script = "ReaADR_Cue_Manager.lua" },
-  { key = "export_reports", label = "Export Reports", app_action = "export_reports" },
-  { key = "overlay_settings", label = "Video Overlays Tab", app_action = "open_overlay_manager" },
-  { key = "character_filter", label = "Character Filter", script = "ReaADR_Character_Filter.lua" },
-  { key = "refresh_overlay", label = "Refresh Video Overlay", app_action = "refresh_overlay" },
-  { key = "validate", label = "Validate Session", app_action = "validate_session" },
+  { key = "import",           label = "Import Cue Sheet",       script = "ReaADR_Import_Cue_Sheet.lua" },
+  { key = "cue_manager",      label = "Open Cue Manager",        script = "ReaADR_Cue_Manager.lua" },
+  { key = "record_cue",       label = "Record Current Cue",      script = "ReaADR_Record_Cue.lua" },
+  { key = "export_reports",   label = "Export Reports",          app_action = "export_reports" },
+  { key = "overlay_settings", label = "Video Overlays Tab",      app_action = "open_overlay_manager" },
+  { key = "character_filter", label = "Character Filter",        script = "ReaADR_Character_Filter.lua" },
+  { key = "refresh_overlay",  label = "Refresh Video Overlay",   app_action = "refresh_overlay" },
+  { key = "validate",         label = "Validate Session",        app_action = "validate_session" },
 }
 
 App.quick_action_defaults = {
@@ -583,10 +588,12 @@ function App.export_reports()
   end
 
   local reports = {
-    { label = "Cue Sheet CSV", suffix = "cue_sheet", export = ReaADR.export_cues_to_csv },
-    { label = "Recording Report CSV", suffix = "recording_report", export = ReaADR.export_recording_report },
-    { label = "Timing Report CSV", suffix = "timing_report", export = ReaADR.export_timing_report },
-    { label = "Session Metadata CSV", suffix = "session_metadata", export = ReaADR.export_session_metadata_report },
+    { label = "Cue Sheet CSV",        suffix = "cue_sheet",         export = ReaADR.export_cues_to_csv },
+    { label = "Recording Report CSV", suffix = "recording_report",  export = ReaADR.export_recording_report },
+    { label = "Timing Report CSV",    suffix = "timing_report",     export = ReaADR.export_timing_report },
+    { label = "Session Metadata CSV", suffix = "session_metadata",  export = ReaADR.export_session_metadata_report },
+    { label = "Full Session JSON",    suffix = "session",           export = ReaADR.export_session_json,    ext = "json" },
+    { label = "EDL (CMX 3600)",       suffix = "session",           export = ReaADR.export_cues_to_edl,     ext = "edl" },
   }
 
   local labels = {}
@@ -608,7 +615,7 @@ function App.export_reports()
   if not project_path or project_path == "" then
     project_path = "."
   end
-  local default_path = project_path .. "/reaadr_" .. report.suffix .. ".csv"
+  local default_path = project_path .. "/reaadr_" .. report.suffix .. "." .. (report.ext or "csv")
   local ok, value = reaper.GetUserInputs("Export " .. report.label, 1, "Output path:", default_path)
   if not ok or value == "" then
     return false
