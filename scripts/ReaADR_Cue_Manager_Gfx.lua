@@ -39,6 +39,7 @@ local state = {
   filter_signature = select(2, ReaADR.active_character_filter()),
   closed = false,
   editing = nil,
+  dropdown_rect = nil,
   last_poll = 0,
   dragging_scrollbar = false,
   scrollbar_drag_offset = 0,
@@ -105,7 +106,7 @@ end
 local function button(rect)
   local theme = ReaADR.ui_theme()
   local hover = inside(rect, gfx.mouse_x, gfx.mouse_y)
-  ReaADR.set_gfx_color(hover and theme.accent_blue or theme.panel_alt)
+  ReaADR.set_gfx_color(hover and (rect.hover_accent or theme.accent_blue) or (rect.accent or theme.panel_alt))
   gfx.rect(rect.x, rect.y, rect.w, rect.h, true)
   ReaADR.set_gfx_color(theme.border)
   gfx.rect(rect.x, rect.y, rect.w, rect.h, false)
@@ -171,6 +172,7 @@ local function set_status_for_selected(status)
   end
   ReaADR.set_cue_status_at_position(status, cue.start_time)
   state.dropdown_field = nil
+  state.dropdown_rect = nil
   state.editing = nil
   refresh_cues()
 end
@@ -191,6 +193,7 @@ local function set_cue_type_for_selected(cue_type)
     return
   end
   state.dropdown_field = nil
+  state.dropdown_rect = nil
   state.editing = nil
   refresh_cues()
 end
@@ -280,18 +283,18 @@ local function launch_record_cue()
 end
 
 local function cell_columns(content_w)
-  local trailing_w = math.max(280, content_w - 670)
-  local line_w = math.max(110, math.floor(trailing_w * 0.52))
+  local trailing_w = math.max(280, content_w - 620)
+  local line_w = math.max(130, math.floor(trailing_w * 0.56))
   local notes_w = math.max(100, trailing_w - line_w)
   return {
-    { key = "id", x = 30, w = 52 },
-    { key = "character", x = 92, w = 112 },
-    { key = "start_time", x = 214, w = 116 },
-    { key = "end_time", x = 340, w = 116 },
-    { key = "status", x = 466, w = 118 },
-    { key = "cue_type", x = 594, w = 94 },
-    { key = "line", x = 698, w = line_w },
-    { key = "notes", x = 698 + line_w + 10, w = notes_w - 10 },
+    { key = "id", x = 30, w = 46 },
+    { key = "character", x = 84, w = 108 },
+    { key = "start_time", x = 194, w = 108 },
+    { key = "end_time", x = 312, w = 108 },
+    { key = "status", x = 430, w = 108 },
+    { key = "cue_type", x = 548, w = 82 },
+    { key = "line", x = 640, w = line_w },
+    { key = "notes", x = 640 + line_w + 10, w = notes_w - 10 },
   }
 end
 
@@ -671,10 +674,10 @@ local button_specs = {
   { key = "jump", label = "Jump...", min_w = 92, hint = "Type a cue number and jump to its region start." },
   { key = "prev", label = "Previous", min_w = 92, hint = "Select the previous cue in the list." },
   { key = "next", label = "Next", min_w = 92, hint = "Select the next cue in the list." },
+  { key = "record", label = "Record Current Cue", min_w = 148, hint = "Arm the current cue and start the dedicated record workflow.", accent = { 0.42, 0.20, 0.16, 1.0 }, hover_accent = { 0.55, 0.24, 0.19, 1.0 } },
   { key = "add", label = "Add Cue", min_w = 92, hint = "Create a cue at the current timeline position." },
   { key = "remove", label = "Remove Cue", min_w = 104, hint = "Delete the selected cue, renumber the remaining cues, and rebuild cue regions/audio." },
   { key = "filter", label = "Character Filter", min_w = 132, hint = "Enable or disable character tracks for focused recording passes." },
-  { key = "record", label = "Record Current Cue", min_w = 148, hint = "Arm the current cue and start the dedicated record workflow." },
   { key = "sync", label = "Refresh Session", min_w = 134, hint = "Rebuild cue tracks, reapply filters, resync regions, and refresh overlay/session state." },
   { key = "overlay", label = "Refresh Overlay", min_w = 142, hint = "Refresh the video overlay for the selected/current cue state." },
   { key = "info", label = "Info Panel", min_w = 112, hint = "Open the large cue information panel for the selected cue." },
@@ -683,30 +686,26 @@ local button_specs = {
 local function layout_buttons(content_w)
   local gap = 8
   local button_h = 32
-  local rows = {}
-  local current = {}
-  local current_w = 0
-
+  local rows = {
+    { "jump", "prev", "next", "record", "add", "remove" },
+    { "filter", "sync", "overlay", "info" },
+  }
+  local by_key = {}
   for _, spec in ipairs(button_specs) do
-    local next_w = current_w + (current_w > 0 and gap or 0) + spec.min_w
-    if #current > 0 and next_w > content_w then
-      rows[#rows + 1] = current
-      current = { spec }
-      current_w = spec.min_w
-    else
-      current[#current + 1] = spec
-      current_w = next_w
-    end
-  end
-  if #current > 0 then
-    rows[#rows + 1] = current
+    by_key[spec.key] = spec
   end
 
   local toolbar_h = (#rows * button_h) + ((#rows - 1) * gap)
   local toolbar_y = state.height - 52 - toolbar_h
   local buttons = {}
 
-  for row_index, row in ipairs(rows) do
+  for row_index, row_keys in ipairs(rows) do
+    local row = {}
+    for _, key in ipairs(row_keys) do
+      if by_key[key] then
+        row[#row + 1] = by_key[key]
+      end
+    end
     local min_total = 0
     for _, spec in ipairs(row) do
       min_total = min_total + spec.min_w
@@ -725,6 +724,8 @@ local function layout_buttons(content_w)
         h = button_h,
         label = spec.label,
         hint = spec.hint,
+        accent = spec.accent,
+        hover_accent = spec.hover_accent,
       }
       x = x + w + gap
     end
@@ -769,17 +770,17 @@ local function frame()
   gfx.x = 30
   gfx.y = header_y + 7
   gfx.drawstr("Cue")
-  gfx.x = 92
+  gfx.x = 84
   gfx.drawstr("Character")
-  gfx.x = 214
+  gfx.x = 194
   gfx.drawstr("Start SMPTE")
-  gfx.x = 340
+  gfx.x = 312
   gfx.drawstr("End SMPTE")
-  gfx.x = 466
+  gfx.x = 430
   gfx.drawstr("Status")
-  gfx.x = 594
+  gfx.x = 548
   gfx.drawstr("Type")
-  gfx.x = 698
+  gfx.x = 640
   gfx.drawstr("Line")
   gfx.x = columns[8].x
   gfx.drawstr("Notes")
@@ -821,17 +822,17 @@ local function frame()
       gfx.x = 30
       gfx.y = y + 7
       gfx.drawstr(tostring(cue.id or ""))
-      gfx.x = 92
+      gfx.x = 84
       gfx.drawstr(tostring(cue.character or ""))
-      gfx.x = 214
+      gfx.x = 194
       gfx.drawstr(ReaADR.format_timecode(cue.start_time, frame_rate))
-      gfx.x = 340
+      gfx.x = 312
       gfx.drawstr(ReaADR.format_timecode(cue.end_time, frame_rate))
-      gfx.x = 466
+      gfx.x = 430
       gfx.drawstr(tostring(cue.status or "Not Recorded"))
-      gfx.x = 594
+      gfx.x = 548
       gfx.drawstr(tostring(cue.cue_type or "Dialogue"))
-      gfx.x = 698
+      gfx.x = 640
       local line = tostring(cue.line or "")
       local line_chars = math.max(14, math.floor((columns[7].w - 8) / 7))
       if #line > line_chars then
@@ -910,9 +911,9 @@ local function frame()
     ))
   end
 
-  if selected_cue and state.dropdown_field and state.editing and state.editing.rect then
+  if selected_cue and state.dropdown_field and state.dropdown_rect then
     local current_value = state.dropdown_field == "cue_type" and (selected_cue.cue_type or "Dialogue") or (selected_cue.status or "Not Recorded")
-    dropdown_options = draw_dropdown(state.editing.rect, current_value, state.dropdown_field)
+    dropdown_options = draw_dropdown(state.dropdown_rect, current_value, state.dropdown_field)
   end
 
   if hover_hint ~= "" then
@@ -1043,6 +1044,30 @@ local function frame()
   end
 
   if mouse == 1 and state.last_mouse == 0 then
+    if state.dropdown_field then
+      local clicked_dropdown = false
+      for _, option in ipairs(dropdown_options or {}) do
+        if inside(option, gfx.mouse_x, gfx.mouse_y) then
+          if state.dropdown_field == "cue_type" then
+            set_cue_type_for_selected(option.value)
+          else
+            set_status_for_selected(option.value)
+          end
+          clicked_dropdown = true
+          break
+        end
+      end
+      local clicked_anchor = state.dropdown_rect and inside(state.dropdown_rect, gfx.mouse_x, gfx.mouse_y)
+      if clicked_dropdown then
+        state.last_mouse = mouse
+        reaper.defer(frame)
+        return
+      elseif not clicked_anchor then
+        state.dropdown_field = nil
+        state.dropdown_rect = nil
+      end
+    end
+
     if state.editing then
       if inside(state.editing.rect, gfx.mouse_x, gfx.mouse_y) then
         set_inline_cursor_from_mouse()
@@ -1079,25 +1104,6 @@ local function frame()
       return
     end
 
-    if state.dropdown_field then
-      for _, option in ipairs(dropdown_options or {}) do
-        if inside(option, gfx.mouse_x, gfx.mouse_y) then
-          if state.dropdown_field == "cue_type" then
-            set_cue_type_for_selected(option.value)
-          else
-            set_status_for_selected(option.value)
-          end
-          clicked_dropdown = true
-          break
-        end
-      end
-      local clicked_anchor = state.editing and state.editing.rect and inside(state.editing.rect, gfx.mouse_x, gfx.mouse_y)
-      if not clicked_dropdown and not clicked_anchor then
-        state.dropdown_field = nil
-        state.editing = nil
-      end
-    end
-
     if not clicked_dropdown then
       for row = 1, visible_rows do
         local cue_index = state.scroll + row
@@ -1114,16 +1120,11 @@ local function frame()
               if inside(cell_rect, gfx.mouse_x, gfx.mouse_y) then
                 if column.key == "status" or column.key == "cue_type" then
                   state.dropdown_field = column.key
-                  state.editing = {
-                    cue_index = cue_index,
-                    cue_key = ReaADR.cue_key(cues[cue_index]),
-                    field_key = column.key,
-                    rect = {
-                      x = cell_rect.x,
-                      y = cell_rect.y,
-                      w = cell_rect.w,
-                      h = cell_rect.h,
-                    },
+                  state.dropdown_rect = {
+                    x = cell_rect.x,
+                    y = cell_rect.y,
+                    w = cell_rect.w,
+                    h = cell_rect.h,
                   }
                 else
                   begin_inline_edit(cue_index, column.key, cell_rect, frame_rate)

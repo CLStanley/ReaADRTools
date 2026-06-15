@@ -28,40 +28,41 @@ local cue_end      = tonumber(cue.end_time) or cue_start
 local record_start = math.max(0, cue_start - preroll)
 local frame_rate   = reaper.TimeMap_curFrameRate(0)
 
--- Locate all recording tracks tagged for this character.
--- Uses ReaADR.character_filter_key to match the same token Core.lua stores.
-local function find_rec_tracks(character)
-  local token = ReaADR.character_filter_key(character)
-  local tracks = {}
+-- Locate the exact recording track for the selected cue's character lane.
+-- Falls back to lane 1 if the cached cue does not carry a lane yet.
+local function find_rec_track_for_cue(selected_cue)
+  local lane = tonumber(selected_cue and selected_cue._reaadr_lane) or 1
+  local wanted_key = ReaADR.character_filter_target_key(selected_cue.character, lane)
+  local fallback_token = ReaADR.character_filter_key(selected_cue.character)
+  local fallback_track = nil
   for i = 0, reaper.CountTracks(0) - 1 do
     local track = reaper.GetTrack(0, i)
     local _, role = reaper.GetSetMediaTrackInfo_String(track, "P_EXT:ReaADR.role", "", false)
     if role == "character" then
       local _, key = reaper.GetSetMediaTrackInfo_String(track, "P_EXT:ReaADR.key", "", false)
-      -- Stored key format: "Token.laneN" — compare lowercased token portion only.
-      local key_char = tostring(key or ""):lower():match("^(.-)%.lane") or ""
-      if key_char == token then
-        tracks[#tracks + 1] = track
+      key = tostring(key or ""):lower()
+      if key == wanted_key then
+        return track
+      end
+      local key_char = key:match("^(.-)%.lane") or ""
+      if not fallback_track and key_char == fallback_token then
+        fallback_track = track
       end
     end
   end
-  return tracks
+  return fallback_track
 end
 
-local rec_tracks = find_rec_tracks(cue.character)
+local rec_track = find_rec_track_for_cue(cue)
 
 -- Cache track names once — they don't change while the window is open.
 local track_label
 do
-  if #rec_tracks == 0 then
+  if not rec_track then
     track_label = nil  -- error shown in draw
   else
-    local names = {}
-    for _, t in ipairs(rec_tracks) do
-      local _, n = reaper.GetSetMediaTrackInfo_String(t, "P_NAME", "", false)
-      names[#names + 1] = tostring(n or "")
-    end
-    track_label = "Track: " .. table.concat(names, ", ")
+    local _, n = reaper.GetSetMediaTrackInfo_String(rec_track, "P_NAME", "", false)
+    track_label = "Track: " .. tostring(n or "")
   end
 end
 
@@ -73,7 +74,7 @@ local LOOP_WAIT = "loop_wait"  -- stop sent, waiting for transport to settle
 local state = {
   mode              = IDLE,
   loop              = false,
-  preroll_on_repeat = true,
+  include_preroll_each_loop = settings.include_preroll_each_loop ~= false,
   take_count        = 0,
   width             = 570,
   height            = 300,
@@ -81,6 +82,10 @@ local state = {
   min_height        = 260,
   last_mouse        = 0,
   status_msg        = "",
+  loop_range_saved  = false,
+  loop_range_active = false,
+  loop_start        = 0,
+  loop_end          = 0,
 }
 
 local theme       = ReaADR.ui_theme()
@@ -126,14 +131,48 @@ local function draw_btn(rect, label, fill)
 end
 
 local function arm_tracks()
-  for _, t in ipairs(rec_tracks) do
-    reaper.SetMediaTrackInfo_Value(t, "I_RECARM", 1)
+  if rec_track then
+    reaper.SetMediaTrackInfo_Value(rec_track, "I_RECARM", 1)
   end
 end
 
+local function save_loop_preference()
+  settings.include_preroll_each_loop = state.include_preroll_each_loop
+  ReaADR.save_overlay_settings(settings)
+end
+
+local function capture_loop_range()
+  if state.loop_range_saved or type(reaper.GetSet_LoopTimeRange) ~= "function" then
+    return
+  end
+  local ok, start_pos, end_pos = pcall(reaper.GetSet_LoopTimeRange, false, true, 0, 0, false)
+  if ok then
+    state.loop_start = tonumber(start_pos) or 0
+    state.loop_end = tonumber(end_pos) or 0
+    state.loop_range_saved = true
+  end
+end
+
+local function configure_loop_range()
+  if type(reaper.GetSet_LoopTimeRange) ~= "function" then
+    return
+  end
+  capture_loop_range()
+  local ok = pcall(reaper.GetSet_LoopTimeRange, true, true, record_start, cue_end, false)
+  state.loop_range_active = ok and true or false
+end
+
+local function restore_loop_range()
+  if not state.loop_range_active or type(reaper.GetSet_LoopTimeRange) ~= "function" then
+    return
+  end
+  pcall(reaper.GetSet_LoopTimeRange, true, true, state.loop_start or 0, state.loop_end or 0, false)
+  state.loop_range_active = false
+end
+
 local function disarm_tracks()
-  for _, t in ipairs(rec_tracks) do
-    reaper.SetMediaTrackInfo_Value(t, "I_RECARM", 0)
+  if rec_track then
+    reaper.SetMediaTrackInfo_Value(rec_track, "I_RECARM", 0)
   end
 end
 
@@ -153,6 +192,7 @@ local function finalize_stop(loop_after)
     state.mode = LOOP_WAIT
   else
     state.mode = IDLE
+    restore_loop_range()
     disarm_tracks()
     finalize_takes()
   end
@@ -166,7 +206,12 @@ local function stop_take(loop_after)
 end
 
 local function start_take()
-  local use_preroll = state.take_count == 0 or state.preroll_on_repeat
+  local use_preroll = state.take_count == 0 or state.include_preroll_each_loop
+  if state.loop and state.include_preroll_each_loop then
+    configure_loop_range()
+  elseif not state.loop then
+    restore_loop_range()
+  end
   local pos = (use_preroll and record_start < cue_start) and record_start or cue_start
   reaper.SetEditCurPos(pos, true, false)
   arm_tracks()
@@ -249,8 +294,8 @@ local function frame()
     state.mode == PREROLL   and { 0.45, 0.35, 0.05, 1.0 } or nil)
   draw_btn(btn_loop,    state.loop              and "Loop: ON"     or "Loop: OFF",
     state.loop              and theme.accent_green  or nil)
-  draw_btn(btn_preroll, state.preroll_on_repeat and "Pre-roll: ON" or "Pre-roll: OFF",
-    state.preroll_on_repeat and theme.accent_blue   or nil)
+  draw_btn(btn_preroll, state.include_preroll_each_loop and "Pre-roll Each Loop" or "Default Repeat",
+    state.include_preroll_each_loop and theme.accent_blue   or nil)
   draw_btn(btn_stop, "Stop")
 
   gfx.update()
@@ -261,6 +306,7 @@ local function frame()
     if play_state == 0 then
       -- Stopped externally during preroll.
       state.mode = IDLE
+      restore_loop_range()
       disarm_tracks()
     elseif reaper.GetPlayPosition() >= cue_start then
       reaper.Main_OnCommand(1013, 0)  -- Punch in to record at cue_start
@@ -287,10 +333,13 @@ local function frame()
   if char < 0 or char == 27 then
     if state.mode == PREROLL then
       reaper.Main_OnCommand(1016, 0)  -- Stop
+      restore_loop_range()
       disarm_tracks()
       state.mode = IDLE
     elseif state.mode ~= IDLE then
       stop_take(false)
+    else
+      restore_loop_range()
     end
     ReaADR.save_window_state("record_cue")
     gfx.quit()
@@ -304,15 +353,29 @@ local function frame()
       if state.mode == IDLE then start_take() end
     elseif inside(btn_loop, gfx.mouse_x, gfx.mouse_y) then
       state.loop = not state.loop
+      if state.loop and state.include_preroll_each_loop then
+        configure_loop_range()
+      else
+        restore_loop_range()
+      end
     elseif inside(btn_preroll, gfx.mouse_x, gfx.mouse_y) then
-      state.preroll_on_repeat = not state.preroll_on_repeat
+      state.include_preroll_each_loop = not state.include_preroll_each_loop
+      if state.loop and state.include_preroll_each_loop then
+        configure_loop_range()
+      else
+        restore_loop_range()
+      end
+      save_loop_preference()
     elseif inside(btn_stop, gfx.mouse_x, gfx.mouse_y) then
       if state.mode == PREROLL then
         reaper.Main_OnCommand(1016, 0)  -- Stop
+        restore_loop_range()
         disarm_tracks()
         state.mode = IDLE
       elseif state.mode ~= IDLE then
         stop_take(false)
+      else
+        restore_loop_range()
       end
     end
   end

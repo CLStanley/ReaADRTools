@@ -17,7 +17,7 @@ App.modules = {
     title = "Import",
     actions = {
       { label = "Import Cue Sheet", script = "ReaADR_Import_Cue_Sheet.lua", hint = "Import CSV or TSV script data, map columns, create tracks, regions, cue audio, and overlay metadata." },
-      { label = "Detect Dialogue From Selected Media", script = "ReaADR_Detect_Dialogue.lua", hint = "Analyze selected audio/video media and create editable ADR cues from detected speech regions." },
+      { label = "Detect Dialogue From Selected Media", script = "ReaADR_Detect_Dialogue.lua", hint = "Analyze selected audio/video media and create editable ADR cues from detected speech regions, with optional transcription draft mode." },
       { label = "Generate Cues from Markers/Regions", script = "ReaADR_Generate_Cues.lua", hint = "Create ADR cue items from existing project markers or regions without importing a cue sheet." },
     },
   },
@@ -46,7 +46,6 @@ App.modules = {
     title = "Video Overlays",
     actions = {
       { label = "Refresh Video Overlay", script = "ReaADR_Overlay.lua",         hint = "Rebuild the video overlay FX from the current session cue data." },
-      { label = "Overlay Settings",      script = "ReaADR_Overlay_Settings.lua", hint = "Configure which elements appear in the video overlay." },
     },
   },
   preferences = {
@@ -834,6 +833,8 @@ function App.open_manager(initial_tab, instance_slot)
     overlay_dirty = false,
     overlay_message = "",
     overlay_message_until = 0,
+    overlay_scroll = 0,
+    overlay_content_h = 0,
     quick_action_dropdown = nil,
     last_heartbeat = 0,
     instance_slot = tonumber(instance_slot),
@@ -911,11 +912,13 @@ function App.open_manager(initial_tab, instance_slot)
     gfx.drawstr(module.title)
     y = y + 38
 
-    for index, action in ipairs(module.actions or {}) do
-      local rect = { x = 24, y = y + ((index - 1) * 44), w = 320, h = 34, label = action.label, action = action }
-      buttons[#buttons + 1] = rect
-      if draw_button(rect) and action.hint then
-        hover_hint = action.hint
+    if state.tab ~= "overlay" then
+      for index, action in ipairs(module.actions or {}) do
+        local rect = { x = 24, y = y + ((index - 1) * 44), w = 320, h = 34, label = action.label, action = action }
+        buttons[#buttons + 1] = rect
+        if draw_button(rect) and action.hint then
+          hover_hint = action.hint
+        end
       end
     end
 
@@ -1007,15 +1010,23 @@ function App.open_manager(initial_tab, instance_slot)
       local settings = state.overlay_settings
       local left = 24
       local content_w = state.width - 48
-      local section_y = y
+      local section_y_base = y
+      local overlay_viewport_h = math.max(140, state.height - section_y_base - 86)
+      local section_y = section_y_base - (state.overlay_scroll or 0)
+
+      local refresh_rect = { x = left, y = section_y, w = 188, h = 34, label = "Refresh Video Overlay" }
+      special_click[#special_click + 1] = { rect = refresh_rect, kind = "overlay_refresh" }
+      if draw_button(refresh_rect) then
+        hover_hint = "Rebuild the video overlay FX from the current session cue data."
+      end
 
       gfx.setfont(1, "Arial", 14)
       ReaADR.set_gfx_color(theme.muted)
       gfx.x = left
-      gfx.y = section_y
+      gfx.y = section_y + 52
       gfx.drawstr("Profiles")
 
-      local profile_buttons, after_profiles_y = layout_wrapped_buttons(left, section_y + 24, content_w, {
+      local profile_buttons, after_profiles_y = layout_wrapped_buttons(left, section_y + 76, content_w, {
         { label = "Actor", profile = "actor", min_w = 92 },
         { label = "Engineer", profile = "engineer", min_w = 102 },
         { label = "Studio", profile = "studio", min_w = 92 },
@@ -1132,6 +1143,10 @@ function App.open_manager(initial_tab, instance_slot)
         ReaADR.set_gfx_color(theme.accent_green)
         gfx.drawstr(state.overlay_message)
       end
+
+      state.overlay_content_h = math.max(0, (save_rect.y + save_rect.h + 22) - section_y_base)
+      local overlay_max_scroll = math.max(0, state.overlay_content_h - overlay_viewport_h)
+      state.overlay_scroll = math.max(0, math.min(state.overlay_scroll or 0, overlay_max_scroll))
     elseif state.tab == "help" then
       gfx.setfont(1, "Arial", 14)
       ReaADR.set_gfx_color(theme.muted)
@@ -1167,6 +1182,14 @@ function App.open_manager(initial_tab, instance_slot)
       return
     end
 
+    if state.tab == "overlay" and gfx.mouse_wheel ~= 0 then
+      local section_y_base = y + ((#(module.actions or {})) * 44) + 18
+      local overlay_viewport_h = math.max(140, state.height - section_y_base - 86)
+      local overlay_max_scroll = math.max(0, (state.overlay_content_h or 0) - overlay_viewport_h)
+      state.overlay_scroll = math.max(0, math.min(overlay_max_scroll, (state.overlay_scroll or 0) - (gfx.mouse_wheel > 0 and 28 or -28)))
+      gfx.mouse_wheel = 0
+    end
+
     local mouse = gfx.mouse_cap % 2
     if mouse == 1 and state.last_mouse == 0 then
       for _, tab in ipairs(tab_rects) do
@@ -1198,6 +1221,8 @@ function App.open_manager(initial_tab, instance_slot)
           elseif entry.kind == "overlay_toggle" then
             state.overlay_settings[entry.key] = not state.overlay_settings[entry.key]
             state.overlay_dirty = true
+          elseif entry.kind == "overlay_refresh" then
+            App.refresh_overlay()
           elseif entry.kind == "metadata" then
             if edit_metadata_fields(state.overlay_settings) then
               state.overlay_dirty = true

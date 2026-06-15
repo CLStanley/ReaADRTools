@@ -36,6 +36,7 @@ ReaADR.DEFAULT_OVERLAY_SETTINGS = {
   text_color = "white",
   metadata_fields = "PGID,MID,Media Time,Watermark Timestamp,Asset Date Code,Project Name",
   preroll_seconds = 3,
+  include_preroll_each_loop = true,
 }
 
 ReaADR.UI_THEME = {
@@ -1683,7 +1684,7 @@ function ReaADR.available_filter_targets()
     })
   end
   cues = cues or {}
-  assign_filter_lanes(cues)
+  ReaADR.character_region_lanes(cues)
 
   local characters = ReaADR.collect_characters(cues)
   local max_lanes = {}
@@ -1758,7 +1759,7 @@ function ReaADR.apply_character_filter()
     })
   end
   cues = cues or {}
-  assign_filter_lanes(cues)
+  ReaADR.character_region_lanes(cues)
 
   local muted_tracks = 0
   local active_tracks = 0

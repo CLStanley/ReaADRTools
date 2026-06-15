@@ -25,9 +25,9 @@ end
 
 local ok, values = reaper.GetUserInputs(
   "Detect Dialogue From Selected Media",
-  5,
-  "Character,Threshold dB,Min speech sec,Min silence sec,Pad sec",
-  table.concat({ "ADR", "-42", "0.25", "0.35", "0.05" }, ",")
+  6,
+  "Character/Placeholder,Threshold dB,Min speech sec,Min silence sec,Pad sec,Transcription Draft? (y/n)",
+  table.concat({ "ADR", "-42", "0.25", "0.35", "0.05", "n" }, ",")
 )
 if not ok then
   return
@@ -43,6 +43,8 @@ local threshold_db = tonumber(parts[2]) or -42
 local min_speech = tonumber(parts[3]) or 0.25
 local min_silence = tonumber(parts[4]) or 0.35
 local pad = tonumber(parts[5]) or 0.05
+local want_transcription = tostring(parts[6] or ""):lower():match("^%s*(.-)%s*$")
+want_transcription = want_transcription == "y" or want_transcription == "yes" or want_transcription == "1" or want_transcription == "true"
 
 local SAMPLE_RATE = 12000
 local CHANNELS = 1
@@ -51,7 +53,55 @@ local BLOCK_DUR = BLOCK_SAMPLES / SAMPLE_RATE
 local BLOCKS_PER_FRAME = 200
 local threshold = 10 ^ (threshold_db / 20)
 
-local function build_and_import_cues(raw_segments)
+local function parse_transcription_blob(blob)
+  local entries = {}
+  for line in tostring(blob or ""):gmatch("([^\n]+)") do
+    local start_time, end_time, text, speaker, confidence, notes =
+      line:match("^([^\t]*)\t([^\t]*)\t([^\t]*)\t([^\t]*)\t([^\t]*)\t?(.*)$")
+    start_time = tonumber(start_time)
+    end_time = tonumber(end_time)
+    if start_time and end_time and end_time > start_time then
+      entries[#entries + 1] = {
+        start_time = start_time,
+        end_time = end_time,
+        text = tostring(text or ""),
+        speaker = tostring(speaker or ""),
+        confidence = tostring(confidence or ""),
+        notes = tostring(notes or ""),
+      }
+    end
+  end
+  return entries
+end
+
+local function detect_transcription_entries_native()
+  local native_fn = reaper.ReaADR_TranscribeSelectedMedia
+  if type(native_fn) ~= "function" then
+    return nil, "unavailable"
+  end
+
+  local ok_call, ok_transcribed, blob, error_text = pcall(
+    native_fn,
+    threshold_db,
+    min_speech,
+    min_silence,
+    pad,
+    SAMPLE_RATE,
+    "",
+    8 * 1024 * 1024,
+    "",
+    4096
+  )
+  if not ok_call then
+    return nil, tostring(ok_transcribed)
+  end
+  if not ok_transcribed then
+    return nil, tostring(error_text or "Native transcription failed.")
+  end
+  return parse_transcription_blob(blob)
+end
+
+local function build_and_import_cues(raw_segments, transcription_entries, transcription_error)
   if #raw_segments == 0 then
     ReaADR.message("No dialogue regions were detected with the current settings.\n\nTry lowering the threshold dB value.")
     return
@@ -60,16 +110,27 @@ local function build_and_import_cues(raw_segments)
   local cues = {}
   local cue_id_width = math.max(3, #tostring(#raw_segments))
   for index, segment in ipairs(raw_segments) do
+    local transcription = transcription_entries and transcription_entries[index] or nil
+    local generated_character = character
+    if want_transcription then
+      generated_character = (transcription and transcription.speaker ~= "" and transcription.speaker) or (character ~= "" and character) or "Unknown"
+    end
+    local metadata = {}
+    if transcription and transcription.confidence ~= "" then
+      metadata["Confidence Score"] = transcription.confidence
+    end
     cues[index] = {
       id = ("%0" .. tostring(cue_id_width) .. "d"):format(index),
-      character = character,
+      character = generated_character ~= "" and generated_character or "Unknown",
       cue_type = "Dialogue",
       start_time = segment.start_time,
       end_time = segment.end_time,
-      line = "",
+      line = transcription and transcription.text or "",
       status = "Not Recorded",
-      notes = "Detected from selected media",
+      notes = transcription and transcription.notes ~= "" and transcription.notes
+        or (want_transcription and transcription_error and ("Transcription draft: " .. transcription_error) or "Detected from selected media"),
       source_line = index,
+      metadata = metadata,
     }
   end
 
@@ -96,7 +157,8 @@ local function build_and_import_cues(raw_segments)
 
   ReaADR.show_video_window()
   ReaADR.message(
-    ("Detected and created %d editable cue(s).\n\nTracks: %d created, %d reused\nRegions: %d created, %d updated\nCue audio: %d created, %d updated, %d skipped\nOverlap splits: %d\nOverlay: %s"):format(
+    ("%s and created %d editable cue(s).\n\nTracks: %d created, %d reused\nRegions: %d created, %d updated\nCue audio: %d created, %d updated, %d skipped\nOverlap splits: %d\nOverlay: %s"):format(
+      want_transcription and "Generated transcription-assisted draft cues" or "Detected",
       summary.cue_count,
       summary.tracks_created,
       summary.tracks_reused,
@@ -155,8 +217,16 @@ local function detect_segments_native()
 end
 
 local native_segments, native_error = detect_segments_native()
+local native_transcription_entries = nil
+local native_transcription_error = nil
+if want_transcription then
+  native_transcription_entries, native_transcription_error = detect_transcription_entries_native()
+  if native_transcription_error == "unavailable" then
+    native_transcription_error = "transcription engine unavailable; draft cues need dialogue text review"
+  end
+end
 if native_segments then
-  build_and_import_cues(native_segments)
+  build_and_import_cues(native_segments, native_transcription_entries, native_transcription_error)
   return
 end
 
@@ -206,7 +276,7 @@ local function finalize_scan()
   if cancelled then
     return
   end
-  build_and_import_cues(raw_segments)
+  build_and_import_cues(raw_segments, nil, native_transcription_error)
 end
 
 local function scan_frame()

@@ -52,6 +52,7 @@ local col_button_hovered = imgui_const("Col_ButtonHovered", nil)
 local col_frame_bg = imgui_const("Col_FrameBg", nil)
 local col_popup_bg = imgui_const("Col_PopupBg", nil)
 local col_border = imgui_const("Col_Border", nil)
+local col_button_active = imgui_const("Col_ButtonActive", nil)
 
 local state = {
   selected = 1,
@@ -609,6 +610,28 @@ local function loop()
       select_cue(math.min(#cues, state.selected + 1), true)
     end
     reaper.ImGui_SameLine(ctx)
+    if col_button ~= nil then
+      reaper.ImGui_PushStyleColor(ctx, col_button, 0.42, 0.20, 0.16, 1.0)
+    end
+    if col_button_hovered ~= nil then
+      reaper.ImGui_PushStyleColor(ctx, col_button_hovered, 0.55, 0.24, 0.19, 1.0)
+    end
+    if col_button_active ~= nil then
+      reaper.ImGui_PushStyleColor(ctx, col_button_active, 0.62, 0.28, 0.22, 1.0)
+    end
+    if reaper.ImGui_Button(ctx, "Record Current Cue") then
+      launch_record_cue()
+    end
+    if col_button_active ~= nil then
+      reaper.ImGui_PopStyleColor(ctx)
+    end
+    if col_button_hovered ~= nil then
+      reaper.ImGui_PopStyleColor(ctx)
+    end
+    if col_button ~= nil then
+      reaper.ImGui_PopStyleColor(ctx)
+    end
+    reaper.ImGui_SameLine(ctx)
     if reaper.ImGui_Button(ctx, "Add Cue") then
       add_cue_from_manager()
     end
@@ -619,10 +642,6 @@ local function loop()
     reaper.ImGui_SameLine(ctx)
     if reaper.ImGui_Button(ctx, "Character Filter") then
       launch_character_filter()
-    end
-    reaper.ImGui_SameLine(ctx)
-    if reaper.ImGui_Button(ctx, "Record Current Cue") then
-      launch_record_cue()
     end
     reaper.ImGui_SameLine(ctx)
     if reaper.ImGui_Button(ctx, "Refresh Session") then
