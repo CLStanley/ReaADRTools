@@ -3,3 +3,9 @@ assets/peaks/
 build/
 dist/
 vendor/
+
+# Compiled artifacts
+*.obj
+*.so
+*.dll
+*.dylib
