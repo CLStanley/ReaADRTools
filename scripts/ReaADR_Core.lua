@@ -220,9 +220,11 @@ local ROLE_COLORS = {
 
 local STATUS_COLORS = {
   ["not recorded"] = { 120, 120, 120 },
-  ["recorded"] = { 0, 174, 239 },
-  ["approved"] = { 0, 210, 90 },
-  ["needs retake"] = { 255, 0, 0 },
+  ["in progress"]  = { 255, 165,   0 },
+  ["recorded"]     = {   0, 174, 239 },
+  ["needs review"] = { 170, 100, 220 },
+  ["approved"]     = {   0, 210,  90 },
+  ["needs retake"] = { 255,   0,   0 },  -- kept for backwards-compat with old data
 }
 
 local CHARACTER_COLORS = {
@@ -325,8 +327,14 @@ local function normalize_status(status)
   if lowered == "not recorded" or lowered == "notrecorded" or lowered == "pending" then
     return "Not Recorded"
   end
+  if lowered == "in progress" or lowered == "inprogress" or lowered == "recording" then
+    return "In Progress"
+  end
   if lowered == "recorded" then
     return "Recorded"
+  end
+  if lowered == "needs review" or lowered == "review" or lowered == "needsreview" then
+    return "Needs Review"
   end
   if lowered == "approved" then
     return "Approved"
@@ -2485,9 +2493,23 @@ end
 function ReaADR.cue_statuses()
   return {
     "Not Recorded",
+    "In Progress",
     "Recorded",
+    "Needs Review",
     "Approved",
-    "Needs Retake",
+  }
+end
+
+function ReaADR.cue_types()
+  return {
+    "Dialogue",
+    "Reaction",
+    "Effort",
+    "Walla",
+    "Crowd",
+    "Announcement",
+    "Narration",
+    "Custom",
   }
 end
 
@@ -2751,6 +2773,29 @@ function ReaADR.rebuild_cached_session(options)
     create_cues_track = options.create_cues_track ~= false,
     on_progress = options.on_progress,
   })
+end
+
+-- Unified session refresh.  Syncs region positions back into the cache, rebuilds
+-- cue audio and overlay, and fires a session-revision bump so all open windows
+-- react.  This is the single function all "Refresh Session" controls should call.
+function ReaADR.refresh_session(options)
+  options = options or {}
+  local sync_summary, sync_err = ReaADR.sync_cached_cues_from_project_regions()
+  if not sync_summary then
+    return nil, sync_err
+  end
+  local rebuild_summary, rebuild_err = ReaADR.rebuild_cached_session({
+    clear_generated_items = options.clear_generated_items ~= false,
+  })
+  if not rebuild_summary then
+    return nil, rebuild_err
+  end
+  ReaADR.refresh_overlay_silent()
+  ReaADR.bump_session_revision()
+  return {
+    sync    = sync_summary,
+    rebuild = rebuild_summary,
+  }
 end
 
 function ReaADR.detect_dialogue_cues_from_selected_media(options)
@@ -3307,6 +3352,138 @@ function ReaADR.cleanup_generated_items()
   }
 end
 
+function ReaADR.set_character_recording_completed(character, value)
+  local key = "character_completed." .. ReaADR.character_filter_key(character)
+  reaper.SetProjExtState(project(), ReaADR.EXT_NAMESPACE, key, value and "1" or "0")
+end
+
+function ReaADR.is_character_recording_completed(character)
+  local key = "character_completed." .. ReaADR.character_filter_key(character)
+  local _, value = reaper.GetProjExtState(project(), ReaADR.EXT_NAMESPACE, key)
+  return value == "1"
+end
+
+-- Remove all cues, generated regions, and cue-audio tracks for the given list of
+-- character names.  Recording (dialogue) tracks are preserved.
+function ReaADR.clear_cues_for_characters(character_list)
+  local char_set = {}
+  for _, c in ipairs(character_list or {}) do
+    char_set[c] = true
+  end
+
+  local cached = ReaADR.load_last_import_cues() or {}
+  local remaining = {}
+  local to_clear = {}
+  for _, cue in ipairs(cached) do
+    if char_set[cue.character] then
+      to_clear[#to_clear + 1] = cue
+    else
+      remaining[#remaining + 1] = cue
+    end
+  end
+
+  if #to_clear == 0 then
+    return { cues_removed = 0, regions_removed = 0, tracks_removed = 0 }
+  end
+
+  reaper.Undo_BeginBlock()
+  reaper.PreventUIRefresh(1)
+
+  -- Collect cue tags so we can match regions by name
+  local cue_tags = {}
+  for _, cue in ipairs(to_clear) do
+    cue_tags[#cue_tags + 1] = ReaADR.cue_tag(cue)
+  end
+
+  -- Scan and delete matching regions
+  local regions_removed = 0
+  local _, marker_count, region_count = reaper.CountProjectMarkers(project())
+  local total = marker_count + region_count
+  local region_ids = {}
+  for i = 0, total - 1 do
+    local ok, is_region, _, _, name, marker_id = reaper.EnumProjectMarkers3(project(), i)
+    if ok and is_region then
+      for _, tag in ipairs(cue_tags) do
+        if name:find(tag, 1, true) then
+          region_ids[#region_ids + 1] = marker_id
+          break
+        end
+      end
+    end
+  end
+  for _, marker_id in ipairs(region_ids) do
+    if reaper.DeleteProjectMarker(project(), marker_id, true) then
+      regions_removed = regions_removed + 1
+    end
+  end
+
+  -- Delete cue-audio items for cleared cues (role="cue_audio")
+  local cleared_keys = {}
+  for _, cue in ipairs(to_clear) do
+    cleared_keys[ReaADR.cue_key(cue)] = true
+  end
+  for i = 0, reaper.CountTracks(project()) - 1 do
+    local track = reaper.GetTrack(project(), i)
+    for j = reaper.CountTrackMediaItems(track) - 1, 0, -1 do
+      local item = reaper.GetTrackMediaItem(track, j)
+      local _, role = reaper.GetSetMediaItemInfo_String(item, "P_EXT:ReaADR.role", "", false)
+      if role == "cue_audio" then
+        local _, cue_key = reaper.GetSetMediaItemInfo_String(item, "P_EXT:ReaADR.cue_key", "", false)
+        if cleared_keys[cue_key] then
+          reaper.DeleteTrackMediaItem(track, item)
+        end
+      end
+    end
+  end
+
+  -- Delete cue_character (beep/streamer) tracks for cleared characters.
+  -- Recording (dialogue) tracks are intentionally preserved.
+  local char_tokens = {}
+  for _, c in ipairs(character_list or {}) do
+    char_tokens[ReaADR.character_filter_key(c)] = true
+  end
+  local tracks_removed = 0
+  local tracks_to_delete = {}
+  for i = 0, reaper.CountTracks(project()) - 1 do
+    local track = reaper.GetTrack(project(), i)
+    if track_ext(track, "ReaADR.role") == "cue_character" then
+      local key = track_ext(track, "ReaADR.key")
+      local key_char = tostring(key or ""):lower():match("^(.-)%.lane") or ""
+      if char_tokens[key_char] then
+        tracks_to_delete[#tracks_to_delete + 1] = track
+      end
+    end
+  end
+  for i = #tracks_to_delete, 1, -1 do
+    reaper.DeleteTrack(tracks_to_delete[i])
+    tracks_removed = tracks_removed + 1
+  end
+
+  -- Persist the slimmed cue cache
+  ReaADR.save_last_import_cues(remaining)
+
+  -- Mark each character as completed so cue regeneration skips them
+  for character, _ in pairs(char_set) do
+    ReaADR.set_character_recording_completed(character, true)
+  end
+
+  reaper.PreventUIRefresh(-1)
+  reaper.TrackList_AdjustWindows(false)
+  reaper.UpdateArrange()
+  reaper.Undo_EndBlock("ReaADR: clear cues for selected characters", -1)
+
+  if #remaining > 0 then
+    ReaADR.refresh_overlay_silent()
+  end
+  ReaADR.bump_session_revision()
+
+  return {
+    cues_removed   = #to_clear,
+    regions_removed = regions_removed,
+    tracks_removed  = tracks_removed,
+  }
+end
+
 function ReaADR.marker_decision_key(is_region, marker_id)
   return ("%s:%s"):format(is_region and "region" or "marker", tostring(marker_id))
 end
@@ -3477,7 +3654,7 @@ local function overlay_fx_code(cues, settings)
 
     if settings.show_character then
       lines[#lines + 1] = "#character = " .. eel_quote(cue.character) .. ";"
-      append_text_draw("#character", "font_meta", "0.75, 0.92, 1, 1", "margin", "margin * 0.55 + font_cue + pad * 0.4", "charw", "charh", settings.bg_character, "pad * 1.0", "pad * 0.45")
+      append_text_draw("#character", "font_meta", base_text_rgba, "margin", "margin * 0.55 + font_cue + pad * 0.4", "charw", "charh", settings.bg_character, "pad * 1.0", "pad * 0.45")
     end
 
     if settings.show_cue_timecode then

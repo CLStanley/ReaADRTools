@@ -8,11 +8,18 @@ end
 
 local ReaADR = dofile(script_dir() .. "/ReaADR_Core.lua")
 
-local targets = ReaADR.available_filter_targets()
-if not targets or #targets == 0 then
+local function load_targets()
+  local t = ReaADR.available_filter_targets()
+  return (t and #t > 0) and t or nil
+end
+
+local targets = load_targets()
+if not targets then
   ReaADR.message("No characters were found to filter.")
   return
 end
+
+local session_revision = ReaADR.session_revision and ReaADR.session_revision() or 0
 
 local selected = {}
 for _, target in ipairs(ReaADR.current_active_filter_targets(targets)) do
@@ -120,6 +127,25 @@ local function close()
 end
 
 local function frame()
+  -- Detect session changes and reload target list while the window is open.
+  local current_revision = ReaADR.session_revision and ReaADR.session_revision() or 0
+  if current_revision ~= session_revision then
+    session_revision = current_revision
+    local new_targets = load_targets()
+    if new_targets then
+      -- Preserve selections that are still valid; add new targets unchecked.
+      local new_selected = {}
+      for _, target in ipairs(new_targets) do
+        if selected[target.key] then
+          new_selected[target.key] = true
+        end
+      end
+      targets  = new_targets
+      selected = new_selected
+      rows     = {}  -- force layout rebuild
+    end
+  end
+
   local theme = ReaADR.ui_theme()
   ReaADR.set_gfx_color(theme.bg)
   gfx.rect(0, 0, state.width, state.height, true)

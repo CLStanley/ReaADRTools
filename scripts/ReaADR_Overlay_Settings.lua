@@ -355,19 +355,21 @@ local function loop()
   ReaADR.set_gfx_color(theme.panel)
   gfx.rect(0, footer_y - 14, gfx.w, gfx.h - footer_y + 14, 1)
 
-  local save_hover = draw_button(24, footer_y, 112, 36, "Save")
+  local save_hover  = draw_button(24,  footer_y, 112, 36, "Save")
   local close_hover = draw_button(150, footer_y, 112, 36, "Close")
 
+  -- State indicator sits immediately to the right of the Save button (§7.1)
+  gfx.setfont(1, "Arial", 14)
   if dirty then
     ReaADR.set_gfx_color(theme.accent_gold)
-    gfx.x = 284
-    gfx.y = footer_y + 10
-    gfx.drawstr("Unsaved changes")
+    gfx.x = 150
+    gfx.y = footer_y + 11
+    gfx.drawstr(" \xe2\x80\x93 unsaved changes")
   elseif reaper.time_precise() < saved_message_until then
     ReaADR.set_gfx_color(theme.accent_green)
-    gfx.x = 284
-    gfx.y = footer_y + 10
-    gfx.drawstr(saved_message)
+    gfx.x = 150
+    gfx.y = footer_y + 11
+    gfx.drawstr(" \xe2\x80\x93 " .. saved_message)
   end
 
   if clicked and save_hover then

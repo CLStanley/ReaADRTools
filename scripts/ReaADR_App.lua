@@ -33,7 +33,7 @@ App.modules = {
     actions = {
       { label = "Validate Session", app_action = "validate_session", hint = "Check cue timing, missing fields, overlap splits, and preserved metadata." },
       { label = "Rebuild Session From Cache", app_action = "rebuild_session", hint = "Recreate tracks, regions, cue audio, and overlays from the last imported session cache." },
-      { label = "Clean Generated Cue Items", script = "ReaADR_Clean_Generated_Cues.lua", hint = "Remove ReaADR-generated cue items without deleting user recordings." },
+      { label = "Clear Character Cues",      script = "ReaADR_Clean_Generated_Cues.lua", hint = "Select characters whose cues, regions, and cue tracks should be removed after their recording session is complete. Recording tracks and takes are preserved." },
     },
   },
   reports = {
