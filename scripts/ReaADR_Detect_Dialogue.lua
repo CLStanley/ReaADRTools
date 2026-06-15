@@ -1,4 +1,5 @@
 -- Detect dialogue regions from selected audio/video media and build editable ADR cues.
+-- Prefers the native extension scan path and falls back to a defer-based Lua scan.
 
 local function script_dir()
   local info = debug.getinfo(1, "S").source
@@ -8,30 +9,25 @@ end
 
 local ReaADR = dofile(script_dir() .. "/ReaADR_Core.lua")
 
--- Capture source item info before the dialog so it's available if transcription is requested.
-local src_item       = reaper.GetSelectedMediaItem(0, 0)
-local src_take       = src_item  and reaper.GetActiveTake(src_item)
-local src_source     = src_take  and reaper.GetMediaItemTake_Source(src_take)
-local source_path    = src_source and reaper.GetMediaSourceFileName(src_source, "") or ""
-local item_position  = src_item  and (reaper.GetMediaItemInfo_Value(src_item, "D_POSITION")  or 0) or 0
-local item_startoffs = src_item  and (reaper.GetMediaItemInfo_Value(src_item, "D_STARTOFFS") or 0) or 0
--- item_offset converts Whisper's source-relative times to project-absolute times.
-local item_offset    = item_position - item_startoffs
+local src_item = reaper.GetSelectedMediaItem(0, 0)
+local src_take = src_item and reaper.GetActiveTake(src_item)
+local item_position = src_item and (reaper.GetMediaItemInfo_Value(src_item, "D_POSITION") or 0) or 0
 
-local defaults = table.concat({
-  "ADR",
-  "-42",
-  "0.25",
-  "0.35",
-  "0.05",
-  "n",
-}, ",")
+if not src_item or not src_take then
+  ReaADR.message("Select one audio or video media item to analyze.")
+  return
+end
+
+if not reaper.CreateTakeAudioAccessor or not reaper.GetAudioAccessorSamples then
+  ReaADR.message("This REAPER build does not expose the audio accessor APIs needed for dialogue detection.")
+  return
+end
 
 local ok, values = reaper.GetUserInputs(
   "Detect Dialogue From Selected Media",
-  6,
-  "Character,Threshold dB,Min speech sec,Min silence sec,Pad sec,Transcribe (y/n)",
-  defaults
+  5,
+  "Character,Threshold dB,Min speech sec,Min silence sec,Pad sec",
+  table.concat({ "ADR", "-42", "0.25", "0.35", "0.05" }, ",")
 )
 if not ok then
   return
@@ -42,102 +38,228 @@ for value in (values .. ","):gmatch("([^,]*),") do
   parts[#parts + 1] = value
 end
 
-local do_transcribe = (parts[6] or ""):lower():sub(1, 1) == "y"
+local character = (parts[1] ~= "" and parts[1]) or "ADR"
+local threshold_db = tonumber(parts[2]) or -42
+local min_speech = tonumber(parts[3]) or 0.25
+local min_silence = tonumber(parts[4]) or 0.35
+local pad = tonumber(parts[5]) or 0.05
 
-local cues, detect_error = ReaADR.detect_dialogue_cues_from_selected_media({
-  character = parts[1],
-  threshold_db = tonumber(parts[2]) or -42,
-  min_speech_seconds = tonumber(parts[3]) or 0.25,
-  min_silence_seconds = tonumber(parts[4]) or 0.35,
-  pad_seconds = tonumber(parts[5]) or 0.05,
-  cue_type = "Dialogue",
-})
+local SAMPLE_RATE = 12000
+local CHANNELS = 1
+local BLOCK_SAMPLES = 300
+local BLOCK_DUR = BLOCK_SAMPLES / SAMPLE_RATE
+local BLOCKS_PER_FRAME = 200
+local threshold = 10 ^ (threshold_db / 20)
 
-if not cues then
-  ReaADR.message("Dialogue detection failed:\n\n" .. tostring(detect_error))
-  return
-end
+local function build_and_import_cues(raw_segments)
+  if #raw_segments == 0 then
+    ReaADR.message("No dialogue regions were detected with the current settings.\n\nTry lowering the threshold dB value.")
+    return
+  end
 
-if #cues == 0 then
-  ReaADR.message(tostring(detect_error or "No dialogue regions were detected."))
-  return
-end
+  local cues = {}
+  local cue_id_width = math.max(3, #tostring(#raw_segments))
+  for index, segment in ipairs(raw_segments) do
+    cues[index] = {
+      id = ("%0" .. tostring(cue_id_width) .. "d"):format(index),
+      character = character,
+      cue_type = "Dialogue",
+      start_time = segment.start_time,
+      end_time = segment.end_time,
+      line = "",
+      status = "Not Recorded",
+      notes = "Detected from selected media",
+      source_line = index,
+    }
+  end
 
--- Transcription pass: overlay Whisper text onto detected cue time ranges.
-if do_transcribe then
-  if source_path == "" then
-    ReaADR.message(
-      "Transcription skipped: the source file path is not accessible for the selected item.\n\n" ..
-      "Detection results will continue without dialogue text."
+  local preview = ReaADR.validate_cues(cues, { preroll_seconds = ReaADR.load_overlay_settings().preroll_seconds })
+  local answer = reaper.ShowMessageBox(
+    ReaADR.validation_summary_text(preview):gsub("^Import validation", "Dialogue detection preview"),
+    "ReaADR Dialogue Detection",
+    4
+  )
+  if answer ~= 6 then
+    return
+  end
+
+  ReaADR.save_last_import_cues(cues)
+
+  local progress = ReaADR.create_progress_window("Building Detected ADR Cues")
+  local summary, setup_error = ReaADR.rebuild_cached_session({ on_progress = progress.update })
+  progress.close()
+
+  if not summary then
+    ReaADR.message("Detected cues were cached, but project setup failed:\n\n" .. tostring(setup_error))
+    return
+  end
+
+  ReaADR.show_video_window()
+  ReaADR.message(
+    ("Detected and created %d editable cue(s).\n\nTracks: %d created, %d reused\nRegions: %d created, %d updated\nCue audio: %d created, %d updated, %d skipped\nOverlap splits: %d\nOverlay: %s"):format(
+      summary.cue_count,
+      summary.tracks_created,
+      summary.tracks_reused,
+      summary.regions_created,
+      summary.regions_updated,
+      summary.cue_audio_created,
+      summary.cue_audio_updated,
+      summary.cue_audio_skipped,
+      summary.overlap_conflicts or 0,
+      summary.overlay_fx_status
     )
-  else
-    reaper.ShowConsoleMsg("[ReaADR] Transcribing with Whisper (this may take several minutes for long media)...\n")
-    local segs, whisper_err = ReaADR.transcribe_media_segments(source_path, { model = "base" })
-    if not segs then
-      ReaADR.message(
-        "Transcription failed:\n\n" .. tostring(whisper_err) ..
-        "\n\nDialogue detection results will continue without transcription text."
-      )
-    else
-      reaper.ShowConsoleMsg(("[ReaADR] Transcription complete: %d segment(s).\n"):format(#segs))
-      for _, c in ipairs(cues) do
-        local cs = tonumber(c.start_time) or 0
-        local ce = tonumber(c.end_time)   or cs
-        local best_text    = ""
-        local best_overlap = 0
-        for _, seg in ipairs(segs) do
-          local ss = seg.start_time + item_offset
-          local se = seg.end_time   + item_offset
-          local overlap = math.min(ce, se) - math.max(cs, ss)
-          if overlap > best_overlap then
-            best_overlap = overlap
-            best_text    = seg.text or ""
-          end
-        end
-        if best_text ~= "" then
-          c.line  = best_text
-          c.notes = (tostring(c.notes or "") ~= "") and (c.notes .. " [transcribed]") or "[transcribed]"
-        end
-      end
+  )
+end
+
+local function parse_segment_blob(blob)
+  local segments = {}
+  for line in tostring(blob or ""):gmatch("([^\n]+)") do
+    local start_time, end_time = line:match("^([^\t]+)\t([^\t]+)$")
+    start_time = tonumber(start_time)
+    end_time = tonumber(end_time)
+    if start_time and end_time and end_time > start_time then
+      segments[#segments + 1] = {
+        start_time = start_time,
+        end_time = end_time,
+      }
     end
   end
+  return segments
 end
 
-local preview = ReaADR.validate_cues(cues, { preroll_seconds = ReaADR.load_overlay_settings().preroll_seconds })
-local answer = reaper.ShowMessageBox(
-  ReaADR.validation_summary_text(preview):gsub("^Import validation", "Dialogue detection preview"),
-  "ReaADR Dialogue Detection",
-  4
-)
-if answer ~= 6 then
-  return
-end
+local function detect_segments_native()
+  local native_fn = reaper.ReaADR_DetectDialogueSegments
+  if type(native_fn) ~= "function" then
+    return nil, "unavailable"
+  end
 
-ReaADR.save_last_import_cues(cues)
-
-local progress = ReaADR.create_progress_window("Building Detected ADR Cues")
-local summary, setup_error = ReaADR.rebuild_cached_session({
-  on_progress = progress.update,
-})
-progress.close()
-
-if not summary then
-  ReaADR.message("Detected cues were cached, but project setup failed:\n\n" .. tostring(setup_error))
-  return
-end
-
-ReaADR.show_video_window()
-ReaADR.message(
-  ("Detected and created %d editable cue(s).\n\nTracks: %d created, %d reused\nRegions: %d created, %d updated\nCue audio: %d created, %d updated, %d skipped\nOverlap splits: %d\nOverlay: %s"):format(
-    summary.cue_count,
-    summary.tracks_created,
-    summary.tracks_reused,
-    summary.regions_created,
-    summary.regions_updated,
-    summary.cue_audio_created,
-    summary.cue_audio_updated,
-    summary.cue_audio_skipped,
-    summary.overlap_conflicts or 0,
-    summary.overlay_fx_status
+  local ok_call, ok_detected, segments_blob, error_text = pcall(
+    native_fn,
+    threshold_db,
+    min_speech,
+    min_silence,
+    pad,
+    SAMPLE_RATE,
+    "",
+    8 * 1024 * 1024,
+    "",
+    4096
   )
-)
+  if not ok_call then
+    return nil, tostring(ok_detected)
+  end
+  if not ok_detected then
+    return nil, tostring(error_text or "Native dialogue detection failed.")
+  end
+  return parse_segment_blob(segments_blob)
+end
+
+local native_segments, native_error = detect_segments_native()
+if native_segments then
+  build_and_import_cues(native_segments)
+  return
+end
+
+if native_error and native_error ~= "unavailable" then
+  reaper.ShowConsoleMsg("[ReaADR] Native dialogue detection unavailable, falling back to Lua scan: " .. tostring(native_error) .. "\n")
+end
+
+local accessor = reaper.CreateTakeAudioAccessor(src_take)
+if not accessor then
+  ReaADR.message("Could not create an audio accessor for the selected item.")
+  return
+end
+
+local item_length = reaper.GetMediaItemInfo_Value(src_item, "D_LENGTH") or 0
+local item_end = item_position + item_length
+local start_t = reaper.GetAudioAccessorStartTime(accessor)
+local scan_end = math.min(reaper.GetAudioAccessorEndTime(accessor), start_t + item_length)
+local total_dur = math.max(0.001, scan_end - start_t)
+local buffer = reaper.new_array(BLOCK_SAMPLES)
+local raw_segments = {}
+local active_start = nil
+local last_loud = nil
+local t = start_t
+local cancelled = false
+local progress = ReaADR.create_progress_window("Detecting Dialogue")
+
+progress.update("Starting scan...", 0, total_dur)
+
+local function timeline_time(accessor_time)
+  return item_position + math.max(0, accessor_time - start_t)
+end
+
+local function flush_segment()
+  if active_start and last_loud and (last_loud - active_start) >= min_speech then
+    raw_segments[#raw_segments + 1] = {
+      start_time = math.max(item_position, timeline_time(active_start - pad)),
+      end_time = math.min(item_end, timeline_time(last_loud + pad)),
+    }
+  end
+  active_start = nil
+  last_loud = nil
+end
+
+local function finalize_scan()
+  reaper.DestroyAudioAccessor(accessor)
+  progress.close()
+  if cancelled then
+    return
+  end
+  build_and_import_cues(raw_segments)
+end
+
+local function scan_frame()
+  if gfx.getchar() < 0 then
+    cancelled = true
+    finalize_scan()
+    return
+  end
+
+  for _ = 1, BLOCKS_PER_FRAME do
+    if t >= scan_end then
+      break
+    end
+
+    local block_end = math.min(scan_end, t + BLOCK_DUR)
+    buffer.clear()
+    local got = reaper.GetAudioAccessorSamples(accessor, SAMPLE_RATE, CHANNELS, t, BLOCK_SAMPLES, buffer)
+
+    if got == 1 then
+      local sum = 0
+      for index = 1, BLOCK_SAMPLES do
+        local sample = buffer[index]
+        sum = sum + sample * sample
+      end
+      local rms = math.sqrt(sum / BLOCK_SAMPLES)
+      local loud = rms >= threshold
+
+      if loud then
+        if not active_start then
+          active_start = t
+        end
+        last_loud = block_end
+      elseif active_start and last_loud and (t - last_loud) >= min_silence then
+        flush_segment()
+      end
+    end
+
+    t = block_end
+  end
+
+  progress.update(
+    ("Scanning %.1f / %.1f s  (%d region(s) found)"):format(t - start_t, total_dur, #raw_segments),
+    t - start_t,
+    total_dur
+  )
+
+  if t < scan_end then
+    reaper.defer(scan_frame)
+    return
+  end
+
+  flush_segment()
+  finalize_scan()
+end
+
+reaper.defer(scan_frame)

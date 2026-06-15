@@ -41,6 +41,8 @@ dist: all
 	cp ../scripts/ReaADR_Quick_Action_3.lua "$(DIST_DIR)/ReaADRTools/scripts/"
 	cp ../scripts/ReaADR_Quick_Action_4.lua "$(DIST_DIR)/ReaADRTools/scripts/"
 	cp ../scripts/ReaADR_Core.lua "$(DIST_DIR)/ReaADRTools/scripts/"
+	cp ../scripts/ReaADR_Core_Persistence.lua "$(DIST_DIR)/ReaADRTools/scripts/"
+	cp ../scripts/ReaADR_Core_Characters.lua "$(DIST_DIR)/ReaADRTools/scripts/"
 	cp ../scripts/ReaADR_Import_Cue_Sheet.lua "$(DIST_DIR)/ReaADRTools/scripts/"
 	cp ../scripts/ReaADR_Detect_Dialogue.lua "$(DIST_DIR)/ReaADRTools/scripts/"
 	cp ../scripts/ReaADR_Export_Cue_Sheet.lua "$(DIST_DIR)/ReaADRTools/scripts/"

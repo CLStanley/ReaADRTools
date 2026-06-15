@@ -166,6 +166,8 @@ Only imported metadata fields with values are shown.
 - Recording report CSV
 - Timing report CSV
 - Session metadata CSV
+- Full session JSON
+- EDL (CMX 3600)
 
 Recording reports include cue status and a take count. Timing reports include
 SMPTE start/end and cue length. Session metadata reports preserve extra columns
@@ -177,7 +179,7 @@ The `Export Cue Sheet` action can export either saved ReaADR cue data or
 ordinary project markers/regions. It writes:
 
 ```text
-cue_id,character,start,end,line,direction,cue_type,status,notes
+cue_id,character,start_smpte,end_smpte,start_time,end_time,line,direction,cue_type,status,notes,metadata
 ```
 
 Blank CSV columns are valid. For marker/region exports, names are interpreted

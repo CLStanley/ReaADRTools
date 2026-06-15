@@ -25,7 +25,6 @@ App.modules = {
     title = "Cue Management",
     actions = {
       { label = "Open Cue Manager",   script = "ReaADR_Cue_Manager.lua",  hint = "Browse cues, jump around the session, update cue status, and refresh the active overlay." },
-      { label = "Record Current Cue", script = "ReaADR_Record_Cue.lua",   hint = "Position at preroll, arm the character recording track, and record the active ADR cue. Stops automatically at cue end. Supports loop mode for repeated takes." },
     },
   },
   session = {
@@ -127,11 +126,13 @@ App.help_topics = {
     title = "Import Cue Sheet",
     keywords = "import script csv tsv column mapping spreadsheet metadata build session",
     body = table.concat({
-      "Import Cue Sheet accepts CSV and TSV files. Columns can be in any order.",
+      "Import Cue Sheet accepts CSV, TSV/TAB, Google Sheets CSV/TSV exports, and plain-text delimited tables such as .txt files.",
       "",
       "Required ADR fields are cue number, character, start time, and dialogue. End time is recommended. Unknown columns are preserved as cue metadata when possible.",
       "",
       "Use the column mapping step when a studio sheet uses names like Role, In, Out, or Line instead of ReaADR's default names.",
+      "",
+      "Future import targets: Excel (.xlsx).",
     }, "\n"),
   },
   cues = {
@@ -158,6 +159,8 @@ App.help_topics = {
     body = table.concat({
       "Export Reports can create cue sheet, recording, timing, and session metadata CSV files.",
       "",
+      "Session export currently supports CSV and JSON. EDL export is available for interchange, and AAF remains a future investigation.",
+      "",
       "Export Cue Sheet CSV is useful when building a project inside REAPER first, then filling in dialogue or metadata later in a spreadsheet.",
     }, "\n"),
   },
@@ -176,7 +179,15 @@ function App.run_script(script_name)
   if not script_name or script_name == "" then
     return false
   end
-  dofile(App.base_dir .. "/" .. script_name)
+  local path = App.base_dir .. "/" .. script_name
+  if type(reaper.AddRemoveReaScript) == "function" and type(reaper.Main_OnCommand) == "function" then
+    local command_id = reaper.AddRemoveReaScript(true, 0, path, true)
+    if command_id and command_id > 0 then
+      reaper.Main_OnCommand(command_id, 0)
+      return true
+    end
+  end
+  dofile(path)
   return true
 end
 
@@ -544,8 +555,7 @@ function App.search_help()
       topics[#topics + 1] = App.help_topics[key]
       labels[#labels + 1] = App.help_topics[key].title
     end
-    local mouse_x, mouse_y = reaper.GetMousePosition()
-    gfx.init("ReaADR Help", 0, 0, 0, mouse_x, mouse_y)
+    gfx.init("ReaADR Help", 0, 0, 0)
     local choice = gfx.showmenu(table.concat(labels, "|"))
     gfx.quit()
     return show_help_topic(topics[choice])
@@ -602,8 +612,7 @@ function App.export_reports()
     labels[index] = report.label
   end
 
-  local mouse_x, mouse_y = reaper.GetMousePosition()
-  gfx.init("ReaADR Reports", 0, 0, 0, mouse_x, mouse_y)
+  gfx.init("ReaADR Reports", 0, 0, 0)
   local choice = gfx.showmenu(table.concat(labels, "|"))
   gfx.quit()
 
@@ -732,6 +741,82 @@ local function draw_button(rect)
   gfx.y = rect.y + 8
   gfx.drawstr(rect.label)
   return hover
+end
+
+local function trim_to_width(text, max_w, font_size)
+  text = tostring(text or "")
+  gfx.setfont(1, "Arial", font_size or 14)
+  if gfx.measurestr(text) <= max_w then
+    return text
+  end
+  local trimmed = text
+  while #trimmed > 1 and gfx.measurestr(trimmed .. "...") > max_w do
+    trimmed = trimmed:sub(1, #trimmed - 1)
+  end
+  return trimmed .. "..."
+end
+
+local function layout_wrapped_buttons(start_x, start_y, available_w, specs, options)
+  options = options or {}
+  local gap_x = options.gap_x or 10
+  local gap_y = options.gap_y or 10
+  local height = options.height or 32
+  local font_size = options.font_size or 15
+  local buttons = {}
+  local x = start_x
+  local y = start_y
+  local row_max_h = height
+
+  gfx.setfont(1, "Arial", font_size)
+  for _, spec in ipairs(specs or {}) do
+    local w = math.max(spec.min_w or 96, math.ceil(gfx.measurestr(spec.label or "") + 24))
+    if x > start_x and (x + w) > (start_x + available_w) then
+      x = start_x
+      y = y + row_max_h + gap_y
+    end
+    buttons[#buttons + 1] = {
+      x = x,
+      y = y,
+      w = w,
+      h = height,
+      label = spec.label,
+      profile = spec.profile,
+    }
+    x = x + w + gap_x
+  end
+
+  local next_y = y + row_max_h
+  return buttons, next_y
+end
+
+local function layout_checkbox_grid(start_x, start_y, available_w, rows, options)
+  options = options or {}
+  local min_col_w = options.min_col_w or 320
+  local gap_x = options.gap_x or 18
+  local row_h = options.row_h or 32
+  local cols = math.max(1, math.floor((available_w + gap_x) / (min_col_w + gap_x)))
+  local col_w = math.floor((available_w - ((cols - 1) * gap_x)) / cols)
+  local entries = {}
+
+  for index, row in ipairs(rows or {}) do
+    local col = (index - 1) % cols
+    local row_index = math.floor((index - 1) / cols)
+    local x = start_x + (col * (col_w + gap_x))
+    local y = start_y + (row_index * row_h)
+    entries[#entries + 1] = {
+      row = row,
+      rect = { x = x, y = y - 4, w = col_w, h = 26 },
+      box_x = x,
+      box_y = y,
+      text_x = x + 30,
+      text_y = y - 1,
+      text_w = col_w - 34,
+    }
+  end
+
+  local rows_used = math.max(1, math.ceil(#(rows or {}) / cols))
+  local next_y = start_y + (rows_used * row_h)
+  return entries, next_y
 end
 
 function App.open_manager(initial_tab, instance_slot)
@@ -920,13 +1005,22 @@ function App.open_manager(initial_tab, instance_slot)
       gfx.drawstr("Show cue text preview on hover")
     elseif state.tab == "overlay" then
       local settings = state.overlay_settings
-      local overlay_y = y
-      local profile_buttons = {
-        { x = 24, y = overlay_y, w = 92, h = 30, label = "Actor", profile = "actor" },
-        { x = 126, y = overlay_y, w = 102, h = 30, label = "Engineer", profile = "engineer" },
-        { x = 238, y = overlay_y, w = 92, h = 30, label = "Studio", profile = "studio" },
-        { x = 340, y = overlay_y, w = 92, h = 30, label = "Minimal", profile = "minimal" },
-      }
+      local left = 24
+      local content_w = state.width - 48
+      local section_y = y
+
+      gfx.setfont(1, "Arial", 14)
+      ReaADR.set_gfx_color(theme.muted)
+      gfx.x = left
+      gfx.y = section_y
+      gfx.drawstr("Profiles")
+
+      local profile_buttons, after_profiles_y = layout_wrapped_buttons(left, section_y + 24, content_w, {
+        { label = "Actor", profile = "actor", min_w = 92 },
+        { label = "Engineer", profile = "engineer", min_w = 102 },
+        { label = "Studio", profile = "studio", min_w = 92 },
+        { label = "Minimal", profile = "minimal", min_w = 92 },
+      }, { gap_x = 10, gap_y = 10, height = 30, font_size = 15 })
       for _, rect in ipairs(profile_buttons) do
         special_click[#special_click + 1] = { rect = rect, kind = "profile", profile = rect.profile }
         if draw_button(rect) then
@@ -934,55 +1028,66 @@ function App.open_manager(initial_tab, instance_slot)
         end
       end
 
-      local row_y = overlay_y + 52
-      for index, row in ipairs(App.overlay_rows) do
-        local x = index <= 7 and 24 or 360
-        local y_row = row_y + (((index - 1) % 7) * 32)
-        local rect = { x = x, y = y_row - 4, w = 300, h = 26 }
-        special_click[#special_click + 1] = { rect = rect, kind = "overlay_toggle", key = row.key }
-        ReaADR.set_gfx_color(theme.panel_alt)
-        gfx.rect(x, y_row, 18, 18, false)
-        if settings[row.key] then
-          ReaADR.set_gfx_color(theme.accent_gold)
-          gfx.rect(x + 4, y_row + 4, 10, 10, true)
-        end
-        gfx.setfont(1, "Arial", 14)
-        ReaADR.set_gfx_color(theme.text)
-        gfx.x = x + 30
-        gfx.y = y_row - 1
-        gfx.drawstr(row.label)
-      end
-
+      local overlay_label_y = after_profiles_y + 22
       gfx.setfont(1, "Arial", 14)
       ReaADR.set_gfx_color(theme.muted)
-      gfx.x = 24
-      gfx.y = row_y + (7 * 32) + 6
-      gfx.drawstr("Text Backgrounds")
+      gfx.x = left
+      gfx.y = overlay_label_y
+      gfx.drawstr("Overlay Elements")
 
-      local bg_row_y = row_y + (7 * 32) + 36
-      for index, row in ipairs(App.overlay_background_rows) do
-        local x = index <= 5 and 24 or 360
-        local y_row = bg_row_y + (((index - 1) % 5) * 32)
-        local rect = { x = x, y = y_row - 4, w = 300, h = 26 }
-        special_click[#special_click + 1] = { rect = rect, kind = "overlay_toggle", key = row.key }
+      local overlay_entries, after_overlay_y = layout_checkbox_grid(left, overlay_label_y + 24, content_w, App.overlay_rows, {
+        min_col_w = 320,
+        gap_x = 18,
+        row_h = 32,
+      })
+      for _, entry in ipairs(overlay_entries) do
+        special_click[#special_click + 1] = { rect = entry.rect, kind = "overlay_toggle", key = entry.row.key }
         ReaADR.set_gfx_color(theme.panel_alt)
-        gfx.rect(x, y_row, 18, 18, false)
-        if settings[row.key] then
+        gfx.rect(entry.box_x, entry.box_y, 18, 18, false)
+        if settings[entry.row.key] then
           ReaADR.set_gfx_color(theme.accent_gold)
-          gfx.rect(x + 4, y_row + 4, 10, 10, true)
+          gfx.rect(entry.box_x + 4, entry.box_y + 4, 10, 10, true)
         end
         gfx.setfont(1, "Arial", 14)
         ReaADR.set_gfx_color(theme.text)
-        gfx.x = x + 30
-        gfx.y = y_row - 1
-        gfx.drawstr(row.label)
+        gfx.x = entry.text_x
+        gfx.y = entry.text_y
+        gfx.drawstr(trim_to_width(entry.row.label, entry.text_w, 14))
       end
 
-      local controls_y = bg_row_y + (5 * 32) + 10
-      local metadata_rect = { x = 24, y = controls_y + 22, w = 132, h = 32, label = "Edit Fields" }
-      local white_rect = { x = 24, y = controls_y + 98, w = 170, h = 26, label = "White general text" }
-      local yellow_rect = { x = 24, y = controls_y + 130, w = 170, h = 26, label = "Yellow general text" }
-      local save_rect = { x = 24, y = controls_y + 170, w = 132, h = 34, label = "Save Overlay" }
+      local backgrounds_label_y = after_overlay_y + 18
+      gfx.setfont(1, "Arial", 14)
+      ReaADR.set_gfx_color(theme.muted)
+      gfx.x = left
+      gfx.y = backgrounds_label_y
+      gfx.drawstr("Text Backgrounds")
+
+      local bg_entries, after_backgrounds_y = layout_checkbox_grid(left, backgrounds_label_y + 24, content_w, App.overlay_background_rows, {
+        min_col_w = 320,
+        gap_x = 18,
+        row_h = 32,
+      })
+      for _, entry in ipairs(bg_entries) do
+        special_click[#special_click + 1] = { rect = entry.rect, kind = "overlay_toggle", key = entry.row.key }
+        ReaADR.set_gfx_color(theme.panel_alt)
+        gfx.rect(entry.box_x, entry.box_y, 18, 18, false)
+        if settings[entry.row.key] then
+          ReaADR.set_gfx_color(theme.accent_gold)
+          gfx.rect(entry.box_x + 4, entry.box_y + 4, 10, 10, true)
+        end
+        gfx.setfont(1, "Arial", 14)
+        ReaADR.set_gfx_color(theme.text)
+        gfx.x = entry.text_x
+        gfx.y = entry.text_y
+        gfx.drawstr(trim_to_width(entry.row.label, entry.text_w, 14))
+      end
+
+      local controls_y = after_backgrounds_y + 22
+      local metadata_rect = { x = left, y = controls_y + 24, w = 132, h = 32, label = "Edit Fields" }
+      local color_label_y = controls_y + 82
+      local white_rect = { x = left, y = color_label_y + 24, w = 220, h = 26, label = "White general text" }
+      local yellow_rect = { x = left, y = color_label_y + 58, w = 220, h = 26, label = "Yellow general text" }
+      local save_rect = { x = left, y = color_label_y + 102, w = 132, h = 34, label = "Save Overlay" }
       special_click[#special_click + 1] = { rect = metadata_rect, kind = "metadata" }
       special_click[#special_click + 1] = { rect = white_rect, kind = "text_color", value = "white" }
       special_click[#special_click + 1] = { rect = yellow_rect, kind = "text_color", value = "yellow" }
@@ -991,18 +1096,15 @@ function App.open_manager(initial_tab, instance_slot)
       draw_button(save_rect)
       gfx.setfont(1, "Arial", 13)
       ReaADR.set_gfx_color(theme.muted)
-      gfx.x = 24
+      gfx.x = left
       gfx.y = controls_y
       gfx.drawstr("Metadata fields")
-      gfx.x = 24
+      gfx.x = left
       gfx.y = metadata_rect.y + 42
       local fields = tostring(settings.metadata_fields or "")
-      if #fields > 62 then
-        fields = fields:sub(1, 59) .. "..."
-      end
-      gfx.drawstr("Current: " .. fields)
-      gfx.x = 24
-      gfx.y = controls_y + 74
+      gfx.drawstr("Current: " .. trim_to_width(fields, math.max(180, content_w - 90), 13))
+      gfx.x = left
+      gfx.y = color_label_y
       gfx.drawstr("General overlay text color")
       gfx.setfont(1, "Arial", 14)
       for _, option in ipairs({
@@ -1021,8 +1123,8 @@ function App.open_manager(initial_tab, instance_slot)
         gfx.y = option.rect.y + 4
         gfx.drawstr(option.label)
       end
-      gfx.x = 24
-      gfx.y = save_rect.y - 26
+      gfx.x = save_rect.x + save_rect.w + 16
+      gfx.y = save_rect.y + 9
       if state.overlay_dirty then
         ReaADR.set_gfx_color(theme.accent_gold)
         gfx.drawstr("Unsaved overlay changes")

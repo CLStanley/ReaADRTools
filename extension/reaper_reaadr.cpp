@@ -2,11 +2,29 @@
 #define REAPERAPI_MINIMAL
 #define REAPERAPI_WANT_AddCustomizableMenu
 #define REAPERAPI_WANT_AddRemoveReaScript
+#define REAPERAPI_WANT_CountSelectedMediaItems
+#define REAPERAPI_WANT_CreateTakeAudioAccessor
+#define REAPERAPI_WANT_DestroyAudioAccessor
+#define REAPERAPI_WANT_GetActiveTake
+#define REAPERAPI_WANT_GetAudioAccessorEndTime
+#define REAPERAPI_WANT_GetAudioAccessorSamples
+#define REAPERAPI_WANT_GetAudioAccessorStartTime
 #define REAPERAPI_WANT_GetExtState
+#define REAPERAPI_WANT_GetMediaItemInfo_Value
+#define REAPERAPI_WANT_GetSelectedMediaItem
 #define REAPERAPI_WANT_ShowMessageBox
 
+#ifdef _WIN32
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#endif
+
+#include <algorithm>
+#include <cmath>
 #include <cstdio>
 #include <cstring>
+#include <sstream>
 #include <string>
 #include <vector>
 
@@ -35,6 +53,11 @@ GetMenuItemCountFn g_get_menu_item_count = nullptr;
 InsertMenuItemFn g_insert_menu_item = nullptr;
 SetMenuItemInfoFn g_set_menu_item_info = nullptr;
 std::string g_log_path;
+const char kDetectDialogueSegmentsDef[] =
+  "bool\0"
+  "double,double,double,double,int,char*,int,char*,int\0"
+  "threshold_db,min_speech_seconds,min_silence_seconds,pad_seconds,sample_rate,segmentsOut,segmentsOut_sz,errorOut,errorOut_sz\0"
+  "Detect dialogue segments from the first selected media item and return timeline start/end pairs as tab-delimited lines.";
 
 struct ScriptAction {
   const char* label;
@@ -205,6 +228,149 @@ std::string quick_action_label(int slot)
   return "Quick Action " + std::to_string(slot);
 }
 
+void copy_to_buffer(const std::string& value, char* buffer, int buffer_size)
+{
+  if (!buffer || buffer_size <= 0) return;
+  std::snprintf(buffer, static_cast<std::size_t>(buffer_size), "%s", value.c_str());
+}
+
+bool detect_dialogue_segments(double threshold_db,
+                              double min_speech_seconds,
+                              double min_silence_seconds,
+                              double pad_seconds,
+                              int sample_rate,
+                              char* segments_out,
+                              int segments_out_sz,
+                              char* error_out,
+                              int error_out_sz)
+{
+  copy_to_buffer("", segments_out, segments_out_sz);
+  copy_to_buffer("", error_out, error_out_sz);
+
+  if (!CountSelectedMediaItems || !GetSelectedMediaItem || !GetActiveTake || !CreateTakeAudioAccessor ||
+      !DestroyAudioAccessor || !GetAudioAccessorStartTime || !GetAudioAccessorEndTime ||
+      !GetAudioAccessorSamples || !GetMediaItemInfo_Value) {
+    copy_to_buffer("Required REAPER audio accessor APIs are unavailable.", error_out, error_out_sz);
+    return false;
+  }
+
+  if (CountSelectedMediaItems(nullptr) <= 0) {
+    copy_to_buffer("Select one audio or video media item to analyze.", error_out, error_out_sz);
+    return false;
+  }
+
+  MediaItem* item = GetSelectedMediaItem(nullptr, 0);
+  MediaItem_Take* take = item ? GetActiveTake(item) : nullptr;
+  if (!item || !take) {
+    copy_to_buffer("The selected media item does not have an active take.", error_out, error_out_sz);
+    return false;
+  }
+
+  AudioAccessor* accessor = CreateTakeAudioAccessor(take);
+  if (!accessor) {
+    copy_to_buffer("Could not create an audio accessor for the selected media.", error_out, error_out_sz);
+    return false;
+  }
+
+  struct Segment {
+    double start_time = 0.0;
+    double end_time = 0.0;
+  };
+
+  const int safe_sample_rate = sample_rate > 0 ? sample_rate : 12000;
+  const int channels = 1;
+  const int block_samples = std::max(64, static_cast<int>(safe_sample_rate * 0.025 + 0.5));
+  const double block_duration = static_cast<double>(block_samples) / static_cast<double>(safe_sample_rate);
+  const double threshold = std::pow(10.0, threshold_db / 20.0);
+  const double min_speech = std::max(0.0, min_speech_seconds);
+  const double min_silence = std::max(0.0, min_silence_seconds);
+  const double pad = std::max(0.0, pad_seconds);
+  const double item_position = GetMediaItemInfo_Value(item, "D_POSITION");
+  const double item_length = std::max(0.0, GetMediaItemInfo_Value(item, "D_LENGTH"));
+  const double item_end = item_position + item_length;
+  const double start_time = GetAudioAccessorStartTime(accessor);
+  const double end_time = std::min(GetAudioAccessorEndTime(accessor), start_time + item_length);
+
+  if (end_time <= start_time) {
+    DestroyAudioAccessor(accessor);
+    copy_to_buffer("The selected media item has no readable audio in the placed item range.", error_out, error_out_sz);
+    return false;
+  }
+
+  std::vector<double> buffer(static_cast<std::size_t>(block_samples) * static_cast<std::size_t>(channels), 0.0);
+  std::vector<Segment> segments;
+  double active_start = -1.0;
+  double last_loud_end = -1.0;
+  double t = start_time;
+
+  auto timeline_time = [item_position, start_time](double accessor_time) {
+    return item_position + std::max(0.0, accessor_time - start_time);
+  };
+
+  auto flush_segment = [&]() {
+    if (active_start >= 0.0 && last_loud_end >= 0.0 && (last_loud_end - active_start) >= min_speech) {
+      Segment segment;
+      segment.start_time = std::max(item_position, timeline_time(active_start - pad));
+      segment.end_time = std::min(item_end, timeline_time(last_loud_end + pad));
+      if (segment.end_time > segment.start_time) {
+        segments.push_back(segment);
+      }
+    }
+    active_start = -1.0;
+    last_loud_end = -1.0;
+  };
+
+  while (t < end_time) {
+    std::fill(buffer.begin(), buffer.end(), 0.0);
+    const double block_end = std::min(end_time, t + block_duration);
+    const int got = GetAudioAccessorSamples(accessor, safe_sample_rate, channels, t, block_samples, buffer.data());
+    bool loud = false;
+
+    if (got < 0) {
+      DestroyAudioAccessor(accessor);
+      copy_to_buffer("REAPER returned an error while reading the selected media.", error_out, error_out_sz);
+      return false;
+    }
+
+    if (got == 1) {
+      double sum = 0.0;
+      for (double sample : buffer) {
+        sum += sample * sample;
+      }
+      const double rms = std::sqrt(sum / static_cast<double>(block_samples));
+      loud = rms >= threshold;
+    }
+
+    if (loud) {
+      if (active_start < 0.0) active_start = t;
+      last_loud_end = block_end;
+    } else if (active_start >= 0.0 && last_loud_end >= 0.0 && (t - last_loud_end) >= min_silence) {
+      flush_segment();
+    }
+
+    t = block_end;
+  }
+
+  flush_segment();
+  DestroyAudioAccessor(accessor);
+
+  std::ostringstream output;
+  output.setf(std::ios::fixed);
+  output.precision(9);
+  for (const Segment& segment : segments) {
+    output << segment.start_time << '\t' << segment.end_time << '\n';
+  }
+
+  const std::string text = output.str();
+  if (static_cast<int>(text.size()) >= segments_out_sz) {
+    copy_to_buffer("Detected segment output exceeded the provided buffer size.", error_out, error_out_sz);
+    return false;
+  }
+
+  copy_to_buffer(text, segments_out, segments_out_sz);
+  return true;
+}
+
 void add_menu_item_with_label(HMENU menu, int position, const ScriptAction& action, const std::string& label)
 {
   if (!action.command_id || !g_insert_menu_item) return;
@@ -305,6 +471,8 @@ bool load(reaper_plugin_info_t* plugin)
   } else {
     log_line("AddCustomizableMenu API unavailable; actions will register without the top-level menu.");
   }
+  plugin->Register("API_ReaADR_DetectDialogueSegments", reinterpret_cast<void*>(detect_dialogue_segments));
+  plugin->Register("APIdef_ReaADR_DetectDialogueSegments", reinterpret_cast<void*>(const_cast<char*>(kDetectDialogueSegmentsDef)));
   register_scripts();
   load_menu_functions();
   if (AddCustomizableMenu) {
@@ -318,6 +486,8 @@ void unload()
   log_line("Unloading ReaADR extension.");
   if (g_plugin) {
     g_plugin->Register("-hookcustommenu", reinterpret_cast<void*>(hook_custom_menu));
+    g_plugin->Register("-API_ReaADR_DetectDialogueSegments", reinterpret_cast<void*>(detect_dialogue_segments));
+    g_plugin->Register("-APIdef_ReaADR_DetectDialogueSegments", reinterpret_cast<void*>(const_cast<char*>(kDetectDialogueSegmentsDef)));
   }
   unregister_scripts();
   g_plugin = nullptr;

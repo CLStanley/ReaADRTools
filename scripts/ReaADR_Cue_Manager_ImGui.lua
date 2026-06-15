@@ -318,6 +318,20 @@ local function launch_info_panel()
   end
 end
 
+local function launch_record_cue()
+  local cue = cues[state.selected]
+  if cue then
+    ReaADR.set_manager_selected_cue(cue)
+  end
+  local path = script_dir() .. "/ReaADR_Record_Cue.lua"
+  local command_id = reaper.AddRemoveReaScript(true, 0, path, true)
+  if command_id and command_id > 0 then
+    reaper.Main_OnCommand(command_id, 0)
+  else
+    ReaADR.message("Could not open Record Current Cue.")
+  end
+end
+
 local function display_value_for_field(cue, field_key, frame_rate)
   if field_key == "id" then
     return tostring(cue.id or "")
@@ -605,6 +619,10 @@ local function loop()
     reaper.ImGui_SameLine(ctx)
     if reaper.ImGui_Button(ctx, "Character Filter") then
       launch_character_filter()
+    end
+    reaper.ImGui_SameLine(ctx)
+    if reaper.ImGui_Button(ctx, "Record Current Cue") then
+      launch_record_cue()
     end
     reaper.ImGui_SameLine(ctx)
     if reaper.ImGui_Button(ctx, "Refresh Session") then

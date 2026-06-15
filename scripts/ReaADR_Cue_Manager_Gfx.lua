@@ -34,7 +34,7 @@ local state = {
   last_mouse = 0,
   last_click_time = 0,
   last_click_index = nil,
-  status_dropdown = false,
+  dropdown_field = nil,
   session_revision = ReaADR.session_revision and ReaADR.session_revision() or 0,
   filter_signature = select(2, ReaADR.active_character_filter()),
   closed = false,
@@ -170,7 +170,28 @@ local function set_status_for_selected(status)
     return
   end
   ReaADR.set_cue_status_at_position(status, cue.start_time)
-  state.status_dropdown = false
+  state.dropdown_field = nil
+  state.editing = nil
+  refresh_cues()
+end
+
+local function set_cue_type_for_selected(cue_type)
+  local cue = cues[state.selected]
+  if not cue or not cue_type or cue_type == "" then
+    return
+  end
+  local updated = {}
+  for key, value in pairs(cue) do
+    updated[key] = value
+  end
+  updated.cue_type = cue_type
+  local saved, err = ReaADR.update_cached_cue(updated)
+  if not saved then
+    ReaADR.message("Cue type update failed:\n\n" .. tostring(err))
+    return
+  end
+  state.dropdown_field = nil
+  state.editing = nil
   refresh_cues()
 end
 
@@ -244,9 +265,23 @@ local function add_cue_from_manager()
   end
 end
 
+local function launch_record_cue()
+  local cue = cues[state.selected]
+  if cue then
+    ReaADR.set_manager_selected_cue(cue)
+  end
+  local path = script_dir() .. "/ReaADR_Record_Cue.lua"
+  local command_id = reaper.AddRemoveReaScript(true, 0, path, true)
+  if command_id and command_id > 0 then
+    reaper.Main_OnCommand(command_id, 0)
+  else
+    ReaADR.message("Could not open Record Current Cue.")
+  end
+end
+
 local function cell_columns(content_w)
-  local trailing_w = math.max(260, content_w - 550)
-  local line_w = math.max(120, math.floor(trailing_w * 0.55))
+  local trailing_w = math.max(280, content_w - 670)
+  local line_w = math.max(110, math.floor(trailing_w * 0.52))
   local notes_w = math.max(100, trailing_w - line_w)
   return {
     { key = "id", x = 30, w = 52 },
@@ -254,8 +289,9 @@ local function cell_columns(content_w)
     { key = "start_time", x = 214, w = 116 },
     { key = "end_time", x = 340, w = 116 },
     { key = "status", x = 466, w = 118 },
-    { key = "line", x = 594, w = line_w },
-    { key = "notes", x = 594 + line_w + 10, w = notes_w - 10 },
+    { key = "cue_type", x = 594, w = 94 },
+    { key = "line", x = 698, w = line_w },
+    { key = "notes", x = 698 + line_w + 10, w = notes_w - 10 },
   }
 end
 
@@ -270,6 +306,8 @@ local function display_value_for_field(cue, field_key, frame_rate)
     return ReaADR.format_timecode(cue.end_time, frame_rate)
   elseif field_key == "status" then
     return tostring(cue.status or "Not Recorded")
+  elseif field_key == "cue_type" then
+    return tostring(cue.cue_type or "Dialogue")
   elseif field_key == "line" then
     return tostring(cue.line or "")
   elseif field_key == "notes" then
@@ -280,6 +318,19 @@ end
 
 local function trim_cell_text(value)
   return tostring(value or ""):gsub("[\r\n]", " ")
+end
+
+local function trim_to_width(value, max_w, font_size)
+  local text = tostring(value or "")
+  gfx.setfont(1, "Arial", font_size or 13)
+  if gfx.measurestr(text) <= max_w then
+    return text
+  end
+  local trimmed = text
+  while #trimmed > 1 and gfx.measurestr(trimmed .. "...") > max_w do
+    trimmed = trimmed:sub(1, #trimmed - 1)
+  end
+  return trimmed .. "..."
 end
 
 local function begin_inline_edit(cue_index, field_key, rect, frame_rate)
@@ -300,7 +351,7 @@ local function begin_inline_edit(cue_index, field_key, rect, frame_rate)
     value = trim_cell_text(display_value_for_field(cue, field_key, frame_rate)),
   }
   state.editing.cursor = #(state.editing.value or "")
-  state.status_dropdown = false
+  state.dropdown_field = nil
 end
 
 local function set_inline_cursor_from_mouse()
@@ -378,6 +429,8 @@ local function commit_inline_edit()
     updated.line = editing.value
   elseif editing.field_key == "notes" then
     updated.notes = editing.value
+  elseif editing.field_key == "cue_type" then
+    updated.cue_type = editing.value
   end
 
   local saved, err = ReaADR.update_cached_cue(updated)
@@ -519,18 +572,12 @@ local function remove_selected_cue()
   end
 end
 
-local function sync_regions_from_manager()
+local function refresh_session_from_manager()
   local selected = cues[state.selected]
   local selected_key = selected and ReaADR.cue_key(selected) or ""
-  local sync_summary, sync_err = ReaADR.sync_cached_cues_from_project_regions()
-  if not sync_summary then
-    ReaADR.message("Region sync failed:\n\n" .. tostring(sync_err))
-    return
-  end
-
-  local summary, rebuild_err = ReaADR.rebuild_cached_session({ clear_generated_items = true })
+  local summary, refresh_err = ReaADR.refresh_session()
   if not summary then
-    ReaADR.message("Region positions were synced, but cue rebuild failed:\n\n" .. tostring(rebuild_err))
+    ReaADR.message("Refresh failed:\n\n" .. tostring(refresh_err))
     return
   end
 
@@ -542,13 +589,13 @@ local function sync_regions_from_manager()
   sync_scroll_to_selection()
   ReaADR.refresh_overlay_silent()
   ReaADR.message(
-    ("Synced %d moved region(s).\n\nCue audio items rebuilt: %d created, %d updated, %d skipped\nOverlap splits: %d\nMissing generated regions: %d"):format(
-      sync_summary.updated or 0,
-      summary.cue_audio_created or 0,
-      summary.cue_audio_updated or 0,
-      summary.cue_audio_skipped or 0,
-      summary.overlap_conflicts or 0,
-      sync_summary.missing or 0
+    ("Session refreshed.\n\nRegions synced: %d\nCue audio created: %d, updated: %d, skipped: %d\nOverlap splits: %d\nCompleted characters skipped: %d"):format(
+      summary.sync.updated or 0,
+      summary.rebuild.cue_audio_created or 0,
+      summary.rebuild.cue_audio_updated or 0,
+      summary.rebuild.cue_audio_skipped or 0,
+      summary.rebuild.overlap_conflicts or 0,
+      summary.rebuild.skipped_completed_characters or 0
     )
   )
 end
@@ -590,11 +637,11 @@ local function draw_text_input(rect, value, label)
   gfx.drawstr(display)
 end
 
-local function draw_status_dropdown(anchor, selected_status)
+local function draw_dropdown(anchor, selected_value, field_key)
   local theme = ReaADR.ui_theme()
-  local statuses = ReaADR.cue_statuses()
+  local options_source = field_key == "cue_type" and ReaADR.cue_types() or ReaADR.cue_statuses()
   local option_h = 24
-  local menu_h = #statuses * option_h
+  local menu_h = #options_source * option_h
   local y = anchor.y - menu_h - 4
   if y < 78 then
     y = anchor.y + anchor.h + 4
@@ -604,18 +651,18 @@ local function draw_status_dropdown(anchor, selected_status)
   gfx.rect(anchor.x, y, anchor.w, menu_h, true)
   ReaADR.set_gfx_color(theme.border)
   gfx.rect(anchor.x, y, anchor.w, menu_h, false)
-  for index, status in ipairs(statuses) do
-    local rect = { x = anchor.x, y = y + ((index - 1) * option_h), w = anchor.w, h = option_h, status = status }
+  for index, value in ipairs(options_source) do
+    local rect = { x = anchor.x, y = y + ((index - 1) * option_h), w = anchor.w, h = option_h, value = value }
     options[#options + 1] = rect
     local hover = inside(rect, gfx.mouse_x, gfx.mouse_y)
-    local active = tostring(status) == tostring(selected_status)
+    local active = tostring(value) == tostring(selected_value)
     ReaADR.set_gfx_color(active and theme.accent_gold or (hover and theme.highlight or theme.panel_alt))
     gfx.rect(rect.x + 1, rect.y + 1, rect.w - 2, rect.h - 2, true)
     gfx.setfont(1, "Arial", 13)
     ReaADR.set_gfx_color(theme.text)
     gfx.x = rect.x + 8
     gfx.y = rect.y + 5
-    gfx.drawstr(status)
+    gfx.drawstr(value)
   end
   return options
 end
@@ -627,7 +674,8 @@ local button_specs = {
   { key = "add", label = "Add Cue", min_w = 92, hint = "Create a cue at the current timeline position." },
   { key = "remove", label = "Remove Cue", min_w = 104, hint = "Delete the selected cue, renumber the remaining cues, and rebuild cue regions/audio." },
   { key = "filter", label = "Character Filter", min_w = 132, hint = "Enable or disable character tracks for focused recording passes." },
-  { key = "sync", label = "Sync Regions", min_w = 124, hint = "Apply manually moved region positions back to cues, cue beeps, lanes, and overlays." },
+  { key = "record", label = "Record Current Cue", min_w = 148, hint = "Arm the current cue and start the dedicated record workflow." },
+  { key = "sync", label = "Refresh Session", min_w = 134, hint = "Rebuild cue tracks, reapply filters, resync regions, and refresh overlay/session state." },
   { key = "overlay", label = "Refresh Overlay", min_w = 142, hint = "Refresh the video overlay for the selected/current cue state." },
   { key = "info", label = "Info Panel", min_w = 112, hint = "Open the large cue information panel for the selected cue." },
 }
@@ -702,7 +750,7 @@ local function frame()
 
   local header = ReaADR.draw_window_header(
     "ReaADR Cue Manager",
-    ("Source: %s | Cues: %d | Double-click to edit; status uses the dropdown."):format(tostring(source or "session"), #cues),
+    ("Source: %s | Cues: %d | Double-click to edit; status and cue type use dropdowns."):format(tostring(source or "session"), #cues),
     { x = 22, y = 18, width = state.width - 44, height = 76 }
   )
 
@@ -730,8 +778,10 @@ local function frame()
   gfx.x = 466
   gfx.drawstr("Status")
   gfx.x = 594
+  gfx.drawstr("Type")
+  gfx.x = 698
   gfx.drawstr("Line")
-  gfx.x = columns[7].x
+  gfx.x = columns[8].x
   gfx.drawstr("Notes")
 
   local row_h = 30
@@ -780,15 +830,17 @@ local function frame()
       gfx.x = 466
       gfx.drawstr(tostring(cue.status or "Not Recorded"))
       gfx.x = 594
+      gfx.drawstr(tostring(cue.cue_type or "Dialogue"))
+      gfx.x = 698
       local line = tostring(cue.line or "")
-      local line_chars = math.max(14, math.floor((columns[6].w - 8) / 7))
+      local line_chars = math.max(14, math.floor((columns[7].w - 8) / 7))
       if #line > line_chars then
         line = line:sub(1, math.max(1, line_chars - 3)) .. "..."
       end
       gfx.drawstr(line)
-      gfx.x = columns[7].x
+      gfx.x = columns[8].x
       local notes = tostring(cue.notes or "")
-      local notes_chars = math.max(12, math.floor((columns[7].w - 8) / 7))
+      local notes_chars = math.max(12, math.floor((columns[8].w - 8) / 7))
       if #notes > notes_chars then
         notes = notes:sub(1, math.max(1, notes_chars - 3)) .. "..."
       end
@@ -839,20 +891,28 @@ local function frame()
   end
 
   local selected_cue = cues[state.selected]
-  local status_rect = nil
-  local status_options = {}
+  local dropdown_options = {}
   if selected_cue then
     gfx.setfont(1, "Arial", 14)
     ReaADR.set_gfx_color(theme.muted)
     gfx.x = 22
     gfx.y = selected_y
-    gfx.drawstr(("Selected Cue %s | %s | %.2fs"):format(tostring(selected_cue.id or ""), tostring(selected_cue.character or ""), ReaADR.cue_duration(selected_cue)))
-    status_rect = { x = state.width - 22 - 150, y = selected_y - 6, w = 150, h = 28 }
-    draw_text_input(status_rect, selected_cue.status or "Not Recorded", "Status")
+    gfx.drawstr(trim_to_width(
+      ("Selected Cue %s | %s | %s | %s | %.2fs | Double-click status/type cells to edit"):format(
+        tostring(selected_cue.id or ""),
+        tostring(selected_cue.character or ""),
+        tostring(selected_cue.status or "Not Recorded"),
+        tostring(selected_cue.cue_type or "Dialogue"),
+        ReaADR.cue_duration(selected_cue)
+      ),
+      math.max(240, content_w - 16),
+      14
+    ))
   end
 
-  if selected_cue and state.status_dropdown and status_rect then
-    status_options = draw_status_dropdown(status_rect, selected_cue.status or "Not Recorded")
+  if selected_cue and state.dropdown_field and state.editing and state.editing.rect then
+    local current_value = state.dropdown_field == "cue_type" and (selected_cue.cue_type or "Dialogue") or (selected_cue.status or "Not Recorded")
+    dropdown_options = draw_dropdown(state.editing.rect, current_value, state.dropdown_field)
   end
 
   if hover_hint ~= "" then
@@ -1000,7 +1060,7 @@ local function frame()
       end
     end
 
-    local clicked_status_dropdown = false
+    local clicked_dropdown = false
     if scrollbar_thumb and inside(scrollbar_thumb, gfx.mouse_x, gfx.mouse_y) then
       state.dragging_scrollbar = true
       state.scrollbar_drag_offset = gfx.mouse_y - scrollbar_thumb.y
@@ -1019,20 +1079,26 @@ local function frame()
       return
     end
 
-    if state.status_dropdown then
-      for _, option in ipairs(status_options or {}) do
+    if state.dropdown_field then
+      for _, option in ipairs(dropdown_options or {}) do
         if inside(option, gfx.mouse_x, gfx.mouse_y) then
-          set_status_for_selected(option.status)
-          clicked_status_dropdown = true
+          if state.dropdown_field == "cue_type" then
+            set_cue_type_for_selected(option.value)
+          else
+            set_status_for_selected(option.value)
+          end
+          clicked_dropdown = true
           break
         end
       end
-      if not clicked_status_dropdown and status_rect and not inside(status_rect, gfx.mouse_x, gfx.mouse_y) then
-        state.status_dropdown = false
+      local clicked_anchor = state.editing and state.editing.rect and inside(state.editing.rect, gfx.mouse_x, gfx.mouse_y)
+      if not clicked_dropdown and not clicked_anchor then
+        state.dropdown_field = nil
+        state.editing = nil
       end
     end
 
-    if not clicked_status_dropdown then
+    if not clicked_dropdown then
       for row = 1, visible_rows do
         local cue_index = state.scroll + row
         local rect = { x = 22, y = list_y + ((row - 1) * row_h), w = content_w, h = row_h - 2 }
@@ -1046,7 +1112,20 @@ local function frame()
             for _, column in ipairs(columns) do
               local cell_rect = { x = column.x, y = rect.y, w = column.w, h = rect.h }
               if inside(cell_rect, gfx.mouse_x, gfx.mouse_y) then
-                if column.key ~= "status" then
+                if column.key == "status" or column.key == "cue_type" then
+                  state.dropdown_field = column.key
+                  state.editing = {
+                    cue_index = cue_index,
+                    cue_key = ReaADR.cue_key(cues[cue_index]),
+                    field_key = column.key,
+                    rect = {
+                      x = cell_rect.x,
+                      y = cell_rect.y,
+                      w = cell_rect.w,
+                      h = cell_rect.h,
+                    },
+                  }
+                else
                   begin_inline_edit(cue_index, column.key, cell_rect, frame_rate)
                 end
                 break
@@ -1059,8 +1138,8 @@ local function frame()
     end
 
     local cue = cues[state.selected]
-    if clicked_status_dropdown then
-      -- Status selection already handled.
+    if clicked_dropdown then
+      -- Dropdown selection already handled.
     elseif cue and inside(buttons.jump, gfx.mouse_x, gfx.mouse_y) then
       prompt_jump_to_cue()
     elseif inside(buttons.prev, gfx.mouse_x, gfx.mouse_y) then
@@ -1073,16 +1152,14 @@ local function frame()
       remove_selected_cue()
     elseif inside(buttons.filter, gfx.mouse_x, gfx.mouse_y) then
       launch_character_filter()
+    elseif cue and inside(buttons.record, gfx.mouse_x, gfx.mouse_y) then
+      launch_record_cue()
     elseif inside(buttons.sync, gfx.mouse_x, gfx.mouse_y) then
-      sync_regions_from_manager()
+      refresh_session_from_manager()
     elseif inside(buttons.overlay, gfx.mouse_x, gfx.mouse_y) then
       ReaADR.refresh_overlay_silent()
     elseif cue and inside(buttons.info, gfx.mouse_x, gfx.mouse_y) then
       launch_info_panel()
-    end
-
-    if cue and status_rect and inside(status_rect, gfx.mouse_x, gfx.mouse_y) then
-      state.status_dropdown = not state.status_dropdown
     end
   end
   state.last_mouse = mouse

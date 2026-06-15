@@ -9,8 +9,7 @@ end
 local ReaADR = dofile(script_dir() .. "/ReaADR_Core.lua")
 
 local statuses = ReaADR.cue_statuses()
-local mouse_x, mouse_y = reaper.GetMousePosition()
-gfx.init("Set ADR Cue Status", 0, 0, 0, mouse_x, mouse_y)
+gfx.init("Set ADR Cue Status", 0, 0, 0)
 local choice = gfx.showmenu(table.concat(statuses, "|"))
 gfx.quit()
 
