@@ -41,6 +41,8 @@ git clone --depth 1 https://github.com/justinfrankel/reaper-sdk vendor/reaper-sd
 git clone --depth 1 https://github.com/justinfrankel/WDL vendor/WDL
 ```
 
+### Linux (x86_64)
+
 ```sh
 cd extension
 make dist
@@ -56,11 +58,39 @@ dist/UserPlugins/
     scripts/*.lua
 ```
 
+### Windows (x64)
+
+1. Open **x64 Native Tools Command Prompt for VS 2022** (or later)
+2. Navigate to the `extension` directory
+3. Run the build script:
+
+```bat
+build-windows-msvc.bat
+```
+
+This produces `reaper_reaadr.dll` in the extension directory (or `build/` subdirectory depending on script configuration).
+
+The distributable Windows layout:
+
+```text
+dist/UserPlugins/
+  reaper_reaadr.dll
+  ReaADRTools/
+    assets/cue.wav
+    scripts/*.lua
+```
+
+After building, copy the updated Lua scripts from the repository's `scripts/` folder into `dist/UserPlugins/ReaADRTools/scripts/` (or directly into your REAPER `UserPlugins/ReaADRTools/scripts/` after install) to ensure the latest script versions are used.
+
 ## Install
 
 Copy the contents of `dist/UserPlugins` into the user's REAPER resource `UserPlugins` folder, then restart REAPER.
 
+**Windows**: After running `build-windows-msvc.bat` in the x64 Native Tools Command Prompt for VS 2022, copy the generated `reaper_reaadr.dll` and the `ReaADRTools/` folder (with updated scripts from the repo's `scripts/` directory) into your REAPER `UserPlugins` folder.
+
 No manual ReaScript action import or menu customization is required.
+
+> **Note on script location**: Currently scripts are bundled inside `UserPlugins/ReaADRTools/scripts/` for self-contained distribution. Future versions may follow REAPER's standard structure where scripts reside in the REAPER resource `Scripts/` directory (outside `UserPlugins`), with the extension only providing the native DLL and assets. This would allow users to manage/update scripts via ReaPack independently of the native extension.
 
 ## Keyboard Shortcuts
 
@@ -197,8 +227,8 @@ finishing the script externally, and re-importing later.
 
 The Lua scripts and bundled cue asset are platform-neutral. The native REAPER extension must be built separately for each REAPER platform:
 
-- Linux x86_64: `reaper_reaadr-x86_64.so` currently builds with this Makefile.
-- macOS: requires a `.dylib` build for the target architecture, usually x86_64 and/or arm64.
-- Windows: requires a `.dll` build, usually x64.
+- **Linux x86_64**: `reaper_reaadr-x86_64.so` builds with the Makefile (`make dist`).
+- **Windows x64**: `reaper_reaadr.dll` builds via `build-windows-msvc.bat` in the x64 Native Tools Command Prompt for VS 2022.
+- **macOS**: requires a `.dylib` build for the target architecture (x86_64 and/or arm64) — not yet verified.
 
-The wrapper source is structured for cross-platform path and menu handling, but only the Linux x86_64 build is currently verified in this repo.
+The wrapper source is structured for cross-platform path and menu handling. Linux and Windows builds are documented; macOS is untested.
