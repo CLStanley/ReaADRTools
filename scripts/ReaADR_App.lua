@@ -17,7 +17,7 @@ App.modules = {
     title = "Import",
     actions = {
       { label = "Import Cue Sheet", script = "ReaADR_Import_Cue_Sheet.lua", hint = "Import CSV or TSV script data, map columns, create tracks, regions, cue audio, and overlay metadata." },
-      { label = "Detect Dialogue From Selected Media", script = "ReaADR_Detect_Dialogue.lua", hint = "Analyze selected audio/video media and create editable ADR cues from detected speech regions, with optional transcription draft mode." },
+      { label = "Detect Dialogue From Selected Media", script = "ReaADR_Detect_Dialogue.lua", hint = "Analyze selected audio/video media and create editable ADR cues from detected speech regions." },
       { label = "Generate Cues from Markers/Regions", script = "ReaADR_Generate_Cues.lua", hint = "Create ADR cue items from existing project markers or regions without importing a cue sheet." },
     },
   },

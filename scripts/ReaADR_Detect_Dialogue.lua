@@ -25,9 +25,9 @@ end
 
 local ok, values = reaper.GetUserInputs(
   "Detect Dialogue From Selected Media",
-  6,
-  "Character/Placeholder,Threshold dB,Min speech sec,Min silence sec,Pad sec,Transcription Draft? (y/n)",
-  table.concat({ "ADR", "-42", "0.25", "0.35", "0.05", "n" }, ",")
+  5,
+  "Character/Placeholder,Threshold dB,Min speech sec,Min silence sec,Pad sec",
+  table.concat({ "ADR", "-42", "0.25", "0.35", "0.05" }, ",")
 )
 if not ok then
   return
@@ -38,13 +38,11 @@ for value in (values .. ","):gmatch("([^,]*),") do
   parts[#parts + 1] = value
 end
 
-local character = (parts[1] ~= "" and parts[1]) or "ADR"
+local character = (parts[1] ~= "" and parts[1]) or "Unknown"
 local threshold_db = tonumber(parts[2]) or -42
 local min_speech = tonumber(parts[3]) or 0.25
 local min_silence = tonumber(parts[4]) or 0.35
 local pad = tonumber(parts[5]) or 0.05
-local want_transcription = tostring(parts[6] or ""):lower():match("^%s*(.-)%s*$")
-want_transcription = want_transcription == "y" or want_transcription == "yes" or want_transcription == "1" or want_transcription == "true"
 
 local SAMPLE_RATE = 12000
 local CHANNELS = 1
@@ -53,55 +51,9 @@ local BLOCK_DUR = BLOCK_SAMPLES / SAMPLE_RATE
 local BLOCKS_PER_FRAME = 200
 local threshold = 10 ^ (threshold_db / 20)
 
-local function parse_transcription_blob(blob)
-  local entries = {}
-  for line in tostring(blob or ""):gmatch("([^\n]+)") do
-    local start_time, end_time, text, speaker, confidence, notes =
-      line:match("^([^\t]*)\t([^\t]*)\t([^\t]*)\t([^\t]*)\t([^\t]*)\t?(.*)$")
-    start_time = tonumber(start_time)
-    end_time = tonumber(end_time)
-    if start_time and end_time and end_time > start_time then
-      entries[#entries + 1] = {
-        start_time = start_time,
-        end_time = end_time,
-        text = tostring(text or ""),
-        speaker = tostring(speaker or ""),
-        confidence = tostring(confidence or ""),
-        notes = tostring(notes or ""),
-      }
-    end
-  end
-  return entries
-end
-
-local function detect_transcription_entries_native()
-  local native_fn = reaper.ReaADR_TranscribeSelectedMedia
-  if type(native_fn) ~= "function" then
-    return nil, "unavailable"
-  end
-
-  local ok_call, ok_transcribed, blob, error_text = pcall(
-    native_fn,
-    threshold_db,
-    min_speech,
-    min_silence,
-    pad,
-    SAMPLE_RATE,
-    "",
-    8 * 1024 * 1024,
-    "",
-    4096
-  )
-  if not ok_call then
-    return nil, tostring(ok_transcribed)
-  end
-  if not ok_transcribed then
-    return nil, tostring(error_text or "Native transcription failed.")
-  end
-  return parse_transcription_blob(blob)
-end
-
-local function build_and_import_cues(raw_segments, transcription_entries, transcription_error)
+local item_length = tonumber(reaper.GetMediaItemInfo_Value(src_item, "D_LENGTH")) or 0
+local item_end = item_position + item_length
+local function build_and_import_cues(raw_segments)
   if #raw_segments == 0 then
     ReaADR.message("No dialogue regions were detected with the current settings.\n\nTry lowering the threshold dB value.")
     return
@@ -110,27 +62,16 @@ local function build_and_import_cues(raw_segments, transcription_entries, transc
   local cues = {}
   local cue_id_width = math.max(3, #tostring(#raw_segments))
   for index, segment in ipairs(raw_segments) do
-    local transcription = transcription_entries and transcription_entries[index] or nil
-    local generated_character = character
-    if want_transcription then
-      generated_character = (transcription and transcription.speaker ~= "" and transcription.speaker) or (character ~= "" and character) or "Unknown"
-    end
-    local metadata = {}
-    if transcription and transcription.confidence ~= "" then
-      metadata["Confidence Score"] = transcription.confidence
-    end
     cues[index] = {
       id = ("%0" .. tostring(cue_id_width) .. "d"):format(index),
-      character = generated_character ~= "" and generated_character or "Unknown",
+      character = character ~= "" and character or "Unknown",
       cue_type = "Dialogue",
       start_time = segment.start_time,
       end_time = segment.end_time,
-      line = transcription and transcription.text or "",
+      line = "",
       status = "Not Recorded",
-      notes = transcription and transcription.notes ~= "" and transcription.notes
-        or (want_transcription and transcription_error and ("Transcription draft: " .. transcription_error) or "Detected from selected media"),
+      notes = "Detected from selected media",
       source_line = index,
-      metadata = metadata,
     }
   end
 
@@ -158,7 +99,7 @@ local function build_and_import_cues(raw_segments, transcription_entries, transc
   ReaADR.show_video_window()
   ReaADR.message(
     ("%s and created %d editable cue(s).\n\nTracks: %d created, %d reused\nRegions: %d created, %d updated\nCue audio: %d created, %d updated, %d skipped\nOverlap splits: %d\nOverlay: %s"):format(
-      want_transcription and "Generated transcription-assisted draft cues" or "Detected",
+      "Detected",
       summary.cue_count,
       summary.tracks_created,
       summary.tracks_reused,
@@ -217,16 +158,8 @@ local function detect_segments_native()
 end
 
 local native_segments, native_error = detect_segments_native()
-local native_transcription_entries = nil
-local native_transcription_error = nil
-if want_transcription then
-  native_transcription_entries, native_transcription_error = detect_transcription_entries_native()
-  if native_transcription_error == "unavailable" then
-    native_transcription_error = "transcription engine unavailable; draft cues need dialogue text review"
-  end
-end
 if native_segments then
-  build_and_import_cues(native_segments, native_transcription_entries, native_transcription_error)
+  build_and_import_cues(native_segments)
   return
 end
 
@@ -240,8 +173,6 @@ if not accessor then
   return
 end
 
-local item_length = reaper.GetMediaItemInfo_Value(src_item, "D_LENGTH") or 0
-local item_end = item_position + item_length
 local start_t = reaper.GetAudioAccessorStartTime(accessor)
 local scan_end = math.min(reaper.GetAudioAccessorEndTime(accessor), start_t + item_length)
 local total_dur = math.max(0.001, scan_end - start_t)
@@ -276,7 +207,7 @@ local function finalize_scan()
   if cancelled then
     return
   end
-  build_and_import_cues(raw_segments, nil, native_transcription_error)
+  build_and_import_cues(raw_segments)
 end
 
 local function scan_frame()
