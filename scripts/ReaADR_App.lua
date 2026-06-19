@@ -687,7 +687,7 @@ function App.rebuild_session()
   end
   local progress = ReaADR.create_progress_window("Rebuilding ReaADR Session")
   local summary, setup_error = ReaADR.setup_project(cues, {
-    cue_audio_path = App.base_dir .. "/../assets/cue.wav",
+    cue_audio_path = ReaADR.project_cue_audio_path(),
     overlay_settings = ReaADR.load_overlay_settings(),
     on_progress = progress.update,
   })

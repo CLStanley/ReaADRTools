@@ -1,3 +1,8 @@
+# Linux x86_64 REAPER extension build and dist payload assembly.
+#
+# Windows builds are handled by build-windows-msvc.bat because the Windows DLL
+# must be built with MSVC.
+
 REAPER_SDK := ../vendor/reaper-sdk
 WDL := ../vendor/WDL/WDL
 TARGET := reaper_reaadr-x86_64.so
@@ -57,7 +62,7 @@ dist: all
 	cp ../scripts/ReaADR_Clean_Generated_Cues.lua "$(DIST_DIR)/ReaADRTools/scripts/"
 	cp ../scripts/ReaADR_Overlay_Settings.lua "$(DIST_DIR)/ReaADRTools/scripts/"
 	cp ../scripts/ReaADR_Menu.lua "$(DIST_DIR)/ReaADRTools/scripts/"
-	cp ../assets/cue.wav "$(DIST_DIR)/ReaADRTools/assets/"
+	cp ../assets/* "$(DIST_DIR)/ReaADRTools/assets/"
 
 clean:
 	rm -rf "$(BUILD_DIR)" ../dist

@@ -1,4 +1,4 @@
-# ReaADR Native Extension Wrapper
+# ReaADR Extension Build Notes
 
 This wrapper keeps the ADR implementation in Lua and uses a small native REAPER extension for low-friction installation:
 
@@ -28,8 +28,8 @@ limited public actions, and launches the Lua application.
 
 Additional documentation:
 
-- `docs/USER_GUIDE.md`
-- `docs/CODE_ARCHITECTURE.md`
+- `USER_GUIDE.md`
+- `CODE_ARCHITECTURE.md`
 
 ## Build
 
@@ -43,6 +43,8 @@ git clone --depth 1 https://github.com/justinfrankel/WDL vendor/WDL
 
 ### Linux (x86_64)
 
+Linux builds use the Makefile in `extension/`.
+
 ```sh
 cd extension
 make dist
@@ -54,11 +56,13 @@ The distributable Linux x86_64 layout is created at:
 dist/UserPlugins/
   reaper_reaadr-x86_64.so
   ReaADRTools/
-    assets/cue.wav
+    assets/
     scripts/*.lua
 ```
 
 ### Windows (x64)
+
+Windows builds require MSVC.
 
 1. Open **x64 Native Tools Command Prompt for VS 2022** (or later)
 2. Navigate to the `extension` directory
@@ -68,7 +72,7 @@ dist/UserPlugins/
 build-windows-msvc.bat
 ```
 
-This produces `reaper_reaadr.dll` in the extension directory (or `build/` subdirectory depending on script configuration).
+This produces `dist\UserPlugins\reaper_reaadr.dll`.
 
 The distributable Windows layout:
 
@@ -76,7 +80,7 @@ The distributable Windows layout:
 dist/UserPlugins/
   reaper_reaadr.dll
   ReaADRTools/
-    assets/cue.wav
+    assets/
     scripts/*.lua
 ```
 
@@ -227,8 +231,8 @@ finishing the script externally, and re-importing later.
 
 The Lua scripts and bundled cue asset are platform-neutral. The native REAPER extension must be built separately for each REAPER platform:
 
-- **Linux x86_64**: `reaper_reaadr-x86_64.so` builds with the Makefile (`make dist`).
-- **Windows x64**: `reaper_reaadr.dll` builds via `build-windows-msvc.bat` in the x64 Native Tools Command Prompt for VS 2022.
+- **Linux x86_64**: `reaper_reaadr-x86_64.so` builds with `extension/Makefile`.
+- **Windows x64**: `reaper_reaadr.dll` builds only via `build-windows-msvc.bat` in the x64 Native Tools Command Prompt for VS 2022.
 - **macOS**: requires a `.dylib` build for the target architecture (x86_64 and/or arm64) — not yet verified.
 
 The wrapper source is structured for cross-platform path and menu handling. Linux and Windows builds are documented; macOS is untested.

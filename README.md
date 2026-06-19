@@ -52,7 +52,8 @@ Lua session layer.
 
 - [User Guide](docs/USER_GUIDE.md)
 - [Code Architecture](docs/CODE_ARCHITECTURE.md)
-- [Extension Build Notes](extension/README.md)
+- [Extension Build Notes](docs/EXTENSION_BUILD.md)
+- [Installer Packaging](docs/PACKAGING.md)
 
 ## Build
 
@@ -88,8 +89,9 @@ platform:
 - macOS: `reaper_reaadr*.dylib`
 - Linux: `reaper_reaadr*.so`
 
-The current local Makefile builds the Linux `.so`; Windows and macOS packages
-need their native binaries added before public release.
+The current local Makefile builds the Linux `.so`. Windows packages must
+use the MSVC-built `reaper_reaadr.dll`. macOS packages still need their native
+`.dylib` added before public release.
 
 ## Development Notes
 

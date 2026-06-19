@@ -30,6 +30,8 @@ cd ..
 packaging/create-release-packages.sh
 ```
 
+`make dist` uses `extension/Makefile`.
+
 This creates:
 
 ```text
@@ -47,16 +49,14 @@ native extension binary. Each release package needs the correct binary:
 - macOS: `reaper_reaadr*.dylib`
 - Windows: `reaper_reaadr*.dll`
 
-The current Linux build only creates the Linux `.so`. Windows and macOS
-packages can be assembled with these installer scripts, but they will not show
-the top-level ReaADR Tools menu until platform-native binaries are built and
-included.
+The current Makefile only creates the Linux `.so`. Windows packages need
+the MSVC-built `reaper_reaadr.dll`, and macOS packages need a platform-native
+`.dylib`, before they will show the top-level ReaADR Tools menu.
 
 ## Building The Windows DLL With MSVC
 
-Recommended build environment: Microsoft Visual Studio Build Tools on Windows.
-The REAPER SDK warns that Windows plug-ins need the MSVC-compatible C++ ABI, so
-prefer this MSVC build over MinGW/MSYS2 for the release DLL.
+Supported build environment: Microsoft Visual Studio Build Tools on Windows.
+Windows builds require MSVC.
 
 1. Install Visual Studio Build Tools with the `Desktop development with C++`
    workload.
@@ -87,57 +87,9 @@ Install `dist\UserPlugins\reaper_reaadr.dll` directly into:
 
 Then restart REAPER.
 
-## Alternative MinGW Build
-
-MSYS2 UCRT64 can compile a DLL, but that DLL may not load in Windows REAPER on
-all systems. Use this only for diagnostics or if the MSVC build is unavailable.
-
-1. Install MSYS2 from <https://www.msys2.org/>.
-2. Open the `MSYS2 UCRT64` terminal, not the plain MSYS terminal.
-3. Install the build tools:
+After building the MSVC DLL, rebuild the release packages:
 
 ```sh
-pacman -Syu
-pacman -S --needed git make mingw-w64-ucrt-x86_64-gcc zip
-```
-
-4. Clone or copy this repo onto the Windows machine.
-5. Make sure the vendor dependencies exist:
-
-```sh
-git clone https://github.com/justinfrankel/reaper-sdk vendor/reaper-sdk
-git clone https://github.com/justinfrankel/WDL vendor/WDL
-```
-
-If the repo already includes `vendor/reaper-sdk` and `vendor/WDL`, skip this
-step.
-
-6. Build the DLL:
-
-```sh
-cd extension
-make -f Makefile.windows dist
-```
-
-Expected output:
-
-```text
-dist/UserPlugins/reaper_reaadr.dll
-```
-
-Verify the DLL exports REAPER's real entrypoint name:
-
-```sh
-objdump -p ../dist/UserPlugins/reaper_reaadr.dll | grep ReaperPluginEntry
-```
-
-`REAPER_PLUGIN_ENTRYPOINT` is a C/C++ macro name. The symbol REAPER needs to
-see in the compiled DLL is `ReaperPluginEntry`.
-
-7. Rebuild the release packages:
-
-```sh
-cd ..
 packaging/create-release-packages.sh
 ```
 

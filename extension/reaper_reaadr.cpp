@@ -279,17 +279,17 @@ bool detect_dialogue_segments(double threshold_db,
 
   const int safe_sample_rate = sample_rate > 0 ? sample_rate : 12000;
   const int channels = 1;
-  const int block_samples = std::max(64, static_cast<int>(safe_sample_rate * 0.025 + 0.5));
+  const int block_samples = (std::max)(64, static_cast<int>(safe_sample_rate * 0.025 + 0.5));
   const double block_duration = static_cast<double>(block_samples) / static_cast<double>(safe_sample_rate);
   const double threshold = std::pow(10.0, threshold_db / 20.0);
-  const double min_speech = std::max(0.0, min_speech_seconds);
-  const double min_silence = std::max(0.0, min_silence_seconds);
-  const double pad = std::max(0.0, pad_seconds);
+  const double min_speech = (std::max)(0.0, min_speech_seconds);
+  const double min_silence = (std::max)(0.0, min_silence_seconds);
+  const double pad = (std::max)(0.0, pad_seconds);
   const double item_position = GetMediaItemInfo_Value(item, "D_POSITION");
-  const double item_length = std::max(0.0, GetMediaItemInfo_Value(item, "D_LENGTH"));
+  const double item_length = (std::max)(0.0, GetMediaItemInfo_Value(item, "D_LENGTH"));
   const double item_end = item_position + item_length;
   const double start_time = GetAudioAccessorStartTime(accessor);
-  const double end_time = std::min(GetAudioAccessorEndTime(accessor), start_time + item_length);
+  const double end_time = (std::min)(GetAudioAccessorEndTime(accessor), start_time + item_length);
 
   if (end_time <= start_time) {
     DestroyAudioAccessor(accessor);
@@ -304,14 +304,14 @@ bool detect_dialogue_segments(double threshold_db,
   double t = start_time;
 
   auto timeline_time = [item_position, start_time](double accessor_time) {
-    return item_position + std::max(0.0, accessor_time - start_time);
+    return item_position + (std::max)(0.0, accessor_time - start_time);
   };
 
   auto flush_segment = [&]() {
     if (active_start >= 0.0 && last_loud_end >= 0.0 && (last_loud_end - active_start) >= min_speech) {
       Segment segment;
-      segment.start_time = std::max(item_position, timeline_time(active_start - pad));
-      segment.end_time = std::min(item_end, timeline_time(last_loud_end + pad));
+      segment.start_time = (std::max)(item_position, timeline_time(active_start - pad));
+      segment.end_time = (std::min)(item_end, timeline_time(last_loud_end + pad));
       if (segment.end_time > segment.start_time) {
         segments.push_back(segment);
       }
@@ -322,7 +322,7 @@ bool detect_dialogue_segments(double threshold_db,
 
   while (t < end_time) {
     std::fill(buffer.begin(), buffer.end(), 0.0);
-    const double block_end = std::min(end_time, t + block_duration);
+    const double block_end = (std::min)(end_time, t + block_duration);
     const int got = GetAudioAccessorSamples(accessor, safe_sample_rate, channels, t, block_samples, buffer.data());
     bool loud = false;
 
