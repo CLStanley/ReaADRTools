@@ -125,20 +125,24 @@ App.help_topics = {
     title = "Import Cue Sheet",
     keywords = "import script csv tsv column mapping spreadsheet metadata build session",
     body = table.concat({
-      "Import Cue Sheet accepts CSV, TSV/TAB, Google Sheets CSV/TSV exports, and plain-text delimited tables such as .txt files.",
+      "Import Cue Sheet accepts CSV, TSV/TAB, Excel .xlsx files, Google Sheets CSV/TSV exports, and plain-text delimited tables such as .txt files.",
       "",
       "Required ADR fields are cue number, character, start time, and dialogue. End time is recommended. Unknown columns are preserved as cue metadata when possible.",
       "",
       "Use the column mapping step when a studio sheet uses names like Role, In, Out, or Line instead of ReaADR's default names.",
       "",
-      "Future import targets: Excel (.xlsx).",
+      "For best .xlsx results, use a simple first worksheet with one header row and cue data below it.",
     }, "\n"),
   },
   cues = {
     title = "Cue Management",
     keywords = "cue manager status navigation next previous jump character filter selected cue",
     body = table.concat({
-      "Cue Manager lets you browse cues, jump to cues, set cue status, refresh the overlay, and open the cue information panel.",
+      "Cue Manager lets you browse cues, jump to cues, edit cue fields inline, refresh the session, refresh the overlay, and open the cue information panel.",
+      "",
+      "Double-click status or cue type cells to choose values from inline dropdowns. Other editable cells use inline text editing.",
+      "",
+      "Refresh Session is the unified refresh path. It syncs moved regions back to the cached session, rebuilds cue audio and lanes, reapplies character filters, and refreshes overlay state.",
       "",
       "Cue status colors are used by the overlay and generated regions. Character Filter only mutes or unmutes character tracks, so regions stay intact for navigation.",
     }, "\n"),
@@ -982,8 +986,11 @@ function App.open_manager(initial_tab, instance_slot)
       local remember_rect = { x = 24, y = quick_y + 258, w = 340, h = 26 }
       local hover_preview = ReaADR.cue_hover_preview_enabled()
       local hover_preview_rect = { x = 24, y = quick_y + 294, w = 340, h = 26 }
+      local cue_manager_dock = ReaADR.cue_manager_auto_dock_enabled and ReaADR.cue_manager_auto_dock_enabled()
+      local cue_manager_dock_rect = { x = 24, y = quick_y + 330, w = 420, h = 26 }
       special_click[#special_click + 1] = { rect = remember_rect, kind = "remember_layout" }
       special_click[#special_click + 1] = { rect = hover_preview_rect, kind = "hover_preview" }
+      special_click[#special_click + 1] = { rect = cue_manager_dock_rect, kind = "cue_manager_dock" }
       ReaADR.set_gfx_color(theme.panel_alt)
       gfx.rect(remember_rect.x, remember_rect.y, 18, 18, false)
       if remember_layout then
@@ -1006,6 +1013,17 @@ function App.open_manager(initial_tab, instance_slot)
       gfx.x = hover_preview_rect.x + 30
       gfx.y = hover_preview_rect.y - 1
       gfx.drawstr("Show cue text preview on hover")
+      ReaADR.set_gfx_color(theme.panel_alt)
+      gfx.rect(cue_manager_dock_rect.x, cue_manager_dock_rect.y, 18, 18, false)
+      if cue_manager_dock then
+        ReaADR.set_gfx_color(theme.accent_gold)
+        gfx.rect(cue_manager_dock_rect.x + 4, cue_manager_dock_rect.y + 4, 10, 10, true)
+      end
+      gfx.setfont(1, "Arial", 14)
+      ReaADR.set_gfx_color(theme.text)
+      gfx.x = cue_manager_dock_rect.x + 30
+      gfx.y = cue_manager_dock_rect.y - 1
+      gfx.drawstr("Open Cue Manager docked")
     elseif state.tab == "overlay" then
       local settings = state.overlay_settings
       local left = 24
@@ -1215,6 +1233,10 @@ function App.open_manager(initial_tab, instance_slot)
             ReaADR.set_window_layout_enabled(not ReaADR.window_layout_enabled())
           elseif entry.kind == "hover_preview" then
             ReaADR.set_cue_hover_preview_enabled(not ReaADR.cue_hover_preview_enabled())
+          elseif entry.kind == "cue_manager_dock" then
+            if ReaADR.set_cue_manager_auto_dock_enabled then
+              ReaADR.set_cue_manager_auto_dock_enabled(not ReaADR.cue_manager_auto_dock_enabled())
+            end
           elseif entry.kind == "profile" then
             apply_overlay_profile(state.overlay_settings, entry.profile)
             state.overlay_dirty = true

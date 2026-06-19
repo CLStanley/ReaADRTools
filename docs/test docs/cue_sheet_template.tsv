@@ -1,0 +1,5 @@
+cue_id	character	start	end	line	direction	cue_type	status	notes
+001	Alex	00:01:12:00	00:01:15:10	We need to move now.	Strong	Dialogue	Not Recorded	Urgent delivery
+002	Sam	00:01:18.500	00:01:21.000	Copy that.	Whisper	Reaction	In Progress	
+003	Crowd	00:01:22:12	00:01:24:00	Run! Get away from the tower!	Panicked group	Walla	Needs Review	Tests group/crowd cue type
+004	Alex	00:01:24:12	00:01:26:00	I am ending this now!	Determined	Effort	Approved	Tests status import

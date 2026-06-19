@@ -29,6 +29,11 @@ Responsibilities:
 - Add the top-level `ReaADR Tools` menu.
 - Unregister older standalone public actions.
 - Launch Lua entry-point scripts.
+- Provide stable native helper APIs where Lua/ReaScript is a poor fit:
+  - `ReaADR_DetectDialogueSegments` reads selected media through REAPER audio
+    accessors and returns timeline segment pairs.
+  - `ReaADR_ReadXlsxAsTsv` extracts the first worksheet from `.xlsx` files and
+    returns tab-delimited text for the Lua import pipeline.
 
 The extension should stay thin. Avoid moving workflow logic into C++ unless a
 measured performance or integration limitation requires it.
@@ -63,7 +68,9 @@ File: `scripts/ReaADR_Core.lua`
 
 Responsibilities:
 
-- CSV/TSV parsing and column mapping.
+- CSV/TSV parsing and column mapping. `.xlsx` imports use the native
+  `ReaADR_ReadXlsxAsTsv` helper, then use the same Lua parsing/mapping path as
+  other delimited files.
 - Cue cache serialization in project extstate.
 - Timecode parsing/formatting.
 - Project-scoped UI state such as window geometry/layout preferences.
@@ -136,7 +143,7 @@ Generated cue audio items use media item extstate:
 
 ## Import Flow
 
-1. User selects CSV/TSV.
+1. User selects CSV, TSV, or another plain text comma/tab-delimited table.
 2. Parser detects delimiter and headers.
 3. Auto column mapping is attempted.
 4. User maps fields manually if required.
@@ -181,7 +188,8 @@ The shared cue-management behaviors remain in `ReaADR_Core.lua`:
 - session cue loading and filtering
 - selected cue tracking
 - cue add/update/remove operations
-- region sync back into cached cues
+- Refresh Session, which syncs generated region positions back into cached cues
+  and rebuilds cue audio, lanes, filters, and overlay state
 - overlay refresh and character lane rebuilds
 
 This keeps the migration to a richer UI layer from duplicating core workflow
@@ -200,6 +208,62 @@ Batch project edits inside:
 
 Avoid adding new standalone public actions unless there is a strong workflow
 reason. Prefer adding manager controls.
+
+## Reliability And Safety
+
+The cached session model is the source of truth for imported/generated ADR
+cues. REAPER tracks, cue items, regions, ruler lanes, and video overlays are
+rendered from that model and are safe to rebuild.
+
+Risky session-changing operations should create a session snapshot before
+writing cache state or deleting generated project artifacts. Current protected
+paths include:
+
+- Script import/update
+- Dialogue detection session build
+- Cue Manager add/remove cue flows
+- Character-specific cue clearing
+
+`ReaADR.create_session_snapshot()` stores the last cache/registry snapshot in
+project extstate. `ReaADR.restore_session_snapshot()` restores it and bumps the
+session revision so open windows re-query state. `ReaADR.protected_session_operation()`
+is available for new workflows that need snapshot/restore and structured
+logging around a callback.
+
+Destructive operations must remain scoped and confirmed. They should delete
+only ReaADR-owned generated objects, identified by names or extstate such as
+`ReaADR.role` and `ReaADR.cue_key`.
+
+Import update mode builds the replacement session before removing stale
+generated artifacts. Stale cleanup only targets old selected-character cues
+that no longer exist in the replacement import, which avoids deleting newly
+rebuilt cue items with matching cue IDs.
+
+## Supported File Types
+
+Current imports:
+
+- CSV
+- TSV
+- Excel `.xlsx`
+- Google Sheets CSV/TSV exports
+- Plain text comma/tab-delimited tables, including `.txt`
+
+Import test fixtures live in `docs/test docs/`.
+
+Future imports:
+
+- Additional workbook sheet selection and mapping presets by studio template.
+
+Current exports:
+
+- CSV
+- Full session JSON
+- EDL (CMX 3600)
+
+Future export investigations:
+
+- AAF
 
 ## UI Direction
 

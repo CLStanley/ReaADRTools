@@ -271,8 +271,8 @@ end
 local ADR_FIELD_ALIASES = {
   cue_id = { "cue_id", "cue_number", "cue_num", "cue_no", "cue", "id", "number" },
   character = { "character", "char", "actor", "speaker", "performer", "talent", "role" },
-  start = { "start", "start_time", "timecode", "tc", "in_time", "in" },
-  ["end"] = { "end", "end_time", "out_time", "out" },
+  start = { "start", "start_time", "start_timecode", "timecode", "tc", "in_time", "in_timecode", "in" },
+  ["end"] = { "end", "end_time", "end_timecode", "out_time", "out_timecode", "out" },
   line = { "line", "dialogue", "dialog", "text", "script" },
   notes = { "notes", "note" },
   direction = { "direction", "performance_direction", "perf_direction" },
@@ -608,6 +608,34 @@ function ReaADR.log(level, operation, message, context)
   reaper.ShowConsoleMsg(("[ReaADR %s] %s | %s: %s%s\n"):format(
     timestamp, level, operation, tostring(message or ""), ctx_str
   ))
+end
+
+function ReaADR.protected_session_operation(operation, label, callback)
+  operation = tostring(operation or "OPERATION"):upper()
+  label = tostring(label or operation)
+  local snapshot = ReaADR.create_session_snapshot and ReaADR.create_session_snapshot(label) or nil
+  ReaADR.log("INFO", operation, "Starting protected session operation", { detail = label })
+
+  local ok, result, err = pcall(callback, snapshot)
+  if not ok then
+    local message = tostring(result)
+    if snapshot and ReaADR.restore_session_snapshot then
+      ReaADR.restore_session_snapshot(snapshot, label .. " failed: " .. message)
+    end
+    ReaADR.log("ERROR", operation, "Protected operation failed", { detail = message })
+    return nil, message
+  end
+
+  if not result and err then
+    if snapshot and ReaADR.restore_session_snapshot then
+      ReaADR.restore_session_snapshot(snapshot, label .. " failed: " .. tostring(err))
+    end
+    ReaADR.log("ERROR", operation, "Protected operation failed", { detail = tostring(err) })
+    return nil, err
+  end
+
+  ReaADR.log("INFO", operation, "Protected session operation completed", { detail = label })
+  return result, err
 end
 
 function ReaADR.set_cue_info_launch_options(options)
@@ -989,7 +1017,38 @@ local function parse_delimited_content(content, path)
   }
 end
 
+local function path_extension(path)
+  return tostring(path or ""):lower():match("%.([^%.\\/]+)$") or ""
+end
+
+local function inspect_xlsx_native(path)
+  local native_fn = reaper and reaper.ReaADR_ReadXlsxAsTsv
+  if type(native_fn) ~= "function" then
+    return nil, "XLSX import requires the current ReaADR native extension. Reinstall or rebuild the extension, then restart REAPER."
+  end
+
+  local ok_call, ok_read, tsv_text, error_text = pcall(native_fn, path, "", 16 * 1024 * 1024, "", 4096)
+  if not ok_call then
+    return nil, tostring(ok_read or "Native XLSX reader failed.")
+  end
+  if not ok_read then
+    return nil, tostring(error_text or "Native XLSX reader failed.")
+  end
+  return parse_delimited_content(tsv_text or "", path .. ".tsv")
+end
+
 function ReaADR.inspect_script_file(path)
+  if path_extension(path) == "xlsx" then
+    local native_result, native_error = inspect_xlsx_native(path)
+    if native_result then
+      native_result.delimiter_name = "XLSX"
+      return native_result
+    end
+    ReaADR.log("ERROR", "IMPORT", "Native XLSX import failed.", {
+      detail = native_error,
+    })
+    return nil, native_error
+  end
   local content, read_error = read_file(path)
   if not content then
     return nil, read_error
@@ -1124,11 +1183,17 @@ local function strip_extension(name)
 end
 
 local function simple_hash(text)
+  local bitlib = bit32 or bit
   local hash = 2166136261
   text = tostring(text or "")
   for i = 1, #text do
-    hash = (hash ~ string.byte(text, i)) & 0xFFFFFFFF
-    hash = (hash * 16777619) & 0xFFFFFFFF
+    if bitlib then
+      hash = bitlib.band(bitlib.bxor(hash, string.byte(text, i)), 0xFFFFFFFF)
+      hash = bitlib.band(hash * 16777619, 0xFFFFFFFF)
+    else
+      hash = (hash + string.byte(text, i)) % 0x100000000
+      hash = (hash * 16777619) % 0x100000000
+    end
   end
   return ("%08x"):format(hash)
 end
@@ -2790,6 +2855,10 @@ function ReaADR.remove_project_artifacts_for_cues(target_cues)
   local removed_items = 0
   local keys = {}
 
+  ReaADR.log("INFO", "DELETE", "Removing generated artifacts for cue set", { count = #(target_cues or {}) })
+  reaper.Undo_BeginBlock()
+  reaper.PreventUIRefresh(1)
+
   for _, cue in ipairs(target_cues or {}) do
     keys[ReaADR.cue_key(cue)] = true
     if delete_project_marker_by_name(ReaADR.region_name(cue), true) then
@@ -2809,6 +2878,10 @@ function ReaADR.remove_project_artifacts_for_cues(target_cues)
       end
     end
   end
+
+  reaper.PreventUIRefresh(-1)
+  reaper.UpdateArrange()
+  reaper.Undo_EndBlock("ReaADR: remove generated cue artifacts", -1)
 
   return {
     regions_removed = removed_regions,
@@ -2836,9 +2909,11 @@ function ReaADR.rebuild_cached_session(options)
   end
 
   if options.clear_generated_items then
+    ReaADR.log("WARN", "REBUILD", "Clearing generated cue audio items before rebuild")
     ReaADR.delete_generated_cue_audio_items()
   end
   if options.clear_generated_regions then
+    ReaADR.log("WARN", "REBUILD", "Clearing generated cue regions before rebuild")
     ReaADR.delete_generated_cue_regions()
   end
 
@@ -2861,17 +2936,20 @@ function ReaADR.refresh_session(options)
   ReaADR.log("INFO", "REFRESH", "Starting session refresh")
   reaper.Undo_BeginBlock()
 
+  local snapshot = ReaADR.create_session_snapshot("Refresh Session")
   local sync_summary, sync_err = ReaADR.sync_cached_cues_from_project_regions()
   if not sync_summary then
+    ReaADR.restore_session_snapshot(snapshot, "Refresh region sync failed: " .. tostring(sync_err))
     reaper.Undo_EndBlock("ReaADR: refresh session (failed)", -1)
     ReaADR.log("ERROR", "REFRESH", "Region sync failed: " .. tostring(sync_err))
     return nil, sync_err
   end
 
   local rebuild_summary, rebuild_err = ReaADR.rebuild_cached_session({
-    clear_generated_items = options.clear_generated_items ~= false,
+    clear_generated_items = options.clear_generated_items == true,
   })
   if not rebuild_summary then
+    ReaADR.restore_session_snapshot(snapshot, "Refresh rebuild failed: " .. tostring(rebuild_err))
     reaper.Undo_EndBlock("ReaADR: refresh session (failed)", -1)
     ReaADR.log("ERROR", "REFRESH", "Session rebuild failed: " .. tostring(rebuild_err))
     return nil, rebuild_err

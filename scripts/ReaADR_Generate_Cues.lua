@@ -47,6 +47,7 @@ if not generated_cue_path then
 end
 
 -- Step 1: cue audio items only — no character tracks, no overlay, no video track required.
+local snapshot = ReaADR.create_session_snapshot("Generate Cues from Markers/Regions")
 local summary, setup_error = ReaADR.setup_project(cues, {
   cue_audio_path         = cue_audio_path,
   overlay_settings       = ReaADR.load_overlay_settings(),
@@ -60,6 +61,8 @@ local summary, setup_error = ReaADR.setup_project(cues, {
 progress.close()
 
 if not summary then
+  ReaADR.restore_session_snapshot(snapshot, "Generate cues failed: " .. tostring(setup_error))
+  ReaADR.log("ERROR", "GENERATE", "Cue generation failed", { detail = tostring(setup_error) })
   ReaADR.message("Cue generation failed:\n\n" .. tostring(setup_error))
   return
 end

@@ -213,6 +213,7 @@ local function prompt_jump_to_cue()
 end
 
 local function add_cue_from_manager()
+  local snapshot = ReaADR.create_session_snapshot("Add Cue From Cue Manager")
   local position = ReaADR.current_timeline_position()
   local next_id = tostring(#cues + 1)
   local defaults = table.concat({
@@ -247,7 +248,10 @@ local function add_cue_from_manager()
 
   local summary, err = ReaADR.rebuild_cached_session({})
   if not summary then
+    ReaADR.restore_session_snapshot(snapshot, "Add cue rebuild failed: " .. tostring(err))
     ReaADR.message("Cue was added to the session cache, but project rebuild failed:\n\n" .. tostring(err))
+    refresh_cues()
+    return
   end
   refresh_cues()
   local index = cue_index_by_key(ReaADR.cue_key(cue))
@@ -274,19 +278,21 @@ local function remove_selected_cue()
     return
   end
 
+  local snapshot = ReaADR.create_session_snapshot("Remove Cue From Cue Manager")
   local removed, err = ReaADR.remove_cached_cue(cue, { select_index = state.selected, renumber = true })
   if not removed then
     ReaADR.message("Cue remove failed:\n\n" .. tostring(err))
     return
   end
 
-  local summary, rebuild_err = ReaADR.rebuild_cached_session({
-    clear_generated_items = true,
-    clear_generated_regions = true,
-  })
+  local summary, rebuild_err = ReaADR.rebuild_cached_session({})
   if not summary then
+    ReaADR.restore_session_snapshot(snapshot, "Remove cue rebuild failed: " .. tostring(rebuild_err))
     ReaADR.message("Cue was removed from the session cache, but project rebuild failed:\n\n" .. tostring(rebuild_err))
+    refresh_cues()
+    return
   end
+  ReaADR.remove_project_artifacts_for_cues({ removed.removed })
 
   refresh_cues()
   state.selected = math.min(state.selected, math.max(1, #cues))

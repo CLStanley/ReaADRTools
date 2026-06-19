@@ -19,8 +19,14 @@ If you enable `Open Manager > Preferences > Remember ReaADR window layout per pr
 ReaADR saves the size and placement of its utility windows in the current
 project so they reopen where you left them.
 
-In the overlay settings, most informational text can be switched between white
-and yellow while cue-type and status colors stay specialized.
+If your desktop environment makes manual docking difficult, enable
+`Open Manager > Preferences > Open Cue Manager docked`. This opens Cue Manager
+with the dock-capable fallback window and asks REAPER to place it in a docker
+programmatically.
+
+In the overlay settings, informational text can be switched between white and
+yellow. Cue status keeps its status color, while cue type and character labels
+use the normal overlay text color.
 
 ## Recommended REAPER Setup
 
@@ -45,10 +51,13 @@ pre-roll controls actual recording/playback pre-roll.
 Use `ReaADR Tools > Open Manager > Import > Import Cue Sheet`. By default,
 `Quick Action 1` also runs Import Cue Sheet.
 
-Supported text formats:
+Supported import formats:
 
 - CSV
 - TSV
+- Excel `.xlsx`
+- Google Sheets CSV/TSV exports
+- Plain text delimited tables using comma or tab separators
 
 Columns can appear in any order. ReaADR detects common headers such as:
 
@@ -64,6 +73,13 @@ default.
 
 Before modifying the project, ReaADR shows an import preview with cue counts,
 characters, blank dialogue, metadata fields, and overlap splits.
+
+For best `.xlsx` imports, use a simple first worksheet with one header row and
+cue data below it. Formulas should be saved with calculated values by Excel,
+LibreOffice, or Google Sheets before import.
+
+Sample import files for each supported format are available in
+`docs/test docs/`.
 
 ## Detecting Dialogue From Media
 
@@ -112,8 +128,9 @@ Useful tools:
 - Open Cue Manager
 
 The Cue Manager shows cue rows with cue ID, character, SMPTE start/end, status,
-and dialogue. ReaADR now prefers a ReaImGui-based Cue Manager when ReaImGui is
-installed, and falls back to the legacy REAPER `gfx` version if it is not.
+cue type, dialogue, and notes. ReaADR now prefers a ReaImGui-based Cue Manager
+when ReaImGui is installed, and falls back to the legacy REAPER `gfx` version
+if it is not.
 Select a row to jump to the start of its region. Use the Cue Manager buttons to
 jump by cue number, move previous/next, add cues at the current timeline
 position, remove cues, open Character Filter, refresh overlays, or open the
@@ -121,21 +138,23 @@ information panel for the selected cue. If Character Filter is applied while
 Cue Manager is open, Cue Manager updates its visible cue list to show only
 active character targets.
 
-Double-click a cell in Cue Manager to edit that field inline. Press `Enter` or
-click away to commit the change back to the cached session, generated region,
-and overlay. This is intended to make Cue Manager the main script-building
-workspace instead of forcing every small edit through a separate panel. Cue
-status is not edited inline; use the status dropdown for the selected cue.
+Double-click a cell in Cue Manager to edit that field inline. Status and cue
+type open inline dropdowns. Text and time fields become inline text editors.
+Press `Enter` or click away to commit text changes back to the cached session,
+generated region, and overlay. This is intended to make Cue Manager the main
+script-building workspace instead of forcing every small edit through a
+separate panel.
 
 Cue Manager includes a Notes column. If dialogue or notes text is too long for
 the table cell, hover the cell to preview the full text. In the legacy `gfx`
 Cue Manager, the hover preview now wraps and expands near the cursor, and it
 can be disabled from `Open Manager > Preferences`.
 
-If you manually move or resize generated regions in REAPER, press `Sync Regions`
-in Cue Manager. This applies the current region positions back to ReaADR's cue
-cache, rebuilds cue beep items, reapplies overlap lane logic, updates ruler
-lanes such as `ALEX #2`, and refreshes the overlay.
+If you manually move or resize generated regions in REAPER, press `Refresh
+Session` in Cue Manager. This applies the current region positions back to
+ReaADR's cue cache, rebuilds cue beep items, reapplies character filters,
+reapplies overlap lane logic, updates ruler lanes such as `ALEX #2`, refreshes
+open ADR windows through session state, and refreshes the overlay.
 
 If you remove a cue from Cue Manager, ReaADR deletes the cached cue, rebuilds
 generated regions and cue audio, and renumbers the remaining cues in order.
@@ -196,16 +215,22 @@ they stay readable on screen instead of running off the frame.
 Use `Open Manager > Reports > Export Cue Sheet CSV` for a cue sheet export, or
 assign `Export Reports` to a quick-action slot for the multi-report exporter.
 
-Available reports:
+Available reports and exports:
 
 - Cue sheet CSV
 - Recording report CSV
 - Timing report CSV
 - Session metadata CSV
+- Full session JSON
+- EDL (CMX 3600)
 
 Recording reports include cue status and take counts. Timing reports include
 SMPTE start/end and cue length. Metadata reports preserve extra imported
 studio columns.
+
+Future export investigations:
+
+- AAF
 
 ## Session Maintenance
 
@@ -215,10 +240,17 @@ Available tools:
 
 - Validate Session
 - Rebuild Session From Cache
-- Clean Generated Cue Items
+- Clear Character Cues
+- Toggle QA Mode
 
 These tools help recover from manual REAPER edits without reimporting the
 original script.
+
+ReaADR keeps a project-local snapshot of the last cue cache before risky
+session-changing operations such as imports, detected-dialogue builds, and Cue
+Manager add/remove flows. If one of those workflows fails during rebuild,
+ReaADR restores the cached session state and reports the error instead of
+silently leaving the session cache half-updated.
 
 ## Help And Hints
 

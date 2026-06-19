@@ -85,6 +85,8 @@ local function build_and_import_cues(raw_segments)
     return
   end
 
+  local snapshot = ReaADR.create_session_snapshot("Detect Dialogue From Selected Media")
+  ReaADR.log("INFO", "DETECT", "Saving detected dialogue cues", { count = #cues })
   ReaADR.save_last_import_cues(cues)
 
   local progress = ReaADR.create_progress_window("Building Detected ADR Cues")
@@ -92,6 +94,8 @@ local function build_and_import_cues(raw_segments)
   progress.close()
 
   if not summary then
+    ReaADR.restore_session_snapshot(snapshot, "Detected dialogue setup failed: " .. tostring(setup_error))
+    ReaADR.log("ERROR", "DETECT", "Detected cue setup failed", { detail = tostring(setup_error) })
     ReaADR.message("Detected cues were cached, but project setup failed:\n\n" .. tostring(setup_error))
     return
   end

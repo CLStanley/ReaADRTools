@@ -57,6 +57,8 @@ dist: all
 	cp ../scripts/ReaADR_Set_Cue_Status.lua "$(DIST_DIR)/ReaADRTools/scripts/"
 	cp ../scripts/ReaADR_Character_Filter.lua "$(DIST_DIR)/ReaADRTools/scripts/"
 	cp ../scripts/ReaADR_Cue_Manager.lua "$(DIST_DIR)/ReaADRTools/scripts/"
+	cp ../scripts/ReaADR_Cue_Manager_Gfx.lua "$(DIST_DIR)/ReaADRTools/scripts/"
+	cp ../scripts/ReaADR_Cue_Manager_ImGui.lua "$(DIST_DIR)/ReaADRTools/scripts/"
 	cp ../scripts/ReaADR_Cue_Info_Panel.lua "$(DIST_DIR)/ReaADRTools/scripts/"
 	cp ../scripts/ReaADR_Generate_Cues.lua "$(DIST_DIR)/ReaADRTools/scripts/"
 	cp ../scripts/ReaADR_Clean_Generated_Cues.lua "$(DIST_DIR)/ReaADRTools/scripts/"

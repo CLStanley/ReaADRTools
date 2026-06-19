@@ -198,6 +198,22 @@ return function(ReaADR, deps)
     reaper.SetProjExtState(project(), ReaADR.EXT_NAMESPACE, "ui.cue_hover_preview", enabled and "1" or "0")
   end
 
+  function ReaADR.cue_manager_auto_dock_enabled()
+    local _, value = reaper.GetProjExtState(project(), ReaADR.EXT_NAMESPACE, "ui.cue_manager_auto_dock")
+    return value == "1" or value == "true" or value == "yes"
+  end
+
+  function ReaADR.set_cue_manager_auto_dock_enabled(enabled)
+    reaper.SetProjExtState(project(), ReaADR.EXT_NAMESPACE, "ui.cue_manager_auto_dock", enabled and "1" or "0")
+    if enabled then
+      ReaADR.save_window_geometry("cue_manager", {
+        dock = 1,
+        width = 980,
+        height = 700,
+      })
+    end
+  end
+
   function ReaADR.load_window_state(window_id, defaults)
     defaults = defaults or {}
     local state = {
@@ -222,6 +238,9 @@ return function(ReaADR, deps)
     state.dock = tonumber(dock) or state.dock
     state.x = tonumber(x) or state.x
     state.y = tonumber(y) or state.y
+    if defaults.force_dock and state.dock == 0 then
+      state.dock = tonumber(defaults.dock) or 1
+    end
     return state
   end
 
@@ -301,7 +320,7 @@ return function(ReaADR, deps)
     end
   end
 
-  function ReaADR.save_last_import_cues(cues)
+  local function serialize_cue_cache(cues)
     local lines = {}
     for _, cue in ipairs(cues or {}) do
       local fields = {}
@@ -311,10 +330,55 @@ return function(ReaADR, deps)
       end
       lines[#lines + 1] = table.concat(fields, "\t")
     end
+    return table.concat(lines, "\n")
+  end
 
-    reaper.SetProjExtState(project(), ReaADR.EXT_NAMESPACE, "last_import_cues_v1", table.concat(lines, "\n"))
+  function ReaADR.save_last_import_cues(cues)
+    reaper.SetProjExtState(project(), ReaADR.EXT_NAMESPACE, "last_import_cues_v1", serialize_cue_cache(cues))
     ReaADR.rebuild_script_registry(cues or {})
     ReaADR.bump_session_revision()
+  end
+
+  function ReaADR.create_session_snapshot(label)
+    label = tostring(label or "operation")
+    local timestamp = os.date("!%Y-%m-%dT%H:%M:%SZ")
+    local _, cue_blob = reaper.GetProjExtState(project(), ReaADR.EXT_NAMESPACE, "last_import_cues_v1")
+    local _, registry_blob = reaper.GetProjExtState(project(), ReaADR.EXT_NAMESPACE, "script_registry_v1")
+    local _, revision = reaper.GetProjExtState(project(), ReaADR.EXT_NAMESPACE, "session_revision")
+    local snapshot = {
+      label = label,
+      timestamp = timestamp,
+      cue_blob = cue_blob or "",
+      registry_blob = registry_blob or "",
+      revision = revision or "",
+    }
+    reaper.SetProjExtState(project(), ReaADR.EXT_NAMESPACE, "session_snapshot_last_label", label)
+    reaper.SetProjExtState(project(), ReaADR.EXT_NAMESPACE, "session_snapshot_last_timestamp", timestamp)
+    reaper.SetProjExtState(project(), ReaADR.EXT_NAMESPACE, "session_snapshot_last_cues_v1", snapshot.cue_blob)
+    reaper.SetProjExtState(project(), ReaADR.EXT_NAMESPACE, "session_snapshot_last_registry_v1", snapshot.registry_blob)
+    reaper.SetProjExtState(project(), ReaADR.EXT_NAMESPACE, "session_snapshot_last_revision", snapshot.revision)
+    if ReaADR.log then
+      ReaADR.log("INFO", "SNAPSHOT", "Session snapshot created", { detail = label })
+    end
+    return snapshot
+  end
+
+  function ReaADR.restore_session_snapshot(snapshot, reason)
+    if not snapshot then
+      return false, "No session snapshot is available."
+    end
+    reaper.SetProjExtState(project(), ReaADR.EXT_NAMESPACE, "last_import_cues_v1", snapshot.cue_blob or "")
+    reaper.SetProjExtState(project(), ReaADR.EXT_NAMESPACE, "script_registry_v1", snapshot.registry_blob or "")
+    if snapshot.revision and snapshot.revision ~= "" then
+      reaper.SetProjExtState(project(), ReaADR.EXT_NAMESPACE, "session_revision", snapshot.revision)
+    end
+    ReaADR.bump_session_revision()
+    if ReaADR.log then
+      ReaADR.log("WARN", "RESTORE", "Session snapshot restored", {
+        detail = tostring(reason or snapshot.label or "unknown"),
+      })
+    end
+    return true
   end
 
   function ReaADR.load_last_import_cues()

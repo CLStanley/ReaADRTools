@@ -136,8 +136,13 @@ whole-ruler-lane disable switch.
 
 ## Import Script
 
-`Import Script` accepts comma-delimited CSV and tab-delimited TSV files. The
-importer reads column headers, so columns can appear in any order.
+`Import Script` accepts comma-delimited CSV, tab-delimited TSV/TAB, Excel
+`.xlsx`, Google Sheets CSV/TSV exports, and plain text comma/tab-delimited
+tables such as `.txt` files. The importer reads column headers, so columns can
+appear in any order.
+
+Test import documents for CSV, TSV, TXT, and XLSX are stored in
+`docs/test docs/`.
 
 The project must already contain a video item. ReaADR uses the existing video
 track as the overlay target instead of creating an empty video track.
@@ -202,6 +207,8 @@ Only imported metadata fields with values are shown.
 - Session metadata CSV
 - Full session JSON
 - EDL (CMX 3600)
+
+AAF export remains a future investigation.
 
 Recording reports include cue status and a take count. Timing reports include
 SMPTE start/end and cue length. Session metadata reports preserve extra columns

@@ -257,7 +257,28 @@ local function apply_import_mode(existing_cues, imported_cues, script_id, select
   return final_cues
 end
 
-local ok, path = reaper.GetUserFileNameForRead("", "Import ADR script", "csv;tsv;tab;txt")
+local function stale_update_cues(existing_script_cues, imported_cues, selected_characters)
+  local selected_set = {}
+  for _, character in ipairs(selected_characters or {}) do
+    selected_set[character] = true
+  end
+
+  local imported_keys = {}
+  for _, cue in ipairs(imported_cues or {}) do
+    imported_keys[tostring(cue.character or "") .. "\t" .. ReaADR.cue_key(cue)] = true
+  end
+
+  local stale = {}
+  for _, cue in ipairs(existing_script_cues or {}) do
+    local character = tostring(cue.character or "")
+    if selected_set[character] and not imported_keys[character .. "\t" .. ReaADR.cue_key(cue)] then
+      stale[#stale + 1] = cue
+    end
+  end
+  return stale
+end
+
+local ok, path = reaper.GetUserFileNameForRead("", "Import ADR script", "csv;tsv;tab;txt;xlsx")
 if not ok or not path or path == "" then
   return
 end
@@ -365,6 +386,13 @@ if proceed ~= 6 then
   return
 end
 
+local snapshot = ReaADR.create_session_snapshot("Import Cue Sheet: " .. tostring(script_info.script_id))
+ReaADR.log("INFO", "IMPORT", "Starting script import", {
+  script_id = script_info.script_id,
+  count = #imported_cues,
+  detail = ({ all = "all", selected = "selected", update = "update" })[plan.mode],
+})
+
 overlay_settings.preroll_seconds = import_preroll_seconds
 ReaADR.save_overlay_settings(overlay_settings)
 
@@ -378,11 +406,7 @@ end
 
 local preroll_status = ReaADR.configure_project_preroll(import_preroll_seconds)
 local cleanup_summary = nil
-if plan.mode == "update" then
-  cleanup_summary = ReaADR.remove_project_artifacts_for_cues(
-    ReaADR.filter_cues_by_characters(existing_script_cues, selected_characters)
-  )
-end
+local stale_cues = plan.mode == "update" and stale_update_cues(existing_script_cues, imported_cues, selected_characters) or {}
 local summary, setup_error = ReaADR.setup_project(final_cues, {
   cue_audio_path = cue_audio_path,
   overlay_settings = overlay_settings,
@@ -394,12 +418,30 @@ local summary, setup_error = ReaADR.setup_project(final_cues, {
 if not summary then
   progress.update("Import failed.", 1, 1)
   progress.close()
+  ReaADR.restore_session_snapshot(snapshot, "Import failed: " .. tostring(setup_error))
+  ReaADR.log("ERROR", "IMPORT", "Cue sheet import failed during project setup", {
+    script_id = script_info.script_id,
+    detail = tostring(setup_error),
+  })
   ReaADR.message("Cue sheet import failed while populating the project:\n\n" .. tostring(setup_error))
   return
 end
 
+if #stale_cues > 0 then
+  cleanup_summary = ReaADR.remove_project_artifacts_for_cues(stale_cues)
+  ReaADR.log("INFO", "IMPORT", "Removed stale cues after successful update", {
+    script_id = script_info.script_id,
+    count = #stale_cues,
+  })
+end
+
 progress.close()
 ReaADR.show_video_window()
+ReaADR.log("INFO", "IMPORT", "Script import completed", {
+  script_id = script_info.script_id,
+  count = summary.cue_count,
+  detail = table.concat(selected_characters, ", "),
+})
 
 ReaADR.message(
   ("Imported script %s.\n\nMode: %s\nScript ID: %s\nCharacters imported: %s\n\nProject cues: %d\nProject characters: %d\nTracks: %d created, %d reused\nRegions: %d created, %d updated\nOld cue markers removed: %d\nCue audio: %d created, %d updated, %d skipped\nOverlap splits: %d\nVideo overlay FX: %s\nPre-roll: %.1fs (%s)"):format(

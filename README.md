@@ -12,6 +12,7 @@ audio/video media for script-building workflows.
 ```text
 Native REAPER extension
   Registers a small ReaADR Tools menu
+  Provides native media-analysis and XLSX import helpers
   Launches Lua application entry points
 
 Lua application framework
@@ -23,6 +24,9 @@ Lua application framework
 The native extension is intentionally small. Most feature development happens
 in Lua so ADR workflows can evolve quickly without requiring compiled-plugin
 changes for every feature.
+Native code is reserved for stable REAPER integration and helpers that are
+better handled outside Lua, currently selected-media dialogue detection and
+first-worksheet `.xlsx` ingestion.
 
 ## Public Actions
 
@@ -45,8 +49,8 @@ workflow guidance.
 
 Cue Manager now prefers a ReaImGui interface when ReaImGui is installed and
 falls back to the legacy `gfx` manager otherwise. Cue editing, cue removal with
-renumbering, and overlay refresh behavior remain available through the shared
-Lua session layer.
+renumbering, inline status/type editing, Refresh Session, and overlay refresh
+behavior remain available through the shared Lua session layer.
 
 ## Documentation
 
@@ -54,6 +58,7 @@ Lua session layer.
 - [Code Architecture](docs/CODE_ARCHITECTURE.md)
 - [Extension Build Notes](docs/EXTENSION_BUILD.md)
 - [Installer Packaging](docs/PACKAGING.md)
+- [Import Test Documents](<docs/test docs/README.md>)
 
 ## Build
 
