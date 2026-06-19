@@ -11,7 +11,7 @@ end
 
 local ReaADR = dofile(script_dir() .. "/ReaADR_Core.lua")
 
-local cues = ReaADR.load_last_import_cues()
+local cues = ReaADR.load_session_cues()
 if not cues or #cues == 0 then
   ReaADR.message("No ADR session is loaded.\n\nImport a cue sheet first.")
   return

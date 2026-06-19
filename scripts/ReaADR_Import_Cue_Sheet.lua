@@ -304,7 +304,7 @@ if not cues then
   return
 end
 
-local existing_cues = ReaADR.load_last_import_cues() or {}
+local existing_cues = ReaADR.load_session_cues() or {}
 local initial_script_info = ReaADR.derive_script_identity(path, cues)
 local existing_script_cues = ReaADR.script_cues(existing_cues, initial_script_info.script_id)
 local existing_counts = ReaADR.character_counts(existing_script_cues)

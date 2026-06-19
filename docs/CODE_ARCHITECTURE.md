@@ -84,6 +84,29 @@ Responsibilities:
 
 Most shared behavior belongs here instead of inside feature scripts.
 
+## ADR Session Model
+
+The canonical project data model is stored in project extstate as
+`adr_session_model_v1`. It is a structured line-based model with these sections:
+
+- `session`: session ID and name.
+- `script`: imported script/source records.
+- `character`: character records independent of cue rows.
+- `cue`: production cue records.
+- `track`: intended REAPER track mappings.
+- `region`: intended region mappings.
+- `import`: import registry records used for duplicate/revision safety.
+- `state` and `dirty`: runtime state and dirty flags.
+
+The old cue-cache and script-registry extstate records are no longer written.
+Current test projects can be recreated, so the project now favors a clean
+single-model architecture over preserving experimental data layouts.
+
+Core rule: REAPER project state is rendered output. The ADR Session Model is the
+source of truth. General refresh renders from the session model and does not
+pull region positions from REAPER into the model. Explicit sync tools may still
+read REAPER region edits back into the model, but that is a separate user action.
+
 ## Feature Scripts
 
 Feature scripts should remain thin and call into `ReaADR_Core` or
@@ -105,14 +128,17 @@ Quick-action wrappers should stay tiny. They delegate to
 `App.run_quick_action(slot)` so users can customize what each top-menu slot
 runs without adding more public REAPER actions.
 
-## Session Data Model
+## Session Data Fields
 
-Cached cues are stored in project extstate using `last_import_cues_v1`.
+Session data is stored in project extstate using `adr_session_model_v1`.
 
 Cue fields:
 
 - `id`
 - `character`
+- `character_id`
+- `script_id`
+- `session_cue_id`
 - `start_time`
 - `end_time`
 - `line`
@@ -121,9 +147,16 @@ Cue fields:
 - `cue_type`
 - `source_line`
 - `status`
+- `region_id`
+- `track_id`
 - `metadata`
 
 `metadata` preserves unknown/studio-specific imported columns.
+
+Scripts, characters, track mappings, region mappings, import records, and
+runtime dirty flags are stored beside cues in the same session model. Avoid
+adding separate project extstate stores for ADR data unless the data is truly
+UI-only or temporary.
 
 ## Generated Object Ownership
 
@@ -149,7 +182,9 @@ Generated cue audio items use media item extstate:
 4. User maps fields manually if required.
 5. Cues are validated.
 6. User confirms import preview.
-7. Tracks, regions, cue audio, ruler lanes, cache, and overlay are built.
+7. The ADR Session Model is saved.
+8. Tracks, regions, cue audio, ruler lanes, and overlay are rendered from the
+   model.
 
 Import and marker/region cue generation require an existing video item in the
 project. `setup_project()` marks that track as `source_video` and installs the
@@ -159,8 +194,8 @@ Video Processor overlay there.
 
 `ReaADR_Detect_Dialogue.lua` analyzes the active take of the first selected
 media item using REAPER audio accessor APIs. It detects threshold-based
-speech-like regions, creates sequential editable cues, saves them to the normal
-session cache, and calls the same project setup path used by imported cue
+speech-like regions, creates sequential editable cues, saves them to the ADR
+Session Model, and calls the same project setup path used by imported cue
 sheets. The generated cues are intentionally reviewable rather than final
 transcription data.
 
@@ -211,9 +246,9 @@ reason. Prefer adding manager controls.
 
 ## Reliability And Safety
 
-The cached session model is the source of truth for imported/generated ADR
-cues. REAPER tracks, cue items, regions, ruler lanes, and video overlays are
-rendered from that model and are safe to rebuild.
+The ADR Session Model is the source of truth for imported/generated ADR cues.
+REAPER tracks, cue items, regions, ruler lanes, and video overlays are rendered
+from that model and are safe to rebuild.
 
 Risky session-changing operations should create a session snapshot before
 writing cache state or deleting generated project artifacts. Current protected

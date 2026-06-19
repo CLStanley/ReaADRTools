@@ -1,7 +1,7 @@
 -- ReaADR_Generate_Cues.lua  (Step 1 of 2)
 -- Detect existing project markers/regions and generate cue audio items on the
 -- ReaADR cue track.  Character tracks, overlay, and lane assignment are NOT
--- built here — use "Rebuild Session From Cache" (Step 2) for the full structure.
+-- built here — use "Rebuild Session From Model" (Step 2) for the full structure.
 
 local function script_dir()
   local info = debug.getinfo(1, "S").source
@@ -25,7 +25,7 @@ end
 local answer = reaper.ShowMessageBox(
   ("Generate ReaADR cue items from %d marker/region cue point(s)?\n\n" ..
    "Step 1 of 2: creates cue audio items only.\n" ..
-   "Use \xe2\x80\x9cRebuild Session From Cache\xe2\x80\x9d afterward to build\n" ..
+   "Use \xe2\x80\x9cRebuild Session From Model\xe2\x80\x9d afterward to build\n" ..
    "character tracks, overlay, and lane assignments."):format(#cues),
   "ReaADR \xe2\x80\x93 Generate Cues",
   4
@@ -70,7 +70,7 @@ end
 ReaADR.message(
   ("Step 1 complete: %d cue item(s) generated.\n\n" ..
    "Cue audio created: %d  updated: %d  skipped: %d\n\n" ..
-   "Next: use \xe2\x80\x9cRebuild Session From Cache\xe2\x80\x9d to add character tracks,\n" ..
+   "Next: use \xe2\x80\x9cRebuild Session From Model\xe2\x80\x9d to add character tracks,\n" ..
    "lane assignments, and video overlay."):format(
     summary.cue_count or 0,
     summary.cue_audio_created or 0,

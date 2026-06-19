@@ -87,10 +87,10 @@ local function build_and_import_cues(raw_segments)
 
   local snapshot = ReaADR.create_session_snapshot("Detect Dialogue From Selected Media")
   ReaADR.log("INFO", "DETECT", "Saving detected dialogue cues", { count = #cues })
-  ReaADR.save_last_import_cues(cues)
+  ReaADR.save_session_cues(cues)
 
   local progress = ReaADR.create_progress_window("Building Detected ADR Cues")
-  local summary, setup_error = ReaADR.rebuild_cached_session({ on_progress = progress.update })
+  local summary, setup_error = ReaADR.rebuild_session_from_model({ on_progress = progress.update })
   progress.close()
 
   if not summary then

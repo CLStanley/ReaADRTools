@@ -31,7 +31,7 @@ App.modules = {
     title = "Session Tools",
     actions = {
       { label = "Validate Session", app_action = "validate_session", hint = "Check cue timing, missing fields, overlap splits, and preserved metadata." },
-      { label = "Rebuild Session From Cache", app_action = "rebuild_session", hint = "Recreate tracks, regions, cue audio, and overlays from the last imported session cache." },
+      { label = "Rebuild Session From Model", app_action = "rebuild_session", hint = "Recreate tracks, regions, cue audio, and overlays from the ADR Session Model." },
       { label = "Clear Character Cues",      script = "ReaADR_Clean_Generated_Cues.lua", hint = "Select characters whose cues, regions, and cue tracks should be removed after their recording session is complete. Recording tracks and takes are preserved." },
       { label = "Toggle QA Mode", app_action = "toggle_qa_mode", hint = "Enable or disable verbose console logging for imports, refreshes, deletions, and errors. Disabled by default in production." },
     },
@@ -591,7 +591,7 @@ end
 
 function App.export_reports()
   local ReaADR = App.ReaADR
-  local cues = ReaADR.load_last_import_cues()
+  local cues = ReaADR.load_session_cues()
   if not cues then
     cues = ReaADR.navigation_cues()
   end
@@ -680,7 +680,7 @@ end
 
 function App.rebuild_session()
   local ReaADR = App.ReaADR
-  local cues, err = ReaADR.load_last_import_cues()
+  local cues, err = ReaADR.load_session_cues()
   if not cues then
     ReaADR.message("No cached ReaADR session found:\n\n" .. tostring(err))
     return false
@@ -712,7 +712,7 @@ function App.rebuild_session()
 end
 
 local function session_summary(ReaADR)
-  local cues = ReaADR.load_last_import_cues()
+  local cues = ReaADR.load_session_cues()
   if not cues then
     cues = ReaADR.navigation_cues()
   end

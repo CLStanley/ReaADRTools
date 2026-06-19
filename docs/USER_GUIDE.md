@@ -150,11 +150,14 @@ the table cell, hover the cell to preview the full text. In the legacy `gfx`
 Cue Manager, the hover preview now wraps and expands near the cursor, and it
 can be disabled from `Open Manager > Preferences`.
 
-If you manually move or resize generated regions in REAPER, press `Refresh
-Session` in Cue Manager. This applies the current region positions back to
-ReaADR's cue cache, rebuilds cue beep items, reapplies character filters,
-reapplies overlap lane logic, updates ruler lanes such as `ALEX #2`, refreshes
-open ADR windows through session state, and refreshes the overlay.
+`Refresh Session` in Cue Manager rebuilds REAPER tracks, cue items, regions,
+ruler lanes, filters, and video overlay state from ReaADR's internal ADR
+Session Model. This model is the source of truth, so refresh is safe to rerun
+without stacking duplicate project objects.
+
+If you intentionally move or resize generated regions directly in REAPER, use a
+dedicated sync/update workflow before refreshing. General refresh no longer
+treats REAPER ruler state as authoritative.
 
 If you remove a cue from Cue Manager, ReaADR deletes the cached cue, rebuilds
 generated regions and cue audio, and renumbers the remaining cues in order.
@@ -239,18 +242,18 @@ Open Manager > Session Tools.
 Available tools:
 
 - Validate Session
-- Rebuild Session From Cache
+- Rebuild Session From Model
 - Clear Character Cues
 - Toggle QA Mode
 
 These tools help recover from manual REAPER edits without reimporting the
 original script.
 
-ReaADR keeps a project-local snapshot of the last cue cache before risky
+ReaADR keeps a project-local snapshot of the ADR Session Model before risky
 session-changing operations such as imports, detected-dialogue builds, and Cue
 Manager add/remove flows. If one of those workflows fails during rebuild,
-ReaADR restores the cached session state and reports the error instead of
-silently leaving the session cache half-updated.
+ReaADR restores the session model and reports the error instead of silently
+leaving session state half-updated.
 
 ## Help And Hints
 

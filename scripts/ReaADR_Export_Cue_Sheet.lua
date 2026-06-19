@@ -316,7 +316,7 @@ local function path_dialog(default_path, on_done)
   frame()
 end
 
-local cues, source_message = ReaADR.load_last_import_cues()
+local cues, source_message = ReaADR.load_session_cues()
 local source = "cached ReaADR cues"
 if not cues then
   cues = ReaADR.collect_project_marker_cues({

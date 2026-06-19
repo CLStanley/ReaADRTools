@@ -9,7 +9,7 @@ end
 local ReaADR = dofile(script_dir() .. "/ReaADR_Core.lua")
 
 local function manager_source_cues()
-  local loaded = ReaADR.load_last_import_cues()
+  local loaded = ReaADR.load_session_cues()
   if loaded then
     return loaded, "cached ReaADR session"
   end
@@ -258,10 +258,10 @@ local function add_cue_from_manager()
     return
   end
 
-  local summary, err = ReaADR.rebuild_cached_session({})
+  local summary, err = ReaADR.rebuild_session_from_model({})
   if not summary then
     ReaADR.restore_session_snapshot(snapshot, "Add cue rebuild failed: " .. tostring(err))
-    ReaADR.message("Cue was added to the session cache, but project rebuild failed:\n\n" .. tostring(err))
+    ReaADR.message("Cue was added to the session model, but project rebuild failed:\n\n" .. tostring(err))
     refresh_cues()
     return
   end
@@ -561,10 +561,10 @@ local function remove_selected_cue()
     return
   end
 
-  local summary, rebuild_err = ReaADR.rebuild_cached_session({})
+  local summary, rebuild_err = ReaADR.rebuild_session_from_model({})
   if not summary then
     ReaADR.restore_session_snapshot(snapshot, "Remove cue rebuild failed: " .. tostring(rebuild_err))
-    ReaADR.message("Cue was removed from the session cache, but project rebuild failed:\n\n" .. tostring(rebuild_err))
+    ReaADR.message("Cue was removed from the session model, but project rebuild failed:\n\n" .. tostring(rebuild_err))
     refresh_cues()
     return
   end

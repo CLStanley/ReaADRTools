@@ -1724,7 +1724,7 @@ dofile(script_file_dir() .. "/ReaADR_Core_Characters.lua")(ReaADR, {
 })
 
 function ReaADR.available_filter_characters()
-  local cues = ReaADR.load_last_import_cues()
+  local cues = ReaADR.load_session_cues()
   if not cues then
     cues = ReaADR.collect_project_marker_cues({
       include_markers = true,
@@ -1738,7 +1738,7 @@ function ReaADR.available_filter_characters()
 end
 
 function ReaADR.available_filter_targets()
-  local cues = ReaADR.load_last_import_cues()
+  local cues = ReaADR.load_session_cues()
   if not cues then
     cues = ReaADR.collect_project_marker_cues({
       include_markers = true,
@@ -1813,7 +1813,7 @@ end
 function ReaADR.apply_character_filter()
   ReaADR.log("INFO", "FILTER", "Applying character filter")
   reaper.Undo_BeginBlock()
-  local cues = ReaADR.load_last_import_cues()
+  local cues = ReaADR.load_session_cues()
   if not cues then
     cues = ReaADR.collect_project_marker_cues({
       include_markers = true,
@@ -2234,7 +2234,7 @@ function ReaADR.navigation_cues()
   local source = "project regions"
 
   if #cues == 0 then
-    local cached = ReaADR.load_last_import_cues()
+    local cached = ReaADR.load_session_cues()
     if cached and #cached > 0 then
       cues = cached
       source = "cached ReaADR cues"
@@ -2446,7 +2446,7 @@ function ReaADR.count_recorded_takes_for_cue(cue)
 end
 
 function ReaADR.active_cue()
-  local cues = ReaADR.load_last_import_cues()
+  local cues = ReaADR.load_session_cues()
   if not cues then
     cues = ReaADR.navigation_cues()
   end
@@ -2477,7 +2477,7 @@ function ReaADR.active_cue()
 end
 
 function ReaADR.session_cues()
-  local cues, source = ReaADR.load_last_import_cues()
+  local cues, source = ReaADR.load_session_cues()
   if cues then
     return ReaADR.filter_cues_by_active_characters(cues), "cached ReaADR session"
   end
@@ -2643,7 +2643,7 @@ function ReaADR.set_cue_status_at_position(status, position)
   status = normalize_status(status)
   position = tonumber(position) or ReaADR.current_timeline_position()
 
-  local cues, cue_error = ReaADR.load_last_import_cues()
+  local cues, cue_error = ReaADR.load_session_cues()
   if not cues then
     cues = ReaADR.navigation_cues()
   end
@@ -2658,7 +2658,7 @@ function ReaADR.set_cue_status_at_position(status, position)
 
   cue.status = status
   ReaADR.set_active_overlay_cue(cue)
-  ReaADR.save_last_import_cues(cues)
+  ReaADR.save_session_cues(cues)
   ReaADR.ensure_region(cue, character_color(cue.character))
   ReaADR.ensure_character_ruler_lanes(cues)
   local ruler_lanes = ReaADR.character_region_lanes(cues)
@@ -2676,7 +2676,7 @@ function ReaADR.update_cached_cue(updated_cue)
     return nil, "No cue was provided."
   end
 
-  local cues, cue_error = ReaADR.load_last_import_cues()
+  local cues, cue_error = ReaADR.load_session_cues()
   if not cues then
     return nil, cue_error or "No cached ReaADR session was found."
   end
@@ -2720,7 +2720,7 @@ function ReaADR.update_cached_cue(updated_cue)
     return nil, "Cue was not found in the cached ReaADR session."
   end
 
-  ReaADR.save_last_import_cues(cues)
+  ReaADR.save_session_cues(cues)
   ReaADR.ensure_region(updated, character_color(updated.character))
   ReaADR.ensure_character_ruler_lanes(cues)
   local ruler_lanes = ReaADR.character_region_lanes(cues)
@@ -2732,7 +2732,7 @@ function ReaADR.update_cached_cue(updated_cue)
 end
 
 function ReaADR.sync_cached_cues_from_project_regions()
-  local cues, cue_error = ReaADR.load_last_import_cues()
+  local cues, cue_error = ReaADR.load_session_cues()
   if not cues then
     return nil, cue_error or "No cached ReaADR session was found."
   end
@@ -2757,7 +2757,7 @@ function ReaADR.sync_cached_cues_from_project_regions()
     end
   end
 
-  ReaADR.save_last_import_cues(cues)
+  ReaADR.save_session_cues(cues)
   ReaADR.ensure_character_ruler_lanes(cues)
   local ruler_lanes = ReaADR.character_region_lanes(cues)
   for _, cue in ipairs(cues) do
@@ -2773,7 +2773,7 @@ end
 
 function ReaADR.add_cached_cue(cue)
   cue = cue or {}
-  local cues = ReaADR.load_last_import_cues()
+  local cues = ReaADR.load_session_cues()
   if not cues then
     cues = ReaADR.navigation_cues()
   end
@@ -2800,7 +2800,7 @@ function ReaADR.add_cached_cue(cue)
     end
     return (tonumber(a.start_time) or 0) < (tonumber(b.start_time) or 0)
   end)
-  ReaADR.save_last_import_cues(cues)
+  ReaADR.save_session_cues(cues)
   ReaADR.set_manager_selected_cue(cue)
   return cue, cues
 end
@@ -2811,7 +2811,7 @@ function ReaADR.remove_cached_cue(target_cue, options)
     return nil, "No cue was provided."
   end
 
-  local cues, cue_error = ReaADR.load_last_import_cues()
+  local cues, cue_error = ReaADR.load_session_cues()
   if not cues then
     return nil, cue_error or "No cached ReaADR session was found."
   end
@@ -2835,7 +2835,7 @@ function ReaADR.remove_cached_cue(target_cue, options)
     renumber_cues_in_order(cues)
   end
 
-  ReaADR.save_last_import_cues(cues)
+  ReaADR.save_session_cues(cues)
 
   local selected = cues[math.min(#cues, math.max(1, tonumber(options.select_index) or 1))]
   ReaADR.set_manager_selected_cue(selected)
@@ -2889,9 +2889,9 @@ function ReaADR.remove_project_artifacts_for_cues(target_cues)
   }
 end
 
-function ReaADR.rebuild_cached_session(options)
+function ReaADR.rebuild_session_from_model(options)
   options = options or {}
-  local cues, err = ReaADR.load_last_import_cues()
+  local cues, err = ReaADR.load_session_cues()
   if not cues then
     ReaADR.log("ERROR", "REBUILD", "No cached session: " .. tostring(err or "unknown"))
     return nil, err or "No cached ReaADR session was found."
@@ -2928,24 +2928,16 @@ function ReaADR.rebuild_cached_session(options)
   })
 end
 
--- Unified session refresh.  Syncs region positions back into the cache, rebuilds
--- cue audio and overlay, and fires a session-revision bump so all open windows
--- react.  This is the single function all "Refresh Session" controls should call.
+-- Unified session refresh. Rebuilds REAPER state from the ADR Session Model and
+-- fires a session-revision bump so all open windows react. This is the single
+-- function all "Refresh Session" controls should call.
 function ReaADR.refresh_session(options)
   options = options or {}
   ReaADR.log("INFO", "REFRESH", "Starting session refresh")
   reaper.Undo_BeginBlock()
 
   local snapshot = ReaADR.create_session_snapshot("Refresh Session")
-  local sync_summary, sync_err = ReaADR.sync_cached_cues_from_project_regions()
-  if not sync_summary then
-    ReaADR.restore_session_snapshot(snapshot, "Refresh region sync failed: " .. tostring(sync_err))
-    reaper.Undo_EndBlock("ReaADR: refresh session (failed)", -1)
-    ReaADR.log("ERROR", "REFRESH", "Region sync failed: " .. tostring(sync_err))
-    return nil, sync_err
-  end
-
-  local rebuild_summary, rebuild_err = ReaADR.rebuild_cached_session({
+  local rebuild_summary, rebuild_err = ReaADR.rebuild_session_from_model({
     clear_generated_items = options.clear_generated_items == true,
   })
   if not rebuild_summary then
@@ -2965,7 +2957,6 @@ function ReaADR.refresh_session(options)
     (rebuild_summary.tracks_created or 0) + (rebuild_summary.tracks_reused or 0)
   ))
   return {
-    sync    = sync_summary,
     rebuild = rebuild_summary,
   }
 end
@@ -3628,7 +3619,7 @@ function ReaADR.clear_cues_for_characters(character_list)
     #char_names, table.concat(char_names, ", ")
   ))
 
-  local cached = ReaADR.load_last_import_cues() or {}
+  local cached = ReaADR.load_session_cues() or {}
   local remaining = {}
   local to_clear = {}
   for _, cue in ipairs(cached) do
@@ -3717,8 +3708,8 @@ function ReaADR.clear_cues_for_characters(character_list)
     tracks_removed = tracks_removed + 1
   end
 
-  -- Persist the slimmed cue cache
-  ReaADR.save_last_import_cues(remaining)
+  -- Persist the updated session model.
+  ReaADR.save_session_cues(remaining)
 
   -- Mark each character as completed so cue regeneration skips them
   for character, _ in pairs(char_set) do
@@ -4056,7 +4047,7 @@ end
 function ReaADR.refresh_overlay_fx_from_project(settings)
   settings = settings or ReaADR.load_overlay_settings()
 
-  local cues, cue_error = ReaADR.load_last_import_cues()
+  local cues, cue_error = ReaADR.load_session_cues()
   if not cues then
     return nil, cue_error
   end
@@ -4383,10 +4374,10 @@ function ReaADR.setup_project(cues, options)
     end
 
     progress("Saving ReaADR project state...")
-    ReaADR.save_last_import_cues(session_cues)
+    ReaADR.save_session_cues(session_cues)
     reaper.SetProjExtState(project(), ReaADR.EXT_NAMESPACE, "version", ReaADR.VERSION)
-    reaper.SetProjExtState(project(), ReaADR.EXT_NAMESPACE, "last_import_cue_count", tostring(#session_cues))
-    reaper.SetProjExtState(project(), ReaADR.EXT_NAMESPACE, "last_import_character_count", tostring(#session_characters))
+    reaper.SetProjExtState(project(), ReaADR.EXT_NAMESPACE, "session_cue_count", tostring(#session_cues))
+    reaper.SetProjExtState(project(), ReaADR.EXT_NAMESPACE, "session_character_count", tostring(#session_characters))
     if ReaADR.character_filter_enabled() then
       progress("Applying character filter...")
       ReaADR.apply_character_filter()
