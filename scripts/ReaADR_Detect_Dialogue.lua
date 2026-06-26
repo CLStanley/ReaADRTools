@@ -75,7 +75,15 @@ local function build_and_import_cues(raw_segments)
     }
   end
 
-  local preview = ReaADR.validate_cues(cues, { preroll_seconds = ReaADR.load_overlay_settings().preroll_seconds })
+  local preview_summary, preview_error = ReaADR.sync_validate(
+    { cues = cues },
+    { preroll_seconds = ReaADR.load_overlay_settings().preroll_seconds }
+  )
+  if not preview_summary then
+    ReaADR.message("Dialogue detection preview failed:\n\n" .. tostring(preview_error))
+    return
+  end
+  local preview = preview_summary.validation
   local answer = reaper.ShowMessageBox(
     ReaADR.validation_summary_text(preview):gsub("^Import validation", "Dialogue detection preview"),
     "ReaADR Dialogue Detection",
@@ -87,10 +95,18 @@ local function build_and_import_cues(raw_segments)
 
   local snapshot = ReaADR.create_session_snapshot("Detect Dialogue From Selected Media")
   ReaADR.log("INFO", "DETECT", "Saving detected dialogue cues", { count = #cues })
-  ReaADR.save_session_cues(cues)
+  ReaADR.save_session_cues(cues, {
+    event_type = "BulkCueCreated",
+    source = "detect_dialogue",
+    last_operation = "detect_dialogue",
+  })
 
   local progress = ReaADR.create_progress_window("Building Detected ADR Cues")
-  local summary, setup_error = ReaADR.rebuild_session_from_model({ on_progress = progress.update })
+  local sync_summary, setup_error = ReaADR.sync_full({
+    on_progress = progress.update,
+    source = "detect_dialogue",
+  })
+  local summary = sync_summary and sync_summary.rebuild
   progress.close()
 
   if not summary then

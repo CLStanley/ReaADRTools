@@ -30,8 +30,8 @@ App.modules = {
   session = {
     title = "Session Tools",
     actions = {
-      { label = "Validate Session", app_action = "validate_session", hint = "Check cue timing, missing fields, overlap splits, and preserved metadata." },
-      { label = "Rebuild Session From Model", app_action = "rebuild_session", hint = "Recreate tracks, regions, cue audio, and overlays from the ADR Session Model." },
+      { label = "Check Session", app_action = "validate_session", hint = "Check cue timing, missing fields, overlap splits, metadata, and generated session items." },
+      { label = "Refresh Session", app_action = "rebuild_session", hint = "Repair missing or changed generated tracks, cue regions, cue audio, and overlays." },
       { label = "Clear Character Cues",      script = "ReaADR_Clean_Generated_Cues.lua", hint = "Select characters whose cues, regions, and cue tracks should be removed after their recording session is complete. Recording tracks and takes are preserved." },
       { label = "Toggle QA Mode", app_action = "toggle_qa_mode", hint = "Enable or disable verbose console logging for imports, refreshes, deletions, and errors. Disabled by default in production." },
     },
@@ -110,7 +110,7 @@ App.quick_action_choices = {
   { key = "overlay_settings", label = "Video Overlays Tab",      app_action = "open_overlay_manager" },
   { key = "character_filter", label = "Character Filter",        script = "ReaADR_Character_Filter.lua" },
   { key = "refresh_overlay",  label = "Refresh Video Overlay",   app_action = "refresh_overlay" },
-  { key = "validate",         label = "Validate Session",        app_action = "validate_session" },
+  { key = "validate",         label = "Check Session",           app_action = "validate_session" },
 }
 
 App.quick_action_defaults = {
@@ -142,7 +142,7 @@ App.help_topics = {
       "",
       "Double-click status or cue type cells to choose values from inline dropdowns. Other editable cells use inline text editing.",
       "",
-      "Refresh Session is the unified refresh path. It syncs moved regions back to the cached session, rebuilds cue audio and lanes, reapplies character filters, and refreshes overlay state.",
+      "Refresh Session repairs generated tracks, cue regions, cue audio, lane assignments, filters, and overlay state from the saved ReaADR session.",
       "",
       "Cue status colors are used by the overlay and generated regions. Character Filter only mutes or unmutes character tracks, so regions stay intact for navigation.",
     }, "\n"),
@@ -659,11 +659,85 @@ function App.toggle_qa_mode()
   return true
 end
 
+local function refresh_session_workflow(ReaADR, confirm_message)
+  local cues, err = ReaADR.load_session_cues()
+  if not cues then
+    ReaADR.message("No ReaADR session was found:\n\n" .. tostring(err))
+    return false
+  end
+  if confirm_message then
+    local answer = reaper.ShowMessageBox(confirm_message, "ReaADR", 4)
+    if answer ~= 6 then
+      return false
+    end
+  end
+
+  local progress = ReaADR.create_progress_window("Refreshing ReaADR Session")
+  local summary, setup_error = ReaADR.resolve_session_drift("refresh", {
+    on_progress = progress.update,
+  })
+  progress.close()
+  if not summary then
+    ReaADR.message("Session refresh failed:\n\n" .. tostring(setup_error))
+    return false
+  end
+
+  local rebuild = summary.rebuild or {}
+  ReaADR.message(("Session refreshed.\n\nCues: %d\nTracks: %d created, %d reused\nRegions: %d created, %d updated\nCue audio: %d created, %d updated, %d skipped\nOverlay: %s"):format(
+    rebuild.cue_count or 0,
+    rebuild.tracks_created or 0,
+    rebuild.tracks_reused or 0,
+    rebuild.regions_created or 0,
+    rebuild.regions_updated or 0,
+    rebuild.cue_audio_created or 0,
+    rebuild.cue_audio_updated or 0,
+    rebuild.cue_audio_skipped or 0,
+    rebuild.overlay_fx_status or "not_configured"
+  ))
+  return true
+end
+
 function App.validate_session()
   local ReaADR = App.ReaADR
-  local cues = ReaADR.session_cues()
-  local validation = ReaADR.validate_cues(cues or {}, { preroll_seconds = ReaADR.load_overlay_settings().preroll_seconds })
-  ReaADR.message(ReaADR.validation_summary_text(validation):gsub("\nBuild this ADR session%?$", ""))
+  local cues = ReaADR.load_session_cues()
+  if not cues then
+    cues = ReaADR.session_cues()
+  end
+  local summary, err = ReaADR.sync_validate({ cues = cues or {} }, {
+    preroll_seconds = ReaADR.load_overlay_settings().preroll_seconds,
+    include_drift = true,
+  })
+  if not summary then
+    ReaADR.message("Session check failed:\n\n" .. tostring(err))
+    return false
+  end
+
+  local text = ReaADR.validation_summary_text(summary.validation):gsub("\nBuild this ADR session%?$", "")
+  local drift = summary.drift
+  if drift then
+    local drift_lines = {
+      "",
+      "Generated session items:",
+      "Missing tracks: " .. tostring(drift.missing_tracks or 0),
+      "Missing cue regions: " .. tostring(drift.missing_regions or 0),
+      "Changed cue regions: " .. tostring(drift.modified_regions or 0),
+      "Missing cue audio: " .. tostring(drift.missing_cue_audio or 0),
+      "Extra cue audio: " .. tostring(drift.unexpected_cue_audio or 0),
+    }
+    if drift.has_drift then
+      drift_lines[#drift_lines + 1] = ""
+      drift_lines[#drift_lines + 1] = "Refresh Session can repair these generated items."
+    end
+    text = text .. "\n" .. table.concat(drift_lines, "\n")
+  end
+  if drift and drift.has_drift then
+    local answer = reaper.ShowMessageBox(text .. "\n\nRefresh the session now?", "ReaADR Session Check", 4)
+    if answer == 6 then
+      return refresh_session_workflow(ReaADR, nil)
+    end
+  else
+    ReaADR.message(text)
+  end
   return true
 end
 
@@ -680,35 +754,10 @@ end
 
 function App.rebuild_session()
   local ReaADR = App.ReaADR
-  local cues, err = ReaADR.load_session_cues()
-  if not cues then
-    ReaADR.message("No cached ReaADR session found:\n\n" .. tostring(err))
-    return false
-  end
-  local answer = reaper.ShowMessageBox("Rebuild tracks, regions, cue audio, and overlay from the cached ReaADR session?", "ReaADR", 4)
-  if answer ~= 6 then
-    return false
-  end
-  local progress = ReaADR.create_progress_window("Rebuilding ReaADR Session")
-  local summary, setup_error = ReaADR.setup_project(cues, {
-    cue_audio_path = ReaADR.project_cue_audio_path(),
-    overlay_settings = ReaADR.load_overlay_settings(),
-    on_progress = progress.update,
-  })
-  progress.close()
-  if not summary then
-    ReaADR.message("Session rebuild failed:\n\n" .. tostring(setup_error))
-    return false
-  end
-  ReaADR.message(("Rebuilt %d cue(s).\n\nTracks: %d created, %d reused\nRegions: %d created, %d updated\nOverlay: %s"):format(
-    summary.cue_count,
-    summary.tracks_created,
-    summary.tracks_reused,
-    summary.regions_created,
-    summary.regions_updated,
-    summary.overlay_fx_status
-  ))
-  return true
+  return refresh_session_workflow(
+    ReaADR,
+    "Refresh generated tracks, cue regions, cue audio, and video overlays from the saved ReaADR session?"
+  )
 end
 
 local function session_summary(ReaADR)

@@ -199,6 +199,10 @@ Session Model, and calls the same project setup path used by imported cue
 sheets. The generated cues are intentionally reviewable rather than final
 transcription data.
 
+Transcription-assisted cue generation is not implemented yet. Future
+transcription work should add transcript text, confidence metadata, and speaker
+placeholders to the Session Model before sync renders the cues into REAPER.
+
 ## Overlay Flow
 
 The overlay is generated as source code for REAPER's Video Processor FX on the
@@ -223,8 +227,8 @@ The shared cue-management behaviors remain in `ReaADR_Core.lua`:
 - session cue loading and filtering
 - selected cue tracking
 - cue add/update/remove operations
-- Refresh Session, which syncs generated region positions back into cached cues
-  and rebuilds cue audio, lanes, filters, and overlay state
+- Refresh Session, which rebuilds cue audio, generated regions, lanes, filters,
+  and overlay state from the Session Model
 - overlay refresh and character lane rebuilds
 
 This keeps the migration to a richer UI layer from duplicating core workflow
@@ -243,6 +247,59 @@ Batch project edits inside:
 
 Avoid adding new standalone public actions unless there is a strong workflow
 reason. Prefer adding manager controls.
+
+## Sync Direction
+
+The current sync bridge is being consolidated behind explicit Sync Engine-style
+core APIs:
+
+- `ReaADR.sync_full(options)`
+- `ReaADR.sync_incremental(change_set, options)`
+- `ReaADR.sync_validate(change_set, options)`
+- `ReaADR.detect_session_drift(options)`
+
+`sync_full()` currently wraps `rebuild_session_from_model()` and `setup_project()`.
+`sync_incremental()` handles small cue-region/lane/overlay updates for cue status
+and cue field edits. `sync_validate()` is a dry-run validation surface.
+`detect_session_drift()` compares the Session Model against ReaADR-owned tracks,
+regions, and cue audio.
+
+New code should route REAPER mutations through one of these core helpers instead
+of writing tracks, regions, cue items, or overlay FX directly from UI scripts.
+Cue sheet import, dialogue detection, marker/region cue generation, Cue Manager
+add/remove, cue edits, and refresh now route through these sync APIs. The next
+architecture step is to add richer drift resolution UI and broaden incremental
+sync coverage. See `docs/ADDENDUM_IMPLEMENTATION_BACKLOG.md`.
+
+Performance rule: keep drift detection on-demand. It scans project tracks,
+regions, and generated cue items, so it should run from explicit checks or repair
+workflows rather than every UI frame. Full refresh should avoid duplicate overlay
+rebuilds; `setup_project()` already renders the overlay when overlay settings and
+the source video track are available.
+
+## Event Direction
+
+The core now includes a small synchronous event layer:
+
+- `ReaADR.emit_event(type, payload, options)`
+- `ReaADR.process_event_queue(options)`
+- `ReaADR.subscribe_event(type, handler)`
+- `ReaADR.log_event(event)`
+
+Events are immutable payload snapshots after dispatch and are logged in a
+bounded project-local event log (`event_log_v1`, latest 200 entries). Bulk
+workflows emit aggregate events such as `ScriptImported` or `BulkCueCreated`
+instead of one event per cue. Sync validation, full sync, incremental sync,
+refresh requests, and sync failures also emit typed events.
+
+Open windows still stay consistent by polling `session_revision` and
+re-querying the Session Model when it changes. This remains the compatibility
+signal while UI surfaces migrate to event subscriptions.
+
+New state-changing code should still call `ReaADR.bump_session_revision()` via
+the existing save/update helpers so open windows do not operate on stale data.
+New UI code can subscribe to typed events for narrower refreshes, but should
+continue to tolerate `session_revision` changes until all windows have migrated.
 
 ## Reliability And Safety
 
@@ -264,6 +321,11 @@ project extstate. `ReaADR.restore_session_snapshot()` restores it and bumps the
 session revision so open windows re-query state. `ReaADR.protected_session_operation()`
 is available for new workflows that need snapshot/restore and structured
 logging around a callback.
+
+This is currently a last-operation safety snapshot, not a snapshot history or
+crash-recovery system. Full recovery work should add named restore points,
+snapshot diffing, restore UI, autosave/crash detection, and full-sync-after-
+restore behavior.
 
 Destructive operations must remain scoped and confirmed. They should delete
 only ReaADR-owned generated objects, identified by names or extstate such as

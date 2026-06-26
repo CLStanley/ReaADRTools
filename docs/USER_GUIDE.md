@@ -41,10 +41,11 @@ of silence after the third beep before the cue point. If the project already
 has a correctly timed `reaadr_cue.wav`, ReaADR reuses it during later imports
 or rebuilds.
 
-For recording pre-roll, use REAPER's own pre-roll/metronome settings. A good
-ADR default is 3 measures. ReaADR uses its own internal 3-second cue-aid timing
-for beeps, streamers, and overlap splitting, but REAPER's native transport
-pre-roll controls actual recording/playback pre-roll.
+ReaADR uses its overlay pre-roll duration for cue beeps, streamers, overlap
+splitting, and the Record Current Cue workflow. In the Record Cue window, enable
+`Loop: ON` and keep `Pre-roll Each Loop` enabled when you want every repeated
+take to start from the pre-roll/beep area before punching into the cue. Turn that
+toggle off to use REAPER's default repeat behavior after the first take.
 
 ## Importing A Script
 
@@ -74,6 +75,13 @@ default.
 Before modifying the project, ReaADR shows an import preview with cue counts,
 characters, blank dialogue, metadata fields, and overlap splits.
 
+During setup, ReaADR shows the characters it found in the script. Choose whether
+to import selected characters or update characters that were already imported,
+then tick the characters you want to bring into the project. Use `Select All`
+when you want the whole script. Double-click the script name to edit it before
+continuing. Updating existing characters requires confirmation before ReaADR
+replaces their saved cue data.
+
 For best `.xlsx` imports, use a simple first worksheet with one header row and
 cue data below it. Formulas should be saved with calculated values by Excel,
 LibreOffice, or Google Sheets before import.
@@ -99,6 +107,9 @@ Detected cues use the same overlap handling as imported scripts, so close cues
 can create additional cue/dialogue lanes. Review and edit detected cues in Cue
 Manager and Cue Information Panel.
 
+This tool detects likely dialogue timing; it does not transcribe spoken words.
+Generated dialogue fields are blank until you edit them or import a script.
+
 ## Generated Session Layout
 
 Import creates:
@@ -118,6 +129,11 @@ For recording multiple takes, use REAPER's native take system on the generated
 character dialogue tracks. ReaADR does not pre-create `Take 1`, `Take 2`, etc.
 tracks by default because native takes are better for comping, take selection,
 and keeping recordings tied to the same cue.
+
+Use `Record Current Cue` from Cue Manager or a quick action to arm the selected
+character lane and start at the cue pre-roll. Recording punches in at the cue
+start so pre-roll beeps are played for timing without intentionally recording
+pre-roll media into the take.
 
 ## Cue Management
 
@@ -150,10 +166,9 @@ the table cell, hover the cell to preview the full text. In the legacy `gfx`
 Cue Manager, the hover preview now wraps and expands near the cursor, and it
 can be disabled from `Open Manager > Preferences`.
 
-`Refresh Session` in Cue Manager rebuilds REAPER tracks, cue items, regions,
-ruler lanes, filters, and video overlay state from ReaADR's internal ADR
-Session Model. This model is the source of truth, so refresh is safe to rerun
-without stacking duplicate project objects.
+`Refresh Session` in Cue Manager repairs generated REAPER tracks, cue items,
+regions, ruler lanes, filters, and video overlay state from the saved ReaADR
+session. It is safe to rerun without stacking duplicate project objects.
 
 If you intentionally move or resize generated regions directly in REAPER, use a
 dedicated sync/update workflow before refreshing. General refresh no longer
@@ -241,19 +256,32 @@ Open Manager > Session Tools.
 
 Available tools:
 
-- Validate Session
-- Rebuild Session From Model
+- Check Session
+- Refresh Session
 - Clear Character Cues
 - Toggle QA Mode
 
 These tools help recover from manual REAPER edits without reimporting the
 original script.
 
-ReaADR keeps a project-local snapshot of the ADR Session Model before risky
-session-changing operations such as imports, detected-dialogue builds, and Cue
-Manager add/remove flows. If one of those workflows fails during rebuild,
-ReaADR restores the session model and reports the error instead of silently
-leaving session state half-updated.
+`Check Session` checks cue data and reports missing or changed generated tracks,
+cue regions, and cue audio. If it finds a mismatch, it can offer to run
+`Refresh Session` immediately.
+
+`Toggle QA Mode` enables more detailed console logging for testing. It records
+major changes such as imports, cue edits, refreshes, generated cue builds, and
+errors so a tester can report what happened before a problem.
+
+ReaADR keeps a project-local safety snapshot before risky session-changing
+operations such as imports, detected-dialogue builds, and Cue Manager add/remove
+flows. If one of those workflows fails while refreshing generated session items,
+ReaADR restores the saved session data and reports the error instead of silently
+leaving the session half-updated.
+
+Current snapshots are automatic safety snapshots for the latest risky operation.
+They are not yet user-selectable restore points. For manual backups today, export
+the Full Session JSON report before large editing passes or before testing major
+workflow changes.
 
 ## Help And Hints
 

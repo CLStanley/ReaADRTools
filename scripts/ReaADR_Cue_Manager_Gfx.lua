@@ -258,10 +258,10 @@ local function add_cue_from_manager()
     return
   end
 
-  local summary, err = ReaADR.rebuild_session_from_model({})
+  local summary, err = ReaADR.sync_full({})
   if not summary then
     ReaADR.restore_session_snapshot(snapshot, "Add cue rebuild failed: " .. tostring(err))
-    ReaADR.message("Cue was added to the session model, but project rebuild failed:\n\n" .. tostring(err))
+    ReaADR.message("Cue was added, but the session refresh failed:\n\n" .. tostring(err))
     refresh_cues()
     return
   end
@@ -561,10 +561,10 @@ local function remove_selected_cue()
     return
   end
 
-  local summary, rebuild_err = ReaADR.rebuild_session_from_model({})
+  local summary, rebuild_err = ReaADR.sync_full({})
   if not summary then
     ReaADR.restore_session_snapshot(snapshot, "Remove cue rebuild failed: " .. tostring(rebuild_err))
-    ReaADR.message("Cue was removed from the session model, but project rebuild failed:\n\n" .. tostring(rebuild_err))
+    ReaADR.message("Cue was removed, but the session refresh failed:\n\n" .. tostring(rebuild_err))
     refresh_cues()
     return
   end
@@ -596,9 +596,8 @@ local function refresh_session_from_manager()
     state.selected = index
   end
   sync_scroll_to_selection()
-  ReaADR.refresh_overlay_silent()
   ReaADR.message(
-    ("Session refreshed.\n\nRegions synced: %d\nCue audio created: %d, updated: %d, skipped: %d\nOverlap splits: %d\nCompleted characters skipped: %d"):format(
+	    ("Session refreshed.\n\nCue regions refreshed: %d\nCue audio created: %d, updated: %d, skipped: %d\nOverlap lanes: %d\nCompleted characters skipped: %d"):format(
       summary.sync.updated or 0,
       summary.rebuild.cue_audio_created or 0,
       summary.rebuild.cue_audio_updated or 0,
@@ -684,7 +683,7 @@ local button_specs = {
   { key = "add", label = "Add Cue", min_w = 92, hint = "Create a cue at the current timeline position." },
   { key = "remove", label = "Remove Cue", min_w = 104, hint = "Delete the selected cue, renumber the remaining cues, and rebuild cue regions/audio." },
   { key = "filter", label = "Character Filter", min_w = 132, hint = "Enable or disable character tracks for focused recording passes." },
-  { key = "sync", label = "Refresh Session", min_w = 134, hint = "Rebuild cue tracks, reapply filters, resync regions, and refresh overlay/session state." },
+  { key = "sync", label = "Refresh Session", min_w = 134, hint = "Repair generated tracks, cue regions, cue audio, filters, and overlay state." },
   { key = "overlay", label = "Refresh Overlay", min_w = 142, hint = "Refresh the video overlay for the selected/current cue state." },
   { key = "info", label = "Info Panel", min_w = 112, hint = "Open the large cue information panel for the selected cue." },
 }

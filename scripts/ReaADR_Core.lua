@@ -569,6 +569,10 @@ end
 -- Structured logging  (SRS Addendum F §7, §10)
 -- ---------------------------------------------------------------------------
 
+local event_queue = {}
+local event_subscribers = {}
+local EVENT_LOG_LIMIT = 200
+
 -- Returns true when QA/verbose mode is active for the current project.
 function ReaADR.qa_mode_enabled()
   local _, val = reaper.GetProjExtState(project(), ReaADR.EXT_NAMESPACE, "qa_mode")
@@ -608,6 +612,164 @@ function ReaADR.log(level, operation, message, context)
   reaper.ShowConsoleMsg(("[ReaADR %s] %s | %s: %s%s\n"):format(
     timestamp, level, operation, tostring(message or ""), ctx_str
   ))
+end
+
+local function event_session_id()
+  if ReaADR.load_adr_session then
+    local session = ReaADR.load_adr_session()
+    if session and session.session_id then
+      return session.session_id
+    end
+  end
+  local _, session_id = reaper.GetProjExtState(project(), ReaADR.EXT_NAMESPACE, "adr_session_id")
+  return session_id or ""
+end
+
+local function copy_event_payload(payload)
+  if type(payload) ~= "table" then
+    return payload
+  end
+  local copy = {}
+  for key, value in pairs(payload) do
+    if type(value) == "table" then
+      local nested = {}
+      for nested_key, nested_value in pairs(value) do
+        nested[nested_key] = nested_value
+      end
+      copy[key] = nested
+    else
+      copy[key] = value
+    end
+  end
+  return copy
+end
+
+local function compact_event_payload(payload)
+  if type(payload) ~= "table" then
+    return tostring(payload or "")
+  end
+  local keys = {}
+  for key, _ in pairs(payload) do
+    keys[#keys + 1] = tostring(key)
+  end
+  table.sort(keys)
+  local parts = {}
+  for _, key in ipairs(keys) do
+    local value = payload[key]
+    if type(value) == "table" then
+      parts[#parts + 1] = key .. "=[table]"
+    else
+      parts[#parts + 1] = key .. "=" .. tostring(value or "")
+    end
+  end
+  return table.concat(parts, ";")
+end
+
+local function next_event_id()
+  local _, value = reaper.GetProjExtState(project(), ReaADR.EXT_NAMESPACE, "event_counter")
+  local counter = (tonumber(value) or 0) + 1
+  reaper.SetProjExtState(project(), ReaADR.EXT_NAMESPACE, "event_counter", tostring(counter))
+  return ("evt_%08d"):format(counter)
+end
+
+local function event_log_line(event)
+  return table.concat({
+    encode_cache_field(event.event_id or ""),
+    encode_cache_field(event.timestamp or ""),
+    encode_cache_field(event.session_id or ""),
+    encode_cache_field(event.event_type or ""),
+    encode_cache_field(event.source or ""),
+    encode_cache_field(event.batch_id or ""),
+    encode_cache_field(compact_event_payload(event.payload)),
+  }, "|")
+end
+
+function ReaADR.load_event_log()
+  local _, raw = reaper.GetProjExtState(project(), ReaADR.EXT_NAMESPACE, "event_log_v1")
+  local lines = {}
+  for line in tostring(raw or ""):gmatch("([^\n]+)") do
+    lines[#lines + 1] = line
+  end
+  return lines
+end
+
+function ReaADR.log_event(event)
+  if type(event) ~= "table" then
+    return false
+  end
+  local lines = ReaADR.load_event_log()
+  lines[#lines + 1] = event_log_line(event)
+  while #lines > EVENT_LOG_LIMIT do
+    table.remove(lines, 1)
+  end
+  reaper.SetProjExtState(project(), ReaADR.EXT_NAMESPACE, "event_log_v1", table.concat(lines, "\n"))
+  ReaADR.log("INFO", "EVENT", event.event_type or "Unknown", {
+    detail = event.source or "",
+  })
+  return true
+end
+
+function ReaADR.subscribe_event(event_type, handler)
+  event_type = tostring(event_type or "")
+  if event_type == "" or type(handler) ~= "function" then
+    return nil, "Event type and handler are required."
+  end
+  event_subscribers[event_type] = event_subscribers[event_type] or {}
+  event_subscribers[event_type][handler] = true
+  return function()
+    if event_subscribers[event_type] then
+      event_subscribers[event_type][handler] = nil
+    end
+  end
+end
+
+function ReaADR.process_event_queue(options)
+  options = options or {}
+  local processed = 0
+  local max_events = tonumber(options.max_events) or 100
+  while #event_queue > 0 and processed < max_events do
+    local event = table.remove(event_queue, 1)
+    ReaADR.log_event(event)
+    local handlers = {}
+    for handler, _ in pairs(event_subscribers[event.event_type] or {}) do
+      handlers[#handlers + 1] = handler
+    end
+    for handler, _ in pairs(event_subscribers["*"] or {}) do
+      handlers[#handlers + 1] = handler
+    end
+    for _, handler in ipairs(handlers) do
+      local ok, err = pcall(handler, event)
+      if not ok then
+        ReaADR.log("ERROR", "EVENT", "Event subscriber failed", {
+          detail = tostring(err),
+        })
+      end
+    end
+    processed = processed + 1
+  end
+  return processed
+end
+
+function ReaADR.emit_event(event_type, payload, options)
+  options = options or {}
+  event_type = tostring(event_type or "")
+  if event_type == "" then
+    return nil, "Event type is required."
+  end
+  local event = {
+    event_id = tostring(options.event_id or next_event_id()),
+    event_type = event_type,
+    timestamp = os.date("!%Y-%m-%dT%H:%M:%SZ"),
+    session_id = tostring(options.session_id or event_session_id() or ""),
+    source = tostring(options.source or ""),
+    payload = copy_event_payload(payload or {}),
+    batch_id = tostring(options.batch_id or ""),
+  }
+  event_queue[#event_queue + 1] = event
+  if not options.defer then
+    ReaADR.process_event_queue()
+  end
+  return event
 end
 
 function ReaADR.protected_session_operation(operation, label, callback)
@@ -1705,6 +1867,8 @@ function ReaADR.cue_tag(cue)
 end
 
 local character_lane_key
+local character_lane_name
+local cue_track_name
 local setup_preroll_seconds
 local assign_character_lanes
 
@@ -2658,17 +2822,18 @@ function ReaADR.set_cue_status_at_position(status, position)
 
   cue.status = status
   ReaADR.set_active_overlay_cue(cue)
-  ReaADR.save_session_cues(cues)
-  ReaADR.ensure_region(cue, character_color(cue.character))
-  ReaADR.ensure_character_ruler_lanes(cues)
-  local ruler_lanes = ReaADR.character_region_lanes(cues)
-  ReaADR.set_region_lane(cue, ReaADR.region_lane_for_cue(cue, ruler_lanes))
-  local overlay_status = nil
-  if ReaADR.refresh_overlay_fx_from_project then
-    overlay_status = ReaADR.refresh_overlay_fx_from_project()
-  end
-  reaper.UpdateArrange()
-  return cue, overlay_status
+  ReaADR.save_session_cues(cues, {
+    event_type = "CueUpdated",
+    source = "set_cue_status",
+    last_operation = "set_cue_status",
+  })
+  local sync_summary = ReaADR.sync_incremental({
+    cues = { cue },
+    all_cues = cues,
+    refresh_overlay = true,
+    source = "set_cue_status",
+  })
+  return cue, sync_summary and sync_summary.overlay_status
 end
 
 function ReaADR.update_cached_cue(updated_cue)
@@ -2720,14 +2885,18 @@ function ReaADR.update_cached_cue(updated_cue)
     return nil, "Cue was not found in the cached ReaADR session."
   end
 
-  ReaADR.save_session_cues(cues)
-  ReaADR.ensure_region(updated, character_color(updated.character))
-  ReaADR.ensure_character_ruler_lanes(cues)
-  local ruler_lanes = ReaADR.character_region_lanes(cues)
-  ReaADR.set_region_lane(updated, ReaADR.region_lane_for_cue(updated, ruler_lanes))
+  ReaADR.save_session_cues(cues, {
+    event_type = "CueUpdated",
+    source = "update_cached_cue",
+    last_operation = "update_cached_cue",
+  })
+  ReaADR.sync_incremental({
+    cues = { updated },
+    all_cues = cues,
+    refresh_overlay = true,
+    source = "update_cached_cue",
+  })
   ReaADR.set_manager_selected_cue(updated)
-  ReaADR.refresh_overlay_silent()
-  reaper.UpdateArrange()
   return updated
 end
 
@@ -2757,7 +2926,11 @@ function ReaADR.sync_cached_cues_from_project_regions()
     end
   end
 
-  ReaADR.save_session_cues(cues)
+  ReaADR.save_session_cues(cues, {
+    event_type = "CueUpdated",
+    source = "sync_project_regions",
+    last_operation = "sync_project_regions",
+  })
   ReaADR.ensure_character_ruler_lanes(cues)
   local ruler_lanes = ReaADR.character_region_lanes(cues)
   for _, cue in ipairs(cues) do
@@ -2800,7 +2973,11 @@ function ReaADR.add_cached_cue(cue)
     end
     return (tonumber(a.start_time) or 0) < (tonumber(b.start_time) or 0)
   end)
-  ReaADR.save_session_cues(cues)
+  ReaADR.save_session_cues(cues, {
+    event_type = "CueCreated",
+    source = "add_cached_cue",
+    last_operation = "add_cached_cue",
+  })
   ReaADR.set_manager_selected_cue(cue)
   return cue, cues
 end
@@ -2835,7 +3012,11 @@ function ReaADR.remove_cached_cue(target_cue, options)
     renumber_cues_in_order(cues)
   end
 
-  ReaADR.save_session_cues(cues)
+  ReaADR.save_session_cues(cues, {
+    event_type = "CueDeleted",
+    source = "remove_cached_cue",
+    last_operation = "remove_cached_cue",
+  })
 
   local selected = cues[math.min(#cues, math.max(1, tonumber(options.select_index) or 1))]
   ReaADR.set_manager_selected_cue(selected)
@@ -2928,37 +3109,325 @@ function ReaADR.rebuild_session_from_model(options)
   })
 end
 
+local function current_session_id()
+  local session = ReaADR.load_adr_session and ReaADR.load_adr_session()
+  return session and session.session_id or ""
+end
+
+local function sync_summary(sync_type, fields)
+  fields = fields or {}
+  fields.sync_type = sync_type
+  fields.session_id = fields.session_id or current_session_id()
+  fields.duration_seconds = fields.duration_seconds or 0
+  return fields
+end
+
+function ReaADR.sync_validate(change_set, options)
+  change_set = change_set or {}
+  options = options or {}
+  local started = reaper.time_precise and reaper.time_precise() or os.clock()
+  local cues = change_set.cues
+  if not cues then
+    local err
+    cues, err = ReaADR.load_session_cues()
+    if not cues then
+      return nil, err or "No cached ReaADR session was found."
+    end
+  end
+
+  local validation = ReaADR.validate_cues(cues, {
+    preroll_seconds = options.preroll_seconds or ReaADR.load_overlay_settings().preroll_seconds,
+  })
+  local drift = options.include_drift and ReaADR.detect_session_drift({ cues = cues }) or nil
+  local finished = reaper.time_precise and reaper.time_precise() or os.clock()
+  local summary = sync_summary("validation", {
+    affected_cues = #(cues or {}),
+    validation = validation,
+    drift = drift,
+    duration_seconds = math.max(0, finished - started),
+  })
+  if options.emit_event ~= false then
+    ReaADR.emit_event("SyncValidation", {
+      cue_count = summary.affected_cues,
+      has_drift = drift and drift.has_drift or false,
+      duration_seconds = summary.duration_seconds,
+    }, {
+      source = options.source or "sync_validate",
+      batch_id = options.batch_id,
+    })
+  end
+  return summary
+end
+
+function ReaADR.detect_session_drift(options)
+  options = options or {}
+  local cues = options.cues
+  if not cues then
+    local err
+    cues, err = ReaADR.load_session_cues()
+    if not cues then
+      return nil, err or "No cached ReaADR session was found."
+    end
+  end
+
+  local settings = options.overlay_settings or ReaADR.load_overlay_settings()
+  local active_cues = options.include_completed and cues or ReaADR.filter_cues_for_active_characters(cues)
+  assign_character_lanes(active_cues, setup_preroll_seconds({ overlay_settings = settings }))
+  local characters = ReaADR.collect_characters(active_cues)
+  local lane_counts = {}
+  local expected_cue_keys = {}
+  for _, cue in ipairs(active_cues) do
+    local character = first_nonempty(cue.character, "Unassigned")
+    local lane = tonumber(cue._reaadr_lane) or 1
+    lane_counts[character] = math.max(lane_counts[character] or 1, lane)
+    expected_cue_keys[ReaADR.cue_key(cue)] = true
+  end
+
+  local result = {
+    cue_count = #active_cues,
+    missing_tracks = 0,
+    missing_regions = 0,
+    modified_regions = 0,
+    missing_cue_audio = 0,
+    unexpected_cue_audio = 0,
+    details = {},
+  }
+
+  local cue_tracks = {}
+  for _, character in ipairs(characters) do
+    for lane = 1, math.max(1, lane_counts[character] or 1) do
+      local key = character_lane_key(character, lane)
+      local cue_track = ReaADR.find_track_by_ext("cue_character", key)
+      local character_track = ReaADR.find_track_by_ext("character", key)
+      if not cue_track then
+        result.missing_tracks = result.missing_tracks + 1
+        result.details[#result.details + 1] = "Missing cue track: " .. cue_track_name(character, lane)
+      else
+        cue_tracks[key] = cue_track
+      end
+      if not character_track then
+        result.missing_tracks = result.missing_tracks + 1
+        result.details[#result.details + 1] = "Missing recording track: " .. character_lane_name(character, lane)
+      end
+    end
+  end
+
+  for _, cue in ipairs(active_cues) do
+    local region = find_project_marker(ReaADR.region_name(cue), true)
+    if not region then
+      result.missing_regions = result.missing_regions + 1
+      result.details[#result.details + 1] = "Missing region for cue " .. tostring(cue.id or "")
+    else
+      local start_delta = math.abs((tonumber(region.pos) or 0) - (tonumber(cue.start_time) or 0))
+      local end_delta = math.abs((tonumber(region.region_end) or 0) - (tonumber(cue.end_time) or 0))
+      if start_delta > 0.0005 or end_delta > 0.0005 then
+        result.modified_regions = result.modified_regions + 1
+        result.details[#result.details + 1] = "Region timing differs for cue " .. tostring(cue.id or "")
+      end
+    end
+
+    local lane = tonumber(cue._reaadr_lane) or 1
+    local key = character_lane_key(first_nonempty(cue.character, "Unassigned"), lane)
+    local cue_track = cue_tracks[key]
+    if cue_track and not ReaADR.find_cue_audio_item(cue_track, cue) then
+      result.missing_cue_audio = result.missing_cue_audio + 1
+      result.details[#result.details + 1] = "Missing cue audio for cue " .. tostring(cue.id or "")
+    end
+  end
+
+  for track_index = 0, reaper.CountTracks(project()) - 1 do
+    local track = reaper.GetTrack(project(), track_index)
+    for item_index = 0, reaper.CountTrackMediaItems(track) - 1 do
+      local item = reaper.GetTrackMediaItem(track, item_index)
+      if media_item_ext(item, "ReaADR.role") == "cue_audio" then
+        local cue_key = media_item_ext(item, "ReaADR.cue_key")
+        if cue_key ~= "" and not expected_cue_keys[cue_key] then
+          result.unexpected_cue_audio = result.unexpected_cue_audio + 1
+        end
+      end
+    end
+  end
+
+  result.has_drift = result.missing_tracks > 0
+    or result.missing_regions > 0
+    or result.modified_regions > 0
+    or result.missing_cue_audio > 0
+    or result.unexpected_cue_audio > 0
+  return result
+end
+
+function ReaADR.sync_full(options)
+  options = options or {}
+  local started = reaper.time_precise and reaper.time_precise() or os.clock()
+  ReaADR.log("INFO", "SYNC", "Starting full sync")
+  local rebuild_summary, rebuild_err = ReaADR.rebuild_session_from_model({
+    clear_generated_items = options.clear_generated_items == true,
+    clear_generated_regions = options.clear_generated_regions == true,
+    overlay_settings = options.overlay_settings,
+    require_video_track = options.require_video_track,
+    create_source_video_track = options.create_source_video_track,
+    create_character_tracks = options.create_character_tracks,
+    create_cues_track = options.create_cues_track,
+    on_progress = options.on_progress,
+  })
+  if not rebuild_summary then
+    ReaADR.log("ERROR", "SYNC", "Full sync failed", { detail = tostring(rebuild_err) })
+    ReaADR.emit_event("ErrorOccurred", {
+      message = "Full sync failed",
+      detail = tostring(rebuild_err),
+      severity = "error",
+    }, {
+      source = "SyncEngine",
+      batch_id = options.batch_id,
+    })
+    return nil, rebuild_err
+  end
+
+  local finished = reaper.time_precise and reaper.time_precise() or os.clock()
+  local summary = sync_summary("full", {
+    affected_cues = rebuild_summary.cue_count or 0,
+    tracks_created = rebuild_summary.tracks_created or 0,
+    tracks_reused = rebuild_summary.tracks_reused or 0,
+    regions_created = rebuild_summary.regions_created or 0,
+    regions_updated = rebuild_summary.regions_updated or 0,
+    cue_audio_created = rebuild_summary.cue_audio_created or 0,
+    cue_audio_updated = rebuild_summary.cue_audio_updated or 0,
+    cue_audio_skipped = rebuild_summary.cue_audio_skipped or 0,
+    overlay_status = rebuild_summary.overlay_fx_status,
+    rebuild = rebuild_summary,
+    sync = {
+      updated = (rebuild_summary.regions_created or 0) + (rebuild_summary.regions_updated or 0),
+      missing = 0,
+      cue_count = rebuild_summary.cue_count or 0,
+    },
+    duration_seconds = math.max(0, finished - started),
+  })
+  ReaADR.log("INFO", "SYNC", ("Full sync complete: %d cues, %d regions"):format(
+    summary.affected_cues or 0,
+    (summary.regions_created or 0) + (summary.regions_updated or 0)
+  ))
+  if options.emit_event ~= false then
+    ReaADR.emit_event("SyncFull", {
+      cue_count = summary.affected_cues,
+      tracks_created = summary.tracks_created,
+      tracks_reused = summary.tracks_reused,
+      regions_created = summary.regions_created,
+      regions_updated = summary.regions_updated,
+      cue_audio_created = summary.cue_audio_created,
+      cue_audio_updated = summary.cue_audio_updated,
+      duration_seconds = summary.duration_seconds,
+    }, {
+      source = options.source or "sync_full",
+      batch_id = options.batch_id,
+    })
+  end
+  return summary
+end
+
+function ReaADR.resolve_session_drift(choice, options)
+  choice = tostring(choice or ""):lower()
+  options = options or {}
+  if choice == "" or choice == "cancel" then
+    return nil, "cancelled"
+  end
+  if choice == "refresh" or choice == "repair" or choice == "rebuild" or choice == "session" then
+    return ReaADR.refresh_session(options)
+  end
+  if choice == "merge" or choice == "preserve" then
+    return nil, "Merging REAPER changes is not available yet. Use Refresh Session to restore generated session items."
+  end
+  return nil, "Unknown drift resolution: " .. tostring(choice)
+end
+
+function ReaADR.sync_incremental(change_set, options)
+  change_set = change_set or {}
+  options = options or {}
+  local started = reaper.time_precise and reaper.time_precise() or os.clock()
+  local cues = change_set.cues or {}
+  local all_cues = change_set.all_cues
+  if not all_cues then
+    all_cues = ReaADR.load_session_cues() or cues
+  end
+
+  local regions_updated = 0
+  ReaADR.ensure_character_ruler_lanes(all_cues)
+  local ruler_lanes = ReaADR.character_region_lanes(all_cues)
+  for _, cue in ipairs(cues) do
+    ReaADR.ensure_region(cue, character_color(cue.character))
+    ReaADR.set_region_lane(cue, ReaADR.region_lane_for_cue(cue, ruler_lanes))
+    regions_updated = regions_updated + 1
+  end
+
+  local overlay_status = nil
+  if change_set.refresh_overlay ~= false and options.refresh_overlay ~= false then
+    overlay_status = select(1, ReaADR.refresh_overlay_fx_from_project())
+  end
+  reaper.UpdateArrange()
+
+  local finished = reaper.time_precise and reaper.time_precise() or os.clock()
+  local summary = sync_summary("incremental", {
+    affected_cues = #cues,
+    regions_updated = regions_updated,
+    overlay_status = overlay_status,
+    source = change_set.source or options.source or "",
+    duration_seconds = math.max(0, finished - started),
+  })
+  ReaADR.log("INFO", "SYNC", ("Incremental sync complete: %d cue(s)"):format(#cues), {
+    detail = summary.source,
+  })
+  if options.emit_event ~= false and change_set.emit_event ~= false then
+    ReaADR.emit_event("SyncIncremental", {
+      cue_count = summary.affected_cues,
+      regions_updated = summary.regions_updated,
+      overlay_status = summary.overlay_status,
+      duration_seconds = summary.duration_seconds,
+    }, {
+      source = summary.source ~= "" and summary.source or "sync_incremental",
+      batch_id = options.batch_id or change_set.batch_id,
+    })
+  end
+  return summary
+end
+
 -- Unified session refresh. Rebuilds REAPER state from the ADR Session Model and
 -- fires a session-revision bump so all open windows react. This is the single
 -- function all "Refresh Session" controls should call.
 function ReaADR.refresh_session(options)
   options = options or {}
   ReaADR.log("INFO", "REFRESH", "Starting session refresh")
+  ReaADR.emit_event("RefreshRequested", {
+    clear_generated_items = options.clear_generated_items == true,
+    clear_generated_regions = options.clear_generated_regions == true,
+  }, {
+    source = options.source or "refresh_session",
+    batch_id = options.batch_id,
+  })
   reaper.Undo_BeginBlock()
 
   local snapshot = ReaADR.create_session_snapshot("Refresh Session")
-  local rebuild_summary, rebuild_err = ReaADR.rebuild_session_from_model({
+  local summary, sync_err = ReaADR.sync_full({
     clear_generated_items = options.clear_generated_items == true,
+    clear_generated_regions = options.clear_generated_regions == true,
+    on_progress = options.on_progress,
+    batch_id = options.batch_id,
+    source = "refresh_session",
   })
-  if not rebuild_summary then
-    ReaADR.restore_session_snapshot(snapshot, "Refresh rebuild failed: " .. tostring(rebuild_err))
+  if not summary then
+    ReaADR.restore_session_snapshot(snapshot, "Refresh rebuild failed: " .. tostring(sync_err))
     reaper.Undo_EndBlock("ReaADR: refresh session (failed)", -1)
-    ReaADR.log("ERROR", "REFRESH", "Session rebuild failed: " .. tostring(rebuild_err))
-    return nil, rebuild_err
+    ReaADR.log("ERROR", "REFRESH", "Session rebuild failed: " .. tostring(sync_err))
+    return nil, sync_err
   end
 
-  ReaADR.refresh_overlay_silent()
   ReaADR.bump_session_revision()
   reaper.Undo_EndBlock("ReaADR: refresh session", -1)
 
   ReaADR.log("INFO", "REFRESH", ("Refresh complete: %d cues, %d regions updated, %d tracks"):format(
-    rebuild_summary.cue_count or 0,
-    (rebuild_summary.regions_created or 0) + (rebuild_summary.regions_updated or 0),
-    (rebuild_summary.tracks_created or 0) + (rebuild_summary.tracks_reused or 0)
+    summary.affected_cues or 0,
+    (summary.regions_created or 0) + (summary.regions_updated or 0),
+    (summary.tracks_created or 0) + (summary.tracks_reused or 0)
   ))
-  return {
-    rebuild = rebuild_summary,
-  }
+  return summary
 end
 
 function ReaADR.ADR_RefreshSession(options)
@@ -3635,90 +4104,105 @@ function ReaADR.clear_cues_for_characters(character_list)
     return { cues_removed = 0, regions_removed = 0, tracks_removed = 0 }
   end
 
+  local snapshot = ReaADR.create_session_snapshot("Clear Cues For Characters")
   reaper.Undo_BeginBlock()
   reaper.PreventUIRefresh(1)
 
-  -- Collect cue tags so we can match regions by name
-  local cue_tags = {}
-  for _, cue in ipairs(to_clear) do
-    cue_tags[#cue_tags + 1] = ReaADR.cue_tag(cue)
-  end
-
-  -- Scan and delete matching regions
   local regions_removed = 0
-  local _, marker_count, region_count = reaper.CountProjectMarkers(project())
-  local total = marker_count + region_count
-  local region_ids = {}
-  for i = 0, total - 1 do
-    local ok, is_region, _, _, name, marker_id = reaper.EnumProjectMarkers3(project(), i)
-    if ok and is_region then
-      for _, tag in ipairs(cue_tags) do
-        if name:find(tag, 1, true) then
-          region_ids[#region_ids + 1] = marker_id
-          break
-        end
-      end
-    end
-  end
-  for _, marker_id in ipairs(region_ids) do
-    if reaper.DeleteProjectMarker(project(), marker_id, true) then
-      regions_removed = regions_removed + 1
-    end
-  end
-
-  -- Delete cue-audio items for cleared cues (role="cue_audio")
-  local cleared_keys = {}
-  for _, cue in ipairs(to_clear) do
-    cleared_keys[ReaADR.cue_key(cue)] = true
-  end
-  for i = 0, reaper.CountTracks(project()) - 1 do
-    local track = reaper.GetTrack(project(), i)
-    for j = reaper.CountTrackMediaItems(track) - 1, 0, -1 do
-      local item = reaper.GetTrackMediaItem(track, j)
-      local _, role = reaper.GetSetMediaItemInfo_String(item, "P_EXT:ReaADR.role", "", false)
-      if role == "cue_audio" then
-        local _, cue_key = reaper.GetSetMediaItemInfo_String(item, "P_EXT:ReaADR.cue_key", "", false)
-        if cleared_keys[cue_key] then
-          reaper.DeleteTrackMediaItem(track, item)
-        end
-      end
-    end
-  end
-
-  -- Delete cue_character (beep/streamer) tracks for cleared characters.
-  -- Recording (dialogue) tracks are intentionally preserved.
-  local char_tokens = {}
-  for _, c in ipairs(character_list or {}) do
-    char_tokens[ReaADR.character_filter_key(c)] = true
-  end
   local tracks_removed = 0
-  local tracks_to_delete = {}
-  for i = 0, reaper.CountTracks(project()) - 1 do
-    local track = reaper.GetTrack(project(), i)
-    if track_ext(track, "ReaADR.role") == "cue_character" then
-      local key = track_ext(track, "ReaADR.key")
-      local key_char = tostring(key or ""):lower():match("^(.-)%.lane") or ""
-      if char_tokens[key_char] then
-        tracks_to_delete[#tracks_to_delete + 1] = track
+  local ok, err = pcall(function()
+    -- Collect cue tags so we can match regions by name
+    local cue_tags = {}
+    for _, cue in ipairs(to_clear) do
+      cue_tags[#cue_tags + 1] = ReaADR.cue_tag(cue)
+    end
+
+    -- Scan and delete matching regions
+    local _, marker_count, region_count = reaper.CountProjectMarkers(project())
+    local total = marker_count + region_count
+    local region_ids = {}
+    for i = 0, total - 1 do
+      local marker_ok, is_region, _, _, name, marker_id = reaper.EnumProjectMarkers3(project(), i)
+      if marker_ok and is_region then
+        for _, tag in ipairs(cue_tags) do
+          if name:find(tag, 1, true) then
+            region_ids[#region_ids + 1] = marker_id
+            break
+          end
+        end
       end
     end
-  end
-  for i = #tracks_to_delete, 1, -1 do
-    reaper.DeleteTrack(tracks_to_delete[i])
-    tracks_removed = tracks_removed + 1
-  end
+    for _, marker_id in ipairs(region_ids) do
+      if reaper.DeleteProjectMarker(project(), marker_id, true) then
+        regions_removed = regions_removed + 1
+      end
+    end
 
-  -- Persist the updated session model.
-  ReaADR.save_session_cues(remaining)
+    -- Delete cue-audio items for cleared cues (role="cue_audio")
+    local cleared_keys = {}
+    for _, cue in ipairs(to_clear) do
+      cleared_keys[ReaADR.cue_key(cue)] = true
+    end
+    for i = 0, reaper.CountTracks(project()) - 1 do
+      local track = reaper.GetTrack(project(), i)
+      for j = reaper.CountTrackMediaItems(track) - 1, 0, -1 do
+        local item = reaper.GetTrackMediaItem(track, j)
+        local _, role = reaper.GetSetMediaItemInfo_String(item, "P_EXT:ReaADR.role", "", false)
+        if role == "cue_audio" then
+          local _, cue_key = reaper.GetSetMediaItemInfo_String(item, "P_EXT:ReaADR.cue_key", "", false)
+          if cleared_keys[cue_key] then
+            reaper.DeleteTrackMediaItem(track, item)
+          end
+        end
+      end
+    end
 
-  -- Mark each character as completed so cue regeneration skips them
-  for character, _ in pairs(char_set) do
-    ReaADR.set_character_recording_completed(character, true)
-  end
+    -- Delete cue_character (beep/streamer) tracks for cleared characters.
+    -- Recording (dialogue) tracks are intentionally preserved.
+    local char_tokens = {}
+    for _, c in ipairs(character_list or {}) do
+      char_tokens[ReaADR.character_filter_key(c)] = true
+    end
+    local tracks_to_delete = {}
+    for i = 0, reaper.CountTracks(project()) - 1 do
+      local track = reaper.GetTrack(project(), i)
+      if track_ext(track, "ReaADR.role") == "cue_character" then
+        local key = track_ext(track, "ReaADR.key")
+        local key_char = tostring(key or ""):lower():match("^(.-)%.lane") or ""
+        if char_tokens[key_char] then
+          tracks_to_delete[#tracks_to_delete + 1] = track
+        end
+      end
+    end
+    for i = #tracks_to_delete, 1, -1 do
+      reaper.DeleteTrack(tracks_to_delete[i])
+      tracks_removed = tracks_removed + 1
+    end
+
+    -- Persist the updated session model.
+    ReaADR.save_session_cues(remaining, {
+      event_type = "CueDeleted",
+      source = "clear_character_cues",
+      last_operation = "clear_character_cues",
+    })
+
+    -- Mark each character as completed so cue regeneration skips them
+    for character, _ in pairs(char_set) do
+      ReaADR.set_character_recording_completed(character, true)
+    end
+  end)
 
   reaper.PreventUIRefresh(-1)
   reaper.TrackList_AdjustWindows(false)
   reaper.UpdateArrange()
+
+  if not ok then
+    ReaADR.restore_session_snapshot(snapshot, "Clear cues failed: " .. tostring(err))
+    reaper.Undo_EndBlock("ReaADR: clear cues for selected characters (failed)", -1)
+    ReaADR.log("ERROR", "DELETE", "Clear cues failed", { detail = tostring(err) })
+    return nil, tostring(err)
+  end
+
   reaper.Undo_EndBlock("ReaADR: clear cues for selected characters", -1)
 
   if #remaining > 0 then
@@ -4125,14 +4609,14 @@ function character_lane_key(character, lane)
   return sanitize_token(character) .. ".lane" .. tostring(lane)
 end
 
-local function character_lane_name(character, lane)
+character_lane_name = function(character, lane)
   if lane <= 1 then
     return character
   end
   return ("%s %d"):format(character, lane)
 end
 
-local function cue_track_name(character, lane)
+cue_track_name = function(character, lane)
   if lane <= 1 then
     return "Cue - " .. character
   end
@@ -4374,7 +4858,11 @@ function ReaADR.setup_project(cues, options)
     end
 
     progress("Saving ReaADR project state...")
-    ReaADR.save_session_cues(session_cues)
+    ReaADR.save_session_cues(session_cues, {
+      event_type = "ScriptImported",
+      source = "setup_project",
+      last_operation = "setup_project",
+    })
     reaper.SetProjExtState(project(), ReaADR.EXT_NAMESPACE, "version", ReaADR.VERSION)
     reaper.SetProjExtState(project(), ReaADR.EXT_NAMESPACE, "session_cue_count", tostring(#session_cues))
     reaper.SetProjExtState(project(), ReaADR.EXT_NAMESPACE, "session_character_count", tostring(#session_characters))

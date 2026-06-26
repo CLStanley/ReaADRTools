@@ -56,6 +56,7 @@ behavior remain available through the shared Lua session layer.
 
 - [User Guide](docs/USER_GUIDE.md)
 - [Code Architecture](docs/CODE_ARCHITECTURE.md)
+- [Addendum Implementation Backlog](docs/ADDENDUM_IMPLEMENTATION_BACKLOG.md)
 - [Extension Build Notes](docs/EXTENSION_BUILD.md)
 - [Installer Packaging](docs/PACKAGING.md)
 - [Import Test Documents](<docs/test docs/README.md>)

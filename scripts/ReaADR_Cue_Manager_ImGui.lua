@@ -246,10 +246,10 @@ local function add_cue_from_manager()
     return
   end
 
-  local summary, err = ReaADR.rebuild_session_from_model({})
+  local summary, err = ReaADR.sync_full({})
   if not summary then
     ReaADR.restore_session_snapshot(snapshot, "Add cue rebuild failed: " .. tostring(err))
-    ReaADR.message("Cue was added to the session model, but project rebuild failed:\n\n" .. tostring(err))
+    ReaADR.message("Cue was added, but the session refresh failed:\n\n" .. tostring(err))
     refresh_cues()
     return
   end
@@ -285,10 +285,10 @@ local function remove_selected_cue()
     return
   end
 
-  local summary, rebuild_err = ReaADR.rebuild_session_from_model({})
+  local summary, rebuild_err = ReaADR.sync_full({})
   if not summary then
     ReaADR.restore_session_snapshot(snapshot, "Remove cue rebuild failed: " .. tostring(rebuild_err))
-    ReaADR.message("Cue was removed from the session model, but project rebuild failed:\n\n" .. tostring(rebuild_err))
+    ReaADR.message("Cue was removed, but the session refresh failed:\n\n" .. tostring(rebuild_err))
     refresh_cues()
     return
   end
@@ -661,7 +661,7 @@ local function loop()
         local index = cue_index_by_key(pre_key)
         if index then state.selected = index end
         ReaADR.message(
-          ("Session refreshed.\n\nRegions synced: %d\nCue audio created: %d, updated: %d"):format(
+          ("Session refreshed.\n\nCue regions refreshed: %d\nCue audio created: %d, updated: %d"):format(
             summary.sync.updated or 0,
             summary.rebuild.cue_audio_created or 0,
             summary.rebuild.cue_audio_updated or 0

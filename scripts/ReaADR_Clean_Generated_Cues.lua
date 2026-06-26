@@ -113,7 +113,11 @@ local function do_clear()
   )
   if answer ~= 6 then return end
 
-  local summary = ReaADR.clear_cues_for_characters(to_clear)
+  local summary, err = ReaADR.clear_cues_for_characters(to_clear)
+  if not summary then
+    ReaADR.message("Clear cues failed:\n\n" .. tostring(err or "unknown error"))
+    return
+  end
   ReaADR.message(
     ("Cleared %d cue(s), %d region(s), %d cue track(s)."):format(
       summary.cues_removed, summary.regions_removed, summary.tracks_removed

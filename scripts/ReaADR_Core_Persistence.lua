@@ -544,10 +544,25 @@ return function(ReaADR, deps)
     return nil, "No ADR session model found. Import or generate cues first."
   end
 
-  function ReaADR.save_session_cues(cues)
-    local session = ReaADR.build_adr_session(cues or {}, { last_operation = "save_cues", cues_modified = true })
+  function ReaADR.save_session_cues(cues, options)
+    options = options or {}
+    local session = ReaADR.build_adr_session(cues or {}, {
+      last_operation = options.last_operation or "save_cues",
+      cues_modified = true,
+    })
     ReaADR.save_adr_session(session)
-    ReaADR.bump_session_revision()
+    local revision = ReaADR.bump_session_revision()
+    if options.emit_event ~= false and ReaADR.emit_event then
+      ReaADR.emit_event(options.event_type or "SessionSaved", {
+        cue_count = #(cues or {}),
+        revision = revision,
+        operation = options.last_operation or "save_cues",
+      }, {
+        source = options.source or "session",
+        session_id = session.session_id,
+        batch_id = options.batch_id,
+      })
+    end
   end
 
   function ReaADR.create_session_snapshot(label)
