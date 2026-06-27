@@ -9,12 +9,6 @@ end
 
 local base = script_dir()
 
-local ReaADR = dofile(base .. "/ReaADR_Core.lua")
-if ReaADR.cue_manager_auto_dock_enabled and ReaADR.cue_manager_auto_dock_enabled() then
-  dofile(base .. "/ReaADR_Cue_Manager_Gfx.lua")
-  return
-end
-
 if type(reaper.ImGui_CreateContext) == "function" then
   local ok, err = pcall(dofile, base .. "/ReaADR_Cue_Manager_ImGui.lua")
   if ok then

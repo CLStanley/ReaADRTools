@@ -59,6 +59,10 @@ local function build_and_import_cues(raw_segments)
     return
   end
 
+  if not ReaADR.confirm_replace_active_cues("Detect Dialogue From Selected Media") then
+    return
+  end
+
   local cues = {}
   local cue_id_width = math.max(3, #tostring(#raw_segments))
   for index, segment in ipairs(raw_segments) do

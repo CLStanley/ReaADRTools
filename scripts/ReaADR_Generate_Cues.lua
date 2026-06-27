@@ -1,7 +1,6 @@
--- ReaADR_Generate_Cues.lua  (Step 1 of 2)
--- Detect existing project markers/regions and generate cue audio items on the
--- ReaADR cue track.  Character tracks, overlay, and lane assignment are NOT
--- built here — use "Refresh Session" (Step 2) for the full structure.
+-- ReaADR_Generate_Cues.lua
+-- Detect existing project markers/regions and build a complete editable ReaADR
+-- session from them.
 
 local function script_dir()
   local info = debug.getinfo(1, "S").source
@@ -22,11 +21,13 @@ if #cues == 0 then
   return
 end
 
+if not ReaADR.confirm_replace_active_cues("Generate Cues from Markers/Regions") then
+  return
+end
+
 local answer = reaper.ShowMessageBox(
-  ("Generate ReaADR cue items from %d marker/region cue point(s)?\n\n" ..
-	   "Step 1 of 2: creates cue audio items only.\n" ..
-	   "Use \xe2\x80\x9cRefresh Session\xe2\x80\x9d afterward to build\n" ..
-	   "character tracks, overlay, and lane assignments."):format(#cues),
+  ("Generate a complete editable ReaADR session from %d marker/region cue point(s)?\n\n" ..
+	   "This creates or updates saved cues, cue regions, cue audio, character tracks, lane assignments, and video overlay data."):format(#cues),
   "ReaADR \xe2\x80\x93 Generate Cues",
   4
 )
@@ -46,9 +47,7 @@ if not generated_cue_path then
   return
 end
 
--- Step 1: cue audio items only — no character tracks, no overlay, no video track required.
 local snapshot = ReaADR.create_session_snapshot("Generate Cues from Markers/Regions")
--- Save the generated cue list first, then render only the cue-audio layer.
 ReaADR.save_session_cues(cues, {
   event_type = "BulkCueCreated",
   source = "generate_cues_from_selection",
@@ -56,11 +55,10 @@ ReaADR.save_session_cues(cues, {
 })
 local sync_summary, setup_error = ReaADR.sync_full({
   overlay_settings       = ReaADR.load_overlay_settings(),
-  create_source_video_track = false,
+  create_source_video_track = true,
   require_video_track    = false,
-  create_character_tracks = false,
+  create_character_tracks = true,
   create_cues_track      = true,
-  refresh_overlay        = false,
   on_progress            = progress.update,
   source                 = "generate_cues_from_selection",
 })
@@ -76,13 +74,16 @@ if not summary then
 end
 
 ReaADR.message(
-  ("Step 1 complete: %d cue item(s) generated.\n\n" ..
-	   "Cue audio created: %d  updated: %d  skipped: %d\n\n" ..
-	   "Next: use \xe2\x80\x9cRefresh Session\xe2\x80\x9d to add character tracks,\n" ..
-	   "lane assignments, and video overlay."):format(
+  ("Generated a complete ReaADR session from %d marker/region cue point(s).\n\n" ..
+	   "Tracks: %d created, %d reused\nRegions: %d created, %d updated\nCue audio: %d created, %d updated, %d skipped\nOverlay: %s"):format(
     summary.cue_count or 0,
+    summary.tracks_created or 0,
+    summary.tracks_reused or 0,
+    summary.regions_created or 0,
+    summary.regions_updated or 0,
     summary.cue_audio_created or 0,
     summary.cue_audio_updated or 0,
-    summary.cue_audio_skipped or 0
+    summary.cue_audio_skipped or 0,
+    summary.overlay_fx_status or "not_configured"
   )
 )

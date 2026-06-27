@@ -86,6 +86,7 @@ local state = {
   loop_range_active = false,
   loop_start        = 0,
   loop_end          = 0,
+  loop_take_warning_ack = false,
 }
 
 local theme       = ReaADR.ui_theme()
@@ -139,6 +140,19 @@ end
 local function save_loop_preference()
   settings.include_preroll_each_loop = state.include_preroll_each_loop
   ReaADR.save_overlay_settings(settings)
+end
+
+local function confirm_loop_recording_takes()
+  if state.loop_take_warning_ack then
+    return true
+  end
+  local answer = reaper.ShowMessageBox(
+    "Loop recording should create new takes or lanes for each pass.\n\nIf REAPER is set to replace or trim overlapping recordings, previous passes can be overwritten.\n\nCheck Options > New recording that overlaps existing media items before continuing.\n\nEnable loop recording?",
+    "ReaADR Loop Recording",
+    4
+  )
+  state.loop_take_warning_ack = answer == 6
+  return state.loop_take_warning_ack
 end
 
 local function capture_loop_range()
@@ -352,6 +366,11 @@ local function frame()
     if inside(btn_rec, gfx.mouse_x, gfx.mouse_y) then
       if state.mode == IDLE then start_take() end
     elseif inside(btn_loop, gfx.mouse_x, gfx.mouse_y) then
+      if not state.loop and not confirm_loop_recording_takes() then
+        state.last_mouse = mouse
+        reaper.defer(frame)
+        return
+      end
       state.loop = not state.loop
       if state.loop and state.include_preroll_each_loop then
         configure_loop_range()

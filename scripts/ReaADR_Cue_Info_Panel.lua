@@ -14,11 +14,16 @@ local state = {
   min_width = 820,
   min_height = 560,
   last_mouse = 0,
-  editing = false,
-  active_field = "line",
+  active_field = nil,
   edit_values = nil,
+  edit_key = "",
   cursors = {},
   edit_original_key = "",
+  dirty = false,
+  last_click_field = nil,
+  last_click_time = 0,
+  field_rects = {},
+  dock_button = nil,
   close_on_save = false,
 }
 
@@ -28,10 +33,11 @@ state.close_on_save = launch_options.close_on_save == true
 local edit_fields = {
   { key = "id", label = "Cue Number", row = 1, col = 1 },
   { key = "character", label = "Character", row = 1, col = 2 },
-  { key = "cue_type", label = "Cue Type", row = 1, col = 3 },
-  { key = "direction", label = "Direction", row = 1, col = 4 },
+  { key = "status", label = "Status", row = 1, col = 3, dropdown = true },
+  { key = "cue_type", label = "Cue Type", row = 1, col = 4, dropdown = true },
   { key = "start_time", label = "Start SMPTE or Seconds", row = 2, col = 1 },
   { key = "end_time", label = "End SMPTE or Seconds", row = 2, col = 2 },
+  { key = "direction", label = "Direction", row = 2, col = 3 },
   { key = "line", label = "Dialogue", multiline = true },
   { key = "notes", label = "Notes", multiline = true },
 }
@@ -39,37 +45,6 @@ local edit_fields = {
 local function sync_window_size()
   state.width = math.max(state.min_width, gfx.w or state.width)
   state.height = math.max(state.min_height, gfx.h or state.height)
-end
-
-local function layout_edit_fields()
-  local margin = 28
-  local gap = 18
-  local content_w = state.width - (margin * 2)
-  local top_w = math.max(130, (content_w - (gap * 3)) / 4)
-  local time_w = math.max(210, (content_w - gap) / 2)
-  for _, field in ipairs(edit_fields) do
-    if field.row == 1 then
-      field.x = margin + ((field.col - 1) * (top_w + gap))
-      field.y = 104
-      field.w = top_w
-      field.h = 34
-    elseif field.row == 2 then
-      field.x = margin + ((field.col - 1) * (time_w + gap))
-      field.y = 182
-      field.w = time_w
-      field.h = 34
-    elseif field.key == "line" then
-      field.x = margin
-      field.y = 272
-      field.w = content_w
-      field.h = math.max(130, state.height - 450)
-    elseif field.key == "notes" then
-      field.x = margin
-      field.y = state.height - 150
-      field.w = content_w
-      field.h = 86
-    end
-  end
 end
 
 local function inside(rect, x, y)
@@ -91,18 +66,32 @@ local KEY_END = key_code("end")
 local KEY_DELETE = key_code("del")
 
 local function draw_button(rect)
+  local theme = ReaADR.ui_theme()
   local hover = inside(rect, gfx.mouse_x, gfx.mouse_y)
-  gfx.set(hover and 0.20 or 0.16, hover and 0.34 or 0.24, hover and 0.42 or 0.30, 1)
+  ReaADR.set_gfx_color(hover and theme.highlight or theme.panel_alt)
   gfx.rect(rect.x, rect.y, rect.w, rect.h, true)
-  gfx.set(0.66, 0.70, 0.74, 1)
+  ReaADR.set_gfx_color(theme.border)
   gfx.rect(rect.x, rect.y, rect.w, rect.h, false)
   gfx.setfont(1, "Arial", 14)
-  gfx.set(1, 1, 1, 1)
-  local tw = gfx.measurestr(rect.label)
+  ReaADR.set_gfx_color(theme.text)
+  local label = tostring(rect.label or "")
+  local tw = gfx.measurestr(label)
   gfx.x = rect.x + math.floor((rect.w - tw) / 2)
   gfx.y = rect.y + 8
-  gfx.drawstr(rect.label)
+  gfx.drawstr(label)
   return hover
+end
+
+local function dock_info_panel()
+  if not gfx or not gfx.dock then
+    return
+  end
+  local ok, dock = pcall(gfx.dock, -1, 0, 0, 0, 0)
+  dock = ok and tonumber(dock) or 0
+  if dock == 0 then
+    gfx.dock(1)
+  end
+  ReaADR.save_window_state("cue_info")
 end
 
 local function draw_label(label, value, x, y)
@@ -247,16 +236,17 @@ local function set_cursor_from_mouse(field)
   set_cursor_for_field(field.key, best)
 end
 
-local function begin_edit(cue)
+local function begin_edit(cue, active_field)
   if not cue then
     return
   end
-  state.editing = true
-  state.active_field = "line"
+  state.active_field = active_field or state.active_field
   state.edit_original_key = ReaADR.cue_key(cue)
+  state.edit_key = state.edit_original_key
   state.edit_values = {
     id = tostring(cue.id or ""),
     character = tostring(cue.character or ""),
+    status = tostring(cue.status or "Not Recorded"),
     cue_type = tostring(cue.cue_type or ""),
     direction = tostring(cue.direction or ""),
     start_time = ReaADR.format_timecode(cue.start_time, reaper.TimeMap_curFrameRate(0) > 0 and reaper.TimeMap_curFrameRate(0) or 24),
@@ -268,10 +258,26 @@ local function begin_edit(cue)
   for key, value in pairs(state.edit_values) do
     state.cursors[key] = #tostring(value or "")
   end
+  state.dirty = false
+end
+
+local function sync_edit_values(cue)
+  if not cue then
+    state.edit_values = nil
+    state.edit_key = ""
+    state.edit_original_key = ""
+    state.active_field = nil
+    state.dirty = false
+    return
+  end
+  local key = ReaADR.cue_key(cue)
+  if key ~= state.edit_key then
+    begin_edit(cue, nil)
+  end
 end
 
 local function save_edit(cue)
-  if not state.edit_values then
+  if not state.edit_values or not cue then
     return false
   end
   local updated = {}
@@ -281,6 +287,7 @@ local function save_edit(cue)
   updated._original_key = state.edit_original_key
   updated.id = state.edit_values.id
   updated.character = state.edit_values.character
+  updated.status = state.edit_values.status
   updated.cue_type = state.edit_values.cue_type
   updated.direction = state.edit_values.direction
   local frame_rate = reaper.TimeMap_curFrameRate(0)
@@ -310,69 +317,124 @@ local function save_edit(cue)
     ReaADR.message("Cue update failed:\n\n" .. tostring(err))
     return false
   end
+  local refreshed, refresh_err = ReaADR.refresh_session({
+    source = "cue_info_inline_edit",
+  })
+  if not refreshed then
+    ReaADR.message("Cue was saved, but session refresh failed:\n\n" .. tostring(refresh_err))
+  end
   state.edit_original_key = ReaADR.cue_key(saved)
+  state.edit_key = state.edit_original_key
+  state.dirty = false
+  state.active_field = nil
+  ReaADR.set_manager_selected_cue(saved)
+  ReaADR.refresh_overlay_silent()
   return true
 end
 
 local function end_edit()
-  state.editing = false
-  state.edit_values = nil
-  state.cursors = {}
-  state.active_field = "line"
+  state.active_field = nil
 end
 
-local function draw_edit_field(field)
-  local active = field.key == state.active_field
-  gfx.setfont(1, "Arial", 13)
-  gfx.set(0.64, 0.68, 0.72, 1)
+local function dropdown_values_for_field(field_key)
+  if field_key == "status" then
+    return ReaADR.cue_statuses()
+  elseif field_key == "cue_type" then
+    return ReaADR.cue_types()
+  end
+  return {}
+end
+
+local function choose_dropdown_value(field, cue)
+  local choices = dropdown_values_for_field(field.key)
+  if #choices == 0 then
+    return
+  end
+  local current = tostring((state.edit_values or {})[field.key] or "")
+  local labels = {}
+  for index, value in ipairs(choices) do
+    labels[index] = (current == tostring(value) and "!" or "") .. tostring(value)
+  end
   gfx.x = field.x
-  gfx.y = field.y - 20
-  gfx.drawstr(field.label)
-  gfx.set(0.05, 0.06, 0.07, 1)
-  gfx.rect(field.x, field.y, field.w, field.h, true)
-  gfx.set(active and 0.95 or 0.40, active and 0.78 or 0.44, active and 0.30 or 0.48, 1)
-  gfx.rect(field.x, field.y, field.w, field.h, false)
-  gfx.setfont(1, "Arial", field.multiline and 16 or 14)
-  gfx.set(1, 1, 1, 1)
-  local value = tostring((state.edit_values or {})[field.key] or "")
-  local cursor = cursor_for_field(field.key)
-  if field.multiline then
-    draw_wrapped_text(value, field.x + 8, field.y + 8, field.w - 16, 20, math.floor((field.h - 12) / 20))
-    if active then
-      local cx, cy, ch = cursor_xy_for_multiline(field, value, cursor)
-      gfx.line(cx, cy, cx, math.min(field.y + field.h - 8, cy + ch))
-    end
-  else
-    draw_single_line_value(field, value, cursor, active)
+  gfx.y = field.y + field.h
+  local choice = gfx.showmenu(table.concat(labels, "|"))
+  if choice and choice > 0 and choices[choice] then
+    state.edit_values[field.key] = choices[choice]
+    state.active_field = field.key
+    state.dirty = true
+    save_edit(cue)
   end
 end
 
-local function draw_editor()
-  layout_edit_fields()
-  gfx.set(0.10, 0.11, 0.12, 1)
-  gfx.rect(0, 0, state.width, state.height, true)
-  gfx.setfont(1, "Arial", 24)
-  gfx.set(1, 1, 1, 1)
-  gfx.x = 24
-  gfx.y = 22
-  gfx.drawstr("Edit ADR Cue")
-  gfx.setfont(1, "Arial", 13)
-  gfx.set(0.72, 0.76, 0.80, 1)
-  gfx.x = 24
-  gfx.y = 52
-  gfx.drawstr("Click a field and type. Start/end accept SMPTE timecode or seconds.")
+local function field_by_key(key)
   for _, field in ipairs(edit_fields) do
-    draw_edit_field(field)
+    if field.key == key then
+      return field
+    end
   end
-  local save = { x = state.width - 292, y = state.height - 48, w = 110, h = 34, label = "Save" }
-  local close = { x = state.width - 154, y = state.height - 48, w = 110, h = 34, label = "Cancel" }
-  draw_button(save)
-  draw_button(close)
-  return save, close
+  return nil
 end
 
-local function handle_text_input(char)
+local function register_field_rect(key, rect)
+  local field = field_by_key(key)
+  if not field then
+    return nil
+  end
+  field.x = rect.x
+  field.y = rect.y
+  field.w = rect.w
+  field.h = rect.h
+  state.field_rects[#state.field_rects + 1] = field
+  return field
+end
+
+local function draw_single_line_editor(field)
+  local theme = ReaADR.ui_theme()
+  ReaADR.set_gfx_color(theme.panel_alt)
+  gfx.rect(field.x, field.y, field.w, field.h, true)
+  ReaADR.set_gfx_color(theme.accent_gold)
+  gfx.rect(field.x, field.y, field.w, field.h, false)
+  gfx.setfont(1, "Arial", 18)
+  ReaADR.set_gfx_color(theme.text)
+  local value = tostring((state.edit_values or {})[field.key] or "")
+  draw_single_line_value(field, value, cursor_for_field(field.key), true)
+end
+
+local function draw_multiline_editor(field, font_size, line_height)
+  local theme = ReaADR.ui_theme()
+  ReaADR.set_gfx_color(theme.panel_alt)
+  gfx.rect(field.x, field.y, field.w, field.h, true)
+  ReaADR.set_gfx_color(theme.accent_gold)
+  gfx.rect(field.x, field.y, field.w, field.h, false)
+  gfx.setfont(1, "Arial", font_size)
+  ReaADR.set_gfx_color(theme.text)
+  local value = tostring((state.edit_values or {})[field.key] or "")
+  draw_wrapped_text(value, field.x + 8, field.y + 8, field.w - 16, line_height, math.max(1, math.floor((field.h - 12) / line_height)))
+  local cx, cy, ch = cursor_xy_for_multiline(field, value, cursor_for_field(field.key))
+  gfx.line(cx, cy, cx, math.min(field.y + field.h - 8, cy + ch))
+end
+
+local function draw_editable_label(key, label, value, x, y, w)
+  local field = register_field_rect(key, { x = x, y = y + 18, w = w, h = 32 })
+  if field and state.active_field == key then
+    local theme = ReaADR.ui_theme()
+    gfx.setfont(1, "Arial", 14)
+    ReaADR.set_gfx_color(theme.muted)
+    gfx.x = x
+    gfx.y = y
+    gfx.drawstr(label)
+    draw_single_line_editor(field)
+  else
+    draw_label(label, value, x, y)
+  end
+end
+
+local function handle_text_input(char, cue)
   if not state.active_field or not state.edit_values then
+    return
+  end
+  local field_key = state.active_field
+  if field_key == "status" or field_key == "cue_type" then
     return
   end
   local value = state.edit_values[state.active_field] or ""
@@ -381,10 +443,12 @@ local function handle_text_input(char)
     if cursor > 0 then
       state.edit_values[state.active_field] = value:sub(1, cursor - 1) .. value:sub(cursor + 1)
       set_cursor_for_field(state.active_field, cursor - 1)
+      state.dirty = true
     end
   elseif char == KEY_DELETE then
     if cursor < #value then
       state.edit_values[state.active_field] = value:sub(1, cursor) .. value:sub(cursor + 2)
+      state.dirty = true
     end
   elseif char == KEY_LEFT then
     set_cursor_for_field(state.active_field, cursor - 1)
@@ -395,13 +459,11 @@ local function handle_text_input(char)
   elseif char == KEY_END or char == 5 then
     set_cursor_for_field(state.active_field, #value)
   elseif char == 13 then
-    if state.active_field == "line" or state.active_field == "notes" then
-      state.edit_values[state.active_field] = value:sub(1, cursor) .. "\n" .. value:sub(cursor + 1)
-      set_cursor_for_field(state.active_field, cursor + 1)
-    end
+    save_edit(cue)
   elseif char >= 32 and char < 127 then
     state.edit_values[state.active_field] = value:sub(1, cursor) .. string.char(char) .. value:sub(cursor + 1)
     set_cursor_for_field(state.active_field, cursor + 1)
+    state.dirty = true
   end
 end
 
@@ -409,6 +471,8 @@ local function draw_info(cue)
   local theme = ReaADR.ui_theme()
   ReaADR.set_gfx_color(theme.bg)
   gfx.rect(0, 0, state.width, state.height, true)
+  sync_edit_values(cue)
+  state.field_rects = {}
 
   local frame_rate = reaper.TimeMap_curFrameRate(0)
   if not frame_rate or frame_rate <= 0 then
@@ -420,6 +484,7 @@ local function draw_info(cue)
     cue and ("Cue %s | %s"):format(tostring(cue.id or ""), tostring(cue.character or "")) or "No cue selected",
     { x = 24, y = 20, width = state.width - 48, height = 76 }
   )
+  state.dock_button = nil
 
   if cue then
     local now = ReaADR.current_timeline_position()
@@ -432,12 +497,14 @@ local function draw_info(cue)
     local row2_y = row1_y + row_gap
     local row3_y = row2_y + row_gap
 
-    draw_label("Cue", cue.id or "", 24, row1_y)
-    draw_label("Character", cue.character or "", 180, row1_y)
-    draw_label("Status", cue.status or "Not Recorded", 452, row1_y)
-    draw_label("Cue Type", cue.cue_type or "", 760, row1_y)
-    draw_label("Start", ReaADR.format_timecode(cue.start_time, frame_rate), 24, row2_y)
-    draw_label("End", ReaADR.format_timecode(cue.end_time, frame_rate), 260, row2_y)
+    draw_editable_label("id", "Cue", cue.id or "", 24, row1_y, 128)
+    draw_editable_label("character", "Character", cue.character or "", 180, row1_y, 236)
+    draw_editable_label("status", "Status", cue.status or "Not Recorded", 452, row1_y, 236)
+    draw_editable_label("cue_type", "Cue Type", cue.cue_type or "", 760, row1_y, 220)
+    state.dock_button = { x = 760, y = row2_y + 18, w = 96, h = 32, label = "Dock" }
+    draw_button(state.dock_button)
+    draw_editable_label("start_time", "Start", ReaADR.format_timecode(cue.start_time, frame_rate), 24, row2_y, 190)
+    draw_editable_label("end_time", "End", ReaADR.format_timecode(cue.end_time, frame_rate), 260, row2_y, 190)
     draw_label("Length", ("%.2fs"):format(ReaADR.cue_duration(cue)), 496, row2_y)
     draw_label("Countdown", ("%.2fs"):format(countdown), 24, row3_y)
     draw_label("Take Count", tostring(take_count), 260, row3_y)
@@ -449,21 +516,40 @@ local function draw_info(cue)
     local dialogue_label_y = row3_y + 76
     gfx.y = dialogue_label_y
     gfx.drawstr("Dialogue")
-    gfx.setfont(1, "Arial", 22)
-    ReaADR.set_gfx_color(theme.text)
     local notes_y = state.height - 176
     local dialogue_text_y = dialogue_label_y + 24
-    local dialogue_max_lines = math.max(3, math.floor((notes_y - dialogue_text_y - 16) / 26))
-    draw_wrapped_text(tostring(cue.line or ""), 24, dialogue_text_y, state.width - 56, 26, dialogue_max_lines)
+    local dialogue_h = math.max(68, notes_y - dialogue_text_y - 16)
+    local line_field = register_field_rect("line", { x = 24, y = dialogue_text_y - 4, w = state.width - 56, h = dialogue_h })
+    if state.active_field == "line" and line_field then
+      draw_multiline_editor(line_field, 22, 26)
+    else
+      gfx.setfont(1, "Arial", 22)
+      ReaADR.set_gfx_color(theme.text)
+      local dialogue_max_lines = math.max(3, math.floor(dialogue_h / 26))
+      draw_wrapped_text(tostring(cue.line or ""), 24, dialogue_text_y, state.width - 56, 26, dialogue_max_lines)
+    end
 
     gfx.setfont(1, "Arial", 16)
     ReaADR.set_gfx_color(theme.muted)
     gfx.x = 24
     gfx.y = notes_y
     gfx.drawstr("Notes")
-    gfx.setfont(1, "Arial", 18)
-    ReaADR.set_gfx_color(theme.text)
-    draw_wrapped_text(tostring(cue.notes or ""), 24, notes_y + 24, state.width - 56, 22, math.max(2, math.floor((state.height - notes_y - 32) / 22)))
+    local notes_field = register_field_rect("notes", { x = 24, y = notes_y + 24, w = state.width - 56, h = math.max(54, state.height - notes_y - 56) })
+    if state.active_field == "notes" and notes_field then
+      draw_multiline_editor(notes_field, 18, 22)
+    else
+      gfx.setfont(1, "Arial", 18)
+      ReaADR.set_gfx_color(theme.text)
+      draw_wrapped_text(tostring(cue.notes or ""), 24, notes_y + 24, state.width - 56, 22, math.max(2, math.floor((state.height - notes_y - 32) / 22)))
+    end
+
+    if state.dirty then
+      gfx.setfont(1, "Arial", 13)
+      ReaADR.set_gfx_color(theme.muted)
+      gfx.x = 28
+      gfx.y = state.height - 28
+      gfx.drawstr("Unsaved edit: press Enter to save.")
+    end
   else
     gfx.setfont(1, "Arial", 18)
     ReaADR.set_gfx_color(theme.text)
@@ -476,44 +562,6 @@ end
 local function frame()
   sync_window_size()
   local cue = ReaADR.active_cue()
-  local buttons
-
-  if state.editing then
-    local save_button, close_button = draw_editor()
-    gfx.update()
-    local char = gfx.getchar()
-    if char < 0 or char == 27 then
-      ReaADR.save_window_state("cue_info")
-      end_edit()
-      return
-    end
-    handle_text_input(char)
-    local mouse = gfx.mouse_cap % 2
-    if mouse == 1 and state.last_mouse == 0 then
-      for _, field in ipairs(edit_fields) do
-        if inside(field, gfx.mouse_x, gfx.mouse_y) then
-          state.active_field = field.key
-          set_cursor_from_mouse(field)
-        end
-      end
-      if inside(save_button, gfx.mouse_x, gfx.mouse_y) then
-        if save_edit(cue) then
-          if state.close_on_save then
-            ReaADR.save_window_state("cue_info")
-            gfx.quit()
-            return
-          else
-            end_edit()
-          end
-        end
-      elseif inside(close_button, gfx.mouse_x, gfx.mouse_y) then
-        end_edit()
-      end
-    end
-    state.last_mouse = mouse
-    reaper.defer(frame)
-    return
-  end
 
   draw_info(cue)
   gfx.update()
@@ -523,6 +571,36 @@ local function frame()
     gfx.quit()
     return
   end
+  handle_text_input(char, cue)
+  local mouse = gfx.mouse_cap % 2
+  if mouse == 1 and state.last_mouse == 0 and state.dock_button and inside(state.dock_button, gfx.mouse_x, gfx.mouse_y) then
+    dock_info_panel()
+  elseif mouse == 1 and state.last_mouse == 0 and cue then
+    local clicked_field = nil
+    for _, field in ipairs(state.field_rects or {}) do
+      if inside(field, gfx.mouse_x, gfx.mouse_y) then
+        clicked_field = field
+        break
+      end
+    end
+    if clicked_field then
+      local now = reaper.time_precise()
+      local double_click = state.last_click_field == clicked_field.key and (now - state.last_click_time) <= 0.35
+      state.last_click_field = clicked_field.key
+      state.last_click_time = now
+      if clicked_field.dropdown and double_click then
+        choose_dropdown_value(clicked_field, cue)
+      elseif not clicked_field.dropdown and (double_click or state.active_field == clicked_field.key) then
+        state.active_field = clicked_field.key
+        set_cursor_from_mouse(clicked_field)
+      end
+    else
+      if not state.dirty then
+        end_edit()
+      end
+    end
+  end
+  state.last_mouse = mouse
   reaper.defer(frame)
 end
 

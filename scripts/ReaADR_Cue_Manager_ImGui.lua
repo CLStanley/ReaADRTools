@@ -41,8 +41,12 @@ local table_flags =
   imgui_const("TableFlags_Borders", 0) +
   imgui_const("TableFlags_RowBg", 0) +
   imgui_const("TableFlags_Resizable", 0) +
+  imgui_const("TableFlags_Reorderable", 0) +
+  imgui_const("TableFlags_Sortable", 0) +
+  imgui_const("TableFlags_ScrollX", 0) +
   imgui_const("TableFlags_ScrollY", 0) +
-  imgui_const("TableFlags_SizingStretchProp", 0)
+  imgui_const("TableFlags_SizingFixedFit", 0)
+local table_col_fixed = imgui_const("TableColumnFlags_WidthFixed", 0)
 local input_flags = imgui_const("InputTextFlags_EnterReturnsTrue", 0)
 local col_window_bg = imgui_const("Col_WindowBg", nil)
 local col_header = imgui_const("Col_Header", nil)
@@ -61,6 +65,31 @@ local state = {
   filter_signature = select(2, ReaADR.active_character_filter()),
   restored = ReaADR.load_window_state("cue_manager", { width = 1180, height = 760 }),
   last_poll = 0,
+  sort_key = "start_time",
+  sort_ascending = true,
+  show_column_controls = false,
+  close_requested = false,
+  column_widths = {
+    id = 58,
+    character = 130,
+    start_time = 128,
+    end_time = 128,
+    status = 132,
+    cue_type = 112,
+    line = 360,
+    notes = 300,
+  },
+}
+
+local default_column_widths = {
+  id = 58,
+  character = 130,
+  start_time = 128,
+  end_time = 128,
+  status = 132,
+  cue_type = 112,
+  line = 360,
+  notes = 300,
 }
 
 local logo_texture = nil
@@ -117,6 +146,80 @@ local function pop_theme(count)
   end
 end
 
+local function setup_table_column(label, width)
+  local ok = pcall(reaper.ImGui_TableSetupColumn, ctx, label, table_col_fixed, width)
+  if not ok then
+    reaper.ImGui_TableSetupColumn(ctx, label)
+  end
+end
+
+local function column_width(key, fallback)
+  return math.max(44, tonumber(state.column_widths[key]) or tonumber(fallback) or 100)
+end
+
+local function adjust_column_width(key, delta)
+  state.column_widths[key] = math.max(44, math.min(900, column_width(key, default_column_widths[key]) + delta))
+end
+
+local function draw_column_controls()
+  if not state.show_column_controls then
+    return
+  end
+  local columns = {
+    { key = "id", label = "Cue" },
+    { key = "character", label = "Character" },
+    { key = "start_time", label = "Start" },
+    { key = "end_time", label = "End" },
+    { key = "status", label = "Status" },
+    { key = "cue_type", label = "Type" },
+    { key = "line", label = "Line" },
+    { key = "notes", label = "Notes" },
+  }
+  reaper.ImGui_Separator(ctx)
+  reaper.ImGui_Text(ctx, "Column widths")
+  reaper.ImGui_SameLine(ctx)
+  if reaper.ImGui_Button(ctx, "Reset Columns") then
+    for key, width in pairs(default_column_widths) do
+      state.column_widths[key] = width
+    end
+  end
+  for index, column in ipairs(columns) do
+    if index > 1 then
+      reaper.ImGui_SameLine(ctx)
+    end
+    reaper.ImGui_Text(ctx, column.label)
+    reaper.ImGui_SameLine(ctx)
+    if reaper.ImGui_Button(ctx, "-##col_" .. column.key) then
+      adjust_column_width(column.key, -24)
+    end
+    reaper.ImGui_SameLine(ctx)
+    reaper.ImGui_Text(ctx, tostring(math.floor(column_width(column.key, default_column_widths[column.key]))))
+    reaper.ImGui_SameLine(ctx)
+    if reaper.ImGui_Button(ctx, "+##col_" .. column.key) then
+      adjust_column_width(column.key, 24)
+    end
+    if index == 4 then
+      reaper.ImGui_NewLine(ctx)
+    end
+  end
+  reaper.ImGui_Separator(ctx)
+end
+
+local set_sort
+
+local function render_sort_header(label, key)
+  local text = label
+  if state.sort_key == key then
+    text = text .. (state.sort_ascending and " ^" or " v")
+  end
+  reaper.ImGui_Selectable(ctx, text .. "##header_" .. key, false)
+  if reaper.ImGui_IsItemHovered(ctx) and reaper.ImGui_IsMouseDoubleClicked(ctx, 0) then
+    if set_sort then
+      set_sort(key)
+    end
+  end
+end
+
 local function cue_index_by_key(key)
   if not key or key == "" then
     return nil
@@ -137,10 +240,58 @@ local function cue_index_at_position(position)
   return nil
 end
 
+local function sort_value(cue, key)
+  if key == "start_time" or key == "end_time" then
+    return tonumber(cue[key]) or 0
+  end
+  return tostring(cue[key] or ""):lower()
+end
+
+local function apply_sort()
+  local key = state.sort_key
+  if not key or key == "" then
+    return
+  end
+  local ascending = state.sort_ascending ~= false
+  table.sort(cues, function(a, b)
+    local av = sort_value(a, key)
+    local bv = sort_value(b, key)
+    if av == bv then
+      local as = tonumber(a.start_time) or 0
+      local bs = tonumber(b.start_time) or 0
+      if as == bs then
+        return tostring(a.id or "") < tostring(b.id or "")
+      end
+      return as < bs
+    end
+    if ascending then
+      return av < bv
+    end
+    return av > bv
+  end)
+end
+
+function set_sort(key)
+  local selected = cues[state.selected]
+  local selected_key = selected and ReaADR.cue_key(selected) or ""
+  if state.sort_key == key then
+    state.sort_ascending = not state.sort_ascending
+  else
+    state.sort_key = key
+    state.sort_ascending = true
+  end
+  apply_sort()
+  local index = cue_index_by_key(selected_key)
+  if index then
+    state.selected = index
+  end
+end
+
 local selected_key = ReaADR.selected_region_cue_key()
 if selected_key == "" then
   selected_key = ReaADR.manager_selected_cue_key()
 end
+apply_sort()
 state.selected = cue_index_by_key(selected_key) or cue_index_at_position(ReaADR.current_timeline_position()) or 1
 
 local function refresh_cues()
@@ -149,6 +300,7 @@ local function refresh_cues()
   all_cues, source = manager_source_cues()
   all_cues = all_cues or {}
   cues = ReaADR.filter_cues_by_active_characters(all_cues)
+  apply_sort()
   local restored = cue_index_by_key(selected_key)
   if restored then
     state.selected = restored
@@ -575,11 +727,34 @@ local function save_geometry_if_enabled()
   })
 end
 
+local function launch_docked_cue_manager()
+  local cue = cues[state.selected]
+  if cue then
+    ReaADR.set_manager_selected_cue(cue)
+  end
+  ReaADR.save_window_geometry("cue_manager", {
+    dock = 1,
+    width = 1180,
+    height = 760,
+  })
+  local path = script_dir() .. "/ReaADR_Cue_Manager_Gfx.lua"
+  local command_id = reaper.AddRemoveReaScript(true, 0, path, true)
+  if command_id and command_id > 0 then
+    reaper.Main_OnCommand(command_id, 0)
+  else
+    dofile(path)
+  end
+  state.close_requested = true
+end
+
 local function loop()
   maybe_refresh_external_changes()
   local style_count = push_theme()
 
   reaper.ImGui_SetNextWindowSize(ctx, state.restored.width, state.restored.height, cond_first_use)
+  if type(reaper.ImGui_SetNextWindowSizeConstraints) == "function" then
+    reaper.ImGui_SetNextWindowSizeConstraints(ctx, 920, 520, 8192, 8192)
+  end
   if state.restored.x and state.restored.y then
     reaper.ImGui_SetNextWindowPos(ctx, state.restored.x, state.restored.y, cond_first_use)
   end
@@ -650,12 +825,38 @@ local function loop()
       launch_character_filter()
     end
     reaper.ImGui_SameLine(ctx)
+    if reaper.ImGui_Button(ctx, "Update Cues From Regions") then
+      local progress = ReaADR.create_progress_window("Updating Cues From Regions")
+      local summary, err = ReaADR.update_session_cues_from_regions({ on_progress = progress.update })
+      progress.close()
+      if not summary then
+        ReaADR.message("Update failed:\n\n" .. tostring(err))
+      else
+        refresh_cues()
+        ReaADR.message(("Updated %d cue(s) from current region timing."):format(summary.changed_cues or 0))
+      end
+    end
+    reaper.ImGui_SameLine(ctx)
     if reaper.ImGui_Button(ctx, "Refresh Session") then
       local pre_selected = cues[state.selected]
       local pre_key = pre_selected and ReaADR.cue_key(pre_selected) or ""
-      local summary, err = ReaADR.refresh_session()
+      local drift = ReaADR.detect_session_drift and ReaADR.detect_session_drift({ cues = all_cues })
+      local proceed = true
+      if drift and (drift.modified_regions or 0) > 0 then
+        proceed = reaper.ShowMessageBox(
+          ("Detected %d cue region(s) whose timing differs from the saved session.\n\nRefresh Session will overwrite those moved regions. Use Update Cues From Regions first if the moved regions are correct.\n\nContinue with Refresh Session?"):format(drift.modified_regions or 0),
+          "ReaADR Refresh Session",
+          4
+        ) == 6
+      end
+      local summary, err = nil, nil
+      if proceed then
+        summary, err = ReaADR.refresh_session()
+      end
       if not summary then
-        ReaADR.message("Refresh failed:\n\n" .. tostring(err))
+        if proceed then
+          ReaADR.message("Refresh failed:\n\n" .. tostring(err))
+        end
       else
         refresh_cues()
         local index = cue_index_by_key(pre_key)
@@ -677,6 +878,16 @@ local function loop()
     if reaper.ImGui_Button(ctx, "Info Panel") then
       launch_info_panel()
     end
+    reaper.ImGui_SameLine(ctx)
+    if reaper.ImGui_Button(ctx, "Dock") then
+      launch_docked_cue_manager()
+    end
+    reaper.ImGui_SameLine(ctx)
+    if reaper.ImGui_Button(ctx, state.show_column_controls and "Hide Columns" or "Columns") then
+      state.show_column_controls = not state.show_column_controls
+    end
+
+    draw_column_controls()
 
     local selected_cue = cues[state.selected]
     if selected_cue then
@@ -691,34 +902,50 @@ local function loop()
 
     local table_height = -40
     if reaper.ImGui_BeginTable(ctx, "cue_table", 8, table_flags, 0, table_height) then
-      reaper.ImGui_TableSetupColumn(ctx, "Cue")
-      reaper.ImGui_TableSetupColumn(ctx, "Character")
-      reaper.ImGui_TableSetupColumn(ctx, "Start SMPTE")
-      reaper.ImGui_TableSetupColumn(ctx, "End SMPTE")
-      reaper.ImGui_TableSetupColumn(ctx, "Status")
-      reaper.ImGui_TableSetupColumn(ctx, "Type")
-      reaper.ImGui_TableSetupColumn(ctx, "Line")
-      reaper.ImGui_TableSetupColumn(ctx, "Notes")
-      reaper.ImGui_TableHeadersRow(ctx)
+      setup_table_column("Cue", column_width("id", 58))
+      setup_table_column("Character", column_width("character", 130))
+      setup_table_column("Start SMPTE", column_width("start_time", 128))
+      setup_table_column("End SMPTE", column_width("end_time", 128))
+      setup_table_column("Status", column_width("status", 132))
+      setup_table_column("Type", column_width("cue_type", 112))
+      setup_table_column("Line", column_width("line", 360))
+      setup_table_column("Notes", column_width("notes", 300))
+      reaper.ImGui_TableNextRow(ctx)
+      reaper.ImGui_TableSetColumnIndex(ctx, 0)
+      render_sort_header("Cue", "id")
+      reaper.ImGui_TableSetColumnIndex(ctx, 1)
+      render_sort_header("Character", "character")
+      reaper.ImGui_TableSetColumnIndex(ctx, 2)
+      render_sort_header("Start SMPTE", "start_time")
+      reaper.ImGui_TableSetColumnIndex(ctx, 3)
+      render_sort_header("End SMPTE", "end_time")
+      reaper.ImGui_TableSetColumnIndex(ctx, 4)
+      render_sort_header("Status", "status")
+      reaper.ImGui_TableSetColumnIndex(ctx, 5)
+      render_sort_header("Type", "cue_type")
+      reaper.ImGui_TableSetColumnIndex(ctx, 6)
+      render_sort_header("Line", "line")
+      reaper.ImGui_TableSetColumnIndex(ctx, 7)
+      render_sort_header("Notes", "notes")
 
       for index, cue in ipairs(cues) do
         reaper.ImGui_TableNextRow(ctx)
         reaper.ImGui_TableSetColumnIndex(ctx, 0)
-        render_cell(cue, "id",         display_value_for_field(cue, "id",         frame_rate), display_value_for_field(cue, "id",         frame_rate), 56,  frame_rate)
+        render_cell(cue, "id",         display_value_for_field(cue, "id",         frame_rate), display_value_for_field(cue, "id",         frame_rate), column_width("id", 58) - 8,  frame_rate)
         reaper.ImGui_TableSetColumnIndex(ctx, 1)
-        render_cell(cue, "character",  display_value_for_field(cue, "character",  frame_rate), display_value_for_field(cue, "character",  frame_rate), 120, frame_rate)
+        render_cell(cue, "character",  display_value_for_field(cue, "character",  frame_rate), display_value_for_field(cue, "character",  frame_rate), column_width("character", 130) - 8, frame_rate)
         reaper.ImGui_TableSetColumnIndex(ctx, 2)
-        render_cell(cue, "start_time", display_value_for_field(cue, "start_time", frame_rate), display_value_for_field(cue, "start_time", frame_rate), 118, frame_rate)
+        render_cell(cue, "start_time", display_value_for_field(cue, "start_time", frame_rate), display_value_for_field(cue, "start_time", frame_rate), column_width("start_time", 128) - 8, frame_rate)
         reaper.ImGui_TableSetColumnIndex(ctx, 3)
-        render_cell(cue, "end_time",   display_value_for_field(cue, "end_time",   frame_rate), display_value_for_field(cue, "end_time",   frame_rate), 118, frame_rate)
+        render_cell(cue, "end_time",   display_value_for_field(cue, "end_time",   frame_rate), display_value_for_field(cue, "end_time",   frame_rate), column_width("end_time", 128) - 8, frame_rate)
         reaper.ImGui_TableSetColumnIndex(ctx, 4)
-        render_cell(cue, "status",     display_value_for_field(cue, "status",     frame_rate), display_value_for_field(cue, "status",     frame_rate), 126, frame_rate)
+        render_cell(cue, "status",     display_value_for_field(cue, "status",     frame_rate), display_value_for_field(cue, "status",     frame_rate), column_width("status", 132) - 8, frame_rate)
         reaper.ImGui_TableSetColumnIndex(ctx, 5)
-        render_cell(cue, "cue_type",   display_value_for_field(cue, "cue_type",   frame_rate), display_value_for_field(cue, "cue_type",   frame_rate), 104, frame_rate)
+        render_cell(cue, "cue_type",   display_value_for_field(cue, "cue_type",   frame_rate), display_value_for_field(cue, "cue_type",   frame_rate), column_width("cue_type", 112) - 8, frame_rate)
         reaper.ImGui_TableSetColumnIndex(ctx, 6)
-        render_cell(cue, "line",  shorten_text(display_value_for_field(cue, "line",  frame_rate), 72), display_value_for_field(cue, "line",  frame_rate), 300, frame_rate)
+        render_cell(cue, "line",  shorten_text(display_value_for_field(cue, "line",  frame_rate), 72), display_value_for_field(cue, "line",  frame_rate), column_width("line", 360) - 8, frame_rate)
         reaper.ImGui_TableSetColumnIndex(ctx, 7)
-        render_cell(cue, "notes", shorten_text(display_value_for_field(cue, "notes", frame_rate), 60), display_value_for_field(cue, "notes", frame_rate), 260, frame_rate)
+        render_cell(cue, "notes", shorten_text(display_value_for_field(cue, "notes", frame_rate), 60), display_value_for_field(cue, "notes", frame_rate), column_width("notes", 300) - 8, frame_rate)
 
         if index == state.selected then
           ReaADR.set_manager_selected_cue(cue)
@@ -730,10 +957,12 @@ local function loop()
   reaper.ImGui_End(ctx)
   pop_theme(style_count)
 
-  if open then
+  if open and not state.close_requested then
     reaper.defer(loop)
   else
-    save_geometry_if_enabled()
+    if not state.close_requested then
+      save_geometry_if_enabled()
+    end
     reaper.ImGui_DestroyContext(ctx)
   end
 end

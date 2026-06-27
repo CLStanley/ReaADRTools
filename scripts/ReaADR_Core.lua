@@ -553,6 +553,23 @@ function ReaADR.message(text)
   reaper.ShowMessageBox(tostring(text), "ReaADR", 0)
 end
 
+function ReaADR.confirm_replace_active_cues(operation_name)
+  local session = ReaADR.load_adr_session and ReaADR.load_adr_session()
+  local existing = session and session.cues or nil
+  if not existing or #existing == 0 then
+    return true
+  end
+  local answer = reaper.ShowMessageBox(
+    ("%s will replace the current saved ReaADR cue session.\n\nCurrent active cues: %d\n\nA safety snapshot will be created first. Continue?"):format(
+      tostring(operation_name or "This action"),
+      #existing
+    ),
+    "ReaADR",
+    4
+  )
+  return answer == 6
+end
+
 function ReaADR.bump_session_revision()
   local _, value = reaper.GetProjExtState(project(), ReaADR.EXT_NAMESPACE, "session_revision")
   local revision = (tonumber(value) or 0) + 1
@@ -1743,20 +1760,12 @@ function ReaADR.generate_project_cue_wav(path, frame_rate)
   local interval_seconds = 1.0
   local total_seconds = 3.0
   local starts = { 0, interval_seconds, interval_seconds * 2 }
-  if file_exists(path) then
-    local duration = wav_duration_seconds(path)
-    if duration and math.abs(duration - total_seconds) <= 0.02 then
-      return path, {
-        status = "skipped",
-        reason = "exists",
-        total_seconds = duration,
-      }
-    end
-  end
+  -- Always rewrite the generated cue file so changes to cue tone level or shape
+  -- are applied to existing projects on the next refresh/generation.
 
   local total_samples = math.max(1, math.floor(total_seconds * sample_rate + 0.5))
   local beep_samples = math.max(1, math.floor(beep_seconds * sample_rate + 0.5))
-  local amplitude = 0.72
+  local amplitude = 0.36
   local frequency = 1000
   local sample_values = {}
 
@@ -2350,11 +2359,18 @@ function ReaADR.collect_project_marker_cues(options)
       local character = first_nonempty(options.character, "ADR")
       local line = label
       local cue_type = is_region and "Region" or "Marker"
+      local reaadr_id, reaadr_character = label:match("^%[ReaADR%]:id=([^%s]+)%s+ADR Cue%s+.-%s+%-%s+(.+)$")
       if flexible_export then
-        local parsed_character, parsed_line = parse_spotting_label(label)
-        character = first_nonempty(parsed_character, options.character, "")
-        line = parsed_line
-        cue_type = first_nonempty(options.cue_type, "")
+        if reaadr_id then
+          character = first_nonempty(reaadr_character, options.character, "")
+          line = ""
+          cue_type = "Dialogue"
+        else
+          local parsed_character, parsed_line = parse_spotting_label(label)
+          character = first_nonempty(parsed_character, options.character, "")
+          line = parsed_line
+          cue_type = first_nonempty(options.cue_type, "")
+        end
       end
 
       local end_time = is_region and region_end or (pos + default_duration)
@@ -2363,7 +2379,7 @@ function ReaADR.collect_project_marker_cues(options)
       end
 
       cues[#cues + 1] = {
-        id = tostring(marker_id),
+        id = tostring(reaadr_id or marker_id),
         character = character,
         start_time = pos,
         end_time = end_time,
@@ -3254,6 +3270,79 @@ function ReaADR.detect_session_drift(options)
     or result.missing_cue_audio > 0
     or result.unexpected_cue_audio > 0
   return result
+end
+
+function ReaADR.update_session_cues_from_regions(options)
+  options = options or {}
+  local cues, err = ReaADR.load_session_cues()
+  if not cues then
+    return nil, err or "No cached ReaADR session was found."
+  end
+
+  local updated = {}
+  local changed = 0
+  local missing = 0
+  local epsilon = tonumber(options.epsilon) or 0.0005
+
+  for index, cue in ipairs(cues) do
+    local copy = {}
+    for key, value in pairs(cue) do
+      copy[key] = value
+    end
+
+    local region = find_project_marker(ReaADR.region_name(cue), true)
+    if region then
+      local start_time = tonumber(region.pos) or tonumber(copy.start_time) or 0
+      local end_time = tonumber(region.region_end) or tonumber(copy.end_time) or start_time
+      if end_time < start_time then
+        end_time = start_time
+      end
+      local start_delta = math.abs(start_time - (tonumber(copy.start_time) or 0))
+      local end_delta = math.abs(end_time - (tonumber(copy.end_time) or tonumber(copy.start_time) or 0))
+      if start_delta > epsilon or end_delta > epsilon then
+        copy.start_time = start_time
+        copy.end_time = end_time
+        changed = changed + 1
+      end
+    else
+      missing = missing + 1
+    end
+    updated[index] = copy
+  end
+
+  if changed == 0 then
+    return {
+      changed_cues = 0,
+      missing_regions = missing,
+      rebuild = nil,
+    }
+  end
+
+  local snapshot = ReaADR.create_session_snapshot("Update Cues From Regions")
+  ReaADR.save_session_cues(updated, {
+    event_type = "CueTimingUpdated",
+    source = options.source or "update_cues_from_regions",
+    last_operation = "update_cues_from_regions",
+  })
+
+  local rebuild_summary, rebuild_err = ReaADR.sync_full({
+    overlay_settings = options.overlay_settings,
+    on_progress = options.on_progress,
+    source = options.source or "update_cues_from_regions",
+    batch_id = options.batch_id,
+  })
+  if not rebuild_summary then
+    ReaADR.restore_session_snapshot(snapshot, "Update cues from regions failed: " .. tostring(rebuild_err))
+    return nil, rebuild_err
+  end
+
+  ReaADR.bump_session_revision()
+  return {
+    changed_cues = changed,
+    missing_regions = missing,
+    rebuild = rebuild_summary.rebuild,
+    sync = rebuild_summary,
+  }
 end
 
 function ReaADR.sync_full(options)

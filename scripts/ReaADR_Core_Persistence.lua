@@ -90,22 +90,6 @@ return function(ReaADR, deps)
     reaper.SetProjExtState(project(), ReaADR.EXT_NAMESPACE, "ui.cue_hover_preview", enabled and "1" or "0")
   end
 
-  function ReaADR.cue_manager_auto_dock_enabled()
-    local _, value = reaper.GetProjExtState(project(), ReaADR.EXT_NAMESPACE, "ui.cue_manager_auto_dock")
-    return value == "1" or value == "true" or value == "yes"
-  end
-
-  function ReaADR.set_cue_manager_auto_dock_enabled(enabled)
-    reaper.SetProjExtState(project(), ReaADR.EXT_NAMESPACE, "ui.cue_manager_auto_dock", enabled and "1" or "0")
-    if enabled then
-      ReaADR.save_window_geometry("cue_manager", {
-        dock = 1,
-        width = 980,
-        height = 700,
-      })
-    end
-  end
-
   function ReaADR.load_window_state(window_id, defaults)
     defaults = defaults or {}
     local state = {
@@ -141,7 +125,15 @@ return function(ReaADR, deps)
     if state.x ~= nil and state.y ~= nil then
       gfx.init(title, state.width, state.height, state.dock, state.x, state.y)
     else
-      gfx.init(title, state.width, state.height, state.dock)
+      local mouse_x, mouse_y = 0, 0
+      if reaper.GetMousePosition then
+        mouse_x, mouse_y = reaper.GetMousePosition()
+      end
+      if mouse_x and mouse_y and (mouse_x ~= 0 or mouse_y ~= 0) then
+        gfx.init(title, state.width, state.height, state.dock, math.max(0, mouse_x - math.floor(state.width / 2)), math.max(0, mouse_y - 80))
+      else
+        gfx.init(title, state.width, state.height, state.dock)
+      end
     end
     return state
   end
@@ -607,6 +599,18 @@ return function(ReaADR, deps)
     local session = ReaADR.load_adr_session and ReaADR.load_adr_session()
     if session and session.cues and #session.cues > 0 then
       return session.cues
+    end
+    if ReaADR.collect_project_marker_cues then
+      local region_cues = ReaADR.collect_project_marker_cues({
+        include_markers = false,
+        include_regions = true,
+        character = "",
+        cue_type = "",
+        flexible_export = true,
+      })
+      if region_cues and #region_cues > 0 then
+        return region_cues
+      end
     end
     return nil, "No ADR session model found. Import or generate cues first."
   end

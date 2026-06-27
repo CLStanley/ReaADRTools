@@ -32,8 +32,8 @@ App.modules = {
     actions = {
       { label = "Check Session", app_action = "validate_session", hint = "Check cue timing, missing fields, overlap splits, metadata, and generated session items." },
       { label = "Refresh Session", app_action = "rebuild_session", hint = "Repair missing or changed generated tracks, cue regions, cue audio, and overlays." },
+      { label = "Update Cues From Regions", app_action = "update_cues_from_regions", hint = "Save current ReaADR region start/end times back to the cue session, then rebuild cue audio and overlays." },
       { label = "Clear Character Cues",      script = "ReaADR_Clean_Generated_Cues.lua", hint = "Select characters whose cues, regions, and cue tracks should be removed after their recording session is complete. Recording tracks and takes are preserved." },
-      { label = "Toggle QA Mode", app_action = "toggle_qa_mode", hint = "Enable or disable verbose console logging for imports, refreshes, deletions, and errors. Disabled by default in production." },
     },
   },
   reports = {
@@ -289,6 +289,7 @@ local function claim_manager_slot(max_slots)
 end
 
 function App.launch_manager(initial_tab)
+  App.ReaADR.show_video_window()
   local slot = claim_manager_slot(3)
   if not slot then
     App.ReaADR.message("Three ReaADR manager windows are already open. Close one before opening another.")
@@ -665,6 +666,17 @@ local function refresh_session_workflow(ReaADR, confirm_message)
     ReaADR.message("No ReaADR session was found:\n\n" .. tostring(err))
     return false
   end
+  local drift = ReaADR.detect_session_drift and ReaADR.detect_session_drift({ cues = cues })
+  if drift and (drift.modified_regions or 0) > 0 and not confirm_message then
+    local answer = reaper.ShowMessageBox(
+      ("Detected %d cue region(s) whose timing differs from the saved session.\n\nRefresh Session will restore the saved cue timing and overwrite those moved regions.\n\nChoose No, then use Update Cues From Regions if the moved regions are the timing you want to keep.\n\nContinue with Refresh Session?"):format(drift.modified_regions or 0),
+      "ReaADR Refresh Session",
+      4
+    )
+    if answer ~= 6 then
+      return false
+    end
+  end
   if confirm_message then
     local answer = reaper.ShowMessageBox(confirm_message, "ReaADR", 4)
     if answer ~= 6 then
@@ -694,6 +706,27 @@ local function refresh_session_workflow(ReaADR, confirm_message)
     rebuild.cue_audio_skipped or 0,
     rebuild.overlay_fx_status or "not_configured"
   ))
+  return true
+end
+
+function App.update_cues_from_regions()
+  local ReaADR = App.ReaADR
+  local progress = ReaADR.create_progress_window("Updating Cues From Regions")
+  local summary, err = ReaADR.update_session_cues_from_regions({
+    on_progress = progress.update,
+    source = "manager_update_cues_from_regions",
+  })
+  progress.close()
+  if not summary then
+    ReaADR.message("Could not update cues from regions:\n\n" .. tostring(err))
+    return false
+  end
+  ReaADR.message(
+    ("Updated %d cue(s) from current region timing.\n\nMissing ReaADR regions: %d"):format(
+      summary.changed_cues or 0,
+      summary.missing_regions or 0
+    )
+  )
   return true
 end
 
@@ -754,6 +787,18 @@ end
 
 function App.rebuild_session()
   local ReaADR = App.ReaADR
+  local cues = ReaADR.load_session_cues()
+  local drift = cues and ReaADR.detect_session_drift and ReaADR.detect_session_drift({ cues = cues })
+  if drift and (drift.modified_regions or 0) > 0 then
+    local answer = reaper.ShowMessageBox(
+      ("Detected %d cue region(s) whose timing differs from the saved session.\n\nYes: refresh from saved cues and overwrite moved regions.\nNo: cancel so you can use Update Cues From Regions instead."):format(drift.modified_regions or 0),
+      "ReaADR Refresh Session",
+      4
+    )
+    if answer ~= 6 then
+      return false
+    end
+  end
   return refresh_session_workflow(
     ReaADR,
     "Refresh generated tracks, cue regions, cue audio, and video overlays from the saved ReaADR session?"
@@ -873,12 +918,13 @@ end
 
 function App.open_manager(initial_tab, instance_slot)
   local ReaADR = App.ReaADR
+  ReaADR.show_video_window()
   local summary = session_summary(ReaADR)
   local state = {
-    width = 980,
-    height = 860,
-    min_width = 900,
-    min_height = 820,
+    width = 1040,
+    height = 880,
+    min_width = 1040,
+    min_height = 880,
     tab = initial_tab or "import",
     last_mouse = 0,
     closed = false,
@@ -891,6 +937,8 @@ function App.open_manager(initial_tab, instance_slot)
     quick_action_dropdown = nil,
     last_heartbeat = 0,
     instance_slot = tonumber(instance_slot),
+    dragging_overlay_scrollbar = false,
+    overlay_scrollbar_drag_offset = 0,
   }
 
   local tab_rects = {}
@@ -913,11 +961,24 @@ function App.open_manager(initial_tab, instance_slot)
       reaper.SetProjExtState(0, "ReaADRTools", manager_slot_key(state.instance_slot, "launching"), "")
       reaper.SetProjExtState(0, "ReaADRTools", manager_slot_key(state.instance_slot, "launch_tab"), "")
     end
-    ReaADR.save_window_state("manager")
     gfx.quit()
   end
 
   local function frame()
+    if (gfx.w or state.width) < state.min_width or (gfx.h or state.height) < state.min_height then
+      local dock, x, y = 0, nil, nil
+      local ok, current_dock, current_x, current_y = pcall(gfx.dock, -1, 0, 0, 0, 0)
+      if ok then
+        dock = tonumber(current_dock) or 0
+        x = tonumber(current_x)
+        y = tonumber(current_y)
+      end
+      if x ~= nil and y ~= nil then
+        gfx.init("ReaADR Tools Manager", state.min_width, state.min_height, dock, x, y)
+      else
+        gfx.init("ReaADR Tools Manager", state.min_width, state.min_height, dock)
+      end
+    end
     state.width = math.max(state.min_width, gfx.w or state.width)
     state.height = math.max(state.min_height, gfx.h or state.height)
     if state.instance_slot and (reaper.time_precise() - state.last_heartbeat) >= 0.5 then
@@ -957,6 +1018,11 @@ function App.open_manager(initial_tab, instance_slot)
 
     local module = App.modules[state.tab]
     local buttons = {}
+    local overlay_scrollbar_rect = nil
+    local overlay_scrollbar_thumb = nil
+    local overlay_max_scroll = 0
+    local overlay_viewport_top = 0
+    local overlay_viewport_bottom = 0
     local y = math.max(156, header.content_y + 6)
     gfx.setfont(1, "Arial", 18)
     ReaADR.set_gfx_color(theme.text)
@@ -1035,11 +1101,8 @@ function App.open_manager(initial_tab, instance_slot)
       local remember_rect = { x = 24, y = quick_y + 258, w = 340, h = 26 }
       local hover_preview = ReaADR.cue_hover_preview_enabled()
       local hover_preview_rect = { x = 24, y = quick_y + 294, w = 340, h = 26 }
-      local cue_manager_dock = ReaADR.cue_manager_auto_dock_enabled and ReaADR.cue_manager_auto_dock_enabled()
-      local cue_manager_dock_rect = { x = 24, y = quick_y + 330, w = 420, h = 26 }
       special_click[#special_click + 1] = { rect = remember_rect, kind = "remember_layout" }
       special_click[#special_click + 1] = { rect = hover_preview_rect, kind = "hover_preview" }
-      special_click[#special_click + 1] = { rect = cue_manager_dock_rect, kind = "cue_manager_dock" }
       ReaADR.set_gfx_color(theme.panel_alt)
       gfx.rect(remember_rect.x, remember_rect.y, 18, 18, false)
       if remember_layout then
@@ -1062,36 +1125,54 @@ function App.open_manager(initial_tab, instance_slot)
       gfx.x = hover_preview_rect.x + 30
       gfx.y = hover_preview_rect.y - 1
       gfx.drawstr("Show cue text preview on hover")
-      ReaADR.set_gfx_color(theme.panel_alt)
-      gfx.rect(cue_manager_dock_rect.x, cue_manager_dock_rect.y, 18, 18, false)
-      if cue_manager_dock then
-        ReaADR.set_gfx_color(theme.accent_gold)
-        gfx.rect(cue_manager_dock_rect.x + 4, cue_manager_dock_rect.y + 4, 10, 10, true)
-      end
-      gfx.setfont(1, "Arial", 14)
-      ReaADR.set_gfx_color(theme.text)
-      gfx.x = cue_manager_dock_rect.x + 30
-      gfx.y = cue_manager_dock_rect.y - 1
-      gfx.drawstr("Open Cue Manager docked")
     elseif state.tab == "overlay" then
       local settings = state.overlay_settings
       local left = 24
-      local content_w = state.width - 48
+      local content_w = state.width - 70
       local section_y_base = y
+      overlay_viewport_top = section_y_base
       local overlay_viewport_h = math.max(140, state.height - section_y_base - 86)
+      overlay_viewport_bottom = overlay_viewport_top + overlay_viewport_h
       local section_y = section_y_base - (state.overlay_scroll or 0)
 
+      local function overlay_visible(rect)
+        return rect and rect.y + rect.h >= overlay_viewport_top and rect.y <= overlay_viewport_bottom
+      end
+
+      local function add_overlay_click(rect, kind, extra)
+        if overlay_visible(rect) then
+          local entry = { rect = rect, kind = kind }
+          for key, value in pairs(extra or {}) do
+            entry[key] = value
+          end
+          special_click[#special_click + 1] = entry
+        end
+      end
+
+      local function draw_overlay_button(rect)
+        if overlay_visible(rect) then
+          return draw_button(rect)
+        end
+        return false
+      end
+
+      local function draw_overlay_text(text, x, y_pos, font_size, color)
+        if y_pos >= overlay_viewport_top - 24 and y_pos <= overlay_viewport_bottom then
+          gfx.setfont(1, "Arial", font_size)
+          ReaADR.set_gfx_color(color)
+          gfx.x = x
+          gfx.y = y_pos
+          gfx.drawstr(text)
+        end
+      end
+
       local refresh_rect = { x = left, y = section_y, w = 188, h = 34, label = "Refresh Video Overlay" }
-      special_click[#special_click + 1] = { rect = refresh_rect, kind = "overlay_refresh" }
-      if draw_button(refresh_rect) then
+      add_overlay_click(refresh_rect, "overlay_refresh")
+      if draw_overlay_button(refresh_rect) then
         hover_hint = "Rebuild the video overlay FX from the current session cue data."
       end
 
-      gfx.setfont(1, "Arial", 14)
-      ReaADR.set_gfx_color(theme.muted)
-      gfx.x = left
-      gfx.y = section_y + 52
-      gfx.drawstr("Profiles")
+      draw_overlay_text("Profiles", left, section_y + 52, 14, theme.muted)
 
       local profile_buttons, after_profiles_y = layout_wrapped_buttons(left, section_y + 76, content_w, {
         { label = "Actor", profile = "actor", min_w = 92 },
@@ -1100,18 +1181,14 @@ function App.open_manager(initial_tab, instance_slot)
         { label = "Minimal", profile = "minimal", min_w = 92 },
       }, { gap_x = 10, gap_y = 10, height = 30, font_size = 15 })
       for _, rect in ipairs(profile_buttons) do
-        special_click[#special_click + 1] = { rect = rect, kind = "profile", profile = rect.profile }
-        if draw_button(rect) then
+        add_overlay_click(rect, "profile", { profile = rect.profile })
+        if draw_overlay_button(rect) then
           hover_hint = "Apply a common overlay visibility preset."
         end
       end
 
       local overlay_label_y = after_profiles_y + 22
-      gfx.setfont(1, "Arial", 14)
-      ReaADR.set_gfx_color(theme.muted)
-      gfx.x = left
-      gfx.y = overlay_label_y
-      gfx.drawstr("Overlay Elements")
+      draw_overlay_text("Overlay Elements", left, overlay_label_y, 14, theme.muted)
 
       local overlay_entries, after_overlay_y = layout_checkbox_grid(left, overlay_label_y + 24, content_w, App.overlay_rows, {
         min_col_w = 320,
@@ -1119,26 +1196,24 @@ function App.open_manager(initial_tab, instance_slot)
         row_h = 32,
       })
       for _, entry in ipairs(overlay_entries) do
-        special_click[#special_click + 1] = { rect = entry.rect, kind = "overlay_toggle", key = entry.row.key }
-        ReaADR.set_gfx_color(theme.panel_alt)
-        gfx.rect(entry.box_x, entry.box_y, 18, 18, false)
-        if settings[entry.row.key] then
-          ReaADR.set_gfx_color(theme.accent_gold)
-          gfx.rect(entry.box_x + 4, entry.box_y + 4, 10, 10, true)
+        add_overlay_click(entry.rect, "overlay_toggle", { key = entry.row.key })
+        if overlay_visible(entry.rect) then
+          ReaADR.set_gfx_color(theme.panel_alt)
+          gfx.rect(entry.box_x, entry.box_y, 18, 18, false)
+          if settings[entry.row.key] then
+            ReaADR.set_gfx_color(theme.accent_gold)
+            gfx.rect(entry.box_x + 4, entry.box_y + 4, 10, 10, true)
+          end
+          gfx.setfont(1, "Arial", 14)
+          ReaADR.set_gfx_color(theme.text)
+          gfx.x = entry.text_x
+          gfx.y = entry.text_y
+          gfx.drawstr(trim_to_width(entry.row.label, entry.text_w, 14))
         end
-        gfx.setfont(1, "Arial", 14)
-        ReaADR.set_gfx_color(theme.text)
-        gfx.x = entry.text_x
-        gfx.y = entry.text_y
-        gfx.drawstr(trim_to_width(entry.row.label, entry.text_w, 14))
       end
 
       local backgrounds_label_y = after_overlay_y + 18
-      gfx.setfont(1, "Arial", 14)
-      ReaADR.set_gfx_color(theme.muted)
-      gfx.x = left
-      gfx.y = backgrounds_label_y
-      gfx.drawstr("Text Backgrounds")
+      draw_overlay_text("Text Backgrounds", left, backgrounds_label_y, 14, theme.muted)
 
       local bg_entries, after_backgrounds_y = layout_checkbox_grid(left, backgrounds_label_y + 24, content_w, App.overlay_background_rows, {
         min_col_w = 320,
@@ -1146,18 +1221,20 @@ function App.open_manager(initial_tab, instance_slot)
         row_h = 32,
       })
       for _, entry in ipairs(bg_entries) do
-        special_click[#special_click + 1] = { rect = entry.rect, kind = "overlay_toggle", key = entry.row.key }
-        ReaADR.set_gfx_color(theme.panel_alt)
-        gfx.rect(entry.box_x, entry.box_y, 18, 18, false)
-        if settings[entry.row.key] then
-          ReaADR.set_gfx_color(theme.accent_gold)
-          gfx.rect(entry.box_x + 4, entry.box_y + 4, 10, 10, true)
+        add_overlay_click(entry.rect, "overlay_toggle", { key = entry.row.key })
+        if overlay_visible(entry.rect) then
+          ReaADR.set_gfx_color(theme.panel_alt)
+          gfx.rect(entry.box_x, entry.box_y, 18, 18, false)
+          if settings[entry.row.key] then
+            ReaADR.set_gfx_color(theme.accent_gold)
+            gfx.rect(entry.box_x + 4, entry.box_y + 4, 10, 10, true)
+          end
+          gfx.setfont(1, "Arial", 14)
+          ReaADR.set_gfx_color(theme.text)
+          gfx.x = entry.text_x
+          gfx.y = entry.text_y
+          gfx.drawstr(trim_to_width(entry.row.label, entry.text_w, 14))
         end
-        gfx.setfont(1, "Arial", 14)
-        ReaADR.set_gfx_color(theme.text)
-        gfx.x = entry.text_x
-        gfx.y = entry.text_y
-        gfx.drawstr(trim_to_width(entry.row.label, entry.text_w, 14))
       end
 
       local controls_y = after_backgrounds_y + 22
@@ -1166,54 +1243,66 @@ function App.open_manager(initial_tab, instance_slot)
       local white_rect = { x = left, y = color_label_y + 24, w = 220, h = 26, label = "White general text" }
       local yellow_rect = { x = left, y = color_label_y + 58, w = 220, h = 26, label = "Yellow general text" }
       local save_rect = { x = left, y = color_label_y + 102, w = 132, h = 34, label = "Save Overlay" }
-      special_click[#special_click + 1] = { rect = metadata_rect, kind = "metadata" }
-      special_click[#special_click + 1] = { rect = white_rect, kind = "text_color", value = "white" }
-      special_click[#special_click + 1] = { rect = yellow_rect, kind = "text_color", value = "yellow" }
-      special_click[#special_click + 1] = { rect = save_rect, kind = "overlay_save" }
-      draw_button(metadata_rect)
-      draw_button(save_rect)
-      gfx.setfont(1, "Arial", 13)
-      ReaADR.set_gfx_color(theme.muted)
-      gfx.x = left
-      gfx.y = controls_y
-      gfx.drawstr("Metadata fields")
-      gfx.x = left
-      gfx.y = metadata_rect.y + 42
+      add_overlay_click(metadata_rect, "metadata")
+      add_overlay_click(white_rect, "text_color", { value = "white" })
+      add_overlay_click(yellow_rect, "text_color", { value = "yellow" })
+      add_overlay_click(save_rect, "overlay_save")
+      draw_overlay_button(metadata_rect)
+      draw_overlay_button(save_rect)
+      draw_overlay_text("Metadata fields", left, controls_y, 13, theme.muted)
       local fields = tostring(settings.metadata_fields or "")
-      gfx.drawstr("Current: " .. trim_to_width(fields, math.max(180, content_w - 90), 13))
-      gfx.x = left
-      gfx.y = color_label_y
-      gfx.drawstr("General overlay text color")
-      gfx.setfont(1, "Arial", 14)
+      draw_overlay_text("Current: " .. trim_to_width(fields, math.max(180, content_w - 90), 13), left, metadata_rect.y + 42, 13, theme.muted)
+      draw_overlay_text("General overlay text color", left, color_label_y, 13, theme.muted)
       for _, option in ipairs({
         { rect = white_rect, value = "white", label = "White general text" },
         { rect = yellow_rect, value = "yellow", label = "Yellow general text" },
       }) do
-        local selected_color = ReaADR.overlay_text_mode(settings) == option.value
-        ReaADR.set_gfx_color(theme.panel_alt)
-        gfx.circle(option.rect.x + 10, option.rect.y + 13, 8, false, true)
-        if selected_color then
-          ReaADR.set_gfx_color(theme.accent_gold)
-          gfx.circle(option.rect.x + 10, option.rect.y + 13, 4, true, true)
+        if overlay_visible(option.rect) then
+          local selected_color = ReaADR.overlay_text_mode(settings) == option.value
+          ReaADR.set_gfx_color(theme.panel_alt)
+          gfx.circle(option.rect.x + 10, option.rect.y + 13, 8, false, true)
+          if selected_color then
+            ReaADR.set_gfx_color(theme.accent_gold)
+            gfx.circle(option.rect.x + 10, option.rect.y + 13, 4, true, true)
+          end
+          gfx.setfont(1, "Arial", 14)
+          ReaADR.set_gfx_color(theme.text)
+          gfx.x = option.rect.x + 24
+          gfx.y = option.rect.y + 4
+          gfx.drawstr(option.label)
         end
-        ReaADR.set_gfx_color(theme.text)
-        gfx.x = option.rect.x + 24
-        gfx.y = option.rect.y + 4
-        gfx.drawstr(option.label)
       end
-      gfx.x = save_rect.x + save_rect.w + 16
-      gfx.y = save_rect.y + 9
-      if state.overlay_dirty then
-        ReaADR.set_gfx_color(theme.accent_gold)
-        gfx.drawstr("Unsaved overlay changes")
-      elseif reaper.time_precise() < state.overlay_message_until then
-        ReaADR.set_gfx_color(theme.accent_green)
-        gfx.drawstr(state.overlay_message)
+      if overlay_visible(save_rect) then
+        gfx.setfont(1, "Arial", 14)
+        gfx.x = save_rect.x + save_rect.w + 16
+        gfx.y = save_rect.y + 9
+        if state.overlay_dirty then
+          ReaADR.set_gfx_color(theme.accent_gold)
+          gfx.drawstr("Unsaved overlay changes")
+        elseif reaper.time_precise() < state.overlay_message_until then
+          ReaADR.set_gfx_color(theme.accent_green)
+          gfx.drawstr(state.overlay_message)
+        end
       end
 
-      state.overlay_content_h = math.max(0, (save_rect.y + save_rect.h + 22) - section_y_base)
-      local overlay_max_scroll = math.max(0, state.overlay_content_h - overlay_viewport_h)
+      state.overlay_content_h = math.max(0, (save_rect.y + save_rect.h + 22 + (state.overlay_scroll or 0)) - section_y_base)
+      overlay_max_scroll = math.max(0, state.overlay_content_h - overlay_viewport_h)
       state.overlay_scroll = math.max(0, math.min(state.overlay_scroll or 0, overlay_max_scroll))
+      if overlay_max_scroll > 0 then
+        local bar_x = state.width - 22
+        local bar_y = section_y_base
+        local bar_h = overlay_viewport_h
+        local thumb_h = math.max(32, bar_h * (bar_h / math.max(bar_h, state.overlay_content_h)))
+        local thumb_y = bar_y + ((bar_h - thumb_h) * ((state.overlay_scroll or 0) / overlay_max_scroll))
+        overlay_scrollbar_rect = { x = bar_x - 3, y = bar_y, w = 14, h = bar_h }
+        overlay_scrollbar_thumb = { x = bar_x - 1, y = thumb_y, w = 10, h = thumb_h }
+        ReaADR.set_gfx_color(theme.panel)
+        gfx.rect(bar_x, bar_y, 8, bar_h, true)
+        ReaADR.set_gfx_color(theme.border)
+        gfx.rect(bar_x, bar_y, 8, bar_h, false)
+        ReaADR.set_gfx_color(theme.accent_gold)
+        gfx.rect(bar_x + 1, thumb_y, 6, thumb_h, true)
+      end
     elseif state.tab == "help" then
       gfx.setfont(1, "Arial", 14)
       ReaADR.set_gfx_color(theme.muted)
@@ -1250,25 +1339,52 @@ function App.open_manager(initial_tab, instance_slot)
     end
 
     if state.tab == "overlay" and gfx.mouse_wheel ~= 0 then
-      local section_y_base = y + ((#(module.actions or {})) * 44) + 18
-      local overlay_viewport_h = math.max(140, state.height - section_y_base - 86)
-      local overlay_max_scroll = math.max(0, (state.overlay_content_h or 0) - overlay_viewport_h)
       state.overlay_scroll = math.max(0, math.min(overlay_max_scroll, (state.overlay_scroll or 0) - (gfx.mouse_wheel > 0 and 28 or -28)))
       gfx.mouse_wheel = 0
     end
 
     local mouse = gfx.mouse_cap % 2
+    if state.dragging_overlay_scrollbar and mouse == 1 and overlay_scrollbar_rect and overlay_scrollbar_thumb then
+      local travel = math.max(1, overlay_scrollbar_rect.h - overlay_scrollbar_thumb.h)
+      local thumb_y = math.max(
+        overlay_scrollbar_rect.y,
+        math.min(gfx.mouse_y - (state.overlay_scrollbar_drag_offset or 0), overlay_scrollbar_rect.y + travel)
+      )
+      local ratio = (thumb_y - overlay_scrollbar_rect.y) / travel
+      state.overlay_scroll = math.max(0, math.min(overlay_max_scroll, math.floor((ratio * overlay_max_scroll) + 0.5)))
+    elseif state.dragging_overlay_scrollbar and mouse == 0 then
+      state.dragging_overlay_scrollbar = false
+      state.overlay_scrollbar_drag_offset = 0
+    end
+
     if mouse == 1 and state.last_mouse == 0 then
       for _, tab in ipairs(tab_rects) do
         if inside(tab, gfx.mouse_x, gfx.mouse_y) then
           state.tab = tab.key
         end
       end
+      if state.tab == "overlay" and overlay_scrollbar_thumb and inside(overlay_scrollbar_thumb, gfx.mouse_x, gfx.mouse_y) then
+        state.dragging_overlay_scrollbar = true
+        state.overlay_scrollbar_drag_offset = gfx.mouse_y - overlay_scrollbar_thumb.y
+        state.last_mouse = mouse
+        reaper.defer(frame)
+        return
+      elseif state.tab == "overlay" and overlay_scrollbar_rect and inside(overlay_scrollbar_rect, gfx.mouse_x, gfx.mouse_y) then
+        local travel = math.max(1, overlay_scrollbar_rect.h - overlay_scrollbar_thumb.h)
+        local thumb_y = math.max(
+          overlay_scrollbar_rect.y,
+          math.min(gfx.mouse_y - math.floor(overlay_scrollbar_thumb.h * 0.5), overlay_scrollbar_rect.y + travel)
+        )
+        local ratio = (thumb_y - overlay_scrollbar_rect.y) / travel
+        state.overlay_scroll = math.max(0, math.min(overlay_max_scroll, math.floor((ratio * overlay_max_scroll) + 0.5)))
+        state.last_mouse = mouse
+        reaper.defer(frame)
+        return
+      end
       for _, button in ipairs(buttons) do
         if inside(button, gfx.mouse_x, gfx.mouse_y) then
-          close()
           run_action(button.action)
-          return
+          summary = session_summary(ReaADR)
         end
       end
       for _, entry in ipairs(special_click) do
@@ -1282,10 +1398,6 @@ function App.open_manager(initial_tab, instance_slot)
             ReaADR.set_window_layout_enabled(not ReaADR.window_layout_enabled())
           elseif entry.kind == "hover_preview" then
             ReaADR.set_cue_hover_preview_enabled(not ReaADR.cue_hover_preview_enabled())
-          elseif entry.kind == "cue_manager_dock" then
-            if ReaADR.set_cue_manager_auto_dock_enabled then
-              ReaADR.set_cue_manager_auto_dock_enabled(not ReaADR.cue_manager_auto_dock_enabled())
-            end
           elseif entry.kind == "profile" then
             apply_overlay_profile(state.overlay_settings, entry.profile)
             state.overlay_dirty = true
@@ -1317,12 +1429,15 @@ function App.open_manager(initial_tab, instance_slot)
     reaper.defer(frame)
   end
 
-  local restored = ReaADR.init_persistent_window("manager", "ReaADR Tools Manager", {
-    width = state.width,
-    height = state.height,
-  })
-  state.width = restored.width
-  state.height = restored.height
+  local mouse_x, mouse_y = 0, 0
+  if reaper.GetMousePosition then
+    mouse_x, mouse_y = reaper.GetMousePosition()
+  end
+  if mouse_x and mouse_y and (mouse_x ~= 0 or mouse_y ~= 0) then
+    gfx.init("ReaADR Tools Manager", state.width, state.height, 0, math.max(0, mouse_x - math.floor(state.width / 2)), math.max(0, mouse_y - 80))
+  else
+    gfx.init("ReaADR Tools Manager", state.width, state.height, 0)
+  end
   frame()
 end
 

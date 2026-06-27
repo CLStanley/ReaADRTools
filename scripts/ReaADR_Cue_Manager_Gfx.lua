@@ -43,6 +43,10 @@ local state = {
   last_poll = 0,
   dragging_scrollbar = false,
   scrollbar_drag_offset = 0,
+  sort_key = "start_time",
+  sort_ascending = true,
+  last_header_click_key = nil,
+  last_header_click_time = 0,
 }
 
 local function key_code(name)
@@ -93,10 +97,42 @@ local function sync_scroll_to_selection(visible_rows)
   end
 end
 
+local function sort_value(cue, key)
+  if key == "start_time" or key == "end_time" then
+    return tonumber(cue[key]) or 0
+  end
+  return tostring(cue[key] or ""):lower()
+end
+
+local function apply_sort()
+  local key = state.sort_key
+  if not key or key == "" then
+    return
+  end
+  local ascending = state.sort_ascending ~= false
+  table.sort(cues, function(a, b)
+    local av = sort_value(a, key)
+    local bv = sort_value(b, key)
+    if av == bv then
+      local as = tonumber(a.start_time) or 0
+      local bs = tonumber(b.start_time) or 0
+      if as == bs then
+        return tostring(a.id or "") < tostring(b.id or "")
+      end
+      return as < bs
+    end
+    if ascending then
+      return av < bv
+    end
+    return av > bv
+  end)
+end
+
 local selected_key = ReaADR.selected_region_cue_key()
 if selected_key == "" then
   selected_key = ReaADR.manager_selected_cue_key()
 end
+apply_sort()
 state.selected = cue_index_by_key(selected_key) or cue_index_at_position(ReaADR.current_timeline_position()) or 1
 
 local function inside(rect, x, y)
@@ -124,6 +160,7 @@ local function refresh_cues()
   all_cues, source = manager_source_cues()
   all_cues = all_cues or {}
   cues = ReaADR.filter_cues_by_active_characters(all_cues)
+  apply_sort()
   local restored = cue_index_by_key(selected_key)
   if restored then
     state.selected = restored
@@ -287,19 +324,28 @@ local function launch_record_cue()
 end
 
 local function cell_columns(content_w)
-  local trailing_w = math.max(280, content_w - 620)
-  local line_w = math.max(130, math.floor(trailing_w * 0.56))
-  local notes_w = math.max(100, trailing_w - line_w)
-  return {
-    { key = "id", x = 30, w = 46 },
-    { key = "character", x = 84, w = 108 },
-    { key = "start_time", x = 194, w = 108 },
-    { key = "end_time", x = 312, w = 108 },
-    { key = "status", x = 430, w = 108 },
-    { key = "cue_type", x = 548, w = 82 },
-    { key = "line", x = 640, w = line_w },
-    { key = "notes", x = 640 + line_w + 10, w = notes_w - 10 },
+  local gap = 4
+  local x = 30
+  local fixed = {
+    { key = "id", label = "Cue", w = 42 },
+    { key = "character", label = "Character", w = 104 },
+    { key = "start_time", label = "Start SMPTE", w = 106 },
+    { key = "end_time", label = "End SMPTE", w = 106 },
+    { key = "status", label = "Status", w = 102 },
+    { key = "cue_type", label = "Type", w = 78 },
   }
+  local columns = {}
+  for _, column in ipairs(fixed) do
+    column.x = x
+    columns[#columns + 1] = column
+    x = x + column.w + gap
+  end
+  local trailing_w = math.max(280, (22 + content_w - 16) - x)
+  local line_w = math.max(130, math.floor(trailing_w * 0.56))
+  local notes_w = math.max(100, trailing_w - line_w - gap)
+  columns[#columns + 1] = { key = "line", label = "Line", x = x, w = line_w }
+  columns[#columns + 1] = { key = "notes", label = "Notes", x = x + line_w + gap, w = notes_w }
+  return columns
 end
 
 local function display_value_for_field(cue, field_key, frame_rate)
@@ -623,6 +669,18 @@ local function launch_info_panel()
   end
 end
 
+local function dock_cue_manager()
+  if not gfx or not gfx.dock then
+    return
+  end
+  local ok, dock, x, y = pcall(gfx.dock, -1, 0, 0, 0, 0)
+  dock = ok and tonumber(dock) or 0
+  if dock == 0 then
+    gfx.dock(1)
+  end
+  ReaADR.save_window_state("cue_manager")
+end
+
 local function draw_text_input(rect, value, label)
   local theme = ReaADR.ui_theme()
   gfx.setfont(1, "Arial", 12)
@@ -686,6 +744,7 @@ local button_specs = {
   { key = "sync", label = "Refresh Session", min_w = 134, hint = "Repair generated tracks, cue regions, cue audio, filters, and overlay state." },
   { key = "overlay", label = "Refresh Overlay", min_w = 142, hint = "Refresh the video overlay for the selected/current cue state." },
   { key = "info", label = "Info Panel", min_w = 112, hint = "Open the large cue information panel for the selected cue." },
+  { key = "dock", label = "Dock", min_w = 76, hint = "Dock this Cue Manager window in REAPER." },
 }
 
 local function layout_buttons(content_w)
@@ -693,7 +752,7 @@ local function layout_buttons(content_w)
   local button_h = 32
   local rows = {
     { "jump", "prev", "next", "record", "add", "remove" },
-    { "filter", "sync", "overlay", "info" },
+    { "filter", "sync", "overlay", "info", "dock" },
   }
   local by_key = {}
   for _, spec in ipairs(button_specs) do
@@ -772,23 +831,23 @@ local function frame()
   gfx.rect(22, header_y, content_w, 28, false)
   gfx.setfont(1, "Arial", 13)
   ReaADR.set_gfx_color(theme.text)
-  gfx.x = 30
-  gfx.y = header_y + 7
-  gfx.drawstr("Cue")
-  gfx.x = 84
-  gfx.drawstr("Character")
-  gfx.x = 194
-  gfx.drawstr("Start SMPTE")
-  gfx.x = 312
-  gfx.drawstr("End SMPTE")
-  gfx.x = 430
-  gfx.drawstr("Status")
-  gfx.x = 548
-  gfx.drawstr("Type")
-  gfx.x = 640
-  gfx.drawstr("Line")
-  gfx.x = columns[8].x
-  gfx.drawstr("Notes")
+  local header_cells = {}
+  for _, column in ipairs(columns) do
+    local label = column.label or column.key
+    if state.sort_key == column.key then
+      label = label .. (state.sort_ascending and " ^" or " v")
+    end
+    local rect = { x = column.x, y = header_y, w = column.w, h = 28, key = column.key }
+    header_cells[#header_cells + 1] = rect
+    if inside(rect, gfx.mouse_x, gfx.mouse_y) then
+      ReaADR.set_gfx_color(theme.highlight)
+      gfx.rect(rect.x, rect.y + 1, rect.w, rect.h - 2, true)
+      ReaADR.set_gfx_color(theme.text)
+    end
+    gfx.x = column.x
+    gfx.y = header_y + 7
+    gfx.drawstr(trim_to_width(label, column.w - 4, 13))
+  end
 
   local row_h = 30
   local list_y = header_y + 30
@@ -824,33 +883,16 @@ local function frame()
       gfx.rect(22, y, content_w, row_h - 2, false)
       gfx.setfont(1, "Arial", 13)
       ReaADR.set_gfx_color(theme.text)
-      gfx.x = 30
-      gfx.y = y + 7
-      gfx.drawstr(tostring(cue.id or ""))
-      gfx.x = 84
-      gfx.drawstr(tostring(cue.character or ""))
-      gfx.x = 194
-      gfx.drawstr(ReaADR.format_timecode(cue.start_time, frame_rate))
-      gfx.x = 312
-      gfx.drawstr(ReaADR.format_timecode(cue.end_time, frame_rate))
-      gfx.x = 430
-      gfx.drawstr(tostring(cue.status or "Not Recorded"))
-      gfx.x = 548
-      gfx.drawstr(tostring(cue.cue_type or "Dialogue"))
-      gfx.x = 640
-      local line = tostring(cue.line or "")
-      local line_chars = math.max(14, math.floor((columns[7].w - 8) / 7))
-      if #line > line_chars then
-        line = line:sub(1, math.max(1, line_chars - 3)) .. "..."
+      for _, column in ipairs(columns) do
+        local value = trim_cell_text(display_value_for_field(cue, column.key, frame_rate))
+        local limit = math.max(8, math.floor((column.w - 8) / 7))
+        if #value > limit then
+          value = value:sub(1, math.max(1, limit - 3)) .. "..."
+        end
+        gfx.x = column.x
+        gfx.y = y + 7
+        gfx.drawstr(value)
       end
-      gfx.drawstr(line)
-      gfx.x = columns[8].x
-      local notes = tostring(cue.notes or "")
-      local notes_chars = math.max(12, math.floor((columns[8].w - 8) / 7))
-      if #notes > notes_chars then
-        notes = notes:sub(1, math.max(1, notes_chars - 3)) .. "..."
-      end
-      gfx.drawstr(notes)
 
       local row_rect = { x = 22, y = y, w = content_w, h = row_h - 2 }
       if inside(row_rect, gfx.mouse_x, gfx.mouse_y) then
@@ -1109,6 +1151,34 @@ local function frame()
       return
     end
 
+    for _, header_cell in ipairs(header_cells or {}) do
+      if inside(header_cell, gfx.mouse_x, gfx.mouse_y) then
+        local now = reaper.time_precise()
+        local double_click = state.last_header_click_key == header_cell.key and (now - state.last_header_click_time) <= 0.35
+        state.last_header_click_key = header_cell.key
+        state.last_header_click_time = now
+        if double_click then
+          local selected = cues[state.selected]
+          local selected_key = selected and ReaADR.cue_key(selected) or ""
+          if state.sort_key == header_cell.key then
+            state.sort_ascending = not state.sort_ascending
+          else
+            state.sort_key = header_cell.key
+            state.sort_ascending = true
+          end
+          apply_sort()
+          local selected_index = cue_index_by_key(selected_key)
+          if selected_index then
+            state.selected = selected_index
+            sync_scroll_to_selection(visible_rows)
+          end
+        end
+        state.last_mouse = mouse
+        reaper.defer(frame)
+        return
+      end
+    end
+
     if not clicked_dropdown then
       for row = 1, visible_rows do
         local cue_index = state.scroll + row
@@ -1166,6 +1236,8 @@ local function frame()
       ReaADR.refresh_overlay_silent()
     elseif cue and inside(buttons.info, gfx.mouse_x, gfx.mouse_y) then
       launch_info_panel()
+    elseif inside(buttons.dock, gfx.mouse_x, gfx.mouse_y) then
+      dock_cue_manager()
     end
   end
   state.last_mouse = mouse
@@ -1176,8 +1248,7 @@ end
 local restored = ReaADR.init_persistent_window("cue_manager", "ReaADR Cue Manager", {
   width = state.width,
   height = state.height,
-  dock = (ReaADR.cue_manager_auto_dock_enabled and ReaADR.cue_manager_auto_dock_enabled()) and 1 or 0,
-  force_dock = ReaADR.cue_manager_auto_dock_enabled and ReaADR.cue_manager_auto_dock_enabled(),
+  dock = 0,
 })
 state.width = restored.width
 state.height = restored.height
