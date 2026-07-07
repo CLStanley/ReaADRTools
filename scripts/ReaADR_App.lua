@@ -390,6 +390,9 @@ function App.configure_quick_actions()
     if char < 0 or char == 27 then
       gfx.quit()
       return
+    elseif App.ReaADR.handle_gfx_transport_key(char, false) then
+      reaper.defer(frame)
+      return
     end
 
     local mouse = gfx.mouse_cap % 2
@@ -1335,6 +1338,9 @@ function App.open_manager(initial_tab, instance_slot)
     local char = gfx.getchar()
     if char < 0 or char == 27 then
       close()
+      return
+    elseif ReaADR.handle_gfx_transport_key(char, false) then
+      reaper.defer(frame)
       return
     end
 

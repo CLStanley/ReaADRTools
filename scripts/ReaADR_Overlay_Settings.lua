@@ -409,6 +409,9 @@ local function loop()
     ReaADR.save_window_state("overlay_settings")
     gfx.quit()
     return
+  elseif ReaADR.handle_gfx_transport_key(char, false) then
+    reaper.defer(frame)
+    return
   end
 
   local wheel = gfx.mouse_wheel

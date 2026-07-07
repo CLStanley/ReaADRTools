@@ -47,6 +47,20 @@ local function sync_window_size()
   state.height = math.max(state.min_height, gfx.h or state.height)
 end
 
+local function trim_to_width(value, width)
+  value = tostring(value or "")
+  width = tonumber(width) or 0
+  if width <= 0 or gfx.measurestr(value) <= width then
+    return value
+  end
+  local ellipsis = "..."
+  local limit = math.max(1, width - gfx.measurestr(ellipsis))
+  while #value > 1 and gfx.measurestr(value) > limit do
+    value = value:sub(1, #value - 1)
+  end
+  return value .. ellipsis
+end
+
 local function inside(rect, x, y)
   return x >= rect.x and x <= rect.x + rect.w and y >= rect.y and y <= rect.y + rect.h
 end
@@ -94,18 +108,18 @@ local function dock_info_panel()
   ReaADR.save_window_state("cue_info")
 end
 
-local function draw_label(label, value, x, y)
+local function draw_label(label, value, x, y, w)
   local theme = ReaADR.ui_theme()
   gfx.setfont(1, "Arial", 14)
   ReaADR.set_gfx_color(theme.muted)
   gfx.x = x
   gfx.y = y
-  gfx.drawstr(label)
+  gfx.drawstr(trim_to_width(label, w))
   gfx.setfont(1, "Arial", 22)
   ReaADR.set_gfx_color(theme.text)
   gfx.x = x
   gfx.y = y + 18
-  gfx.drawstr(tostring(value or ""))
+  gfx.drawstr(trim_to_width(value, w))
 end
 
 local function draw_wrapped_text(text, x, y, width, line_height, max_lines)
@@ -425,7 +439,7 @@ local function draw_editable_label(key, label, value, x, y, w)
     gfx.drawstr(label)
     draw_single_line_editor(field)
   else
-    draw_label(label, value, x, y)
+    draw_label(label, value, x, y, w)
   end
 end
 
@@ -468,6 +482,7 @@ local function handle_text_input(char, cue)
 end
 
 local function draw_info(cue)
+  ReaADR.mark_cue_info_panel_active()
   local theme = ReaADR.ui_theme()
   ReaADR.set_gfx_color(theme.bg)
   gfx.rect(0, 0, state.width, state.height, true)
@@ -496,19 +511,26 @@ local function draw_info(cue)
     local row1_y = info_top
     local row2_y = row1_y + row_gap
     local row3_y = row2_y + row_gap
+    local gap = 24
+    local content_w = state.width - 48
+    local col_w = math.floor((content_w - (gap * 3)) / 4)
+    local col1 = 24
+    local col2 = col1 + col_w + gap
+    local col3 = col2 + col_w + gap
+    local col4 = col3 + col_w + gap
 
-    draw_editable_label("id", "Cue", cue.id or "", 24, row1_y, 128)
-    draw_editable_label("character", "Character", cue.character or "", 180, row1_y, 236)
-    draw_editable_label("status", "Status", cue.status or "Not Recorded", 452, row1_y, 236)
-    draw_editable_label("cue_type", "Cue Type", cue.cue_type or "", 760, row1_y, 220)
-    state.dock_button = { x = 760, y = row2_y + 18, w = 96, h = 32, label = "Dock" }
+    draw_editable_label("id", "Cue", cue.id or "", col1, row1_y, col_w)
+    draw_editable_label("character", "Character", cue.character or "", col2, row1_y, col_w)
+    draw_editable_label("status", "Status", cue.status or "Not Recorded", col3, row1_y, col_w)
+    draw_editable_label("cue_type", "Cue Type", cue.cue_type or "", col4, row1_y, col_w)
+    state.dock_button = { x = col4, y = row2_y + 18, w = math.min(96, col_w), h = 32, label = "Dock" }
     draw_button(state.dock_button)
-    draw_editable_label("start_time", "Start", ReaADR.format_timecode(cue.start_time, frame_rate), 24, row2_y, 190)
-    draw_editable_label("end_time", "End", ReaADR.format_timecode(cue.end_time, frame_rate), 260, row2_y, 190)
-    draw_label("Length", ("%.2fs"):format(ReaADR.cue_duration(cue)), 496, row2_y)
-    draw_label("Countdown", ("%.2fs"):format(countdown), 24, row3_y)
-    draw_label("Take Count", tostring(take_count), 260, row3_y)
-    draw_label("Current Position", ReaADR.format_timecode(now, frame_rate), 496, row3_y)
+    draw_editable_label("start_time", "Start", ReaADR.format_timecode(cue.start_time, frame_rate), col1, row2_y, col_w)
+    draw_editable_label("end_time", "End", ReaADR.format_timecode(cue.end_time, frame_rate), col2, row2_y, col_w)
+    draw_label("Length", ("%.2fs"):format(ReaADR.cue_duration(cue)), col3, row2_y, col_w)
+    draw_label("Countdown", ("%.2fs"):format(countdown), col1, row3_y, col_w)
+    draw_label("Take Count", tostring(take_count), col2, row3_y, col_w)
+    draw_label("Current Position", ReaADR.format_timecode(now, frame_rate), col3, row3_y, col_w)
 
     gfx.setfont(1, "Arial", 16)
     ReaADR.set_gfx_color(theme.muted)
@@ -568,7 +590,11 @@ local function frame()
   local char = gfx.getchar()
   if char < 0 or char == 27 then
     ReaADR.save_window_state("cue_info")
+    ReaADR.clear_cue_info_panel_active()
     gfx.quit()
+    return
+  elseif ReaADR.handle_gfx_transport_key(char, state.active_field ~= nil) then
+    reaper.defer(frame)
     return
   end
   handle_text_input(char, cue)
@@ -607,6 +633,8 @@ end
 local restored = ReaADR.init_persistent_window("cue_info", "ReaADR Cue Information", {
   width = state.width,
   height = state.height,
+  min_width = state.min_width,
+  min_height = state.min_height,
 })
 state.width = restored.width
 state.height = restored.height

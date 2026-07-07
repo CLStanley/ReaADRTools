@@ -176,6 +176,9 @@ local function frame()
     ReaADR.save_window_state("clear_character_cues")
     gfx.quit()
     return
+  elseif ReaADR.handle_gfx_transport_key(char, false) then
+    reaper.defer(frame)
+    return
   elseif char == 13 then
     do_clear()
     return

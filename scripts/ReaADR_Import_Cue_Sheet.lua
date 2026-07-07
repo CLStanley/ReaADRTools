@@ -533,6 +533,9 @@ local function prompt_import_plan(script_info, cues, existing_counts, revision_d
       end
       cancel()
       return
+    elseif ReaADR.handle_gfx_transport_key(char, state.editing_script_name) then
+      reaper.defer(frame)
+      return
     elseif char == 13 then
       if state.editing_script_name then
         finish_script_name_edit(true)

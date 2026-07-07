@@ -200,6 +200,9 @@ local function frame()
   if char < 0 or char == 27 then
     close()
     return
+  elseif ReaADR.handle_gfx_transport_key(char, false) then
+    reaper.defer(frame)
+    return
   elseif char == 13 then
     apply_filter()
     return

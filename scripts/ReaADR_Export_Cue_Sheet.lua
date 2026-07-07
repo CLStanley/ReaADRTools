@@ -263,6 +263,9 @@ local function path_dialog(default_path, on_done)
     if char < 0 or char == 27 then
       finish(nil)
       return
+    elseif ReaADR.handle_gfx_transport_key(char, state.focused) then
+      reaper.defer(frame)
+      return
     elseif char == 13 then
       finish(state.path)
       return

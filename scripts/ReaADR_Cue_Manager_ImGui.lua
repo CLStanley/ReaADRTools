@@ -48,6 +48,7 @@ local table_flags =
   imgui_const("TableFlags_SizingFixedFit", 0)
 local table_col_fixed = imgui_const("TableColumnFlags_WidthFixed", 0)
 local input_flags = imgui_const("InputTextFlags_EnterReturnsTrue", 0)
+local key_space = imgui_const("Key_Space", 0)
 local col_window_bg = imgui_const("Col_WindowBg", nil)
 local col_header = imgui_const("Col_Header", nil)
 local col_header_hovered = imgui_const("Col_HeaderHovered", nil)
@@ -63,7 +64,7 @@ local state = {
   editing = nil,
   session_revision = ReaADR.session_revision and ReaADR.session_revision() or 0,
   filter_signature = select(2, ReaADR.active_character_filter()),
-  restored = ReaADR.load_window_state("cue_manager", { width = 1180, height = 760 }),
+  restored = ReaADR.load_window_state("cue_manager", { width = 1180, height = 760, min_width = 900, min_height = 520 }),
   last_poll = 0,
   sort_key = "start_time",
   sort_ascending = true,
@@ -468,9 +469,14 @@ local function launch_info_panel()
     return
   end
   ReaADR.set_manager_selected_cue(cue)
+  if ReaADR.cue_info_panel_is_active and ReaADR.cue_info_panel_is_active() then
+    ReaADR.message("Cue Information Panel is already open.\n\nThe open panel has been updated to the selected cue.")
+    return
+  end
   local path = script_dir() .. "/ReaADR_Cue_Info_Panel.lua"
   local command_id = reaper.AddRemoveReaScript(true, 0, path, true)
   if command_id and command_id > 0 then
+    ReaADR.mark_cue_info_panel_active()
     reaper.Main_OnCommand(command_id, 0)
   else
     ReaADR.message("Could not open Cue Information Panel.")
@@ -747,13 +753,25 @@ local function launch_docked_cue_manager()
   state.close_requested = true
 end
 
+local function handle_imgui_transport_key()
+  if state.editing or (tonumber(key_space) or 0) <= 0 or type(reaper.ImGui_IsKeyPressed) ~= "function" then
+    return false
+  end
+  local ok, pressed = pcall(reaper.ImGui_IsKeyPressed, ctx, key_space, false)
+  if ok and pressed then
+    reaper.Main_OnCommand(40044, 0)
+    return true
+  end
+  return false
+end
+
 local function loop()
   maybe_refresh_external_changes()
   local style_count = push_theme()
 
   reaper.ImGui_SetNextWindowSize(ctx, state.restored.width, state.restored.height, cond_first_use)
   if type(reaper.ImGui_SetNextWindowSizeConstraints) == "function" then
-    reaper.ImGui_SetNextWindowSizeConstraints(ctx, 920, 520, 8192, 8192)
+    reaper.ImGui_SetNextWindowSizeConstraints(ctx, 900, 520, 8192, 8192)
   end
   if state.restored.x and state.restored.y then
     reaper.ImGui_SetNextWindowPos(ctx, state.restored.x, state.restored.y, cond_first_use)
@@ -761,6 +779,7 @@ local function loop()
 
   local visible, open = reaper.ImGui_Begin(ctx, "ReaADR Cue Manager", true)
   if visible then
+    handle_imgui_transport_key()
     save_geometry_if_enabled()
 
     local frame_rate = reaper.TimeMap_curFrameRate(0)

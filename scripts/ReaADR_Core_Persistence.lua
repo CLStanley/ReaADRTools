@@ -95,10 +95,18 @@ return function(ReaADR, deps)
     local state = {
       width = tonumber(defaults.width) or 800,
       height = tonumber(defaults.height) or 600,
+      min_width = tonumber(defaults.min_width),
+      min_height = tonumber(defaults.min_height),
       dock = tonumber(defaults.dock) or 0,
       x = tonumber(defaults.x),
       y = tonumber(defaults.y),
     }
+    if state.min_width then
+      state.width = math.max(state.min_width, state.width)
+    end
+    if state.min_height then
+      state.height = math.max(state.min_height, state.height)
+    end
     if not ReaADR.window_layout_enabled() then
       return state
     end
@@ -111,6 +119,12 @@ return function(ReaADR, deps)
 
     state.width = tonumber(width) or state.width
     state.height = tonumber(height) or state.height
+    if state.min_width then
+      state.width = math.max(state.min_width, state.width)
+    end
+    if state.min_height then
+      state.height = math.max(state.min_height, state.height)
+    end
     state.dock = tonumber(dock) or state.dock
     state.x = tonumber(x) or state.x
     state.y = tonumber(y) or state.y

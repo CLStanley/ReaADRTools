@@ -181,6 +181,82 @@ function ReaADR.draw_logo(x, y, size)
   return size
 end
 
+local function trim_header_text(text, max_w, font_size)
+  text = tostring(text or "")
+  gfx.setfont(1, "Arial", font_size or 12)
+  if gfx.measurestr(text) <= max_w then
+    return text
+  end
+  local trimmed = text
+  while #trimmed > 1 and gfx.measurestr(trimmed .. "...") > max_w do
+    trimmed = trimmed:sub(1, #trimmed - 1)
+  end
+  return trimmed .. "..."
+end
+
+function ReaADR.session_header_metadata()
+  local project_name = ""
+  if reaper and reaper.GetProjectName then
+    project_name = reaper.GetProjectName(0, "") or ""
+  end
+  if project_name == "" then
+    project_name = "Unsaved project"
+  end
+  local frame_rate = 24
+  if reaper and reaper.TimeMap_curFrameRate then
+    frame_rate = reaper.TimeMap_curFrameRate(0)
+    if not frame_rate or frame_rate <= 0 then
+      frame_rate = 24
+    end
+  end
+  local revision = ReaADR.session_revision and ReaADR.session_revision() or 0
+  local cache_key = table.concat({ project_name, tostring(frame_rate), tostring(revision) }, "|")
+  if ReaADR._header_metadata_cache and ReaADR._header_metadata_cache.key == cache_key then
+    return ReaADR._header_metadata_cache.value
+  end
+
+  local session = ReaADR.load_adr_session and ReaADR.load_adr_session()
+  local cue_count = 0
+  local character_count = 0
+  local script_label = ""
+  if session then
+    cue_count = #(session.cues or {})
+    character_count = #(session.characters or {})
+    local scripts = session.scripts or {}
+    if #scripts == 1 then
+      script_label = tostring(scripts[1].script_name or "")
+    elseif #scripts > 1 then
+      script_label = tostring(#scripts) .. " scripts"
+    end
+    if script_label == "" then
+      script_label = tostring(session.session_name or "")
+    end
+  else
+    local cues = ReaADR.load_session_cues and ReaADR.load_session_cues() or nil
+    if cues then
+      cue_count = #cues
+      character_count = #(ReaADR.collect_characters and ReaADR.collect_characters(cues) or {})
+      script_label = tostring((cues[1] and cues[1].script_name) or "")
+    end
+  end
+
+  local value = {
+    project = project_name,
+    script = script_label ~= "" and script_label or "No script",
+    counts = ("Cues %d | Chars %d | %.2f fps"):format(cue_count, character_count, frame_rate),
+  }
+  ReaADR._header_metadata_cache = { key = cache_key, value = value }
+  return value
+end
+
+function ReaADR.handle_gfx_transport_key(char, editing)
+  if char == 32 and not editing then
+    reaper.Main_OnCommand(40044, 0) -- Transport: Play/stop
+    return true
+  end
+  return false
+end
+
 function ReaADR.draw_window_header(title, subtitle, options)
   options = options or {}
   local theme = ReaADR.ui_theme()
@@ -205,6 +281,26 @@ function ReaADR.draw_window_header(title, subtitle, options)
     gfx.x = x + logo_w + 14
     gfx.y = y + 30
     gfx.drawstr(subtitle)
+  end
+
+  if options.show_metadata ~= false then
+    local metadata = ReaADR.session_header_metadata()
+    local right_w = math.min(360, math.max(220, width * 0.34))
+    local right_x = x + width - right_w - 18
+    local text_x = x + logo_w + 14
+    if right_x > text_x + 260 then
+      gfx.setfont(1, "Arial", 12)
+      ReaADR.set_gfx_color(theme.muted)
+      gfx.x = right_x
+      gfx.y = y + 6
+      gfx.drawstr(trim_header_text(metadata.project, right_w, 12))
+      gfx.x = right_x
+      gfx.y = y + 24
+      gfx.drawstr(trim_header_text(metadata.script, right_w, 12))
+      gfx.x = right_x
+      gfx.y = y + 42
+      gfx.drawstr(trim_header_text(metadata.counts, right_w, 12))
+    end
   end
 
   return {
@@ -832,6 +928,36 @@ function ReaADR.consume_cue_info_launch_options()
     edit = edit == "1",
     close_on_save = close_on_save == "1",
   }
+end
+
+local function cue_info_state_key(field)
+  return "cue_info_window_" .. tostring(field or "")
+end
+
+function ReaADR.mark_cue_info_panel_active()
+  local now = reaper.time_precise and reaper.time_precise() or os.time()
+  reaper.SetProjExtState(project(), ReaADR.EXT_NAMESPACE, cue_info_state_key("active"), "1")
+  reaper.SetProjExtState(project(), ReaADR.EXT_NAMESPACE, cue_info_state_key("heartbeat"), tostring(now))
+end
+
+function ReaADR.clear_cue_info_panel_active()
+  reaper.SetProjExtState(project(), ReaADR.EXT_NAMESPACE, cue_info_state_key("active"), "")
+  reaper.SetProjExtState(project(), ReaADR.EXT_NAMESPACE, cue_info_state_key("heartbeat"), "")
+end
+
+function ReaADR.cue_info_panel_is_active()
+  local _, active = reaper.GetProjExtState(project(), ReaADR.EXT_NAMESPACE, cue_info_state_key("active"))
+  if active ~= "1" then
+    return false
+  end
+  local _, heartbeat = reaper.GetProjExtState(project(), ReaADR.EXT_NAMESPACE, cue_info_state_key("heartbeat"))
+  local last_seen = tonumber(heartbeat) or 0
+  local now = reaper.time_precise and reaper.time_precise() or os.time()
+  if last_seen <= 0 or (now - last_seen) > 2.5 then
+    ReaADR.clear_cue_info_panel_active()
+    return false
+  end
+  return true
 end
 
 function ReaADR.create_progress_window(title)

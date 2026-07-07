@@ -358,6 +358,9 @@ local function frame()
     ReaADR.save_window_state("record_cue")
     gfx.quit()
     return
+  elseif ReaADR.handle_gfx_transport_key(char, false) then
+    reaper.defer(frame)
+    return
   end
 
   -- Mouse clicks

@@ -27,7 +27,7 @@ local cues = ReaADR.filter_cues_by_active_characters(all_cues)
 local state = {
   width = 980,
   height = 700,
-  min_width = 520,
+  min_width = 900,
   min_height = 560,
   selected = 1,
   scroll = 0,
@@ -660,9 +660,14 @@ local function launch_info_panel()
     return
   end
   ReaADR.set_manager_selected_cue(cue)
+  if ReaADR.cue_info_panel_is_active and ReaADR.cue_info_panel_is_active() then
+    ReaADR.message("Cue Information Panel is already open.\n\nThe open panel has been updated to the selected cue.")
+    return
+  end
   local path = script_dir() .. "/ReaADR_Cue_Info_Panel.lua"
   local command_id = reaper.AddRemoveReaScript(true, 0, path, true)
   if command_id and command_id > 0 then
+    ReaADR.mark_cue_info_panel_active()
     reaper.Main_OnCommand(command_id, 0)
   else
     ReaADR.message("Could not open Cue Information Panel.")
@@ -1053,6 +1058,9 @@ local function frame()
     ReaADR.save_window_state("cue_manager")
     gfx.quit()
     return
+  elseif ReaADR.handle_gfx_transport_key(char, state.editing ~= nil) then
+    reaper.defer(frame)
+    return
   elseif state.editing and handle_inline_input(char) then
     reaper.defer(frame)
     return
@@ -1248,6 +1256,8 @@ end
 local restored = ReaADR.init_persistent_window("cue_manager", "ReaADR Cue Manager", {
   width = state.width,
   height = state.height,
+  min_width = state.min_width,
+  min_height = state.min_height,
   dock = 0,
 })
 state.width = restored.width
