@@ -5,7 +5,9 @@ set "ROOT=%~dp0.."
 set "REAPER_SDK=%ROOT%\vendor\reaper-sdk"
 set "WDL=%ROOT%\vendor\WDL\WDL"
 set "BUILD_DIR=%ROOT%\build\extension\windows-msvc-x64"
-set "DIST_DIR=%ROOT%\dist\UserPlugins"
+set "DIST_DIR=%ROOT%\dist"
+set "DIST_USERPLUGINS_DIR=%DIST_DIR%\UserPlugins"
+set "DIST_REAADR_DIR=%DIST_DIR%\Scripts\ReaADRTools"
 set "TARGET=reaper_reaadr.dll"
 
 if not exist "%REAPER_SDK%\sdk\reaper_plugin.h" (
@@ -26,7 +28,9 @@ if errorlevel 1 (
 )
 
 if not exist "%BUILD_DIR%" mkdir "%BUILD_DIR%"
-if not exist "%DIST_DIR%" mkdir "%DIST_DIR%"
+if not exist "%DIST_USERPLUGINS_DIR%" mkdir "%DIST_USERPLUGINS_DIR%"
+if not exist "%DIST_REAADR_DIR%\scripts" mkdir "%DIST_REAADR_DIR%\scripts"
+if not exist "%DIST_REAADR_DIR%\assets" mkdir "%DIST_REAADR_DIR%\assets"
 
 pushd "%~dp0"
 cl /nologo /EHsc /O2 /LD ^
@@ -41,8 +45,10 @@ if errorlevel 1 (
   exit /b 1
 )
 
-copy /Y "%BUILD_DIR%\%TARGET%" "%DIST_DIR%\%TARGET%" >nul
+copy /Y "%BUILD_DIR%\%TARGET%" "%DIST_USERPLUGINS_DIR%\%TARGET%" >nul
+xcopy "%ROOT%\scripts\*.lua" "%DIST_REAADR_DIR%\scripts\" /Y >nul
+xcopy "%ROOT%\assets\*" "%DIST_REAADR_DIR%\assets\" /Y >nul
 popd
 
-echo Built "%DIST_DIR%\%TARGET%"
-echo Copy it to %%APPDATA%%\REAPER\UserPlugins and restart REAPER.
+echo Built "%DIST_USERPLUGINS_DIR%\%TARGET%"
+echo Copy dist\UserPlugins into %%APPDATA%%\REAPER\UserPlugins and dist\Scripts into %%APPDATA%%\REAPER\Scripts, then restart REAPER.

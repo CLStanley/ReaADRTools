@@ -57,6 +57,10 @@ local logo_image_slot = 987
 local logo_image_loaded = false
 local logo_image_available = false
 
+local function project()
+  return 0
+end
+
 local function script_file_dir()
   local info = debug.getinfo(1, "S").source
   local path = info:sub(1, 1) == "@" and info:sub(2) or info
@@ -285,8 +289,9 @@ function ReaADR.draw_window_header(title, subtitle, options)
 
   if options.show_metadata ~= false then
     local metadata = ReaADR.session_header_metadata()
+    local right_padding = tonumber(options.right_padding) or 0
     local right_w = math.min(360, math.max(220, width * 0.34))
-    local right_x = x + width - right_w - 18
+    local right_x = x + width - right_w - 18 - right_padding
     local text_x = x + logo_w + 14
     if right_x > text_x + 260 then
       gfx.setfont(1, "Arial", 12)
@@ -307,6 +312,60 @@ function ReaADR.draw_window_header(title, subtitle, options)
     content_y = y + height + 10,
     logo_w = logo_w,
   }
+end
+
+function ReaADR.draw_gfx_tooltip(text, options)
+  if not text or tostring(text) == "" then
+    ReaADR._tooltip_state = nil
+    return false
+  end
+  if ReaADR.tooltips_enabled and not ReaADR.tooltips_enabled() then
+    ReaADR._tooltip_state = nil
+    return false
+  end
+  options = options or {}
+  local delay = tonumber(options.delay) or 2.0
+  local now = reaper.time_precise and reaper.time_precise() or os.clock()
+  local key = tostring(text)
+  local mouse_x = tonumber(gfx.mouse_x) or 0
+  local mouse_y = tonumber(gfx.mouse_y) or 0
+  local state = ReaADR._tooltip_state
+  local moved = state and (math.abs(mouse_x - (state.x or mouse_x)) > 4 or math.abs(mouse_y - (state.y or mouse_y)) > 4)
+  if not state or state.key ~= key or moved then
+    ReaADR._tooltip_state = { key = key, x = mouse_x, y = mouse_y, started = now }
+    return false
+  end
+  if now - state.started < delay then
+    return false
+  end
+
+  local theme = ReaADR.ui_theme()
+  gfx.setfont(1, "Arial", tonumber(options.font_size) or 13)
+  local padding = 8
+  local max_w = tonumber(options.max_width) or 420
+  local display = tostring(text)
+  while #display > 1 and gfx.measurestr(display) > max_w - (padding * 2) do
+    display = display:sub(1, #display - 1)
+  end
+  if display ~= tostring(text) then
+    display = display:sub(1, math.max(1, #display - 3)) .. "..."
+  end
+  local tw = gfx.measurestr(display)
+  local w = math.ceil(tw + (padding * 2))
+  local h = 28
+  local x = math.min((gfx.w or 800) - w - 8, mouse_x + 16)
+  local y = math.min((gfx.h or 600) - h - 8, mouse_y + 18)
+  x = math.max(8, x)
+  y = math.max(8, y)
+  ReaADR.set_gfx_color(theme.panel)
+  gfx.rect(x, y, w, h, true)
+  ReaADR.set_gfx_color(theme.border)
+  gfx.rect(x, y, w, h, false)
+  ReaADR.set_gfx_color(theme.text)
+  gfx.x = x + padding
+  gfx.y = y + 7
+  gfx.drawstr(display)
+  return true
 end
 
 local ROLE_COLORS = {
@@ -633,10 +692,6 @@ local function string_to_bool(value, default)
     return default
   end
   return value == "1" or value == "true" or value == "yes"
-end
-
-local function project()
-  return 0
 end
 
 local function call_progress(callback, message, current, total)

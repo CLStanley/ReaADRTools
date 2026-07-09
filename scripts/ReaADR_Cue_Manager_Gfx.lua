@@ -28,18 +28,23 @@ local state = {
   width = 980,
   height = 700,
   min_width = 900,
-  min_height = 560,
+  min_height = 180,
   selected = 1,
   scroll = 0,
   last_mouse = 0,
   last_click_time = 0,
   last_click_index = nil,
   dropdown_field = nil,
+  character_filter_open = false,
+  character_filter_options = nil,
   session_revision = ReaADR.session_revision and ReaADR.session_revision() or 0,
   filter_signature = select(2, ReaADR.active_character_filter()),
+  selected_key = ReaADR.manager_selected_cue_key and ReaADR.manager_selected_cue_key() or "",
   closed = false,
   editing = nil,
   dropdown_rect = nil,
+  character_filter_rects = {},
+  character_filter_submenu_character = nil,
   last_poll = 0,
   dragging_scrollbar = false,
   scrollbar_drag_offset = 0,
@@ -148,10 +153,42 @@ local function button(rect)
   gfx.rect(rect.x, rect.y, rect.w, rect.h, false)
   gfx.setfont(1, "Arial", 14)
   ReaADR.set_gfx_color(theme.text)
-  gfx.x = rect.x + 10
-  gfx.y = rect.y + 8
-  gfx.drawstr(rect.label)
+  local label = tostring(rect.label or "")
+  local tw, th = gfx.measurestr(label)
+  gfx.x = rect.x + math.floor((rect.w - tw) / 2)
+  gfx.y = rect.y + math.floor((rect.h - th) / 2) - 1
+  gfx.drawstr(label)
   return hover
+end
+
+local function wrap_index(index, delta, count)
+  count = tonumber(count) or 0
+  if count <= 0 then
+    return nil
+  end
+  index = tonumber(index) or 1
+  delta = tonumber(delta) or 0
+  local next_index = index + delta
+  if ReaADR.navigation_wrap_enabled and ReaADR.navigation_wrap_enabled() then
+    while next_index < 1 do
+      next_index = next_index + count
+    end
+    while next_index > count do
+      next_index = next_index - count
+    end
+    return next_index
+  end
+  return math.max(1, math.min(count, next_index))
+end
+
+local select_cue
+
+local function select_relative_cue(delta, jump)
+  local count = #cues
+  local next_index = wrap_index(state.selected, delta, count)
+  if next_index then
+    select_cue(next_index, jump)
+  end
 end
 
 local function refresh_cues()
@@ -175,10 +212,20 @@ local function maybe_refresh_external_changes()
   local revision = ReaADR.session_revision and ReaADR.session_revision() or 0
   local _, filter_signature = ReaADR.active_character_filter()
   filter_signature = tostring(filter_signature or "")
+  local selected_key = ReaADR.manager_selected_cue_key and ReaADR.manager_selected_cue_key() or ""
   if revision ~= state.session_revision or filter_signature ~= tostring(state.filter_signature or "") then
     state.session_revision = revision
     state.filter_signature = filter_signature
+    state.selected_key = selected_key
     refresh_cues()
+    state.last_poll = now
+  elseif selected_key ~= "" and selected_key ~= tostring(state.selected_key or "") then
+    local index = cue_index_by_key(selected_key)
+    if index then
+      state.selected = index
+      sync_scroll_to_selection()
+    end
+    state.selected_key = selected_key
     state.last_poll = now
   elseif not state.editing and (now - (state.last_poll or 0)) >= 0.25 then
     refresh_cues()
@@ -186,12 +233,13 @@ local function maybe_refresh_external_changes()
   end
 end
 
-local function select_cue(index, jump)
+select_cue = function(index, jump)
   if not cues[index] then
     return
   end
   state.selected = index
   local cue = cues[state.selected]
+  state.selected_key = ReaADR.cue_key(cue)
   ReaADR.set_manager_selected_cue(cue)
   if jump then
     ReaADR.jump_to_cue(cue)
@@ -242,6 +290,176 @@ local function launch_character_filter()
     reaper.Main_OnCommand(command_id, 0)
   else
     ReaADR.message("Could not open Character Filter.")
+  end
+end
+
+local function character_filter_options()
+  local targets = ReaADR.available_filter_targets and ReaADR.available_filter_targets() or {}
+  local active = {}
+  if ReaADR.current_active_filter_targets then
+    for _, target in ipairs(ReaADR.current_active_filter_targets(targets)) do
+      active[target.key] = true
+    end
+  end
+  return targets, active
+end
+
+local function grouped_filter_targets(targets)
+  local groups = {}
+  local by_character = {}
+  for _, target in ipairs(targets or {}) do
+    local character = target.character or "Unassigned"
+    local group = by_character[character]
+    if not group then
+      group = { character = character, targets = {} }
+      groups[#groups + 1] = group
+      by_character[character] = group
+    end
+    group.targets[#group.targets + 1] = target
+  end
+  return groups, by_character
+end
+
+local function apply_character_filter_targets(targets, selected)
+  local active = {}
+  for _, target in ipairs(targets or {}) do
+    if selected[target.key] then
+      active[#active + 1] = target
+    end
+  end
+  if #active == #targets then
+    ReaADR.set_active_character_filter({})
+  elseif #active == 0 then
+    ReaADR.set_active_character_filter({ "__none__" })
+  else
+    ReaADR.set_active_character_filter(active)
+  end
+  if ReaADR.apply_character_filter then
+    ReaADR.apply_character_filter()
+  end
+  refresh_cues()
+end
+
+local function fit_filter_text(value, max_w)
+  local text = tostring(value or "")
+  max_w = tonumber(max_w) or 0
+  if max_w <= 0 then
+    return text
+  end
+  gfx.setfont(1, "Arial", 13)
+  if gfx.measurestr(text) <= max_w then
+    return text
+  end
+  local trimmed = text
+  while #trimmed > 1 and gfx.measurestr(trimmed .. "...") > max_w do
+    trimmed = trimmed:sub(1, #trimmed - 1)
+  end
+  return trimmed .. "..."
+end
+
+local function draw_character_filter_menu(anchor)
+  local theme = ReaADR.ui_theme()
+  local targets, active = character_filter_options()
+  local groups, by_character = grouped_filter_targets(targets)
+  local option_h = 26
+  local width = math.max(anchor.w, 260)
+  local submenu_width = 220
+  local height = option_h * (#groups + 1)
+  local x = anchor.x
+  local y = anchor.y + anchor.h + 4
+  if y + height > state.height - 58 then
+    y = anchor.y - height - 4
+  end
+  y = math.max(8, y)
+  state.character_filter_rects = {}
+  ReaADR.set_gfx_color(theme.panel)
+  gfx.rect(x, y, width, height, true)
+  ReaADR.set_gfx_color(theme.border)
+  gfx.rect(x, y, width, height, false)
+
+  local all_checked = not ReaADR.character_filter_enabled()
+  local all_rect = { x = x, y = y, w = width, h = option_h, key = "__all__" }
+  state.character_filter_rects[#state.character_filter_rects + 1] = all_rect
+  ReaADR.set_gfx_color(inside(all_rect, gfx.mouse_x, gfx.mouse_y) and theme.highlight or theme.panel_alt)
+  gfx.rect(all_rect.x + 1, all_rect.y + 1, all_rect.w - 2, all_rect.h - 2, true)
+  ReaADR.set_gfx_color(all_checked and theme.accent_gold or theme.border)
+  gfx.rect(all_rect.x + 8, all_rect.y + 6, 14, 14, all_checked)
+  gfx.rect(all_rect.x + 8, all_rect.y + 6, 14, 14, false)
+  gfx.setfont(1, "Arial", 13)
+  ReaADR.set_gfx_color(theme.text)
+  gfx.x = all_rect.x + 30
+  gfx.y = all_rect.y + 6
+  gfx.drawstr("Show All Character Cues")
+
+  local hovered_submenu_character = nil
+  local hovered_submenu_group = nil
+  local hovered_group_rect = nil
+  for index, group in ipairs(groups) do
+    local rect = { x = x, y = y + (index * option_h), w = width, h = option_h, key = "character:" .. group.character, kind = "character", group = group }
+    state.character_filter_rects[#state.character_filter_rects + 1] = rect
+    local active_count = 0
+    for _, target in ipairs(group.targets) do
+      if active[target.key] then
+        active_count = active_count + 1
+      end
+    end
+    local checked = active_count == #group.targets
+    local partial = active_count > 0 and not checked
+    local hovered = inside(rect, gfx.mouse_x, gfx.mouse_y)
+    if hovered and #group.targets > 1 then
+      hovered_submenu_character = group.character
+      hovered_submenu_group = group
+      hovered_group_rect = rect
+    end
+    ReaADR.set_gfx_color(inside(rect, gfx.mouse_x, gfx.mouse_y) and theme.highlight or theme.panel_alt)
+    gfx.rect(rect.x + 1, rect.y + 1, rect.w - 2, rect.h - 2, true)
+    ReaADR.set_gfx_color((checked or partial) and theme.accent_gold or theme.border)
+    gfx.rect(rect.x + 8, rect.y + 6, 14, 14, checked)
+    gfx.rect(rect.x + 8, rect.y + 6, 14, 14, false)
+    gfx.setfont(1, "Arial", 13)
+    ReaADR.set_gfx_color(theme.text)
+    gfx.x = rect.x + 30
+    gfx.y = rect.y + 6
+    gfx.drawstr(fit_filter_text(group.character, rect.w - 38))
+  end
+
+  local submenu_group = hovered_submenu_group or (state.character_filter_submenu_character and by_character[state.character_filter_submenu_character])
+  local keep_open = false
+  if submenu_group and #submenu_group.targets > 1 then
+    local submenu_h = option_h * #submenu_group.targets
+    local submenu_x = x + width + 6
+    local submenu_y = math.max(8, math.min(y + option_h, state.height - submenu_h - 58))
+    if submenu_x + submenu_width > state.width - 12 then
+      submenu_x = math.max(12, x - submenu_width - 6)
+    end
+    local corridor_left = math.min(hovered_group_rect and (hovered_group_rect.x + hovered_group_rect.w) or submenu_x, submenu_x)
+    local corridor_right = math.max(hovered_group_rect and (hovered_group_rect.x + hovered_group_rect.w) or submenu_x, submenu_x)
+    local corridor_top = math.min(hovered_group_rect and hovered_group_rect.y or submenu_y, submenu_y)
+    local corridor_bottom = math.max((hovered_group_rect and hovered_group_rect.y or submenu_y) + option_h, submenu_y + submenu_h)
+    local mouse_in_corridor = gfx.mouse_x >= corridor_left - 4 and gfx.mouse_x <= corridor_right + 4 and gfx.mouse_y >= corridor_top - 4 and gfx.mouse_y <= corridor_bottom + 4
+    keep_open = hovered_submenu_character ~= nil or inside({ x = submenu_x, y = submenu_y, w = submenu_width, h = submenu_h }, gfx.mouse_x, gfx.mouse_y) or mouse_in_corridor
+    state.character_filter_submenu_character = keep_open and (hovered_submenu_character or state.character_filter_submenu_character) or nil
+    ReaADR.set_gfx_color(theme.panel)
+    gfx.rect(submenu_x, submenu_y, submenu_width, submenu_h, true)
+    ReaADR.set_gfx_color(theme.border)
+    gfx.rect(submenu_x, submenu_y, submenu_width, submenu_h, false)
+    for index, target in ipairs(submenu_group.targets) do
+      local rect = { x = submenu_x, y = submenu_y + ((index - 1) * option_h), w = submenu_width, h = option_h, key = target.key, kind = "target", target = target }
+      state.character_filter_rects[#state.character_filter_rects + 1] = rect
+      local checked = active[target.key] == true
+      ReaADR.set_gfx_color(inside(rect, gfx.mouse_x, gfx.mouse_y) and theme.highlight or theme.panel_alt)
+      gfx.rect(rect.x + 1, rect.y + 1, rect.w - 2, rect.h - 2, true)
+      ReaADR.set_gfx_color(checked and theme.accent_gold or theme.border)
+      gfx.rect(rect.x + 8, rect.y + 6, 14, 14, checked)
+      gfx.rect(rect.x + 8, rect.y + 6, 14, 14, false)
+      gfx.setfont(1, "Arial", 13)
+      ReaADR.set_gfx_color(theme.text)
+      gfx.x = rect.x + 30
+      gfx.y = rect.y + 6
+      gfx.drawstr(fit_filter_text(target.label, rect.w - 38))
+    end
+  else
+    state.character_filter_submenu_character = nil
   end
 end
 
@@ -327,12 +545,12 @@ local function cell_columns(content_w)
   local gap = 4
   local x = 30
   local fixed = {
-    { key = "id", label = "Cue", w = 42 },
-    { key = "character", label = "Character", w = 104 },
-    { key = "start_time", label = "Start SMPTE", w = 106 },
-    { key = "end_time", label = "End SMPTE", w = 106 },
-    { key = "status", label = "Status", w = 102 },
-    { key = "cue_type", label = "Type", w = 78 },
+    { key = "id", label = "Cue", w = 44 },
+    { key = "character", label = "Character", w = 128 },
+    { key = "start_time", label = "Start SMPTE", w = 98 },
+    { key = "end_time", label = "End SMPTE", w = 98 },
+    { key = "status", label = "Status", w = 96 },
+    { key = "cue_type", label = "Type", w = 72 },
   }
   local columns = {}
   for _, column in ipairs(fixed) do
@@ -340,9 +558,9 @@ local function cell_columns(content_w)
     columns[#columns + 1] = column
     x = x + column.w + gap
   end
-  local trailing_w = math.max(280, (22 + content_w - 16) - x)
-  local line_w = math.max(130, math.floor(trailing_w * 0.56))
-  local notes_w = math.max(100, trailing_w - line_w - gap)
+  local trailing_w = math.max(360, (22 + content_w - 16) - x)
+  local line_w = math.max(190, math.floor(trailing_w * 0.58))
+  local notes_w = math.max(150, trailing_w - line_w - gap)
   columns[#columns + 1] = { key = "line", label = "Line", x = x, w = line_w }
   columns[#columns + 1] = { key = "notes", label = "Notes", x = x + line_w + gap, w = notes_w }
   return columns
@@ -642,6 +860,7 @@ local function refresh_session_from_manager()
     state.selected = index
   end
   sync_scroll_to_selection()
+  ReaADR.refresh_overlay_silent()
   ReaADR.message(
 	    ("Session refreshed.\n\nCue regions refreshed: %d\nCue audio created: %d, updated: %d, skipped: %d\nOverlap lanes: %d\nCompleted characters skipped: %d"):format(
       summary.sync.updated or 0,
@@ -747,60 +966,66 @@ local button_specs = {
   { key = "remove", label = "Remove Cue", min_w = 104, hint = "Delete the selected cue, renumber the remaining cues, and rebuild cue regions/audio." },
   { key = "filter", label = "Character Filter", min_w = 132, hint = "Enable or disable character tracks for focused recording passes." },
   { key = "sync", label = "Refresh Session", min_w = 134, hint = "Repair generated tracks, cue regions, cue audio, filters, and overlay state." },
-  { key = "overlay", label = "Refresh Overlay", min_w = 142, hint = "Refresh the video overlay for the selected/current cue state." },
   { key = "info", label = "Info Panel", min_w = 112, hint = "Open the large cue information panel for the selected cue." },
-  { key = "dock", label = "Dock", min_w = 76, hint = "Dock this Cue Manager window in REAPER." },
 }
 
-local function layout_buttons(content_w)
+local function layout_button_row(row_keys, content_w, y)
   local gap = 8
   local button_h = 32
-  local rows = {
-    { "jump", "prev", "next", "record", "add", "remove" },
-    { "filter", "sync", "overlay", "info", "dock" },
-  }
   local by_key = {}
   for _, spec in ipairs(button_specs) do
     by_key[spec.key] = spec
   end
-
-  local toolbar_h = (#rows * button_h) + ((#rows - 1) * gap)
-  local toolbar_y = state.height - 52 - toolbar_h
   local buttons = {}
-
-  for row_index, row_keys in ipairs(rows) do
-    local row = {}
-    for _, key in ipairs(row_keys) do
-      if by_key[key] then
-        row[#row + 1] = by_key[key]
-      end
-    end
-    local min_total = 0
-    for _, spec in ipairs(row) do
-      min_total = min_total + spec.min_w
-    end
-    local extra = math.max(0, content_w - min_total - ((#row - 1) * gap))
-    local grow = math.floor(extra / #row)
-    local remainder = extra - (grow * #row)
-    local x = 22
-    local y = toolbar_y + ((row_index - 1) * (button_h + gap))
-    for index, spec in ipairs(row) do
-      local w = spec.min_w + grow + (index <= remainder and 1 or 0)
-      buttons[spec.key] = {
-        x = x,
-        y = y,
-        w = w,
-        h = button_h,
-        label = spec.label,
-        hint = spec.hint,
-        accent = spec.accent,
-        hover_accent = spec.hover_accent,
-      }
-      x = x + w + gap
+  local row = {}
+  for _, key in ipairs(row_keys) do
+    if by_key[key] then
+      row[#row + 1] = by_key[key]
     end
   end
+  local min_total = 0
+  for _, spec in ipairs(row) do
+    min_total = min_total + spec.min_w
+  end
+  local extra = math.max(0, content_w - min_total - ((#row - 1) * gap))
+  local grow = #row > 0 and math.floor(extra / #row) or 0
+  local remainder = extra - (grow * #row)
+  local x = 22
+  for index, spec in ipairs(row) do
+    local w = spec.min_w + grow + (index <= remainder and 1 or 0)
+    buttons[spec.key] = {
+      x = x,
+      y = y,
+      w = w,
+      h = button_h,
+      label = spec.label,
+      hint = spec.hint,
+      accent = spec.accent,
+      hover_accent = spec.hover_accent,
+    }
+    x = x + w + gap
+  end
+  return buttons
+end
 
-  return buttons, toolbar_y, toolbar_h
+local function layout_buttons(content_w, action_y)
+  local buttons = layout_button_row({ "record", "add", "remove", "filter", "sync", "info" }, content_w, action_y)
+  local nav = layout_button_row({ "jump", "prev", "next" }, math.min(content_w, 300), state.height - 43)
+  for key, rect in pairs(nav) do
+    buttons[key] = rect
+  end
+  return buttons
+end
+
+local function draw_footer_background()
+  local theme = ReaADR.ui_theme()
+  local footer_h = 54
+  local y = state.height - footer_h
+  ReaADR.set_gfx_color(theme.panel)
+  gfx.rect(0, y, state.width, footer_h, true)
+  ReaADR.set_gfx_color(theme.border)
+  gfx.rect(0, y, state.width, 1, true)
+  return y, footer_h
 end
 
 local function frame()
@@ -820,16 +1045,19 @@ local function frame()
 
   local header = ReaADR.draw_window_header(
     "ReaADR Cue Manager",
-    ("Source: %s | Cues: %d | Double-click to edit; status and cue type use dropdowns."):format(tostring(source or "session"), #cues),
-    { x = 22, y = 18, width = state.width - 44, height = 76 }
+    ("Source: %s | Cues: %d"):format(tostring(source or "session"), #cues),
+    { x = 22, y = 18, width = state.width - 44, height = 76, right_padding = 100 }
   )
+  local dock_button = { x = state.width - 126, y = 32, w = 86, h = 32, label = "Dock", hint = "Dock this Cue Manager window in REAPER." }
 
   local content_w = state.width - 44
-  local buttons, toolbar_y = layout_buttons(content_w)
+  local action_y = math.max(108, header.content_y)
+  local buttons = layout_buttons(content_w, action_y)
   local columns = cell_columns(content_w)
-  local selected_y = toolbar_y - 38
+  local footer_y = state.height - 54
+  local selected_y = footer_y + 20
 
-  local header_y = math.max(108, header.content_y)
+  local header_y = action_y + 42
   ReaADR.set_gfx_color(theme.panel_alt)
   gfx.rect(22, header_y, content_w, 28, true)
   ReaADR.set_gfx_color(theme.border)
@@ -848,6 +1076,13 @@ local function frame()
       ReaADR.set_gfx_color(theme.highlight)
       gfx.rect(rect.x, rect.y + 1, rect.w, rect.h - 2, true)
       ReaADR.set_gfx_color(theme.text)
+      if column.key == "status" or column.key == "cue_type" then
+        hover_hint = "Double-click to change " .. (column.key == "status" and "status." or "type.")
+      elseif column.key == "line" then
+        hover_hint = "Double-click to edit dialogue."
+      elseif column.key == "notes" then
+        hover_hint = "Double-click to edit notes."
+      end
     end
     gfx.x = column.x
     gfx.y = header_y + 7
@@ -856,7 +1091,7 @@ local function frame()
 
   local row_h = 30
   local list_y = header_y + 30
-  local visible_rows = math.max(1, math.floor((selected_y - list_y - 8) / row_h))
+  local visible_rows = math.max(1, math.floor((footer_y - list_y - 8) / row_h))
   local max_scroll = math.max(0, #cues - visible_rows)
   state.scroll = math.max(0, math.min(state.scroll, max_scroll))
   local scrollbar_rect = nil
@@ -905,6 +1140,13 @@ local function frame()
           local cell_rect = { x = column.x, y = row_rect.y, w = column.w, h = row_rect.h }
           if inside(cell_rect, gfx.mouse_x, gfx.mouse_y) then
             local full_value = trim_cell_text(display_value_for_field(cue, column.key, frame_rate))
+            if column.key == "status" or column.key == "cue_type" then
+              hover_hint = "Double-click to change " .. (column.key == "status" and "status." or "type.")
+            elseif column.key == "line" then
+              hover_hint = "Double-click to edit dialogue."
+            elseif column.key == "notes" then
+              hover_hint = "Double-click to edit notes."
+            end
             local limit = math.max(12, math.floor((column.w - 8) / 7))
             if #full_value > limit then
               if hover_preview_enabled and (column.key == "line" or column.key == "notes") then
@@ -937,28 +1179,39 @@ local function frame()
 
   draw_inline_editor()
 
+  draw_footer_background()
+
   for _, rect in pairs(buttons) do
     if button(rect) and rect.hint then
       hover_hint = rect.hint
     end
   end
+  if state.character_filter_open and buttons.filter then
+    draw_character_filter_menu(buttons.filter)
+  else
+    state.character_filter_rects = {}
+  end
+  if button(dock_button) and dock_button.hint then
+    hover_hint = dock_button.hint
+  end
 
   local selected_cue = cues[state.selected]
   local dropdown_options = {}
   if selected_cue then
+    local selected_x = math.max(320, (buttons.next and (buttons.next.x + buttons.next.w + 20)) or 320)
     gfx.setfont(1, "Arial", 14)
     ReaADR.set_gfx_color(theme.muted)
-    gfx.x = 22
+    gfx.x = selected_x
     gfx.y = selected_y
     gfx.drawstr(trim_to_width(
-      ("Selected Cue %s | %s | %s | %s | %.2fs | Double-click status/type cells to edit"):format(
+      ("Cue %s | %s | %s | %s | %.2fs"):format(
         tostring(selected_cue.id or ""),
         tostring(selected_cue.character or ""),
         tostring(selected_cue.status or "Not Recorded"),
         tostring(selected_cue.cue_type or "Dialogue"),
         ReaADR.cue_duration(selected_cue)
       ),
-      math.max(240, content_w - 16),
+      math.max(180, state.width - selected_x - 24),
       14
     ))
   end
@@ -968,17 +1221,7 @@ local function frame()
     dropdown_options = draw_dropdown(state.dropdown_rect, current_value, state.dropdown_field)
   end
 
-  if hover_hint ~= "" then
-    ReaADR.set_gfx_color(theme.panel)
-    gfx.rect(22, state.height - 40, state.width - 44, 24, true)
-    ReaADR.set_gfx_color(theme.border)
-    gfx.rect(22, state.height - 40, state.width - 44, 24, false)
-    gfx.setfont(1, "Arial", 13)
-    ReaADR.set_gfx_color(theme.text)
-    gfx.x = 30
-    gfx.y = state.height - 34
-    gfx.drawstr(hover_hint)
-  end
+  ReaADR.draw_gfx_tooltip(hover_hint)
 
   if hover_preview and hover_preview.text ~= "" then
     local max_preview_w = math.min(620, state.width - 32)
@@ -1069,14 +1312,14 @@ local function frame()
       reaper.defer(frame)
       return
     end
-    select_cue(math.max(1, state.selected - 1), true)
+    select_relative_cue(-1, true)
     sync_scroll_to_selection(visible_rows)
   elseif char == 1685026670 then
     if state.editing and not commit_inline_edit() then
       reaper.defer(frame)
       return
     end
-    select_cue(math.min(#cues, state.selected + 1), true)
+    select_relative_cue(1, true)
     sync_scroll_to_selection(visible_rows)
   end
 
@@ -1120,6 +1363,60 @@ local function frame()
       elseif not clicked_anchor then
         state.dropdown_field = nil
         state.dropdown_rect = nil
+      end
+    end
+
+    if state.character_filter_open then
+      local clicked_filter_option = false
+      for _, rect in ipairs(state.character_filter_rects or {}) do
+        if inside(rect, gfx.mouse_x, gfx.mouse_y) then
+          clicked_filter_option = true
+          if rect.key == "__all__" then
+            ReaADR.set_active_character_filter({})
+            if ReaADR.apply_character_filter then
+              ReaADR.apply_character_filter()
+            end
+            refresh_cues()
+          elseif rect.kind == "character" and rect.group then
+            local targets, selected = character_filter_options()
+            local all_selected = true
+            for _, target in ipairs(rect.group.targets or {}) do
+              if not selected[target.key] then
+                all_selected = false
+                break
+              end
+            end
+            for _, target in ipairs(rect.group.targets or {}) do
+              selected[target.key] = not all_selected
+            end
+            if #(rect.group.targets or {}) > 1 then
+              state.character_filter_submenu_character = rect.group.character
+            end
+            apply_character_filter_targets(targets, selected)
+          else
+            local targets, selected = character_filter_options()
+            selected[rect.key] = not selected[rect.key]
+            apply_character_filter_targets(targets, selected)
+          end
+          break
+        end
+      end
+      if clicked_filter_option then
+        state.last_mouse = mouse
+        reaper.defer(frame)
+        return
+      elseif buttons.filter and not inside(buttons.filter, gfx.mouse_x, gfx.mouse_y) then
+        local inside_menu = false
+        for _, rect in ipairs(state.character_filter_rects or {}) do
+          if inside(rect, gfx.mouse_x, gfx.mouse_y) then
+            inside_menu = true
+            break
+          end
+        end
+        if not inside_menu then
+          state.character_filter_open = false
+          state.character_filter_submenu_character = nil
+        end
       end
     end
 
@@ -1227,26 +1524,28 @@ local function frame()
     elseif cue and inside(buttons.jump, gfx.mouse_x, gfx.mouse_y) then
       prompt_jump_to_cue()
     elseif inside(buttons.prev, gfx.mouse_x, gfx.mouse_y) then
-      select_cue(math.max(1, state.selected - 1), true)
+      select_relative_cue(-1, true)
     elseif inside(buttons.next, gfx.mouse_x, gfx.mouse_y) then
-      select_cue(math.min(#cues, state.selected + 1), true)
+      select_relative_cue(1, true)
     elseif inside(buttons.add, gfx.mouse_x, gfx.mouse_y) then
       add_cue_from_manager()
     elseif cue and inside(buttons.remove, gfx.mouse_x, gfx.mouse_y) then
       remove_selected_cue()
     elseif inside(buttons.filter, gfx.mouse_x, gfx.mouse_y) then
-      launch_character_filter()
+      state.character_filter_open = not state.character_filter_open
+      if not state.character_filter_open then
+        state.character_filter_submenu_character = nil
+      end
     elseif cue and inside(buttons.record, gfx.mouse_x, gfx.mouse_y) then
       launch_record_cue()
     elseif inside(buttons.sync, gfx.mouse_x, gfx.mouse_y) then
       refresh_session_from_manager()
-    elseif inside(buttons.overlay, gfx.mouse_x, gfx.mouse_y) then
-      ReaADR.refresh_overlay_silent()
     elseif cue and inside(buttons.info, gfx.mouse_x, gfx.mouse_y) then
       launch_info_panel()
-    elseif inside(buttons.dock, gfx.mouse_x, gfx.mouse_y) then
+    elseif inside(dock_button, gfx.mouse_x, gfx.mouse_y) then
       dock_cue_manager()
     end
+
   end
   state.last_mouse = mouse
 

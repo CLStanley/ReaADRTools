@@ -6,7 +6,7 @@ organization without leaving REAPER.
 
 ## Installation
 
-1. Copy the contents of `dist/UserPlugins` into REAPER's `UserPlugins` folder.
+1. Copy the contents of `dist/UserPlugins` into REAPER's `UserPlugins` folder, and copy the contents of `dist/Scripts` into REAPER's `Scripts` folder.
 2. Restart REAPER.
 3. Use the top-level `ReaADR Tools` menu.
 

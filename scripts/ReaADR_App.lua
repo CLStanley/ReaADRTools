@@ -1103,9 +1103,15 @@ function App.open_manager(initial_tab, instance_slot)
       local remember_layout = ReaADR.window_layout_enabled()
       local remember_rect = { x = 24, y = quick_y + 258, w = 340, h = 26 }
       local hover_preview = ReaADR.cue_hover_preview_enabled()
+      local tooltips_enabled = ReaADR.tooltips_enabled()
+      local navigation_wrap_enabled = ReaADR.navigation_wrap_enabled()
       local hover_preview_rect = { x = 24, y = quick_y + 294, w = 340, h = 26 }
+      local tooltips_rect = { x = 24, y = quick_y + 330, w = 340, h = 26 }
+      local navigation_wrap_rect = { x = 24, y = quick_y + 366, w = 340, h = 26 }
       special_click[#special_click + 1] = { rect = remember_rect, kind = "remember_layout" }
       special_click[#special_click + 1] = { rect = hover_preview_rect, kind = "hover_preview" }
+      special_click[#special_click + 1] = { rect = tooltips_rect, kind = "tooltips" }
+      special_click[#special_click + 1] = { rect = navigation_wrap_rect, kind = "navigation_wrap" }
       ReaADR.set_gfx_color(theme.panel_alt)
       gfx.rect(remember_rect.x, remember_rect.y, 18, 18, false)
       if remember_layout then
@@ -1128,6 +1134,28 @@ function App.open_manager(initial_tab, instance_slot)
       gfx.x = hover_preview_rect.x + 30
       gfx.y = hover_preview_rect.y - 1
       gfx.drawstr("Show cue text preview on hover")
+      ReaADR.set_gfx_color(theme.panel_alt)
+      gfx.rect(tooltips_rect.x, tooltips_rect.y, 18, 18, false)
+      if tooltips_enabled then
+        ReaADR.set_gfx_color(theme.accent_gold)
+        gfx.rect(tooltips_rect.x + 4, tooltips_rect.y + 4, 10, 10, true)
+      end
+      gfx.setfont(1, "Arial", 14)
+      ReaADR.set_gfx_color(theme.text)
+      gfx.x = tooltips_rect.x + 30
+      gfx.y = tooltips_rect.y - 1
+      gfx.drawstr("Show delayed tooltips on hover")
+      ReaADR.set_gfx_color(theme.panel_alt)
+      gfx.rect(navigation_wrap_rect.x, navigation_wrap_rect.y, 18, 18, false)
+      if navigation_wrap_enabled then
+        ReaADR.set_gfx_color(theme.accent_gold)
+        gfx.rect(navigation_wrap_rect.x + 4, navigation_wrap_rect.y + 4, 10, 10, true)
+      end
+      gfx.setfont(1, "Arial", 14)
+      ReaADR.set_gfx_color(theme.text)
+      gfx.x = navigation_wrap_rect.x + 30
+      gfx.y = navigation_wrap_rect.y - 1
+      gfx.drawstr("Wrap cue navigation at ends")
     elseif state.tab == "overlay" then
       local settings = state.overlay_settings
       local left = 24
@@ -1317,21 +1345,7 @@ function App.open_manager(initial_tab, instance_slot)
       gfx.drawstr("Examples: import, overlay, SMPTE, filter, reports")
     end
 
-    if hover_hint ~= "" then
-      ReaADR.set_gfx_color(theme.panel)
-      gfx.rect(18, state.height - 54, state.width - 36, 34, true)
-      ReaADR.set_gfx_color(theme.border)
-      gfx.rect(18, state.height - 54, state.width - 36, 34, false)
-      gfx.setfont(1, "Arial", 13)
-      ReaADR.set_gfx_color(theme.text)
-      gfx.x = 28
-      gfx.y = state.height - 44
-      local hint = hover_hint
-      if #hint > 116 then
-        hint = hint:sub(1, 113) .. "..."
-      end
-      gfx.drawstr(hint)
-    end
+    ReaADR.draw_gfx_tooltip(hover_hint)
 
     gfx.update()
 
@@ -1404,6 +1418,10 @@ function App.open_manager(initial_tab, instance_slot)
             ReaADR.set_window_layout_enabled(not ReaADR.window_layout_enabled())
           elseif entry.kind == "hover_preview" then
             ReaADR.set_cue_hover_preview_enabled(not ReaADR.cue_hover_preview_enabled())
+          elseif entry.kind == "tooltips" then
+            ReaADR.set_tooltips_enabled(not ReaADR.tooltips_enabled())
+          elseif entry.kind == "navigation_wrap" then
+            ReaADR.set_navigation_wrap_enabled(not ReaADR.navigation_wrap_enabled())
           elseif entry.kind == "profile" then
             apply_overlay_profile(state.overlay_settings, entry.profile)
             state.overlay_dirty = true

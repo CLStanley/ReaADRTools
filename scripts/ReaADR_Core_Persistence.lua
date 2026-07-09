@@ -90,6 +90,30 @@ return function(ReaADR, deps)
     reaper.SetProjExtState(project(), ReaADR.EXT_NAMESPACE, "ui.cue_hover_preview", enabled and "1" or "0")
   end
 
+  function ReaADR.tooltips_enabled()
+    local _, value = reaper.GetProjExtState(project(), ReaADR.EXT_NAMESPACE, "ui.tooltips_enabled")
+    if value == "" then
+      return true
+    end
+    return value == "1" or value == "true" or value == "yes"
+  end
+
+  function ReaADR.set_tooltips_enabled(enabled)
+    reaper.SetProjExtState(project(), ReaADR.EXT_NAMESPACE, "ui.tooltips_enabled", enabled and "1" or "0")
+  end
+
+  function ReaADR.navigation_wrap_enabled()
+    local _, value = reaper.GetProjExtState(project(), ReaADR.EXT_NAMESPACE, "ui.navigation_wrap_enabled")
+    if value == "" then
+      return true
+    end
+    return value == "1" or value == "true" or value == "yes"
+  end
+
+  function ReaADR.set_navigation_wrap_enabled(enabled)
+    reaper.SetProjExtState(project(), ReaADR.EXT_NAMESPACE, "ui.navigation_wrap_enabled", enabled and "1" or "0")
+  end
+
   function ReaADR.load_window_state(window_id, defaults)
     defaults = defaults or {}
     local state = {

@@ -55,6 +55,7 @@ The distributable Linux x86_64 layout is created at:
 ```text
 dist/UserPlugins/
   reaper_reaadr-x86_64.so
+dist/Scripts/
   ReaADRTools/
     assets/
     scripts/*.lua
@@ -79,22 +80,27 @@ The distributable Windows layout:
 ```text
 dist/UserPlugins/
   reaper_reaadr.dll
+dist/Scripts/
   ReaADRTools/
     assets/
     scripts/*.lua
 ```
 
-After building, copy the updated Lua scripts from the repository's `scripts/` folder into `dist/UserPlugins/ReaADRTools/scripts/` (or directly into your REAPER `UserPlugins/ReaADRTools/scripts/` after install) to ensure the latest script versions are used.
+After building, the distributable Lua scripts are copied from the repository's
+`scripts/` folder into `dist/Scripts/ReaADRTools/scripts/`.
 
 ## Install
 
-Copy the contents of `dist/UserPlugins` into the user's REAPER resource `UserPlugins` folder, then restart REAPER.
+Copy the contents of `dist/UserPlugins` into the user's REAPER resource
+`UserPlugins` folder, copy the contents of `dist/Scripts` into the user's
+REAPER resource `Scripts` folder, then restart REAPER.
 
-**Windows**: After running `build-windows-msvc.bat` in the x64 Native Tools Command Prompt for VS 2022, copy the generated `reaper_reaadr.dll` and the `ReaADRTools/` folder (with updated scripts from the repo's `scripts/` directory) into your REAPER `UserPlugins` folder.
+**Windows**: After running `build-windows-msvc.bat` in the x64 Native Tools
+Command Prompt for VS 2022, copy `dist\UserPlugins\reaper_reaadr.dll` into
+`%APPDATA%\REAPER\UserPlugins` and `dist\Scripts\ReaADRTools` into
+`%APPDATA%\REAPER\Scripts\ReaADRTools`.
 
 No manual ReaScript action import or menu customization is required.
-
-> **Note on script location**: Currently scripts are bundled inside `UserPlugins/ReaADRTools/scripts/` for self-contained distribution. Future versions may follow REAPER's standard structure where scripts reside in the REAPER resource `Scripts/` directory (outside `UserPlugins`), with the extension only providing the native DLL and assets. This would allow users to manage/update scripts via ReaPack independently of the native extension.
 
 ## Keyboard Shortcuts
 

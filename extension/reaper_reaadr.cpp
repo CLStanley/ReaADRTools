@@ -11,6 +11,7 @@
 #define REAPERAPI_WANT_GetAudioAccessorStartTime
 #define REAPERAPI_WANT_GetExtState
 #define REAPERAPI_WANT_GetMediaItemInfo_Value
+#define REAPERAPI_WANT_GetResourcePath
 #define REAPERAPI_WANT_GetSelectedMediaItem
 #define REAPERAPI_WANT_ShowMessageBox
 
@@ -76,31 +77,31 @@ struct ScriptAction {
 };
 
 std::vector<ScriptAction> g_actions = {
-  {"Open Manager", "ReaADRTools/scripts/ReaADR_Open_Manager.lua", 0},
-  {"Quick Action 1", "ReaADRTools/scripts/ReaADR_Quick_Action_1.lua", 0},
-  {"Quick Action 2", "ReaADRTools/scripts/ReaADR_Quick_Action_2.lua", 0},
-  {"Quick Action 3", "ReaADRTools/scripts/ReaADR_Quick_Action_3.lua", 0},
-  {"Quick Action 4", "ReaADRTools/scripts/ReaADR_Quick_Action_4.lua", 0},
+  {"Open Manager", "Scripts/ReaADRTools/scripts/ReaADR_Open_Manager.lua", 0},
+  {"Quick Action 1", "Scripts/ReaADRTools/scripts/ReaADR_Quick_Action_1.lua", 0},
+  {"Quick Action 2", "Scripts/ReaADRTools/scripts/ReaADR_Quick_Action_2.lua", 0},
+  {"Quick Action 3", "Scripts/ReaADRTools/scripts/ReaADR_Quick_Action_3.lua", 0},
+  {"Quick Action 4", "Scripts/ReaADRTools/scripts/ReaADR_Quick_Action_4.lua", 0},
 };
 
 std::vector<ScriptAction> g_legacy_actions = {
-  {"Import Script", "ReaADRTools/scripts/ReaADR_Import_Script.lua", 0},
-  {"Export Reports", "ReaADRTools/scripts/ReaADR_Export_Reports.lua", 0},
-  {"Preferences", "ReaADRTools/scripts/ReaADR_Preferences.lua", 0},
-  {"Import Cue Sheet", "ReaADRTools/scripts/ReaADR_Import_Cue_Sheet.lua", 0},
-  {"Export Cue Sheet", "ReaADRTools/scripts/ReaADR_Export_Cue_Sheet.lua", 0},
-  {"Next Cue", "ReaADRTools/scripts/ReaADR_Next_Cue.lua", 0},
-  {"Previous Cue", "ReaADRTools/scripts/ReaADR_Previous_Cue.lua", 0},
-  {"Jump To Cue", "ReaADRTools/scripts/ReaADR_Jump_To_Cue.lua", 0},
-  {"Set Cue Status", "ReaADRTools/scripts/ReaADR_Set_Cue_Status.lua", 0},
-  {"Character Filter", "ReaADRTools/scripts/ReaADR_Character_Filter.lua", 0},
-  {"Generate Cues from Markers/Regions", "ReaADRTools/scripts/ReaADR_Generate_Cues.lua", 0},
-  {"Clear Character Cues", "ReaADRTools/scripts/ReaADR_Clean_Generated_Cues.lua", 0},
-  {"Overlay Settings", "ReaADRTools/scripts/ReaADR_Overlay_Settings.lua", 0},
-  {"Open ReaADR Menu", "ReaADRTools/scripts/ReaADR_Menu.lua", 0},
-  {"Start Recording Workflow", "ReaADRTools/scripts/ReaADR_Start_Recording_Workflow.lua", 0},
-  {"Monitor New Markers/Regions", "ReaADRTools/scripts/ReaADR_Monitor_Markers.lua", 0},
-  {"Jump To Selected Cue", "ReaADRTools/scripts/ReaADR_Jump_To_Selected_Cue.lua", 0},
+  {"Import Script", "Scripts/ReaADRTools/scripts/ReaADR_Import_Script.lua", 0},
+  {"Export Reports", "Scripts/ReaADRTools/scripts/ReaADR_Export_Reports.lua", 0},
+  {"Preferences", "Scripts/ReaADRTools/scripts/ReaADR_Preferences.lua", 0},
+  {"Import Cue Sheet", "Scripts/ReaADRTools/scripts/ReaADR_Import_Cue_Sheet.lua", 0},
+  {"Export Cue Sheet", "Scripts/ReaADRTools/scripts/ReaADR_Export_Cue_Sheet.lua", 0},
+  {"Next Cue", "Scripts/ReaADRTools/scripts/ReaADR_Next_Cue.lua", 0},
+  {"Previous Cue", "Scripts/ReaADRTools/scripts/ReaADR_Previous_Cue.lua", 0},
+  {"Jump To Cue", "Scripts/ReaADRTools/scripts/ReaADR_Jump_To_Cue.lua", 0},
+  {"Set Cue Status", "Scripts/ReaADRTools/scripts/ReaADR_Set_Cue_Status.lua", 0},
+  {"Character Filter", "Scripts/ReaADRTools/scripts/ReaADR_Character_Filter.lua", 0},
+  {"Generate Cues from Markers/Regions", "Scripts/ReaADRTools/scripts/ReaADR_Generate_Cues.lua", 0},
+  {"Clear Character Cues", "Scripts/ReaADRTools/scripts/ReaADR_Clean_Generated_Cues.lua", 0},
+  {"Overlay Settings", "Scripts/ReaADRTools/scripts/ReaADR_Overlay_Settings.lua", 0},
+  {"Open ReaADR Menu", "Scripts/ReaADRTools/scripts/ReaADR_Menu.lua", 0},
+  {"Start Recording Workflow", "Scripts/ReaADRTools/scripts/ReaADR_Start_Recording_Workflow.lua", 0},
+  {"Monitor New Markers/Regions", "Scripts/ReaADRTools/scripts/ReaADR_Monitor_Markers.lua", 0},
+  {"Jump To Selected Cue", "Scripts/ReaADRTools/scripts/ReaADR_Jump_To_Selected_Cue.lua", 0},
 };
 
 std::string parent_path(const std::string& path)
@@ -133,6 +134,15 @@ std::string plugin_directory()
   }
   return ".";
 #endif
+}
+
+std::string resource_directory()
+{
+  if (GetResourcePath) {
+    const char* path = GetResourcePath();
+    if (path && *path) return path;
+  }
+  return parent_path(plugin_directory());
 }
 
 std::string join_path(const std::string& base, const char* relative)
@@ -181,16 +191,21 @@ void initialize_log_path()
 
 void register_scripts()
 {
-  const std::string root = plugin_directory();
-  log_line("Registering bundled scripts from: " + root);
+  const std::string root = resource_directory();
+  const std::string old_root = plugin_directory();
+  log_line("Registering resource scripts from: " + root);
 
   for (const ScriptAction& legacy_action : g_legacy_actions) {
+    const std::string old_script_path = join_path(old_root, legacy_action.relative_path + 8);
+    AddRemoveReaScript(false, kMainSection, old_script_path.c_str(), false);
     const std::string script_path = join_path(root, legacy_action.relative_path);
     AddRemoveReaScript(false, kMainSection, script_path.c_str(), false);
   }
 
   for (std::size_t i = 0; i < g_actions.size(); ++i) {
     const bool commit = i + 1 == g_actions.size();
+    const std::string old_script_path = join_path(old_root, g_actions[i].relative_path + 8);
+    AddRemoveReaScript(false, kMainSection, old_script_path.c_str(), false);
     const std::string script_path = join_path(root, g_actions[i].relative_path);
     g_actions[i].command_id = AddRemoveReaScript(true, kMainSection, script_path.c_str(), commit);
     log_line(std::string("Registered ") + g_actions[i].label + " command_id=" + std::to_string(g_actions[i].command_id));
@@ -201,7 +216,7 @@ void unregister_scripts()
 {
   for (std::size_t i = 0; i < g_actions.size(); ++i) {
     const bool commit = i + 1 == g_actions.size();
-    const std::string script_path = join_path(plugin_directory(), g_actions[i].relative_path);
+    const std::string script_path = join_path(resource_directory(), g_actions[i].relative_path);
     AddRemoveReaScript(false, kMainSection, script_path.c_str(), commit);
     g_actions[i].command_id = 0;
   }

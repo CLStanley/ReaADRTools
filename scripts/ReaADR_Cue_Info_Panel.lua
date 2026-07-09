@@ -24,6 +24,13 @@ local state = {
   last_click_time = 0,
   field_rects = {},
   dock_button = nil,
+  nav_buttons = {},
+  dropdown_field = nil,
+  dropdown_rect = nil,
+  scroll = 0,
+  max_scroll = 0,
+  dragging_scrollbar = false,
+  scrollbar_drag_offset = 0,
   close_on_save = false,
 }
 
@@ -32,7 +39,7 @@ state.close_on_save = launch_options.close_on_save == true
 
 local edit_fields = {
   { key = "id", label = "Cue Number", row = 1, col = 1 },
-  { key = "character", label = "Character", row = 1, col = 2 },
+  { key = "character", label = "Character", row = 1, col = 2, dropdown = true },
   { key = "status", label = "Status", row = 1, col = 3, dropdown = true },
   { key = "cue_type", label = "Cue Type", row = 1, col = 4, dropdown = true },
   { key = "start_time", label = "Start SMPTE or Seconds", row = 2, col = 1 },
@@ -78,6 +85,7 @@ local KEY_RIGHT = key_code("rght")
 local KEY_HOME = key_code("home")
 local KEY_END = key_code("end")
 local KEY_DELETE = key_code("del")
+local ADD_NEW_CHARACTER = "__reaadr_add_new_character__"
 
 local function draw_button(rect)
   local theme = ReaADR.ui_theme()
@@ -89,9 +97,9 @@ local function draw_button(rect)
   gfx.setfont(1, "Arial", 14)
   ReaADR.set_gfx_color(theme.text)
   local label = tostring(rect.label or "")
-  local tw = gfx.measurestr(label)
+  local tw, th = gfx.measurestr(label)
   gfx.x = rect.x + math.floor((rect.w - tw) / 2)
-  gfx.y = rect.y + 8
+  gfx.y = rect.y + math.floor((rect.h - th) / 2) - 1
   gfx.drawstr(label)
   return hover
 end
@@ -273,6 +281,9 @@ local function begin_edit(cue, active_field)
     state.cursors[key] = #tostring(value or "")
   end
   state.dirty = false
+  state.dropdown_field = nil
+  state.dropdown_rect = nil
+  state.scroll = 0
 end
 
 local function sync_edit_values(cue)
@@ -355,29 +366,65 @@ local function dropdown_values_for_field(field_key)
     return ReaADR.cue_statuses()
   elseif field_key == "cue_type" then
     return ReaADR.cue_types()
+  elseif field_key == "character" then
+    local characters = ReaADR.collect_characters(ReaADR.load_session_cues() or {})
+    characters[#characters + 1] = { label = "Add New Character...", value = ADD_NEW_CHARACTER }
+    return characters
   end
   return {}
 end
 
-local function choose_dropdown_value(field, cue)
-  local choices = dropdown_values_for_field(field.key)
-  if #choices == 0 then
+local function apply_dropdown_value(field_key, value, cue)
+  if not field_key or value == nil or not state.edit_values then
     return
   end
-  local current = tostring((state.edit_values or {})[field.key] or "")
-  local labels = {}
-  for index, value in ipairs(choices) do
-    labels[index] = (current == tostring(value) and "!" or "") .. tostring(value)
-  end
-  gfx.x = field.x
-  gfx.y = field.y + field.h
-  local choice = gfx.showmenu(table.concat(labels, "|"))
-  if choice and choice > 0 and choices[choice] then
-    state.edit_values[field.key] = choices[choice]
-    state.active_field = field.key
+  if field_key == "character" and value == ADD_NEW_CHARACTER then
+    state.dropdown_field = nil
+    state.dropdown_rect = nil
+    state.active_field = "character"
+    state.edit_values.character = ""
+    set_cursor_for_field("character", 0)
     state.dirty = true
-    save_edit(cue)
+    return
   end
+  state.edit_values[field_key] = value
+  state.active_field = field_key
+  state.dirty = true
+  state.dropdown_field = nil
+  state.dropdown_rect = nil
+  save_edit(cue)
+end
+
+local function draw_dropdown(anchor, selected_value, field_key)
+  local theme = ReaADR.ui_theme()
+  local options_source = dropdown_values_for_field(field_key)
+  local option_h = 24
+  local menu_h = #options_source * option_h
+  local y = anchor.y + anchor.h + 4
+  if y + menu_h > state.height - 70 then
+    y = anchor.y - menu_h - 4
+  end
+  local options = {}
+  ReaADR.set_gfx_color(theme.panel)
+  gfx.rect(anchor.x, y, anchor.w, menu_h, true)
+  ReaADR.set_gfx_color(theme.border)
+  gfx.rect(anchor.x, y, anchor.w, menu_h, false)
+  for index, option in ipairs(options_source) do
+    local label = type(option) == "table" and tostring(option.label or option.value or "") or tostring(option)
+    local value = type(option) == "table" and option.value or option
+    local rect = { x = anchor.x, y = y + ((index - 1) * option_h), w = anchor.w, h = option_h, value = value }
+    options[#options + 1] = rect
+    local hover = inside(rect, gfx.mouse_x, gfx.mouse_y)
+    local active = value ~= ADD_NEW_CHARACTER and tostring(value) == tostring(selected_value)
+    ReaADR.set_gfx_color(active and theme.accent_gold or (hover and theme.highlight or theme.panel_alt))
+    gfx.rect(rect.x + 1, rect.y + 1, rect.w - 2, rect.h - 2, true)
+    gfx.setfont(1, "Arial", 13)
+    ReaADR.set_gfx_color(theme.text)
+    gfx.x = rect.x + 8
+    gfx.y = rect.y + 5
+    gfx.drawstr(trim_to_width(label, rect.w - 16))
+  end
+  return options
 end
 
 local function field_by_key(key)
@@ -430,7 +477,28 @@ end
 
 local function draw_editable_label(key, label, value, x, y, w)
   local field = register_field_rect(key, { x = x, y = y + 18, w = w, h = 32 })
-  if field and state.active_field == key then
+  if field and field.dropdown and not (key == "character" and state.active_field == "character") then
+    local theme = ReaADR.ui_theme()
+    gfx.setfont(1, "Arial", 14)
+    ReaADR.set_gfx_color(theme.muted)
+    gfx.x = x
+    gfx.y = y
+    gfx.drawstr(trim_to_width(label, w))
+    local hover = inside(field, gfx.mouse_x, gfx.mouse_y)
+    ReaADR.set_gfx_color(hover and theme.highlight or theme.panel_alt)
+    gfx.rect(field.x, field.y, field.w, field.h, true)
+    ReaADR.set_gfx_color((state.dropdown_field == key) and theme.accent_gold or theme.border)
+    gfx.rect(field.x, field.y, field.w, field.h, false)
+    gfx.setfont(1, "Arial", 18)
+    ReaADR.set_gfx_color(theme.text)
+    gfx.x = field.x + 8
+    gfx.y = field.y + 7
+    gfx.drawstr(trim_to_width(value, field.w - 28))
+    gfx.setfont(1, "Arial", 16)
+    gfx.x = field.x + field.w - 19
+    gfx.y = field.y + 9
+    gfx.drawstr("▼")
+  elseif field and state.active_field == key then
     local theme = ReaADR.ui_theme()
     gfx.setfont(1, "Arial", 14)
     ReaADR.set_gfx_color(theme.muted)
@@ -440,6 +508,86 @@ local function draw_editable_label(key, label, value, x, y, w)
     draw_single_line_editor(field)
   else
     draw_label(label, value, x, y, w)
+  end
+end
+
+local function cue_index_by_key(cues, key)
+  if not key or key == "" then
+    return nil
+  end
+  for index, cue in ipairs(cues or {}) do
+    if ReaADR.cue_key(cue) == key then
+      return index
+    end
+  end
+  return nil
+end
+
+local function navigate_relative(delta)
+  local cue, cues = ReaADR.active_cue()
+  if not cue or not cues or #cues == 0 then
+    return
+  end
+  local index = cue_index_by_key(cues, ReaADR.cue_key(cue)) or 1
+  local target_index = index + delta
+  if ReaADR.navigation_wrap_enabled and ReaADR.navigation_wrap_enabled() then
+    while target_index < 1 do
+      target_index = target_index + #cues
+    end
+    while target_index > #cues do
+      target_index = target_index - #cues
+    end
+  else
+    target_index = math.max(1, math.min(#cues, target_index))
+  end
+  local target = cues[target_index]
+  if target then
+    ReaADR.jump_to_cue(target)
+  end
+end
+
+local function prompt_jump_to_cue()
+  local cue, cues = ReaADR.active_cue()
+  local ok, value = reaper.GetUserInputs("Jump To Cue", 1, "Cue number:", tostring(cue and cue.id or ""))
+  if not ok then
+    return
+  end
+  value = tostring(value or ""):match("^%s*(.-)%s*$")
+  for _, candidate in ipairs(cues or {}) do
+    if tostring(candidate.id or "") == value then
+      ReaADR.jump_to_cue(candidate)
+      return
+    end
+  end
+  ReaADR.message("Cue was not found: " .. value)
+end
+
+local function draw_footer(cue)
+  local theme = ReaADR.ui_theme()
+  local footer_h = 54
+  local y = state.height - footer_h
+  ReaADR.set_gfx_color(theme.panel)
+  gfx.rect(0, y, state.width, footer_h, true)
+  ReaADR.set_gfx_color(theme.border)
+  gfx.rect(0, y, state.width, 1, true)
+  state.nav_buttons = {
+    prev = { x = 24, y = y + 11, w = 96, h = 32, label = "Previous" },
+    next = { x = 130, y = y + 11, w = 76, h = 32, label = "Next" },
+    jump = { x = 216, y = y + 11, w = 84, h = 32, label = "Jump..." },
+  }
+  for _, button_rect in pairs(state.nav_buttons) do
+    draw_button(button_rect)
+  end
+  if cue then
+    gfx.setfont(1, "Arial", 13)
+    ReaADR.set_gfx_color(theme.muted)
+    gfx.x = 320
+    gfx.y = y + 20
+    gfx.drawstr(trim_to_width(("Cue %s | %s | %s"):format(
+      tostring(cue.id or ""),
+      tostring(cue.character or ""),
+      tostring(cue.status or "Not Recorded")
+    ), state.width - 344))
   end
 end
 
@@ -488,67 +636,82 @@ local function draw_info(cue)
   gfx.rect(0, 0, state.width, state.height, true)
   sync_edit_values(cue)
   state.field_rects = {}
+  state.dock_button = nil
 
   local frame_rate = reaper.TimeMap_curFrameRate(0)
   if not frame_rate or frame_rate <= 0 then
     frame_rate = 24
   end
-
-  local header = ReaADR.draw_window_header(
-    "ADR Cue Information",
-    cue and ("Cue %s | %s"):format(tostring(cue.id or ""), tostring(cue.character or "")) or "No cue selected",
-    { x = 24, y = 20, width = state.width - 48, height = 76 }
-  )
-  state.dock_button = nil
+  local header_y = 20
+  local header_h = 76
+  local content_top = header_y + header_h + 18
+  local footer_h = 54
+  local footer_y = state.height - footer_h
+  local viewport_bottom = footer_y - 12
+  local viewport_h = math.max(120, viewport_bottom - content_top)
+  local content_y = content_top - state.scroll
+  local dropdown_options = {}
 
   if cue then
     local now = ReaADR.current_timeline_position()
     local cue_start = tonumber(cue.start_time) or 0
     local countdown = math.max(0, cue_start - now)
     local take_count = ReaADR.count_recorded_takes_for_cue(cue)
-    local info_top = math.max(118, header.content_y + 8)
-    local row_gap = 66
-    local row1_y = info_top
+    local row_gap = 62
+    local row1_y = content_y
     local row2_y = row1_y + row_gap
-    local row3_y = row2_y + row_gap
-    local gap = 24
-    local content_w = state.width - 48
-    local col_w = math.floor((content_w - (gap * 3)) / 4)
+    local gap = 22
+    local content_w = state.width - 88
+    local cue_w = 96
+    local character_w = math.max(170, math.floor(content_w * 0.22))
+    local status_w = 136
+    local type_w = 160
     local col1 = 24
-    local col2 = col1 + col_w + gap
-    local col3 = col2 + col_w + gap
-    local col4 = col3 + col_w + gap
+    local col2 = col1 + cue_w + gap
+    local col3 = col2 + character_w + gap
+    local col4 = col3 + status_w + gap
+    local col5 = col4 + type_w + gap
 
-    draw_editable_label("id", "Cue", cue.id or "", col1, row1_y, col_w)
-    draw_editable_label("character", "Character", cue.character or "", col2, row1_y, col_w)
-    draw_editable_label("status", "Status", cue.status or "Not Recorded", col3, row1_y, col_w)
-    draw_editable_label("cue_type", "Cue Type", cue.cue_type or "", col4, row1_y, col_w)
-    state.dock_button = { x = col4, y = row2_y + 18, w = math.min(96, col_w), h = 32, label = "Dock" }
-    draw_button(state.dock_button)
-    draw_editable_label("start_time", "Start", ReaADR.format_timecode(cue.start_time, frame_rate), col1, row2_y, col_w)
-    draw_editable_label("end_time", "End", ReaADR.format_timecode(cue.end_time, frame_rate), col2, row2_y, col_w)
-    draw_label("Length", ("%.2fs"):format(ReaADR.cue_duration(cue)), col3, row2_y, col_w)
-    draw_label("Countdown", ("%.2fs"):format(countdown), col1, row3_y, col_w)
-    draw_label("Take Count", tostring(take_count), col2, row3_y, col_w)
-    draw_label("Current Position", ReaADR.format_timecode(now, frame_rate), col3, row3_y, col_w)
+    draw_editable_label("id", "Cue", cue.id or "", col1, row1_y, cue_w)
+    draw_editable_label("character", "Character", cue.character or "", col2, row1_y, character_w)
+    draw_editable_label("status", "Status", cue.status or "Not Recorded", col3, row1_y, status_w)
+    draw_editable_label("cue_type", "Cue Type", cue.cue_type or "", col4, row1_y, type_w)
+    local compact_metrics = state.width < 1000
+    local start_w = compact_metrics and 126 or 158
+    local end_w = compact_metrics and 126 or 158
+    local length_w = compact_metrics and 92 or 104
+    local position_w = compact_metrics and 182 or 226
+    local metric_gap = compact_metrics and 14 or 22
+    local metric1_x = col1
+    local metric2_x = metric1_x + start_w + metric_gap
+    local metric3_x = metric2_x + end_w + metric_gap
+    local metric4_x = metric3_x + length_w + metric_gap
+    draw_editable_label("start_time", "Start", ReaADR.format_timecode(cue.start_time, frame_rate), metric1_x, row2_y, start_w)
+    draw_editable_label("end_time", "End", ReaADR.format_timecode(cue.end_time, frame_rate), metric2_x, row2_y, end_w)
+    draw_label("Length", ("%.2fs"):format(ReaADR.cue_duration(cue)), metric3_x, row2_y, length_w)
+    draw_label("Position", ReaADR.format_timecode(now, frame_rate), metric4_x, row2_y, position_w)
+    local row3_y = row2_y + 50
+    draw_label("Countdown", ("%.2fs"):format(countdown), col1, row3_y, 120)
+    draw_label("Takes", tostring(take_count), col1 + 144, row3_y, 74)
 
     gfx.setfont(1, "Arial", 16)
     ReaADR.set_gfx_color(theme.muted)
     gfx.x = 24
-    local dialogue_label_y = row3_y + 76
+    local dialogue_label_y = row3_y + 78
     gfx.y = dialogue_label_y
     gfx.drawstr("Dialogue")
-    local notes_y = state.height - 176
+    local dialogue_h = 150
+    local notes_y = dialogue_label_y + 24 + dialogue_h + 40
+    local notes_h = 160
     local dialogue_text_y = dialogue_label_y + 24
-    local dialogue_h = math.max(68, notes_y - dialogue_text_y - 16)
-    local line_field = register_field_rect("line", { x = 24, y = dialogue_text_y - 4, w = state.width - 56, h = dialogue_h })
+    local line_field = register_field_rect("line", { x = 24, y = dialogue_text_y - 4, w = state.width - 88, h = dialogue_h })
     if state.active_field == "line" and line_field then
       draw_multiline_editor(line_field, 22, 26)
     else
       gfx.setfont(1, "Arial", 22)
       ReaADR.set_gfx_color(theme.text)
       local dialogue_max_lines = math.max(3, math.floor(dialogue_h / 26))
-      draw_wrapped_text(tostring(cue.line or ""), 24, dialogue_text_y, state.width - 56, 26, dialogue_max_lines)
+      draw_wrapped_text(tostring(cue.line or ""), 24, dialogue_text_y, state.width - 88, 26, dialogue_max_lines)
     end
 
     gfx.setfont(1, "Arial", 16)
@@ -556,36 +719,79 @@ local function draw_info(cue)
     gfx.x = 24
     gfx.y = notes_y
     gfx.drawstr("Notes")
-    local notes_field = register_field_rect("notes", { x = 24, y = notes_y + 24, w = state.width - 56, h = math.max(54, state.height - notes_y - 56) })
+    local notes_field = register_field_rect("notes", { x = 24, y = notes_y + 24, w = state.width - 88, h = notes_h })
     if state.active_field == "notes" and notes_field then
       draw_multiline_editor(notes_field, 18, 22)
     else
       gfx.setfont(1, "Arial", 18)
       ReaADR.set_gfx_color(theme.text)
-      draw_wrapped_text(tostring(cue.notes or ""), 24, notes_y + 24, state.width - 56, 22, math.max(2, math.floor((state.height - notes_y - 32) / 22)))
+      draw_wrapped_text(tostring(cue.notes or ""), 24, notes_y + 24, state.width - 88, 22, math.max(2, math.floor((notes_h - 12) / 22)))
     end
 
     if state.dirty then
       gfx.setfont(1, "Arial", 13)
       ReaADR.set_gfx_color(theme.muted)
       gfx.x = 28
-      gfx.y = state.height - 28
+      gfx.y = notes_y + notes_h + 38
       gfx.drawstr("Unsaved edit: press Enter to save.")
     end
+
+    local content_bottom = notes_y + notes_h + 66
+    state.max_scroll = math.max(0, math.ceil((content_bottom + state.scroll) - viewport_bottom))
+    state.scroll = math.max(0, math.min(state.scroll, state.max_scroll))
   else
     gfx.setfont(1, "Arial", 18)
     ReaADR.set_gfx_color(theme.text)
     gfx.x = 24
-    gfx.y = 82
+    gfx.y = content_top
     gfx.drawstr("No ADR cues were found.")
+    state.max_scroll = 0
+    state.scroll = 0
   end
+
+  if state.max_scroll > 0 then
+    local track = { x = state.width - 24, y = content_top, w = 10, h = viewport_h }
+    local thumb_h = math.max(32, math.floor(track.h * (viewport_h / (viewport_h + state.max_scroll))))
+    local travel = math.max(1, track.h - thumb_h)
+    local thumb_y = track.y + math.floor((state.scroll / state.max_scroll) * travel)
+    state.scrollbar_rect = track
+    state.scrollbar_thumb = { x = track.x + 1, y = thumb_y, w = track.w - 2, h = thumb_h }
+    ReaADR.set_gfx_color(theme.panel_alt)
+    gfx.rect(track.x, track.y, track.w, track.h, true)
+    ReaADR.set_gfx_color(theme.border)
+    gfx.rect(track.x, track.y, track.w, track.h, false)
+    ReaADR.set_gfx_color((state.dragging_scrollbar or inside(state.scrollbar_thumb, gfx.mouse_x, gfx.mouse_y)) and theme.accent_gold or theme.highlight)
+    gfx.rect(state.scrollbar_thumb.x, state.scrollbar_thumb.y, state.scrollbar_thumb.w, state.scrollbar_thumb.h, true)
+  else
+    state.scrollbar_rect = nil
+    state.scrollbar_thumb = nil
+  end
+
+  ReaADR.draw_window_header(
+    "ADR Cue Information",
+    cue and ("Cue %s | %s"):format(tostring(cue.id or ""), tostring(cue.character or "")) or "No cue selected",
+    { x = 24, y = header_y, width = state.width - 48, height = header_h, show_metadata = true, right_padding = 112 }
+  )
+  state.dock_button = { x = state.width - 126, y = header_y + 14, w = 86, h = 32, label = "Dock" }
+  draw_button(state.dock_button)
+  draw_footer(cue)
+
+  if cue and state.dropdown_field and state.dropdown_rect then
+    local current_value = tostring((state.edit_values or {})[state.dropdown_field] or "")
+    dropdown_options = draw_dropdown(state.dropdown_rect, current_value, state.dropdown_field)
+  end
+  return {
+    dropdown_options = dropdown_options,
+    content_top = content_top,
+    viewport_bottom = viewport_bottom,
+  }
 end
 
 local function frame()
   sync_window_size()
   local cue = ReaADR.active_cue()
 
-  draw_info(cue)
+  local layout = draw_info(cue) or {}
   gfx.update()
   local char = gfx.getchar()
   if char < 0 or char == 27 then
@@ -598,13 +804,66 @@ local function frame()
     return
   end
   handle_text_input(char, cue)
+  local wheel = gfx.mouse_wheel
+  if wheel ~= 0 and (layout.content_top == nil or (gfx.mouse_y >= layout.content_top and gfx.mouse_y <= (layout.viewport_bottom or state.height))) then
+    state.scroll = math.max(0, math.min(state.max_scroll or 0, state.scroll - (wheel > 0 and 32 or -32)))
+    gfx.mouse_wheel = 0
+  end
   local mouse = gfx.mouse_cap % 2
+  if state.dragging_scrollbar and mouse == 1 and state.scrollbar_rect and state.scrollbar_thumb then
+    local travel = math.max(1, state.scrollbar_rect.h - state.scrollbar_thumb.h)
+    local thumb_y = math.max(state.scrollbar_rect.y, math.min(gfx.mouse_y - state.scrollbar_drag_offset, state.scrollbar_rect.y + travel))
+    local ratio = (thumb_y - state.scrollbar_rect.y) / travel
+    state.scroll = math.max(0, math.min(state.max_scroll or 0, math.floor((ratio * (state.max_scroll or 0)) + 0.5)))
+  elseif state.dragging_scrollbar and mouse == 0 then
+    state.dragging_scrollbar = false
+  end
   if mouse == 1 and state.last_mouse == 0 and state.dock_button and inside(state.dock_button, gfx.mouse_x, gfx.mouse_y) then
     dock_info_panel()
+  elseif mouse == 1 and state.last_mouse == 0 and state.nav_buttons.prev and inside(state.nav_buttons.prev, gfx.mouse_x, gfx.mouse_y) then
+    navigate_relative(-1)
+  elseif mouse == 1 and state.last_mouse == 0 and state.nav_buttons.next and inside(state.nav_buttons.next, gfx.mouse_x, gfx.mouse_y) then
+    navigate_relative(1)
+  elseif mouse == 1 and state.last_mouse == 0 and state.nav_buttons.jump and inside(state.nav_buttons.jump, gfx.mouse_x, gfx.mouse_y) then
+    prompt_jump_to_cue()
+  elseif mouse == 1 and state.last_mouse == 0 and state.scrollbar_thumb and inside(state.scrollbar_thumb, gfx.mouse_x, gfx.mouse_y) then
+    state.dragging_scrollbar = true
+    state.scrollbar_drag_offset = gfx.mouse_y - state.scrollbar_thumb.y
+  elseif mouse == 1 and state.last_mouse == 0 and state.scrollbar_rect and inside(state.scrollbar_rect, gfx.mouse_x, gfx.mouse_y) then
+    local travel = math.max(1, state.scrollbar_rect.h - (state.scrollbar_thumb and state.scrollbar_thumb.h or 32))
+    local thumb_h = state.scrollbar_thumb and state.scrollbar_thumb.h or 32
+    local thumb_y = math.max(state.scrollbar_rect.y, math.min(gfx.mouse_y - math.floor(thumb_h * 0.5), state.scrollbar_rect.y + travel))
+    local ratio = (thumb_y - state.scrollbar_rect.y) / travel
+    state.scroll = math.max(0, math.min(state.max_scroll or 0, math.floor((ratio * (state.max_scroll or 0)) + 0.5)))
   elseif mouse == 1 and state.last_mouse == 0 and cue then
+    if state.dropdown_field then
+      local clicked_dropdown = false
+      for _, option in ipairs(layout.dropdown_options or {}) do
+        if inside(option, gfx.mouse_x, gfx.mouse_y) then
+          apply_dropdown_value(state.dropdown_field, option.value, cue)
+          clicked_dropdown = true
+          break
+        end
+      end
+      local clicked_anchor = state.dropdown_rect and inside(state.dropdown_rect, gfx.mouse_x, gfx.mouse_y)
+      if clicked_dropdown then
+        -- Selection already applied.
+      elseif clicked_anchor then
+        -- Keep the dropdown open when clicking its anchor.
+      else
+        state.dropdown_field = nil
+        state.dropdown_rect = nil
+      end
+      if clicked_dropdown or clicked_anchor then
+        state.last_mouse = mouse
+        reaper.defer(frame)
+        return
+      end
+    end
     local clicked_field = nil
     for _, field in ipairs(state.field_rects or {}) do
-      if inside(field, gfx.mouse_x, gfx.mouse_y) then
+      local in_viewport = layout.content_top == nil or (gfx.mouse_y >= layout.content_top and gfx.mouse_y <= (layout.viewport_bottom or state.height))
+      if in_viewport and inside(field, gfx.mouse_x, gfx.mouse_y) then
         clicked_field = field
         break
       end
@@ -614,9 +873,10 @@ local function frame()
       local double_click = state.last_click_field == clicked_field.key and (now - state.last_click_time) <= 0.35
       state.last_click_field = clicked_field.key
       state.last_click_time = now
-      if clicked_field.dropdown and double_click then
-        choose_dropdown_value(clicked_field, cue)
-      elseif not clicked_field.dropdown and (double_click or state.active_field == clicked_field.key) then
+      if clicked_field.dropdown and not (clicked_field.key == "character" and state.active_field == "character") then
+        state.dropdown_field = clicked_field.key
+        state.dropdown_rect = { x = clicked_field.x, y = clicked_field.y, w = clicked_field.w, h = clicked_field.h }
+      elseif (not clicked_field.dropdown or (clicked_field.key == "character" and state.active_field == "character")) and (double_click or state.active_field == clicked_field.key) then
         state.active_field = clicked_field.key
         set_cursor_from_mouse(clicked_field)
       end

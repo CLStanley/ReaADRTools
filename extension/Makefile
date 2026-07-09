@@ -7,7 +7,9 @@ REAPER_SDK := ../vendor/reaper-sdk
 WDL := ../vendor/WDL/WDL
 TARGET := reaper_reaadr-x86_64.so
 BUILD_DIR := ../build/extension
-DIST_DIR := ../dist/UserPlugins
+DIST_DIR := ../dist
+DIST_USERPLUGINS_DIR := $(DIST_DIR)/UserPlugins
+DIST_REAADR_DIR := $(DIST_DIR)/Scripts/ReaADRTools
 
 CXX ?= g++
 CXXFLAGS ?= -std=c++17 -fPIC -O2 -Wall -Wextra
@@ -31,40 +33,10 @@ $(BUILD_DIR)/$(TARGET): reaper_reaadr.cpp
 
 dist: all
 	rm -rf "$(DIST_DIR)"
-	@mkdir -p "$(DIST_DIR)/ReaADRTools/scripts" "$(DIST_DIR)/ReaADRTools/assets"
-	cp "$(BUILD_DIR)/$(TARGET)" "$(DIST_DIR)/$(TARGET)"
-	cp ../scripts/ReaADR_App.lua "$(DIST_DIR)/ReaADRTools/scripts/"
-	cp ../scripts/ReaADR_Open_Manager.lua "$(DIST_DIR)/ReaADRTools/scripts/"
-	cp ../scripts/ReaADR_Open_Manager_1.lua "$(DIST_DIR)/ReaADRTools/scripts/"
-	cp ../scripts/ReaADR_Open_Manager_2.lua "$(DIST_DIR)/ReaADRTools/scripts/"
-	cp ../scripts/ReaADR_Open_Manager_3.lua "$(DIST_DIR)/ReaADRTools/scripts/"
-	cp ../scripts/ReaADR_Import_Script.lua "$(DIST_DIR)/ReaADRTools/scripts/"
-	cp ../scripts/ReaADR_Export_Reports.lua "$(DIST_DIR)/ReaADRTools/scripts/"
-	cp ../scripts/ReaADR_Preferences.lua "$(DIST_DIR)/ReaADRTools/scripts/"
-	cp ../scripts/ReaADR_Quick_Action_1.lua "$(DIST_DIR)/ReaADRTools/scripts/"
-	cp ../scripts/ReaADR_Quick_Action_2.lua "$(DIST_DIR)/ReaADRTools/scripts/"
-	cp ../scripts/ReaADR_Quick_Action_3.lua "$(DIST_DIR)/ReaADRTools/scripts/"
-	cp ../scripts/ReaADR_Quick_Action_4.lua "$(DIST_DIR)/ReaADRTools/scripts/"
-	cp ../scripts/ReaADR_Core.lua "$(DIST_DIR)/ReaADRTools/scripts/"
-	cp ../scripts/ReaADR_Core_Persistence.lua "$(DIST_DIR)/ReaADRTools/scripts/"
-	cp ../scripts/ReaADR_Core_Characters.lua "$(DIST_DIR)/ReaADRTools/scripts/"
-	cp ../scripts/ReaADR_Import_Cue_Sheet.lua "$(DIST_DIR)/ReaADRTools/scripts/"
-	cp ../scripts/ReaADR_Detect_Dialogue.lua "$(DIST_DIR)/ReaADRTools/scripts/"
-	cp ../scripts/ReaADR_Export_Cue_Sheet.lua "$(DIST_DIR)/ReaADRTools/scripts/"
-	cp ../scripts/ReaADR_Next_Cue.lua "$(DIST_DIR)/ReaADRTools/scripts/"
-	cp ../scripts/ReaADR_Previous_Cue.lua "$(DIST_DIR)/ReaADRTools/scripts/"
-	cp ../scripts/ReaADR_Jump_To_Cue.lua "$(DIST_DIR)/ReaADRTools/scripts/"
-	cp ../scripts/ReaADR_Set_Cue_Status.lua "$(DIST_DIR)/ReaADRTools/scripts/"
-	cp ../scripts/ReaADR_Character_Filter.lua "$(DIST_DIR)/ReaADRTools/scripts/"
-	cp ../scripts/ReaADR_Cue_Manager.lua "$(DIST_DIR)/ReaADRTools/scripts/"
-	cp ../scripts/ReaADR_Cue_Manager_Gfx.lua "$(DIST_DIR)/ReaADRTools/scripts/"
-	cp ../scripts/ReaADR_Cue_Manager_ImGui.lua "$(DIST_DIR)/ReaADRTools/scripts/"
-	cp ../scripts/ReaADR_Cue_Info_Panel.lua "$(DIST_DIR)/ReaADRTools/scripts/"
-	cp ../scripts/ReaADR_Generate_Cues.lua "$(DIST_DIR)/ReaADRTools/scripts/"
-	cp ../scripts/ReaADR_Clean_Generated_Cues.lua "$(DIST_DIR)/ReaADRTools/scripts/"
-	cp ../scripts/ReaADR_Overlay_Settings.lua "$(DIST_DIR)/ReaADRTools/scripts/"
-	cp ../scripts/ReaADR_Menu.lua "$(DIST_DIR)/ReaADRTools/scripts/"
-	cp ../assets/* "$(DIST_DIR)/ReaADRTools/assets/"
+	@mkdir -p "$(DIST_USERPLUGINS_DIR)" "$(DIST_REAADR_DIR)/scripts" "$(DIST_REAADR_DIR)/assets"
+	cp "$(BUILD_DIR)/$(TARGET)" "$(DIST_USERPLUGINS_DIR)/$(TARGET)"
+	cp ../scripts/*.lua "$(DIST_REAADR_DIR)/scripts/"
+	cp ../assets/* "$(DIST_REAADR_DIR)/assets/"
 
 clean:
 	rm -rf "$(BUILD_DIR)" ../dist
