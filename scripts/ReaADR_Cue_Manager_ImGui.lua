@@ -399,7 +399,6 @@ local function prompt_jump_to_cue()
 end
 
 local function add_cue_from_manager()
-  local snapshot = ReaADR.create_session_snapshot("Add Cue From Cue Manager")
   local position = ReaADR.current_timeline_position()
   local next_id = tostring(#cues + 1)
   local defaults = table.concat({
@@ -419,22 +418,25 @@ local function add_cue_from_manager()
   for value in (values .. ","):gmatch("([^,]*),") do
     parts[#parts + 1] = value
   end
-  local cue = ReaADR.add_cached_cue({
+  local cue, all_cues = ReaADR.add_cached_cue({
     id = parts[1],
     character = parts[2],
     start_time = tonumber(parts[3]),
     end_time = tonumber(parts[4]),
     line = parts[5] or "",
     cue_type = parts[6] or "Dialogue",
-  })
+  }, { save = false })
   if not cue then
     ReaADR.message("Cue could not be added.")
     return
   end
 
-  local summary, err = ReaADR.sync_full({})
+  local summary, err = ReaADR.commit_session_cues(all_cues, {
+    snapshot_label = "Add Cue From Cue Manager",
+    undo_description = "ReaADR: add cue",
+    save_options = { event_type = "CueCreated", source = "cue_manager", last_operation = "add_cached_cue" },
+  })
   if not summary then
-    ReaADR.restore_session_snapshot(snapshot, "Add cue rebuild failed: " .. tostring(err))
     ReaADR.message("Cue was added, but the session refresh failed:\n\n" .. tostring(err))
     refresh_cues()
     return
@@ -464,22 +466,25 @@ local function remove_selected_cue()
     return
   end
 
-  local snapshot = ReaADR.create_session_snapshot("Remove Cue From Cue Manager")
-  local removed, err = ReaADR.remove_cached_cue(cue, { select_index = state.selected, renumber = true })
+  local removed, err = ReaADR.remove_cached_cue(cue, { select_index = state.selected, renumber = true, save = false })
   if not removed then
     ReaADR.message("Cue remove failed:\n\n" .. tostring(err))
     return
   end
 
-  local summary, rebuild_err = ReaADR.sync_full({})
+  local summary, rebuild_err = ReaADR.commit_session_cues(removed.cues, {
+    snapshot_label = "Remove Cue From Cue Manager",
+    undo_description = "ReaADR: remove cue",
+    save_options = { event_type = "CueDeleted", source = "cue_manager", last_operation = "remove_cached_cue" },
+    after_sync = function()
+      return ReaADR.remove_project_artifacts_for_cues({ removed.removed }, { manage_undo = false })
+    end,
+  })
   if not summary then
-    ReaADR.restore_session_snapshot(snapshot, "Remove cue rebuild failed: " .. tostring(rebuild_err))
     ReaADR.message("Cue was removed, but the session refresh failed:\n\n" .. tostring(rebuild_err))
     refresh_cues()
     return
   end
-  ReaADR.remove_project_artifacts_for_cues({ removed.removed })
-
   refresh_cues()
   state.selected = math.min(state.selected, math.max(1, #cues))
   local selected = cues[state.selected]

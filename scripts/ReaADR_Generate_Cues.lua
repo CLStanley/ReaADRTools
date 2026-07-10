@@ -47,27 +47,25 @@ if not generated_cue_path then
   return
 end
 
-local snapshot = ReaADR.create_session_snapshot("Generate Cues from Markers/Regions")
-ReaADR.save_session_cues(cues, {
-  event_type = "BulkCueCreated",
-  source = "generate_cues_from_selection",
-  last_operation = "generate_cues_from_selection",
-})
-local sync_summary, setup_error = ReaADR.sync_full({
-  overlay_settings       = ReaADR.load_overlay_settings(),
-  create_source_video_track = true,
-  require_video_track    = false,
-  create_character_tracks = true,
-  create_cues_track      = true,
-  on_progress            = progress.update,
-  source                 = "generate_cues_from_selection",
+local sync_summary, setup_error = ReaADR.commit_session_cues(cues, {
+  snapshot_label = "Generate Cues from Markers/Regions",
+  undo_description = "ReaADR: generate cues from markers and regions",
+  save_options = {
+    event_type = "BulkCueCreated", source = "generate_cues_from_selection",
+    last_operation = "generate_cues_from_selection",
+  },
+  sync_options = {
+    overlay_settings = ReaADR.load_overlay_settings(),
+    create_source_video_track = true, require_video_track = false,
+    create_character_tracks = true, create_cues_track = true,
+    on_progress = progress.update, source = "generate_cues_from_selection",
+  },
 })
 local summary = sync_summary and sync_summary.rebuild
 
 progress.close()
 
 if not summary then
-  ReaADR.restore_session_snapshot(snapshot, "Generate cues failed: " .. tostring(setup_error))
   ReaADR.log("ERROR", "GENERATE", "Cue generation failed", { detail = tostring(setup_error) })
   ReaADR.message("Cue generation failed:\n\n" .. tostring(setup_error))
   return

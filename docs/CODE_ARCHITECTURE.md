@@ -84,6 +84,14 @@ Responsibilities:
 
 Most shared behavior belongs here instead of inside feature scripts.
 
+Safety-critical cohesive helpers are split into small modules while preserving
+the public `ReaADR` table:
+
+- `ReaADR_Core_Persistence.lua` serializes and mutates the Session Model.
+- `ReaADR_Core_Transactions.lua` owns nested-safe Undo and UI-refresh scopes.
+- `ReaADR_Core_Ownership.lua` contains deletion-boundary predicates.
+- `ReaADR_Record_Arm.lua` captures, isolates, and restores record-arm state.
+
 ## ADR Session Model
 
 The canonical project data model is stored in project extstate as
@@ -106,6 +114,10 @@ Core rule: REAPER project state is rendered output. The ADR Session Model is the
 source of truth. General refresh renders from the session model and does not
 pull region positions from REAPER into the model. Explicit sync tools may still
 read REAPER region edits back into the model, but that is a separate user action.
+
+A valid model with zero cues is an empty model-backed session. A missing or
+invalid model is distinct and is never populated implicitly from project
+regions. `adopt_legacy_project_regions()` is the explicit compatibility bridge.
 
 ## Feature Scripts
 
@@ -239,7 +251,8 @@ logic.
 Prefer cached cue data over project-wide scans. Scan REAPER tracks/items only
 when needed, such as take counting or cleanup.
 
-Batch project edits inside:
+Batch project edits use `ReaADR.with_project_transaction()`. Nested helpers join
+the current operation; only the outer user-facing action calls:
 
 - `reaper.Undo_BeginBlock`
 - `reaper.PreventUIRefresh(1)`
@@ -316,13 +329,14 @@ paths include:
 - Cue Manager add/remove cue flows
 - Character-specific cue clearing
 
-`ReaADR.create_session_snapshot()` stores the last cache/registry snapshot in
-project extstate. `ReaADR.restore_session_snapshot()` restores it and bumps the
-session revision so open windows re-query state. `ReaADR.protected_session_operation()`
-is available for new workflows that need snapshot/restore and structured
-logging around a callback.
+`ReaADR.create_session_snapshot()` stores the last model snapshot in project
+extstate. `ReaADR.restore_session_model_snapshot()` restores model extstate only
+and bumps the revision once so open windows re-query state. It does not restore
+tracks, regions, items, or FX. `ReaADR.commit_session_cues()` combines a model
+mutation with rendered project changes under one Undo-backed transaction.
+`ReaADR.protected_session_operation()` remains available for callback workflows.
 
-This is currently a last-operation safety snapshot, not a snapshot history or
+This is currently a last-operation model snapshot, not a snapshot history or
 crash-recovery system. Full recovery work should add named restore points,
 snapshot diffing, restore UI, autosave/crash detection, and full-sync-after-
 restore behavior.
@@ -335,6 +349,17 @@ Import update mode builds the replacement session before removing stale
 generated artifacts. Stale cleanup only targets old selected-character cues
 that no longer exist in the replacement import, which avoids deleting newly
 rebuilt cue items with matching cue IDs.
+
+On a failed full sync, the outer transaction closes its undo block, invokes
+REAPER Undo to restore project objects, restores the model snapshot, balances
+UI refresh suppression, and logs the error. Cleanup predicates only match
+ReaADR-owned roles and cue keys; recorded/user media is outside this boundary.
+
+## Automated Checks
+
+`tests/run.sh` runs deterministic Lua tests against fake REAPER APIs. GitHub
+Actions validates Lua syntax, runs tests, shellchecks packaging/build scripts,
+fetches pinned native dependencies, and validates serial and parallel builds.
 
 ## Supported File Types
 

@@ -67,6 +67,8 @@ local function script_file_dir()
   return path:match("^(.*)[/\\]") or "."
 end
 
+local Ownership = dofile(script_file_dir() .. "/ReaADR_Core_Ownership.lua")
+
 local function logo_image_paths()
   local base = script_file_dir()
   local candidates = {
@@ -1114,6 +1116,10 @@ function ReaADR.overlay_text_rgba_expr(settings)
   end
   return "1, 1, 1, 1"
 end
+
+dofile(script_file_dir() .. "/ReaADR_Core_Transactions.lua")(ReaADR, {
+  project = project,
+})
 
 dofile(script_file_dir() .. "/ReaADR_Core_Persistence.lua")(ReaADR, {
   project = project,
@@ -2164,9 +2170,13 @@ function ReaADR.current_active_filter_targets(targets)
   return active_targets
 end
 
-function ReaADR.apply_character_filter()
+function ReaADR.apply_character_filter(options)
+  options = options or {}
   ReaADR.log("INFO", "FILTER", "Applying character filter")
-  reaper.Undo_BeginBlock()
+  return ReaADR.with_project_transaction({
+    manage_undo = options.manage_undo ~= false,
+    description = "ReaADR: apply character filter",
+  }, function()
   local cues = ReaADR.load_session_cues()
   if not cues then
     cues = ReaADR.collect_project_marker_cues({
@@ -2217,7 +2227,6 @@ function ReaADR.apply_character_filter()
   end
   ReaADR.bump_session_revision()
   reaper.UpdateArrange()
-  reaper.Undo_EndBlock("ReaADR: apply character filter", -1)
   local result = {
     active_tracks   = active_tracks,
     muted_tracks    = muted_tracks,
@@ -2229,6 +2238,7 @@ function ReaADR.apply_character_filter()
     result.active_tracks, result.muted_tracks, result.hidden_regions
   ))
   return result
+  end)
 end
 
 function ReaADR.region_name(cue)
@@ -3141,7 +3151,8 @@ function ReaADR.sync_cached_cues_from_project_regions()
   }
 end
 
-function ReaADR.add_cached_cue(cue)
+function ReaADR.add_cached_cue(cue, options)
+  options = options or {}
   cue = cue or {}
   local cues = ReaADR.load_session_cues()
   if not cues then
@@ -3170,11 +3181,12 @@ function ReaADR.add_cached_cue(cue)
     end
     return (tonumber(a.start_time) or 0) < (tonumber(b.start_time) or 0)
   end)
-  ReaADR.save_session_cues(cues, {
-    event_type = "CueCreated",
-    source = "add_cached_cue",
-    last_operation = "add_cached_cue",
-  })
+  if options.save ~= false then
+    ReaADR.save_session_cues(cues, {
+      event_type = "CueCreated", source = "add_cached_cue",
+      last_operation = "add_cached_cue",
+    })
+  end
   ReaADR.set_manager_selected_cue(cue)
   return cue, cues
 end
@@ -3209,11 +3221,12 @@ function ReaADR.remove_cached_cue(target_cue, options)
     renumber_cues_in_order(cues)
   end
 
-  ReaADR.save_session_cues(cues, {
-    event_type = "CueDeleted",
-    source = "remove_cached_cue",
-    last_operation = "remove_cached_cue",
-  })
+  if options.save ~= false then
+    ReaADR.save_session_cues(cues, {
+      event_type = "CueDeleted", source = "remove_cached_cue",
+      last_operation = "remove_cached_cue",
+    })
+  end
 
   local selected = cues[math.min(#cues, math.max(1, tonumber(options.select_index) or 1))]
   ReaADR.set_manager_selected_cue(selected)
@@ -3228,15 +3241,18 @@ function ReaADR.remove_cached_cue(target_cue, options)
   }
 end
 
-function ReaADR.remove_project_artifacts_for_cues(target_cues)
+function ReaADR.remove_project_artifacts_for_cues(target_cues, options)
+  options = options or {}
+  return ReaADR.with_project_transaction({
+    manage_undo = options.manage_undo ~= false,
+    description = "ReaADR: remove generated cue artifacts",
+  }, function()
+  local summary, refresh_err = ReaADR.with_ui_refresh_suppressed(function()
   local removed_regions = 0
   local removed_items = 0
   local keys = {}
 
   ReaADR.log("INFO", "DELETE", "Removing generated artifacts for cue set", { count = #(target_cues or {}) })
-  reaper.Undo_BeginBlock()
-  reaper.PreventUIRefresh(1)
-
   for _, cue in ipairs(target_cues or {}) do
     keys[ReaADR.cue_key(cue)] = true
     if delete_project_marker_by_name(ReaADR.region_name(cue), true) then
@@ -3250,21 +3266,22 @@ function ReaADR.remove_project_artifacts_for_cues(target_cues)
       local item = reaper.GetTrackMediaItem(track, item_index)
       local _, role = reaper.GetSetMediaItemInfo_String(item, "P_EXT:ReaADR.role", "", false)
       local _, cue_key = reaper.GetSetMediaItemInfo_String(item, "P_EXT:ReaADR.cue_key", "", false)
-      if role == "cue_audio" and keys[cue_key] then
+      if Ownership.cue_audio_item_matches(role, cue_key, keys) then
         reaper.DeleteTrackMediaItem(track, item)
         removed_items = removed_items + 1
       end
     end
   end
 
-  reaper.PreventUIRefresh(-1)
-  reaper.UpdateArrange()
-  reaper.Undo_EndBlock("ReaADR: remove generated cue artifacts", -1)
-
   return {
     regions_removed = removed_regions,
     cue_audio_removed = removed_items,
   }
+  end)
+  if not summary then error(tostring(refresh_err), 0) end
+  reaper.UpdateArrange()
+  return summary
+  end)
 end
 
 function ReaADR.rebuild_session_from_model(options)
@@ -3303,6 +3320,9 @@ function ReaADR.rebuild_session_from_model(options)
     create_character_tracks = options.create_character_tracks ~= false,
     create_cues_track = options.create_cues_track ~= false,
     on_progress = options.on_progress,
+    manage_undo = options.manage_undo,
+    bump_revision = options.bump_revision,
+    last_operation = options.last_operation,
   })
 end
 
@@ -3499,25 +3519,25 @@ function ReaADR.update_session_cues_from_regions(options)
     }
   end
 
-  local snapshot = ReaADR.create_session_snapshot("Update Cues From Regions")
-  ReaADR.save_session_cues(updated, {
-    event_type = "CueTimingUpdated",
-    source = options.source or "update_cues_from_regions",
-    last_operation = "update_cues_from_regions",
-  })
-
-  local rebuild_summary, rebuild_err = ReaADR.sync_full({
-    overlay_settings = options.overlay_settings,
-    on_progress = options.on_progress,
-    source = options.source or "update_cues_from_regions",
-    batch_id = options.batch_id,
+  local rebuild_summary, rebuild_err = ReaADR.commit_session_cues(updated, {
+    snapshot_label = "Update Cues From Regions",
+    undo_description = "ReaADR: update cues from regions",
+    save_options = {
+      event_type = "CueTimingUpdated",
+      source = options.source or "update_cues_from_regions",
+      last_operation = "update_cues_from_regions",
+    },
+    sync_options = {
+      overlay_settings = options.overlay_settings,
+      on_progress = options.on_progress,
+      source = options.source or "update_cues_from_regions",
+      batch_id = options.batch_id,
+    },
   })
   if not rebuild_summary then
-    ReaADR.restore_session_snapshot(snapshot, "Update cues from regions failed: " .. tostring(rebuild_err))
     return nil, rebuild_err
   end
 
-  ReaADR.bump_session_revision()
   return {
     changed_cues = changed,
     missing_regions = missing,
@@ -3530,17 +3550,35 @@ function ReaADR.sync_full(options)
   options = options or {}
   local started = reaper.time_precise and reaper.time_precise() or os.clock()
   ReaADR.log("INFO", "SYNC", "Starting full sync")
-  local rebuild_summary, rebuild_err = ReaADR.rebuild_session_from_model({
-    clear_generated_items = options.clear_generated_items == true,
-    clear_generated_regions = options.clear_generated_regions == true,
-    overlay_settings = options.overlay_settings,
-    require_video_track = options.require_video_track,
-    create_source_video_track = options.create_source_video_track,
-    create_character_tracks = options.create_character_tracks,
-    create_cues_track = options.create_cues_track,
-    on_progress = options.on_progress,
-  })
+  local snapshot = options.create_snapshot == false and nil or ReaADR.create_session_snapshot("Full Sync")
+  local rebuild_summary, rebuild_err = ReaADR.with_project_transaction({
+    manage_undo = options.manage_undo ~= false,
+    description = options.undo_description or "ReaADR: synchronize ADR session",
+    failure_description = "ReaADR: failed ADR session synchronization",
+  }, function()
+    local summary, err = ReaADR.rebuild_session_from_model({
+      clear_generated_items = options.clear_generated_items == true,
+      clear_generated_regions = options.clear_generated_regions == true,
+      overlay_settings = options.overlay_settings,
+      require_video_track = options.require_video_track,
+      create_source_video_track = options.create_source_video_track,
+      create_character_tracks = options.create_character_tracks,
+      create_cues_track = options.create_cues_track,
+      on_progress = options.on_progress,
+      manage_undo = false,
+      bump_revision = options.bump_revision,
+      last_operation = options.last_operation,
+    })
+    if not summary then error(tostring(err or "Full sync failed."), 0) end
+    return summary
+  end)
   if not rebuild_summary then
+    if options.restore_model_on_failure ~= false and snapshot then
+      local restored, restore_err = ReaADR.restore_session_model_snapshot(snapshot, "Full sync failed: " .. tostring(rebuild_err))
+      if not restored then
+        rebuild_err = tostring(rebuild_err) .. "; model restore failed: " .. tostring(restore_err)
+      end
+    end
     ReaADR.log("ERROR", "SYNC", "Full sync failed", { detail = tostring(rebuild_err) })
     ReaADR.emit_event("ErrorOccurred", {
       message = "Full sync failed",
@@ -3592,6 +3630,37 @@ function ReaADR.sync_full(options)
     })
   end
   return summary
+end
+
+-- Atomically commits model intent and renders it. The outer block owns Undo;
+-- sync/setup helpers participate without opening nested blocks.
+function ReaADR.commit_session_cues(cues, options)
+  options = options or {}
+  local snapshot = ReaADR.create_session_snapshot(options.snapshot_label or "Commit Session Cues")
+  local result, err = ReaADR.with_project_transaction({
+    description = options.undo_description or "ReaADR: update ADR session",
+    failure_description = options.failure_description or "ReaADR: failed ADR session update",
+  }, function()
+    ReaADR.save_session_cues(cues, options.save_options or {})
+    local sync_options = options.sync_options or {}
+    sync_options.manage_undo = false
+    sync_options.restore_model_on_failure = false
+    sync_options.create_snapshot = false
+    sync_options.bump_revision = false
+    sync_options.last_operation = (options.save_options or {}).last_operation
+    local summary, sync_err = ReaADR.sync_full(sync_options)
+    if not summary then error(tostring(sync_err), 0) end
+    local after_summary = nil
+    if options.after_sync then after_summary = options.after_sync(summary) end
+    return { sync = summary, after_sync = after_summary }
+  end)
+  if not result then
+    local restored, restore_err = ReaADR.restore_session_model_snapshot(snapshot, "Session commit failed: " .. tostring(err))
+    if not restored then err = tostring(err) .. "; model restore failed: " .. tostring(restore_err) end
+    ReaADR.log("ERROR", "RECOVERY", "Session commit rolled back", { detail = tostring(err) })
+    return nil, err
+  end
+  return result.sync, nil, result.after_sync
 end
 
 function ReaADR.resolve_session_drift(choice, options)
@@ -3672,25 +3741,18 @@ function ReaADR.refresh_session(options)
     source = options.source or "refresh_session",
     batch_id = options.batch_id,
   })
-  reaper.Undo_BeginBlock()
-
-  local snapshot = ReaADR.create_session_snapshot("Refresh Session")
   local summary, sync_err = ReaADR.sync_full({
     clear_generated_items = options.clear_generated_items == true,
     clear_generated_regions = options.clear_generated_regions == true,
     on_progress = options.on_progress,
     batch_id = options.batch_id,
     source = "refresh_session",
+    undo_description = "ReaADR: refresh session",
   })
   if not summary then
-    ReaADR.restore_session_snapshot(snapshot, "Refresh rebuild failed: " .. tostring(sync_err))
-    reaper.Undo_EndBlock("ReaADR: refresh session (failed)", -1)
     ReaADR.log("ERROR", "REFRESH", "Session rebuild failed: " .. tostring(sync_err))
     return nil, sync_err
   end
-
-  ReaADR.bump_session_revision()
-  reaper.Undo_EndBlock("ReaADR: refresh session", -1)
 
   ReaADR.log("INFO", "REFRESH", ("Refresh complete: %d cues, %d regions updated, %d tracks"):format(
     summary.affected_cues or 0,
@@ -4306,21 +4368,17 @@ function ReaADR.delete_generated_cue_audio_items()
 end
 
 function ReaADR.cleanup_generated_items()
-  local removed_items = 0
-
-  reaper.Undo_BeginBlock()
-  reaper.PreventUIRefresh(1)
-
-  removed_items = ReaADR.delete_generated_cue_audio_items()
-
-  reaper.PreventUIRefresh(-1)
-  reaper.TrackList_AdjustWindows(false)
-  reaper.UpdateArrange()
-  reaper.Undo_EndBlock("ReaADR: clean generated cue items", -1)
-
-  return {
-    removed_items = removed_items,
-  }
+  return ReaADR.with_project_transaction({
+    description = "ReaADR: clean generated cue items",
+  }, function()
+    local removed_items, err = ReaADR.with_ui_refresh_suppressed(function()
+      return ReaADR.delete_generated_cue_audio_items()
+    end)
+    if removed_items == nil then error(tostring(err), 0) end
+    reaper.TrackList_AdjustWindows(false)
+    reaper.UpdateArrange()
+    return { removed_items = removed_items }
+  end)
 end
 
 function ReaADR.set_character_recording_completed(character, value)
@@ -4375,12 +4433,13 @@ function ReaADR.clear_cues_for_characters(character_list)
   end
 
   local snapshot = ReaADR.create_session_snapshot("Clear Cues For Characters")
-  reaper.Undo_BeginBlock()
-  reaper.PreventUIRefresh(1)
-
   local regions_removed = 0
   local tracks_removed = 0
-  local ok, err = pcall(function()
+  local transaction_ok, transaction_err = ReaADR.with_project_transaction({
+    description = "ReaADR: clear cues for selected characters",
+    failure_description = "ReaADR: clear cues for selected characters (failed)",
+  }, function()
+  local ok, err = ReaADR.with_ui_refresh_suppressed(function()
     -- Collect cue tags so we can match regions by name
     local cue_tags = {}
     for _, cue in ipairs(to_clear) do
@@ -4418,11 +4477,9 @@ function ReaADR.clear_cues_for_characters(character_list)
       for j = reaper.CountTrackMediaItems(track) - 1, 0, -1 do
         local item = reaper.GetTrackMediaItem(track, j)
         local _, role = reaper.GetSetMediaItemInfo_String(item, "P_EXT:ReaADR.role", "", false)
-        if role == "cue_audio" then
-          local _, cue_key = reaper.GetSetMediaItemInfo_String(item, "P_EXT:ReaADR.cue_key", "", false)
-          if cleared_keys[cue_key] then
-            reaper.DeleteTrackMediaItem(track, item)
-          end
+        local _, cue_key = reaper.GetSetMediaItemInfo_String(item, "P_EXT:ReaADR.cue_key", "", false)
+        if Ownership.cue_audio_item_matches(role, cue_key, cleared_keys) then
+          reaper.DeleteTrackMediaItem(track, item)
         end
       end
     end
@@ -4460,25 +4517,23 @@ function ReaADR.clear_cues_for_characters(character_list)
     for character, _ in pairs(char_set) do
       ReaADR.set_character_recording_completed(character, true)
     end
+    return true
   end)
-
-  reaper.PreventUIRefresh(-1)
+  if not ok then error(tostring(err), 0) end
   reaper.TrackList_AdjustWindows(false)
   reaper.UpdateArrange()
+  return true
+  end)
 
-  if not ok then
-    ReaADR.restore_session_snapshot(snapshot, "Clear cues failed: " .. tostring(err))
-    reaper.Undo_EndBlock("ReaADR: clear cues for selected characters (failed)", -1)
-    ReaADR.log("ERROR", "DELETE", "Clear cues failed", { detail = tostring(err) })
-    return nil, tostring(err)
+  if not transaction_ok then
+    ReaADR.restore_session_model_snapshot(snapshot, "Clear cues failed: " .. tostring(transaction_err))
+    ReaADR.log("ERROR", "DELETE", "Clear cues failed", { detail = tostring(transaction_err) })
+    return nil, tostring(transaction_err)
   end
-
-  reaper.Undo_EndBlock("ReaADR: clear cues for selected characters", -1)
 
   if #remaining > 0 then
     ReaADR.refresh_overlay_silent()
   end
-  ReaADR.bump_session_revision()
 
   local result = {
     cues_removed    = #to_clear,
@@ -4951,6 +5006,11 @@ end
 
 function ReaADR.setup_project(cues, options)
   options = options or {}
+  return ReaADR.with_project_transaction({
+    manage_undo = options.manage_undo ~= false,
+    description = options.undo_description or "ReaADR: import cue sheet and setup ADR project",
+    failure_description = "ReaADR: failed cue sheet import",
+  }, function()
   local session_cues = cues or {}
   local active_cues = options.skip_completed_characters == false
     and session_cues
@@ -5015,10 +5075,7 @@ function ReaADR.setup_project(cues, options)
     overlap_conflicts = overlap_conflicts,
   }
 
-  reaper.Undo_BeginBlock()
-  reaper.PreventUIRefresh(1)
-
-  local ok, err = pcall(function()
+  local ok, err = ReaADR.with_ui_refresh_suppressed(function()
     progress("Preparing ADR tracks...")
     local tracks = {}
     local source_video_track = nil
@@ -5129,31 +5186,31 @@ function ReaADR.setup_project(cues, options)
 
     progress("Saving ReaADR project state...")
     ReaADR.save_session_cues(session_cues, {
-      event_type = "ScriptImported",
       source = "setup_project",
-      last_operation = "setup_project",
+      last_operation = options.last_operation or "setup_project",
+      emit_event = false,
+      bump_revision = options.bump_revision ~= false,
     })
     reaper.SetProjExtState(project(), ReaADR.EXT_NAMESPACE, "version", ReaADR.VERSION)
     reaper.SetProjExtState(project(), ReaADR.EXT_NAMESPACE, "session_cue_count", tostring(#session_cues))
     reaper.SetProjExtState(project(), ReaADR.EXT_NAMESPACE, "session_character_count", tostring(#session_characters))
     if ReaADR.character_filter_enabled() then
       progress("Applying character filter...")
-      ReaADR.apply_character_filter()
+      ReaADR.apply_character_filter({ manage_undo = false })
     end
     call_progress(options.on_progress, "Finalizing...", total_steps, total_steps)
+    return true
   end)
 
-  reaper.PreventUIRefresh(-1)
   reaper.TrackList_AdjustWindows(false)
   reaper.UpdateArrange()
 
   if ok then
-    reaper.Undo_EndBlock("ReaADR: import cue sheet and setup ADR project", -1)
     return summary
   end
 
-  reaper.Undo_EndBlock("ReaADR: failed cue sheet import", -1)
-  return nil, err
+  error(tostring(err), 0)
+  end)
 end
 
 function ReaADR.show_video_window()

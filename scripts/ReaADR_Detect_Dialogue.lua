@@ -97,26 +97,24 @@ local function build_and_import_cues(raw_segments)
     return
   end
 
-  local snapshot = ReaADR.create_session_snapshot("Detect Dialogue From Selected Media")
   ReaADR.log("INFO", "DETECT", "Saving detected dialogue cues", { count = #cues })
-  ReaADR.save_session_cues(cues, {
-    event_type = "BulkCueCreated",
-    source = "detect_dialogue",
-    last_operation = "detect_dialogue",
-  })
 
   local progress = ReaADR.create_progress_window("Building Detected ADR Cues")
-  local sync_summary, setup_error = ReaADR.sync_full({
-    on_progress = progress.update,
-    source = "detect_dialogue",
+  local sync_summary, setup_error = ReaADR.commit_session_cues(cues, {
+    snapshot_label = "Detect Dialogue From Selected Media",
+    undo_description = "ReaADR: build detected dialogue session",
+    save_options = {
+      event_type = "BulkCueCreated", source = "detect_dialogue",
+      last_operation = "detect_dialogue",
+    },
+    sync_options = { on_progress = progress.update, source = "detect_dialogue" },
   })
   local summary = sync_summary and sync_summary.rebuild
   progress.close()
 
   if not summary then
-    ReaADR.restore_session_snapshot(snapshot, "Detected dialogue setup failed: " .. tostring(setup_error))
     ReaADR.log("ERROR", "DETECT", "Detected cue setup failed", { detail = tostring(setup_error) })
-    ReaADR.message("Detected cues were cached, but project setup failed:\n\n" .. tostring(setup_error))
+    ReaADR.message("Detected cue setup failed and was rolled back:\n\n" .. tostring(setup_error))
     return
   end
 

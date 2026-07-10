@@ -270,6 +270,18 @@ return function(ReaADR, deps)
     }, ":")
   end
 
+  local function deep_copy(value, seen)
+    if type(value) ~= "table" then return value end
+    seen = seen or {}
+    if seen[value] then return seen[value] end
+    local copy = {}
+    seen[value] = copy
+    for key, child in pairs(value) do
+      copy[deep_copy(key, seen)] = deep_copy(child, seen)
+    end
+    return copy
+  end
+
   local function serialize_pairs(prefix, fields)
     local keys = {}
     for key in pairs(fields or {}) do
@@ -302,7 +314,8 @@ return function(ReaADR, deps)
 
   function ReaADR.build_adr_session(cues, options)
     options = options or {}
-    cues = cues or {}
+    -- Derived IDs and lane fields must never leak back into UI/import tables.
+    cues = deep_copy(cues or {})
     local _, existing_session_id = reaper.GetProjExtState(project(), ReaADR.EXT_NAMESPACE, "adr_session_id")
     local session_id = existing_session_id ~= "" and existing_session_id or stable_id("session", os.time(), #cues)
     reaper.SetProjExtState(project(), ReaADR.EXT_NAMESPACE, "adr_session_id", session_id)
@@ -441,27 +454,21 @@ return function(ReaADR, deps)
         session_id = session.session_id,
         session_name = session.session_name,
       }),
+      serialize_pairs("project_metadata", session.project_metadata or {}),
       serialize_pairs("timecode", session.timecode_settings or {}),
-      serialize_pairs("state", {
-        active_script_id = session.session_state and session.session_state.active_script_id or "",
-        refresh_version = session.session_state and session.session_state.refresh_version or "",
-        last_operation = session.session_state and session.session_state.last_operation or "",
-      }),
     }
+    local state = deep_copy(session.session_state or {})
+    state.dirty_flags = nil
+    lines[#lines + 1] = serialize_pairs("state", state)
     local dirty = session.session_state and session.session_state.dirty_flags or {}
     for key, value in pairs(dirty) do
       lines[#lines + 1] = serialize_pairs("dirty", { key = key, value = value })
     end
     for _, script in ipairs(session.scripts or {}) do
-      lines[#lines + 1] = serialize_pairs("script", {
-        script_id = script.script_id,
-        script_name = script.script_name,
-        source_file = script.source_file,
-        import_timestamp = script.import_timestamp,
-        revision_id = script.revision_id,
-        characters = table.concat(script.characters or {}, ","),
-        cue_count = script.cue_count,
-      })
+      local fields = deep_copy(script)
+      fields.characters = table.concat(script.characters or {}, ",")
+      fields.metadata = serialize_metadata(script.metadata)
+      lines[#lines + 1] = serialize_pairs("script", fields)
     end
     for _, character in ipairs(session.characters or {}) do
       lines[#lines + 1] = serialize_pairs("character", character)
@@ -492,6 +499,9 @@ return function(ReaADR, deps)
     for _, record in ipairs(session.import_registry or {}) do
       lines[#lines + 1] = serialize_pairs("import", record)
     end
+    for _, line in ipairs(session._unknown_records or {}) do
+      lines[#lines + 1] = line
+    end
     return table.concat(lines, "\n")
   end
 
@@ -508,6 +518,7 @@ return function(ReaADR, deps)
       timecode_settings = {},
       import_registry = {},
       session_state = { dirty_flags = {} },
+      _unknown_records = {},
     }
     for line in (value .. "\n"):gmatch("([^\n]*)\n") do
       if line ~= "" then
@@ -516,12 +527,17 @@ return function(ReaADR, deps)
         if record_type == "session" then
           session.session_id = fields.session_id or ""
           session.session_name = fields.session_name or ""
+        elseif record_type == "project_metadata" then
+          session.project_metadata = fields
         elseif record_type == "timecode" then
           session.timecode_settings = fields
         elseif record_type == "state" then
-          session.session_state.active_script_id = fields.active_script_id or ""
-          session.session_state.refresh_version = fields.refresh_version or ""
-          session.session_state.last_operation = fields.last_operation or ""
+          for key, state_value in pairs(fields) do
+            session.session_state[key] = state_value
+          end
+          session.session_state.active_script_id = session.session_state.active_script_id or ""
+          session.session_state.refresh_version = session.session_state.refresh_version or ""
+          session.session_state.last_operation = session.session_state.last_operation or ""
         elseif record_type == "dirty" then
           session.session_state.dirty_flags[fields.key or ""] = fields.value or ""
         elseif record_type == "script" then
@@ -529,6 +545,7 @@ return function(ReaADR, deps)
           for id in tostring(fields.characters or ""):gmatch("([^,]+)") do chars[#chars + 1] = id end
           fields.characters = chars
           fields.cue_count = tonumber(fields.cue_count) or 0
+          fields.metadata = deserialize_metadata(fields.metadata)
           session.scripts[#session.scripts + 1] = fields
         elseif record_type == "character" then
           fields.cue_count = tonumber(fields.cue_count) or 0
@@ -552,6 +569,8 @@ return function(ReaADR, deps)
           session.regions[#session.regions + 1] = fields
         elseif record_type == "import" then
           session.import_registry[#session.import_registry + 1] = fields
+        else
+          session._unknown_records[#session._unknown_records + 1] = line
         end
       end
     end
@@ -567,32 +586,102 @@ return function(ReaADR, deps)
 
   function ReaADR.load_adr_session()
     local _, value = reaper.GetProjExtState(project(), ReaADR.EXT_NAMESPACE, "adr_session_model_v1")
+    if tostring(value or "") == "" then
+      return nil, "No ADR session model found. Import or generate cues first.", "missing_session_model"
+    end
     local session = deserialize_session_model(value)
     if session then
       return session
     end
-    return nil, "No ADR session model found. Import or generate cues first."
+    return nil, "The ADR session model is invalid and could not be loaded.", "invalid_session_model"
   end
 
-  function ReaADR.save_session_cues(cues, options)
+  local function merge_records(existing, derived, id_key)
+    local result, by_id = {}, {}
+    for _, record in ipairs(existing or {}) do
+      local copy = deep_copy(record)
+      result[#result + 1] = copy
+      by_id[tostring(copy[id_key] or "")] = copy
+    end
+    for _, record in ipairs(derived or {}) do
+      local id = tostring(record[id_key] or "")
+      local target = by_id[id]
+      if target then
+        for key, value in pairs(record) do
+          if not (key == "metadata" and type(value) == "table" and next(value) == nil and target.metadata ~= nil) then
+            target[key] = deep_copy(value)
+          end
+        end
+      else
+        target = deep_copy(record)
+        result[#result + 1] = target
+        by_id[id] = target
+      end
+    end
+    return result
+  end
+
+  function ReaADR.replace_session_cues(cues, options)
     options = options or {}
-    local session = ReaADR.build_adr_session(cues or {}, {
+    local existing = ReaADR.load_adr_session()
+    local derived = ReaADR.build_adr_session(cues or {}, {
       last_operation = options.last_operation or "save_cues",
       cues_modified = true,
     })
+    local session = existing and deep_copy(existing) or derived
+
+    if existing then
+      session.cues = derived.cues
+      session.scripts = merge_records(existing.scripts, derived.scripts, "script_id")
+      session.characters = merge_records(existing.characters, derived.characters, "character_id")
+      local derived_scripts, derived_characters = {}, {}
+      for _, record in ipairs(derived.scripts) do derived_scripts[tostring(record.script_id or "")] = true end
+      for _, record in ipairs(derived.characters) do derived_characters[tostring(record.character_id or "")] = true end
+      for _, record in ipairs(session.scripts) do
+        if not derived_scripts[tostring(record.script_id or "")] then record.cue_count = 0 end
+      end
+      for _, record in ipairs(session.characters) do
+        if not derived_characters[tostring(record.character_id or "")] then record.cue_count = 0 end
+      end
+      session.tracks = merge_records({}, derived.tracks, "track_id")
+      session.regions = merge_records({}, derived.regions, "region_id")
+      session.timecode_settings = session.timecode_settings or derived.timecode_settings
+      session.project_metadata = session.project_metadata or {}
+      session.import_registry = session.import_registry or {}
+
+      local imports = {}
+      for _, record in ipairs(session.import_registry) do
+        imports[tostring(record.script_id or "")] = true
+      end
+      for _, record in ipairs(derived.import_registry) do
+        if not imports[tostring(record.script_id or "")] then
+          session.import_registry[#session.import_registry + 1] = deep_copy(record)
+        end
+      end
+      session.session_state = session.session_state or { dirty_flags = {} }
+      session.session_state.dirty_flags = session.session_state.dirty_flags or {}
+      session.session_state.dirty_flags.cues_modified = "true"
+      session.session_state.last_operation = options.last_operation or "save_cues"
+    end
+
     ReaADR.save_adr_session(session)
-    local revision = ReaADR.bump_session_revision()
+    local revision = options.bump_revision == false
+      and (ReaADR.session_revision and ReaADR.session_revision() or 0)
+      or ReaADR.bump_session_revision()
     if options.emit_event ~= false and ReaADR.emit_event then
       ReaADR.emit_event(options.event_type or "SessionSaved", {
-        cue_count = #(cues or {}),
-        revision = revision,
+        cue_count = #(cues or {}), revision = revision,
         operation = options.last_operation or "save_cues",
       }, {
-        source = options.source or "session",
-        session_id = session.session_id,
+        source = options.source or "session", session_id = session.session_id,
         batch_id = options.batch_id,
       })
     end
+    return session
+  end
+
+  function ReaADR.save_session_cues(cues, options)
+    return ReaADR.replace_session_cues(cues, options)
   end
 
   function ReaADR.create_session_snapshot(label)
@@ -616,15 +705,16 @@ return function(ReaADR, deps)
     return snapshot
   end
 
-  function ReaADR.restore_session_snapshot(snapshot, reason)
+  -- Model-only restore. Tracks, regions, items, and FX require transaction
+  -- rollback or an explicit render; this function intentionally claims less.
+  function ReaADR.restore_session_model_snapshot(snapshot, reason)
     if not snapshot then
       return false, "No session snapshot is available."
     end
     reaper.SetProjExtState(project(), ReaADR.EXT_NAMESPACE, "adr_session_model_v1", snapshot.model_blob or "")
-    if snapshot.revision and snapshot.revision ~= "" then
-      reaper.SetProjExtState(project(), ReaADR.EXT_NAMESPACE, "session_revision", snapshot.revision)
-    end
-    ReaADR.bump_session_revision()
+    local restored_revision = tonumber(snapshot.revision) or 0
+    local current_revision = ReaADR.session_revision and tonumber(ReaADR.session_revision()) or 0
+    reaper.SetProjExtState(project(), ReaADR.EXT_NAMESPACE, "session_revision", tostring(math.max(restored_revision, current_revision or 0) + 1))
     if ReaADR.log then
       ReaADR.log("WARN", "RESTORE", "Session snapshot restored", {
         detail = tostring(reason or snapshot.label or "unknown"),
@@ -633,23 +723,32 @@ return function(ReaADR, deps)
     return true
   end
 
+
+  ReaADR.restore_session_snapshot = ReaADR.restore_session_model_snapshot
+
   function ReaADR.load_session_cues()
-    local session = ReaADR.load_adr_session and ReaADR.load_adr_session()
-    if session and session.cues and #session.cues > 0 then
-      return session.cues
+    local session, err, code = ReaADR.load_adr_session()
+    if not session then return nil, err, code end
+    return session.cues or {}, nil, "session_model"
+  end
+
+  function ReaADR.adopt_legacy_project_regions(options)
+    options = options or {}
+    if ReaADR.load_adr_session() then
+      return nil, "An ADR Session Model already exists."
     end
-    if ReaADR.collect_project_marker_cues then
-      local region_cues = ReaADR.collect_project_marker_cues({
-        include_markers = false,
-        include_regions = true,
-        character = "",
-        cue_type = "",
-        flexible_export = true,
-      })
-      if region_cues and #region_cues > 0 then
-        return region_cues
-      end
+    if not ReaADR.collect_project_marker_cues then
+      return nil, "Project region discovery is unavailable."
     end
-    return nil, "No ADR session model found. Import or generate cues first."
+    local cues = ReaADR.collect_project_marker_cues({
+      include_markers = options.include_markers == true,
+      include_regions = true,
+      character = "", cue_type = "", flexible_export = true,
+    }) or {}
+    return ReaADR.replace_session_cues(cues, {
+      source = options.source or "legacy_adoption",
+      last_operation = "adopt_legacy_regions",
+      event_type = "LegacySessionAdopted",
+    })
   end
 end

@@ -9,11 +9,11 @@ code change, a user-visible workflow, or a documented constraint.
 | Addendum | Status | Notes |
 | --- | --- | --- |
 | E - Recording loop and transcription | Partial | Pre-roll repeat behavior is mostly implemented. Transcription remains future work; selected-media detection is currently threshold-based speech detection. |
-| F - Reliability and integrity | Mostly implemented | Model-first import/update, scoped deletion, snapshots, undo blocks, and QA logging exist. Snapshot coverage and durable logs need expansion. |
+| F - Reliability and integrity | Mostly implemented | Model-first import/update, ownership-scoped deletion, model snapshots, centralized Undo rollback, and QA logging exist. Durable logs need expansion. |
 | G - Session state model | Mostly implemented | `adr_session_model_v1` is the source of truth for imported/generated ADR data. Some compatibility paths still read REAPER state directly. |
 | H - Sync engine | Partial | Initial sync APIs exist and are used by refresh, cue edits, import, detection, and cue generation. Remaining work is drift resolution UI, merge handling, and broader incremental sync coverage. |
 | I - Event system | Partial | A synchronous typed event queue, bounded project-local event log, and subscription API now exist. UI windows still use `session_revision` polling. |
-| J - Recovery and snapshots | Partial | Last-operation snapshots exist for selected risky paths. Full snapshot history, restore UI, diffing, autosave, and crash recovery are not implemented. |
+| J - Recovery and snapshots | Partial | Last-operation model snapshots and Undo-backed render rollback exist. Full snapshot history, restore UI, diffing, autosave, and crash recovery are not implemented. |
 
 ## Phase 1 - Safety Fixes And Documentation
 

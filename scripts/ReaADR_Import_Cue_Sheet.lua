@@ -853,7 +853,6 @@ if proceed ~= 6 then
   return
 end
 
-local snapshot = ReaADR.create_session_snapshot("Import Cue Sheet: " .. tostring(script_info.script_id))
 ReaADR.log("INFO", "IMPORT", "Starting script import", {
   script_id = script_info.script_id,
   count = #imported_cues,
@@ -867,26 +866,29 @@ local progress = ReaADR.create_progress_window("Importing ADR Cue Sheet")
 local preroll_status = ReaADR.configure_project_preroll(import_preroll_seconds)
 local cleanup_summary = nil
 local stale_cues = plan.mode == "update" and stale_update_cues(existing_script_cues, imported_cues, selected_characters) or {}
--- Commit session intent first, then let the Sync Engine render REAPER state.
-ReaADR.save_session_cues(final_cues, {
-  event_type = "ScriptImported",
-  source = "import_cue_sheet",
-  last_operation = "import_cue_sheet",
-  batch_id = script_info.script_id,
-})
-local sync_summary, setup_error = ReaADR.sync_full({
-  overlay_settings = overlay_settings,
-  require_video_track = true,
-  on_progress = progress.update,
-  source = "import_cue_sheet",
-  batch_id = script_info.script_id,
+local sync_summary, setup_error, committed_cleanup = ReaADR.commit_session_cues(final_cues, {
+  snapshot_label = "Import Cue Sheet: " .. tostring(script_info.script_id),
+  undo_description = "ReaADR: import cue sheet and setup ADR project",
+  save_options = {
+    event_type = "ScriptImported", source = "import_cue_sheet",
+    last_operation = "import_cue_sheet", batch_id = script_info.script_id,
+  },
+  sync_options = {
+    overlay_settings = overlay_settings, require_video_track = true,
+    on_progress = progress.update, source = "import_cue_sheet",
+    batch_id = script_info.script_id,
+  },
+  after_sync = function()
+    if #stale_cues > 0 then
+      return ReaADR.remove_project_artifacts_for_cues(stale_cues, { manage_undo = false })
+    end
+  end,
 })
 local summary = sync_summary and sync_summary.rebuild
 
 if not summary then
   progress.update("Import failed.", 1, 1)
   progress.close()
-  ReaADR.restore_session_snapshot(snapshot, "Import failed: " .. tostring(setup_error))
   ReaADR.log("ERROR", "IMPORT", "Cue sheet import failed during project setup", {
     script_id = script_info.script_id,
     detail = tostring(setup_error),
@@ -895,8 +897,8 @@ if not summary then
   return
 end
 
+cleanup_summary = committed_cleanup
 if #stale_cues > 0 then
-  cleanup_summary = ReaADR.remove_project_artifacts_for_cues(stale_cues)
   ReaADR.log("INFO", "IMPORT", "Removed stale cues after successful update", {
     script_id = script_info.script_id,
     count = #stale_cues,

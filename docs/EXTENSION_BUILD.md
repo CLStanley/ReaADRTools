@@ -33,13 +33,16 @@ Additional documentation:
 
 ## Build
 
-Development builds require the REAPER SDK and WDL source tree:
+Development builds require the REAPER SDK and WDL revisions recorded in
+`extension/dependencies.lock`. Fetch and verify those exact commits with:
 
 ```sh
-mkdir -p vendor
-git clone --depth 1 https://github.com/justinfrankel/reaper-sdk vendor/reaper-sdk
-git clone --depth 1 https://github.com/justinfrankel/WDL vendor/WDL
+extension/fetch-dependencies.sh
 ```
+
+The fetcher refuses to replace an existing dependency checkout at a different
+revision. This prevents an automated build from silently changing local SDK
+sources; remove or relocate an old checkout explicitly before fetching.
 
 ### Linux (x86_64)
 

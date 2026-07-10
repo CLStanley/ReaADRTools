@@ -11,6 +11,7 @@ local function script_dir()
 end
 
 local ReaADR = dofile(script_dir() .. "/ReaADR_Core.lua")
+local arm_state = dofile(script_dir() .. "/ReaADR_Record_Arm.lua")(reaper, 0)
 
 local cue = ReaADR.active_cue()
 if not cue then
@@ -87,6 +88,7 @@ local state = {
   loop_start        = 0,
   loop_end          = 0,
   loop_take_warning_ack = false,
+  operation_finalized = true,
 }
 
 local theme       = ReaADR.ui_theme()
@@ -132,9 +134,7 @@ local function draw_btn(rect, label, fill)
 end
 
 local function arm_tracks()
-  if rec_track then
-    reaper.SetMediaTrackInfo_Value(rec_track, "I_RECARM", 1)
-  end
+  return arm_state.capture_and_isolate(rec_track)
 end
 
 local function save_loop_preference()
@@ -184,12 +184,6 @@ local function restore_loop_range()
   state.loop_range_active = false
 end
 
-local function disarm_tracks()
-  if rec_track then
-    reaper.SetMediaTrackInfo_Value(rec_track, "I_RECARM", 0)
-  end
-end
-
 local function finalize_takes()
   if state.take_count > 0 then
     ReaADR.set_cue_status_at_position("Recorded", cue_start + 0.001)
@@ -199,16 +193,29 @@ local function finalize_takes()
     state.take_count, state.take_count == 1 and "" or "s")
 end
 
+-- Every exit route converges here. Arm and loop restoration are idempotent so
+-- transport callbacks, Escape, gfx close, errors, and atexit may all call it.
+local function finalize_operation(options)
+  options = options or {}
+  if options.stop_transport and state.mode ~= IDLE and reaper.GetPlayState() ~= 0 then
+    reaper.Main_OnCommand(1016, 0)
+  end
+  restore_loop_range()
+  arm_state.restore()
+  state.mode = IDLE
+  if not state.operation_finalized then
+    state.operation_finalized = true
+    if options.finalize_takes ~= false then finalize_takes() end
+  end
+end
+
 -- finalize_stop updates state only; does not send a Stop command.
 -- Use this when the transport already stopped on its own.
 local function finalize_stop(loop_after)
   if loop_after then
     state.mode = LOOP_WAIT
   else
-    state.mode = IDLE
-    restore_loop_range()
-    disarm_tracks()
-    finalize_takes()
+    finalize_operation({ finalize_takes = true })
   end
 end
 
@@ -220,6 +227,9 @@ local function stop_take(loop_after)
 end
 
 local function start_take()
+  if state.mode == IDLE then
+    state.operation_finalized = false
+  end
   local use_preroll = state.take_count == 0 or state.include_preroll_each_loop
   if state.loop and state.include_preroll_each_loop then
     configure_loop_range()
@@ -228,7 +238,11 @@ local function start_take()
   end
   local pos = (use_preroll and record_start < cue_start) and record_start or cue_start
   reaper.SetEditCurPos(pos, true, false)
-  arm_tracks()
+  local armed, arm_error = arm_tracks()
+  if not armed then
+    finalize_operation({ finalize_takes = false })
+    error(arm_error or "Unable to isolate the ADR recording track.")
+  end
   if use_preroll and pos < cue_start then
     reaper.Main_OnCommand(1007, 0)  -- Play; will punch in at cue_start
     state.mode       = PREROLL
@@ -243,6 +257,7 @@ local function start_take()
   ReaADR.refresh_overlay_silent()
 end
 
+local safe_frame
 local function frame()
   layout()
   ReaADR.set_gfx_color(theme.bg)
@@ -319,9 +334,7 @@ local function frame()
     local play_state = reaper.GetPlayState()
     if play_state == 0 then
       -- Stopped externally during preroll.
-      state.mode = IDLE
-      restore_loop_range()
-      disarm_tracks()
+      finalize_operation({ finalize_takes = false })
     elseif reaper.GetPlayPosition() >= cue_start then
       reaper.Main_OnCommand(1013, 0)  -- Punch in to record at cue_start
       state.mode       = RECORDING
@@ -345,21 +358,12 @@ local function frame()
   -- Close / Escape
   local char = gfx.getchar()
   if char < 0 or char == 27 then
-    if state.mode == PREROLL then
-      reaper.Main_OnCommand(1016, 0)  -- Stop
-      restore_loop_range()
-      disarm_tracks()
-      state.mode = IDLE
-    elseif state.mode ~= IDLE then
-      stop_take(false)
-    else
-      restore_loop_range()
-    end
+    finalize_operation({ stop_transport = true, finalize_takes = state.mode ~= PREROLL })
     ReaADR.save_window_state("record_cue")
     gfx.quit()
     return
   elseif ReaADR.handle_gfx_transport_key(char, false) then
-    reaper.defer(frame)
+      reaper.defer(safe_frame)
     return
   end
 
@@ -371,7 +375,7 @@ local function frame()
     elseif inside(btn_loop, gfx.mouse_x, gfx.mouse_y) then
       if not state.loop and not confirm_loop_recording_takes() then
         state.last_mouse = mouse
-        reaper.defer(frame)
+        reaper.defer(safe_frame)
         return
       end
       state.loop = not state.loop
@@ -390,20 +394,17 @@ local function frame()
       save_loop_preference()
     elseif inside(btn_stop, gfx.mouse_x, gfx.mouse_y) then
       if state.mode == PREROLL then
-        reaper.Main_OnCommand(1016, 0)  -- Stop
-        restore_loop_range()
-        disarm_tracks()
-        state.mode = IDLE
+        finalize_operation({ stop_transport = true, finalize_takes = false })
       elseif state.mode ~= IDLE then
         stop_take(false)
       else
-        restore_loop_range()
+        finalize_operation({ finalize_takes = false })
       end
     end
   end
   state.last_mouse = mouse
 
-  reaper.defer(frame)
+  reaper.defer(safe_frame)
 end
 
 ReaADR.init_persistent_window("record_cue", "ReaADR \xe2\x80\x93 Record Cue", {
@@ -411,4 +412,19 @@ ReaADR.init_persistent_window("record_cue", "ReaADR \xe2\x80\x93 Record Cue", {
   height = state.height,
 })
 
-frame()
+if type(reaper.atexit) == "function" then
+  reaper.atexit(function()
+    finalize_operation({ stop_transport = true, finalize_takes = state.mode ~= PREROLL })
+  end)
+end
+
+safe_frame = function()
+  local ok, err = xpcall(frame, debug.traceback)
+  if not ok then
+    finalize_operation({ stop_transport = true, finalize_takes = state.mode ~= PREROLL })
+    ReaADR.log("ERROR", "RECORD", "Record Cue failed", { detail = tostring(err) })
+    ReaADR.message("Record Cue stopped after an error:\n\n" .. tostring(err))
+    if gfx and gfx.quit then gfx.quit() end
+  end
+end
+safe_frame()

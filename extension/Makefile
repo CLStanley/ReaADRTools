@@ -18,7 +18,7 @@ LDFLAGS += -shared -ldl
 
 .PHONY: all clean dist prepare-sdk
 
-all: prepare-sdk $(BUILD_DIR)/$(TARGET)
+all: $(BUILD_DIR)/$(TARGET)
 
 prepare-sdk:
 	@if [ ! -d "$(REAPER_SDK)/sdk" ] || [ ! -d "$(WDL)/swell" ]; then \
@@ -27,7 +27,7 @@ prepare-sdk:
 	fi
 	@if [ ! -e "$(REAPER_SDK)/WDL" ]; then ln -s ../WDL/WDL "$(REAPER_SDK)/WDL"; fi
 
-$(BUILD_DIR)/$(TARGET): reaper_reaadr.cpp
+$(BUILD_DIR)/$(TARGET): reaper_reaadr.cpp | prepare-sdk
 	@mkdir -p "$(BUILD_DIR)"
 	$(CXX) $(CPPFLAGS) $(CXXFLAGS) $< -o $@ $(LDFLAGS)
 

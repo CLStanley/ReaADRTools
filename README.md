@@ -66,6 +66,7 @@ behavior remain available through the shared Lua session layer.
 Linux x86_64 builds use the Makefile in `extension/`:
 
 ```sh
+extension/fetch-dependencies.sh
 cd extension
 make dist
 ```
