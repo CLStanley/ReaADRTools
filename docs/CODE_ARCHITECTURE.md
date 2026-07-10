@@ -71,7 +71,7 @@ Responsibilities:
 - CSV/TSV parsing and column mapping. `.xlsx` imports use the native
   `ReaADR_ReadXlsxAsTsv` helper, then use the same Lua parsing/mapping path as
   other delimited files.
-- Cue cache serialization in project extstate.
+- Session Model serialization and focused cue mutation in project extstate.
 - Timecode parsing/formatting.
 - Project-scoped UI state such as window geometry/layout preferences.
 - Track and region creation.
@@ -98,6 +98,8 @@ The canonical project data model is stored in project extstate as
 `adr_session_model_v1`. It is a structured line-based model with these sections:
 
 - `session`: session ID and name.
+- `project_metadata`: project/studio metadata with escaped values.
+- `timecode`: project timecode settings.
 - `script`: imported script/source records.
 - `character`: character records independent of cue rows.
 - `cue`: production cue records.
@@ -118,6 +120,12 @@ read REAPER region edits back into the model, but that is a separate user action
 A valid model with zero cues is an empty model-backed session. A missing or
 invalid model is distinct and is never populated implicitly from project
 regions. `adopt_legacy_project_regions()` is the explicit compatibility bridge.
+
+`save_session_cues()` is a compatibility wrapper around
+`replace_session_cues()`. It loads the existing model, deep-copies caller cues,
+and replaces only cue-derived collections. Session identity, project metadata,
+script metadata, character state, import identity, timecode settings, runtime
+state, dirty flags, and unknown record types remain intact where applicable.
 
 ## Feature Scripts
 
@@ -255,8 +263,17 @@ Batch project edits use `ReaADR.with_project_transaction()`. Nested helpers join
 the current operation; only the outer user-facing action calls:
 
 - `reaper.Undo_BeginBlock`
+- `reaper.Undo_EndBlock`
 - `reaper.PreventUIRefresh(1)`
 - `reaper.PreventUIRefresh(-1)`
+
+`ReaADR.commit_session_cues()` owns model save plus full rendering for import,
+generation, region-timing updates, and Cue Manager add/remove operations.
+`sync_full()`, `rebuild_session_from_model()`, `setup_project()`, and character
+filtering join an existing transaction and must not start nested undo blocks.
+Failure closes the owned block before conditionally invoking REAPER Undo; the
+undo description is checked first so an empty failed block cannot undo an
+unrelated prior user operation.
 
 Avoid adding new standalone public actions unless there is a strong workflow
 reason. Prefer adding manager controls.
@@ -317,12 +334,14 @@ continue to tolerate `session_revision` changes until all windows have migrated.
 ## Reliability And Safety
 
 The ADR Session Model is the source of truth for imported/generated ADR cues.
-REAPER tracks, cue items, regions, ruler lanes, and video overlays are rendered
-from that model and are safe to rebuild.
+ReaADR-owned cue items, regions, ruler lanes, mappings, and video overlays are
+rendered from that model and are safe to rebuild. Character recording tracks may
+contain user recordings and are never considered disposable merely because the
+track itself has a ReaADR role.
 
 Risky session-changing operations should create a session snapshot before
-writing cache state or deleting generated project artifacts. Current protected
-paths include:
+writing Session Model state or deleting generated project artifacts. Current
+protected paths include:
 
 - Script import/update
 - Dialogue detection session build
@@ -360,6 +379,8 @@ ReaADR-owned roles and cue keys; recorded/user media is outside this boundary.
 `tests/run.sh` runs deterministic Lua tests against fake REAPER APIs. GitHub
 Actions validates Lua syntax, runs tests, shellchecks packaging/build scripts,
 fetches pinned native dependencies, and validates serial and parallel builds.
+The native dependency SHAs live in `extension/dependencies.lock`; the fetcher
+verifies those revisions and refuses to replace a mismatched existing checkout.
 
 ## Supported File Types
 

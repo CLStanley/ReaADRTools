@@ -36,6 +36,9 @@ Additional documentation:
 Development builds require the REAPER SDK and WDL revisions recorded in
 `extension/dependencies.lock`. Fetch and verify those exact commits with:
 
+- REAPER SDK: `ec60fb4c38e1f575e29e28bd01fcf50dbf1c0bc7`
+- WDL: `599228ffee6ad8d02122a171e0e79271b24abbd3`
+
 ```sh
 extension/fetch-dependencies.sh
 ```
@@ -52,6 +55,11 @@ Linux builds use the Makefile in `extension/`.
 cd extension
 make dist
 ```
+
+The binary target has an order-only dependency on `prepare-sdk`, so `make`,
+parallel `make -j`, and `make dist` validate and prepare dependencies before
+compilation. Missing dependencies produce one validation error without starting
+the compiler.
 
 The distributable Linux x86_64 layout is created at:
 

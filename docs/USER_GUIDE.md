@@ -135,6 +135,13 @@ character lane and start at the cue pre-roll. Recording punches in at the cue
 start so pre-roll beeps are played for timing without intentionally recording
 pre-roll media into the take.
 
+When recording starts, ReaADR remembers the arm state of every existing track,
+temporarily disarms all tracks except the selected character lane, and restores
+the complete original arm state afterward. Restoration also runs when you press
+Stop or Escape, stop REAPER's transport elsewhere, close the Record Cue window,
+or encounter a script error. A track that was armed before Record Current Cue
+remains armed afterward; ReaADR does not leave other tracks newly armed.
+
 ## Cue Management
 
 Open `ReaADR Tools > Open Manager`, then choose Cue Management.
@@ -274,14 +281,26 @@ errors so a tester can report what happened before a problem.
 
 ReaADR keeps a project-local safety snapshot before risky session-changing
 operations such as imports, detected-dialogue builds, and Cue Manager add/remove
-flows. If one of those workflows fails while refreshing generated session items,
-ReaADR restores the saved session data and reports the error instead of silently
-leaving the session half-updated.
+flows. The corresponding generated-project edits are grouped into one REAPER
+Undo transaction. If rendering fails, ReaADR closes that transaction, uses Undo
+to revert its partial tracks/regions/items/FX changes, restores the saved Session
+Model, and reports the error instead of leaving a half-updated session.
+
+Recovery and cleanup are restricted to ReaADR-owned objects identified by
+generated names, roles, and cue keys. Character recording tracks and recorded
+takes are not treated as disposable generated cue audio.
 
 Current snapshots are automatic safety snapshots for the latest risky operation.
-They are not yet user-selectable restore points. For manual backups today, export
-the Full Session JSON report before large editing passes or before testing major
-workflow changes.
+They contain the Session Model only; by themselves they do not restore tracks,
+regions, recordings, cue audio, or overlay FX. Project-object rollback is handled
+by the operation's REAPER Undo transaction. Snapshots are not yet user-selectable
+restore points. For manual backups today, export the Full Session JSON report
+before large editing passes or before testing major workflow changes.
+
+An existing Session Model may validly contain zero cues. ReaADR does not silently
+adopt ordinary REAPER regions merely because that model is empty. For an older or
+non-ReaADR project, use the explicit marker/region cue generation workflow when
+you want those project objects converted into a new ReaADR session.
 
 ## Help And Hints
 

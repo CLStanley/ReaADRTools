@@ -21,6 +21,10 @@ code change, a user-visible workflow, or a documented constraint.
   logging, undo, and manager return data stay consistent.
 - Keep destructive character clearing protected by a session snapshot before
   model mutation and generated-artifact removal.
+- Preserve and isolate complete record-arm state for Record Current Cue. (Done.)
+- Keep model save and generated-project rendering in one Undo-owned operation.
+  (Done for import, generation, region timing, Cue Manager add/remove, refresh,
+  setup, filtering, and character clearing.)
 - Document current selected-media behavior as speech-region detection, not
   transcription.
 - Document the current recovery model as last-operation rollback, not snapshot
@@ -46,15 +50,15 @@ stronger.
 
 Initial migration targets:
 
-- Move full rebuild logic out of direct UI paths and behind `sync_full`. (Started:
-  `refresh_session()` now calls `sync_full()`.)
+- Move full rebuild logic out of direct UI paths and behind `sync_full`. (Done:
+  `refresh_session()` and user-facing rebuild paths call the sync boundary.)
 - Move cue status/field update rendering behind `sync_incremental`. (Started:
   cue status and cached cue edits now use `sync_incremental()`.)
 - Move import preview validation behind `sync_validate`. (Started: cue sheet
   import and dialogue detection preview now use `sync_validate()`.)
-- Move import/generation build paths behind `sync_full()`. (Started: cue sheet
-  import, dialogue detection, marker/region cue generation, and Cue Manager
-  add/remove now use `sync_full()`.)
+- Move import/generation build paths behind `commit_session_cues()` and
+  `sync_full()`. (Done for cue sheet import, dialogue detection, marker/region
+  cue generation, region timing updates, and Cue Manager add/remove.)
 - Return one consistent summary shape:
   - `sync_type`
   - `session_id`
@@ -211,6 +215,10 @@ Manager before recording.
   APIs rather than writing REAPER state directly.
 - Destructive operations must be scoped and confirmed.
 - Risky model changes must create a snapshot before mutation.
+- Internal sync/render helpers must join the outer transaction instead of
+  opening nested Undo blocks.
+- Model-only restoration must not claim that REAPER project objects were
+  restored; project rollback requires the owned Undo transaction.
 - Sync/recovery functions should return structured summaries rather than
   formatted UI strings.
 - User-facing docs must distinguish implemented behavior from planned behavior.

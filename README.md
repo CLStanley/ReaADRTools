@@ -107,5 +107,19 @@ The current UI stack is mixed:
 - ReaImGui-first Cue Manager
 - `gfx` utility windows and legacy Cue Manager fallback
 
-Most workflow logic should continue to live in `scripts/ReaADR_Core.lua` so UI
-migration does not fork behavior between interfaces.
+Shared workflow APIs remain exposed through `scripts/ReaADR_Core.lua` so UI
+migration does not fork behavior between interfaces. Cohesive persistence,
+transaction/recovery, ownership, character, and recording-state logic lives in
+small `ReaADR_Core_*` or workflow helper modules loaded by that public core.
+
+Run local deterministic checks without launching REAPER:
+
+```sh
+tests/run.sh
+find scripts tests -type f -name '*.lua' -print0 | xargs -0 -n1 luac -p
+shellcheck packaging/*.sh packaging/*.command extension/*.sh tests/*.sh
+```
+
+Native dependency revisions are pinned in `extension/dependencies.lock`.
+GitHub Actions runs the Lua checks, shellcheck, and serial/parallel Linux native
+build validation on pushes and pull requests.
