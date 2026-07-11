@@ -59,6 +59,7 @@ behavior remain available through the shared Lua session layer.
 - [Addendum Implementation Backlog](docs/ADDENDUM_IMPLEMENTATION_BACKLOG.md)
 - [Extension Build Notes](docs/EXTENSION_BUILD.md)
 - [Installer Packaging](docs/PACKAGING.md)
+- [Branding and Asset Use](docs/BRANDING.md)
 - [Import Test Documents](<docs/test docs/README.md>)
 
 ## Build
@@ -123,3 +124,12 @@ shellcheck packaging/*.sh packaging/*.command extension/*.sh tests/*.sh
 Native dependency revisions are pinned in `extension/dependencies.lock`.
 GitHub Actions runs the Lua checks, shellcheck, and serial/parallel Linux native
 build validation on pushes and pull requests.
+
+## License
+
+Except where otherwise noted, the source code in this repository is licensed
+under the [MIT License](LICENSE). Third-party components and assets remain
+subject to their respective licenses.
+
+The ReaADR Tools name, logo, and other branding assets are not included in the
+MIT License. See [Branding and Asset Use](docs/BRANDING.md) for permitted uses.
