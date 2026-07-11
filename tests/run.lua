@@ -98,6 +98,68 @@ test("valid empty session differs from missing and invalid models", function()
   eq(#cues, 0); eq(code, "session_model")
 end)
 
+test("right dock state uses the configured right-side docker", function()
+  local adr = make_persistence()
+  reaper.DockGetPosition = function(index)
+    if index == 5 then return 3 end
+    return index == 0 and 0 or -1
+  end
+  eq(adr.right_docker_state(), 1 + 5 * 256)
+  reaper.DockGetPosition = function(index)
+    return index == 0 and 0 or -1
+  end
+  local state, exists, should_create = adr.right_docker_state()
+  eq(state, 1 + 1 * 256)
+  eq(exists, false)
+  eq(should_create, true)
+  reaper.DockGetPosition = nil
+  eq(adr.right_docker_state(), 1 + 3 * 256)
+end)
+
+test("new docker can be moved right with REAPER's native action", function()
+  local adr = make_persistence()
+  local invoked = nil
+  reaper.SectionFromUniqueID = function() return {} end
+  reaper.kbd_enumerateActions = function(_, index)
+    if index == 0 then return 123, "Docker: show in right of main window" end
+    return 0, ""
+  end
+  reaper.Main_OnCommand = function(command_id) invoked = command_id end
+  eq(adr.move_current_docker_right(), true)
+  eq(invoked, 123)
+end)
+
+test("cue manager docking preference defaults off and persists", function()
+  local adr = make_persistence()
+  eq(adr.cue_manager_auto_dock_enabled(), false)
+  adr.set_cue_manager_auto_dock_enabled(true)
+  eq(adr.cue_manager_auto_dock_enabled(), true)
+  adr.set_cue_manager_auto_dock_enabled(false)
+  eq(adr.cue_manager_auto_dock_enabled(), false)
+end)
+
+test("force float overrides remembered cue manager docking", function()
+  local adr = make_persistence()
+  adr.set_window_layout_enabled(true)
+  adr.save_window_geometry("cue_manager", { dock = 769, width = 980, height = 700 })
+  local state = adr.load_window_state("cue_manager", {
+    dock = 0,
+    force_float = true,
+  })
+  eq(state.dock, 0)
+end)
+
+test("force dock overrides a remembered bottom docker", function()
+  local adr = make_persistence()
+  adr.set_window_layout_enabled(true)
+  adr.save_window_geometry("cue_manager", { dock = 1, width = 980, height = 700 })
+  local state = adr.load_window_state("cue_manager", {
+    dock = 1281,
+    force_dock = true,
+  })
+  eq(state.dock, 1281)
+end)
+
 test("cue edit preserves session envelope import identity and stable IDs", function()
   local adr = make_persistence()
   local original = adr.build_adr_session({{

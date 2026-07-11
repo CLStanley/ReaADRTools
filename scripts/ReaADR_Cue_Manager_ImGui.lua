@@ -784,11 +784,14 @@ local function launch_docked_cue_manager()
   if cue then
     ReaADR.set_manager_selected_cue(cue)
   end
+  local dock_state, _, should_create_right = ReaADR.right_docker_state()
   ReaADR.save_window_geometry("cue_manager", {
-    dock = 1,
+    dock = dock_state,
     width = 1180,
     height = 760,
   })
+  ReaADR.set_setting("cue_manager_dock_once", "1")
+  ReaADR.set_setting("cue_manager_create_right_docker", should_create_right and "1" or "0")
   local path = script_dir() .. "/ReaADR_Cue_Manager_Gfx.lua"
   local command_id = reaper.AddRemoveReaScript(true, 0, path, true)
   if command_id and command_id > 0 then

@@ -66,6 +66,50 @@ return function(ReaADR, deps)
     return ("ui.window.%s.%s"):format(sanitize_token(window_id), field)
   end
 
+  function ReaADR.dock_state_for_position(position, fallback_index)
+    position = tonumber(position) or 0
+    fallback_index = math.max(0, math.floor(tonumber(fallback_index) or 0))
+    local first_unused = nil
+    if type(reaper.DockGetPosition) == "function" then
+      for docker_index = 0, 15 do
+        local docker_position = reaper.DockGetPosition(docker_index)
+        if docker_position == position then
+          return 1 + docker_index * 256, true, false
+        elseif docker_position == -1 and first_unused == nil then
+          first_unused = docker_index
+        end
+      end
+      if first_unused ~= nil then
+        return 1 + first_unused * 256, false, true
+      end
+    end
+    return 1 + fallback_index * 256, false, false
+  end
+
+  function ReaADR.right_docker_state()
+    return ReaADR.dock_state_for_position(3, 3)
+  end
+
+  function ReaADR.move_current_docker_right()
+    if type(reaper.SectionFromUniqueID) ~= "function"
+      or type(reaper.kbd_enumerateActions) ~= "function"
+      or type(reaper.Main_OnCommand) ~= "function" then
+      return false
+    end
+    local section = reaper.SectionFromUniqueID(0)
+    if not section then return false end
+    for action_index = 0, 100000 do
+      local command_id, name = reaper.kbd_enumerateActions(section, action_index)
+      if not command_id or command_id == 0 then break end
+      name = tostring(name or ""):lower()
+      if name:find("docker:", 1, true) and name:find("right of main window", 1, true) then
+        reaper.Main_OnCommand(command_id, 0)
+        return true
+      end
+    end
+    return false
+  end
+
   function ReaADR.window_layout_enabled()
     local _, value = reaper.GetProjExtState(project(), ReaADR.EXT_NAMESPACE, "ui.remember_window_layout")
     if value == "" then
@@ -76,6 +120,15 @@ return function(ReaADR, deps)
 
   function ReaADR.set_window_layout_enabled(enabled)
     reaper.SetProjExtState(project(), ReaADR.EXT_NAMESPACE, "ui.remember_window_layout", enabled and "1" or "0")
+  end
+
+  function ReaADR.cue_manager_auto_dock_enabled()
+    local _, value = reaper.GetProjExtState(project(), ReaADR.EXT_NAMESPACE, "ui.cue_manager_auto_dock")
+    return value == "1" or value == "true" or value == "yes"
+  end
+
+  function ReaADR.set_cue_manager_auto_dock_enabled(enabled)
+    reaper.SetProjExtState(project(), ReaADR.EXT_NAMESPACE, "ui.cue_manager_auto_dock", enabled and "1" or "0")
   end
 
   function ReaADR.cue_hover_preview_enabled()
@@ -152,7 +205,9 @@ return function(ReaADR, deps)
     state.dock = tonumber(dock) or state.dock
     state.x = tonumber(x) or state.x
     state.y = tonumber(y) or state.y
-    if defaults.force_dock and state.dock == 0 then
+    if defaults.force_float then
+      state.dock = 0
+    elseif defaults.force_dock then
       state.dock = tonumber(defaults.dock) or 1
     end
     return state

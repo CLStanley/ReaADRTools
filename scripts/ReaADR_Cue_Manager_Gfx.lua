@@ -52,6 +52,7 @@ local state = {
   sort_ascending = true,
   last_header_click_key = nil,
   last_header_click_time = 0,
+  move_docker_right_after_update = false,
 }
 
 local function key_code(name)
@@ -905,7 +906,9 @@ local function dock_cue_manager()
   local ok, dock, x, y = pcall(gfx.dock, -1, 0, 0, 0, 0)
   dock = ok and tonumber(dock) or 0
   if dock == 0 then
-    gfx.dock(1)
+    local dock_state, _, should_create_right = ReaADR.right_docker_state()
+    gfx.dock(dock_state)
+    state.move_docker_right_after_update = should_create_right
   end
   ReaADR.save_window_state("cue_manager")
 end
@@ -1295,6 +1298,10 @@ local function frame()
   end
 
   gfx.update()
+  if state.move_docker_right_after_update then
+    state.move_docker_right_after_update = false
+    ReaADR.move_current_docker_right()
+  end
 
   local char = gfx.getchar()
   if char < 0 or char == 27 then
@@ -1557,13 +1564,27 @@ local function frame()
   reaper.defer(frame)
 end
 
+local auto_dock = ReaADR.cue_manager_auto_dock_enabled()
+local dock_once = ReaADR.get_setting("cue_manager_dock_once", "0") == "1"
+local should_dock = auto_dock or dock_once
+local initial_dock, should_create_right = 0, false
+if should_dock then
+  initial_dock, _, should_create_right = ReaADR.right_docker_state()
+end
 local restored = ReaADR.init_persistent_window("cue_manager", "ReaADR Cue Manager", {
   width = state.width,
   height = state.height,
   min_width = state.min_width,
   min_height = state.min_height,
-  dock = 0,
+  dock = initial_dock,
+  force_dock = should_dock,
+  force_float = not should_dock,
 })
+if should_create_right or ReaADR.get_setting("cue_manager_create_right_docker", "0") == "1" then
+  state.move_docker_right_after_update = true
+end
+ReaADR.set_setting("cue_manager_dock_once", "0")
+ReaADR.set_setting("cue_manager_create_right_docker", "0")
 state.width = restored.width
 state.height = restored.height
 frame()

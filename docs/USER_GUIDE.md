@@ -21,8 +21,13 @@ project so they reopen where you left them.
 
 If your desktop environment makes manual docking difficult, enable
 `Open Manager > Preferences > Open Cue Manager docked`. This opens Cue Manager
-with the dock-capable fallback window and asks REAPER to place it in a docker
-programmatically.
+with the dock-capable fallback window and asks REAPER to place it in the
+right-side docker programmatically. If no right-side docker exists, ReaADR uses
+an unused docker slot and asks REAPER to create and move that docker to the
+right. Existing dockers containing other tabs are not repositioned. With this
+preference off, Cue Manager opens as a floating window even when remembered
+window geometry contains an older docked position. The Cue Manager's `Dock`
+button can still dock the current window without enabling the preference.
 
 In the overlay settings, informational text can be switched between white and
 yellow. Cue status keeps its status color, while cue type and character labels

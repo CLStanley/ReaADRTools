@@ -1105,13 +1105,16 @@ function App.open_manager(initial_tab, instance_slot)
       local hover_preview = ReaADR.cue_hover_preview_enabled()
       local tooltips_enabled = ReaADR.tooltips_enabled()
       local navigation_wrap_enabled = ReaADR.navigation_wrap_enabled()
+      local cue_manager_dock = ReaADR.cue_manager_auto_dock_enabled()
       local hover_preview_rect = { x = 24, y = quick_y + 294, w = 340, h = 26 }
       local tooltips_rect = { x = 24, y = quick_y + 330, w = 340, h = 26 }
       local navigation_wrap_rect = { x = 24, y = quick_y + 366, w = 340, h = 26 }
+      local cue_manager_dock_rect = { x = 24, y = quick_y + 402, w = 420, h = 26 }
       special_click[#special_click + 1] = { rect = remember_rect, kind = "remember_layout" }
       special_click[#special_click + 1] = { rect = hover_preview_rect, kind = "hover_preview" }
       special_click[#special_click + 1] = { rect = tooltips_rect, kind = "tooltips" }
       special_click[#special_click + 1] = { rect = navigation_wrap_rect, kind = "navigation_wrap" }
+      special_click[#special_click + 1] = { rect = cue_manager_dock_rect, kind = "cue_manager_dock" }
       ReaADR.set_gfx_color(theme.panel_alt)
       gfx.rect(remember_rect.x, remember_rect.y, 18, 18, false)
       if remember_layout then
@@ -1156,6 +1159,17 @@ function App.open_manager(initial_tab, instance_slot)
       gfx.x = navigation_wrap_rect.x + 30
       gfx.y = navigation_wrap_rect.y - 1
       gfx.drawstr("Wrap cue navigation at ends")
+      ReaADR.set_gfx_color(theme.panel_alt)
+      gfx.rect(cue_manager_dock_rect.x, cue_manager_dock_rect.y, 18, 18, false)
+      if cue_manager_dock then
+        ReaADR.set_gfx_color(theme.accent_gold)
+        gfx.rect(cue_manager_dock_rect.x + 4, cue_manager_dock_rect.y + 4, 10, 10, true)
+      end
+      gfx.setfont(1, "Arial", 14)
+      ReaADR.set_gfx_color(theme.text)
+      gfx.x = cue_manager_dock_rect.x + 30
+      gfx.y = cue_manager_dock_rect.y - 1
+      gfx.drawstr("Open Cue Manager docked")
     elseif state.tab == "overlay" then
       local settings = state.overlay_settings
       local left = 24
@@ -1422,6 +1436,8 @@ function App.open_manager(initial_tab, instance_slot)
             ReaADR.set_tooltips_enabled(not ReaADR.tooltips_enabled())
           elseif entry.kind == "navigation_wrap" then
             ReaADR.set_navigation_wrap_enabled(not ReaADR.navigation_wrap_enabled())
+          elseif entry.kind == "cue_manager_dock" then
+            ReaADR.set_cue_manager_auto_dock_enabled(not ReaADR.cue_manager_auto_dock_enabled())
           elseif entry.kind == "profile" then
             apply_overlay_profile(state.overlay_settings, entry.profile)
             state.overlay_dirty = true
