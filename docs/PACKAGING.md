@@ -19,6 +19,9 @@ Install targets:
 The installer scripts copy the native extension and assets into the REAPER
 resource folder, remove the old bundled
 `UserPlugins/ReaADRTools` folder, and then instruct the user to restart REAPER.
+The platform uninstallers remove only the ReaADR native extension and the
+`Scripts/ReaADRTools` program directory. Project files, recordings, and
+project-local Session Model data are not touched.
 
 ## Build Packages
 
@@ -33,13 +36,20 @@ packaging/create-release-packages.sh
 
 `make dist` uses `extension/Makefile`.
 
-This creates:
+This creates an archive only for each matching native binary currently present
+in `dist/UserPlugins`. After a normal Linux build, this creates:
 
 ```text
 dist/installers/ReaADRTools-linux-x64.zip
-dist/installers/ReaADRTools-macos.zip
-dist/installers/ReaADRTools-windows.zip
 ```
+
+Windows and macOS archives are skipped until their `.dll` or `.dylib` has been
+built and placed in `dist/UserPlugins`. This prevents a Linux `.so` from being
+published inside an archive labeled for another platform.
+
+Each package is validated before its ZIP is written. Validation checks required
+runtime directories and documentation, requires the correct platform binary,
+rejects wrong-platform binaries, and rejects common development artifacts.
 
 ## Native Binary Requirement
 
@@ -101,6 +111,9 @@ After building the MSVC DLL, rebuild the release packages:
 packaging/create-release-packages.sh
 ```
 
+If Linux and Windows binaries share `dist/UserPlugins`, separate Linux and
+Windows archives are produced and each receives only its matching native file.
+
 The Windows zip should then contain:
 
 ```text
@@ -119,3 +132,22 @@ If the Action List does not show `ReaADR`, check:
 
 If actions appear but the top-level menu does not, the DLL loaded but REAPER did
 not provide the customizable-menu hook expected by this extension build.
+
+## Uninstall
+
+Each platform package contains a matching uninstaller:
+
+- Linux: `uninstall-linux.sh`
+- Windows: `uninstall-windows.bat`
+- macOS: `uninstall-macos.command`
+
+Environment overrides supported by the installers are also honored by the
+uninstallers. Uninstall removes only `reaper_reaadr*` for the active platform
+from `UserPlugins` and the `Scripts/ReaADRTools` program folder.
+
+## Release Content Boundary
+
+Release packages include runtime scripts, assets, the correct native extension,
+the README, user guide, third-party notices, and platform install/uninstall
+launchers. They exclude tests, test documents, SRS/roadmap documents, build
+scripts, dependency source, Git metadata, and compiler intermediates.

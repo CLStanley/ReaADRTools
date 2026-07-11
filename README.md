@@ -58,6 +58,8 @@ behavior remain available through the shared Lua session layer.
 - [Extension Build Notes](docs/EXTENSION_BUILD.md)
 - [Installer Packaging](docs/PACKAGING.md)
 - [Branding and Asset Use](docs/BRANDING.md)
+- [Repository Inventory](docs/REPOSITORY_INVENTORY.md)
+- [Beta Readiness](docs/BETA_READINESS.md)
 - [Import Test Documents](<docs/test docs/README.md>)
 
 ## Build
@@ -86,10 +88,13 @@ Create zip packages with:
 packaging/create-release-packages.sh
 ```
 
-The installer copies the bundled `UserPlugins` payload into the user's REAPER
-resource folder and asks them to restart REAPER. The Lua scripts are
-cross-platform, but the native menu extension must be built separately for each
-platform:
+The packaging script creates a platform archive only when the matching native
+binary is present. A Linux build does not fabricate Windows or macOS packages.
+Every created payload is checked by `packaging/validate-release-package.sh`.
+
+The installer copies the native `UserPlugins` payload and assets into the
+user's REAPER resource folder and asks them to restart REAPER. The native menu
+extension must be built separately for each platform:
 
 - Windows: `reaper_reaadr*.dll`
 - macOS: `reaper_reaadr*.dylib`
@@ -98,6 +103,10 @@ platform:
 The current local Makefile builds the Linux `.so`. Windows packages must
 use the MSVC-built `reaper_reaadr.dll`. macOS packages still need their native
 `.dylib` added before public release.
+
+Each package includes a platform-specific uninstaller. Uninstallers remove only
+the ReaADR native extension and `Scripts/ReaADRTools`; they do not modify REAPER
+projects, recordings, or project-local ReaADR Session Model data.
 
 ## Development Notes
 
@@ -113,7 +122,7 @@ shellcheck packaging/*.sh packaging/*.command extension/*.sh tests/*.sh
 ```
 
 Native dependency revisions are pinned in `extension/dependencies.lock`.
-GitHub Actions runs the Lua checks, shellcheck, and serial/parallel Linux native
+GitHub Actions runs native tests, shellcheck, and serial/parallel Linux native
 build validation on pushes and pull requests.
 
 ## License

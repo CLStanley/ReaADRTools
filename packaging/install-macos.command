@@ -20,8 +20,8 @@ if [ ! -d "$payload_root/UserPlugins" ] || [ ! -d "$payload_root/Scripts" ]; the
 fi
 
 if ! ls "$payload_root/UserPlugins"/reaper_reaadr*.dylib >/dev/null 2>&1; then
-  echo "ReaADR Tools installer warning: no macOS extension binary was found in the payload."
-  echo "The Lua files can be copied, but the top-level REAPER menu will not appear without reaper_reaadr*.dylib."
+  echo "ReaADR Tools installer error: no macOS extension binary was found in the payload."
+  exit 1
 fi
 
 mkdir -p "$userplugins_dir" "$scripts_dir"

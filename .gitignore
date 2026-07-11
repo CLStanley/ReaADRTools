@@ -3,9 +3,16 @@ assets/peaks/
 build/
 dist/
 vendor/
+*.log
+*.tmp
+*.swp
+*~
+.DS_Store
+Thumbs.db
 
 # Compiled artifacts
 *.obj
+*.o
 *.so
 *.dll
 *.dylib

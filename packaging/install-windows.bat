@@ -38,8 +38,8 @@ if not exist "%PAYLOAD_ROOT%Scripts\" (
 
 dir /b "%PAYLOAD_ROOT%UserPlugins\reaper_reaadr*.dll" >nul 2>nul
 if errorlevel 1 (
-  echo ReaADR Tools installer warning: no Windows extension binary was found in the payload.
-  echo The Lua files can be copied, but the top-level REAPER menu will not appear without reaper_reaadr*.dll.
+  echo ReaADR Tools installer error: no Windows extension binary was found in the payload.
+  exit /b 1
 )
 
 if not exist "%USERPLUGINS_DIR%\" mkdir "%USERPLUGINS_DIR%"

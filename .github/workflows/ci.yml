@@ -31,3 +31,11 @@ jobs:
       - name: Parallel dist build
         working-directory: extension
         run: make clean && make -j2 dist
+      - name: Assemble available release packages
+        run: packaging/create-release-packages.sh
+      - name: Verify Linux release payload
+        run: packaging/validate-release-package.sh dist/installers/ReaADRTools-linux-x64 linux-x64
+      - name: Verify unsupported packages were not fabricated
+        run: |
+          test ! -e dist/installers/ReaADRTools-windows.zip
+          test ! -e dist/installers/ReaADRTools-macos.zip
