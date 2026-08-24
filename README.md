@@ -7,26 +7,16 @@ reporting, and session maintenance.
 It can also create editable cue regions from detected dialogue in selected
 audio/video media for script-building workflows.
 
-## Current Architecture
+## Architecture Overview
+The system follows a hybrid architecture:
 
-```text
-Native REAPER extension
-  Registers a small ReaADR Tools menu
-  Provides native media-analysis and XLSX import helpers
-  Launches Lua application entry points
+*   **Native Bridge:** A small C++ extension handles core REAPER integration, advanced media analysis (detection), and heavy lifiting like `.xlsx` parsing.
+*   **Lua Application Framework:** The primary logic layer where most features reside, ensuring rapid development and flexibility.
+*   **Session Model (Source of Truth):** All workflow data is stored in a unified ADR Session Model within the project's `extstate`. REAPER elements are rendered from this model rather than being directly manipulated as disconnected objects.
 
-Lua application framework
-  ReaADR Tools Manager
-  Import, cue, session, report, video overlay, preference, and help modules
-  Shared ReaADR_Core session/model helpers
-```
-
-The native extension is intentionally small. Most feature development happens
-in Lua so ADR workflows can evolve quickly without requiring compiled-plugin
-changes for every feature.
-Native code is reserved for stable REAPER integration and helpers that are
-better handled outside Lua, currently selected-media dialogue detection and
-first-worksheet `.xlsx` ingestion.
+## Core Components
+- **ReaADR_Core:** The shared logic layer for state management, persistence, undo/redo handling, and media integration.
+- **Feature Modules:** Specific handlers for Import, Cue Management (supporting both ReaImGui and legacy `gfx` UI), Reporting, and Overlay generation.
 
 ## Public Actions
 
