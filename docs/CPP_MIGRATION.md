@@ -74,6 +74,12 @@ before removing or redirecting any Lua validation entry point.
 
 Exit condition: import and model mutation no longer require Lua.
 
+Implementation status: status/timecode/stable-ID utilities, CSV/TSV text
+inspection, column aliases and mapping, row validation, metadata retention, and
+complete cue-derived session construction are implemented in the native domain
+core. They are test-covered but are not project writers yet. Cue replacement,
+snapshots, file-selection UI, and the import cutover remain pending.
+
 ### Stage 3: REAPER rendering and recording workflows
 
 - Port track/region/item/overlay rendering behind typed REAPER adapters.
@@ -115,6 +121,10 @@ The initial target-architecture modules now include:
   and saving through a narrow project-state port.
 - `extension/reaadr_core/domain_utils.*`: Lua-compatible status normalization,
   deterministic IDs, and non-drop-frame timecode parsing/formatting.
+- `extension/reaadr_core/cue_import.*`: CSV/TSV inspection, column mapping,
+  cue validation, and retention of unmapped studio metadata.
+- `extension/reaadr_core/session_builder.*`: construction of scripts,
+  characters, cues, lane tracks, regions, and import identity from cue rows.
 - `extension/reaadr_reaper/project_state.*`: dynamically sized REAPER project
   extstate access.
 - `extension/reaadr_reaper/project_transaction.*`: nested-safe undo and UI

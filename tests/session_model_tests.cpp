@@ -1,6 +1,8 @@
 #include "reaadr_core/session_model.hpp"
 #include "reaadr_core/domain_utils.hpp"
+#include "reaadr_core/cue_import.hpp"
 #include "reaadr_core/model_repository.hpp"
+#include "reaadr_core/session_builder.hpp"
 #include "reaadr_reaper/project_state.hpp"
 #include "reaadr_reaper/project_transaction.hpp"
 
@@ -281,6 +283,104 @@ void test_domain_utilities()
         "timecode formatting clamps negative positions");
 }
 
+void test_cue_import()
+{
+  const std::string csv =
+    "\xEF\xBB\xBF" "Cue Number,Actor,In Time,Out Time,Dialogue,Studio Note\r\n"
+    "\r\n"
+    "001,Miyuki,00:00:01:00,00:00:02:12,\"Hello, \"\"world\"\"\",Keep this\r\n"
+    "002,Miyuki,3.5,4.25,Second line,\r\n";
+  const auto table = reaadr::core::parse_delimited_content(csv, "cues.csv");
+  check(static_cast<bool>(table), "CSV inspection succeeds");
+  check(table.table.delimiter == ',' && table.table.delimiter_name == "CSV",
+        "CSV delimiter is detected");
+  check(table.table.rows.size() == 2 && table.table.rows[0].line_number == 3,
+        "blank physical lines are skipped without losing source line numbers");
+
+  const auto imported = reaadr::core::import_cues(table.table, 24.0);
+  check(static_cast<bool>(imported) && imported.cues.size() == 2,
+        "mapped CSV rows import as cues");
+  check(imported.mapping.at("cue_id") == "cue_number" && imported.mapping.at("character") == "actor",
+        "default mapping follows the established header aliases");
+  check(imported.cues[0].at("line") == "Hello, \"world\"",
+        "quoted delimiters and escaped quotes match the Lua parser");
+  const auto metadata = reaadr::core::deserialize_metadata(imported.cues[0].at("metadata"));
+  check(metadata.at("Studio Note") == "Keep this", "unmapped columns are retained as labelled metadata");
+  check(imported.cues[0].at("source_line") == "3", "imported cues retain their physical source line");
+  check(imported.cues[0].at("start_time") == "1" && imported.cues[0].at("end_time") == "2.5",
+        "imported timecode is converted to seconds");
+
+  const auto tsv = reaadr::core::parse_delimited_content(
+    "ID\tRole\tStart\tEnd\n1\tActor\t0\t1\n",
+    "forced.tab");
+  check(tsv.table.delimiter == '\t' && tsv.table.delimiter_name == "TSV",
+        "TAB and TSV extensions force tab parsing");
+
+  const auto duplicate_table = reaadr::core::parse_delimited_content(
+    "cue_id,character,start,end\nA 1,Actor,0,1\nA_1,Actor,1,2\n",
+    "duplicate.csv");
+  const auto duplicate = reaadr::core::import_cues(duplicate_table.table, 24.0);
+  check(duplicate.error == reaadr::core::CueImportError::invalid_row &&
+          duplicate.message == "Line 3 cue A_1: duplicate cue_id",
+        "duplicate detection uses the sanitized cue identity and source line");
+
+  const auto missing_table = reaadr::core::parse_delimited_content("Name,Text\nActor,Line\n", "missing.csv");
+  check(reaadr::core::import_cues(missing_table.table, 24.0).error ==
+          reaadr::core::CueImportError::missing_required_mapping,
+        "missing required column mappings are reported before row processing");
+}
+
+void test_session_builder()
+{
+  std::vector<reaadr::core::Fields> cues = {
+    {
+      {"id", "001"}, {"character", "Miyuki"}, {"start_time", "1"}, {"end_time", "2.5"},
+      {"line", "First"}, {"status", "pending"}, {"script_id", "script-1"},
+      {"script_name", "Episode 1"}, {"import_timestamp", "2026-08-29T12:00:00Z"},
+      {"metadata", reaadr::core::serialize_metadata({{"Studio Note", "Keep"}})},
+      {"_reaadr_lane", "1"},
+    },
+    {
+      {"id", "002"}, {"character", "Miyuki"}, {"start_time", "2"}, {"end_time", "3"},
+      {"line", "Second"}, {"status", "recording"}, {"script_id", "script-1"},
+      {"script_name", "Episode 1"}, {"import_timestamp", "2026-08-29T12:00:00Z"},
+      {"metadata", ""}, {"_reaadr_lane", "2"},
+    },
+  };
+  reaadr::core::SessionBuildOptions options;
+  options.session_id = "session-native";
+  options.session_name = "Native Session";
+  options.project_metadata = {{"project_name", "Anime"}};
+  options.frame_rate = "24";
+  options.refresh_version = "7";
+  options.last_operation = "native_import";
+  options.cues_modified = true;
+
+  const auto built = reaadr::core::build_session_model(cues, options);
+  check(static_cast<bool>(built), "native session builder succeeds with an explicit session ID");
+  check(built.model.scripts.size() == 1 && built.model.characters.size() == 1,
+        "session builder derives script and character collections");
+  check(built.model.cues.size() == 2 && built.model.tracks.size() == 4 && built.model.regions.size() == 2,
+        "session builder derives lane tracks and regions for every cue");
+  check(built.model.imports.size() == 1 && built.model.scripts[0].at("cue_count") == "2",
+        "session builder creates import identity and cue counts");
+  check(built.model.cues[0].at("status") == "Not Recorded" &&
+          built.model.cues[1].at("status") == "In Progress",
+        "session builder canonicalizes cue statuses");
+  check(built.model.cues[0].count("_reaadr_lane") == 0,
+        "transient lane fields do not leak into the canonical cue model");
+  check(built.model.tracks[0].at("track_name") == "Miyuki Cues" &&
+          built.model.tracks[2].at("track_name") == "Miyuki Cues #2",
+        "session builder names base and overlap lane tracks consistently");
+  check(static_cast<bool>(reaadr::core::parse_session_model(
+          reaadr::core::serialize_session_model(built.model))),
+        "a built session survives canonical model serialization");
+
+  reaadr::core::SessionBuildOptions missing_id;
+  check(!reaadr::core::build_session_model({}, missing_id),
+        "session builder refuses to create an anonymous source-of-truth model");
+}
+
 } // namespace
 
 int main()
@@ -293,10 +393,12 @@ int main()
   test_reaper_project_state_adapter();
   test_transaction_scopes();
   test_domain_utilities();
+  test_cue_import();
+  test_session_builder();
   if (failures != 0) {
-    std::cerr << failures << " native session model test(s) failed\n";
+    std::cerr << failures << " native core test(s) failed\n";
     return EXIT_FAILURE;
   }
-  std::cout << "ok - native session model tests\n";
+  std::cout << "ok - native core tests\n";
   return EXIT_SUCCESS;
 }

@@ -45,6 +45,12 @@ project-model access and `domain_utils.*` for status, stable-ID, and timecode
 rules. REAPER-specific extstate and transaction adapters live under
 `extension/reaadr_reaper/` so the domain modules remain host-independent.
 
+Native import work now begins in `cue_import.*`, which parses delimited text and
+maps it into cue records, and `session_builder.*`, which derives every
+cue-backed model collection. These modules are intentionally not project
+writers yet; Lua remains the single import writer until native cue replacement,
+transactions, and the import UI are ready for one coordinated cutover.
+
 ## Lua Application Layer
 
 File: `scripts/ReaADR_App.lua`

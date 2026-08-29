@@ -16,8 +16,10 @@ CXX ?= g++
 CXXFLAGS ?= -std=c++17 -fPIC -O2 -Wall -Wextra
 CPPFLAGS += -I. -isystem $(REAPER_SDK)/sdk -isystem $(WDL)
 LDFLAGS += -shared -ldl
-CORE_SOURCES := reaadr_core/session_model.cpp reaadr_core/model_repository.cpp reaadr_core/domain_utils.cpp
-CORE_HEADERS := reaadr_core/session_model.hpp reaadr_core/model_repository.hpp reaadr_core/domain_utils.hpp
+CORE_SOURCES := reaadr_core/session_model.cpp reaadr_core/model_repository.cpp reaadr_core/domain_utils.cpp \
+	reaadr_core/cue_import.cpp reaadr_core/session_builder.cpp
+CORE_HEADERS := reaadr_core/session_model.hpp reaadr_core/model_repository.hpp reaadr_core/domain_utils.hpp \
+	reaadr_core/cue_import.hpp reaadr_core/session_builder.hpp
 REAPER_SOURCES := reaadr_reaper/project_state.cpp reaadr_reaper/project_transaction.cpp
 REAPER_HEADERS := reaadr_reaper/project_state.hpp reaadr_reaper/project_transaction.hpp
 NATIVE_SOURCES := $(CORE_SOURCES) $(REAPER_SOURCES)
