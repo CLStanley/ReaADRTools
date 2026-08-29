@@ -20,6 +20,8 @@ jobs:
         run: tests/run.sh
       - name: Shellcheck
         run: shellcheck packaging/*.sh packaging/*.command extension/*.sh tests/*.sh
+      - name: Native session model tests
+        run: make -C extension test
 
   native-linux:
     runs-on: ubuntu-24.04

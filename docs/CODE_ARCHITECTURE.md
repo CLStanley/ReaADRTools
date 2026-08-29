@@ -4,26 +4,24 @@ This document is for maintainers working on ReaADR Tools.
 
 ## Design Direction
 
-ReaADR is moving from a collection of independent scripts to a Lua application
-framework hosted by a thin native REAPER extension.
+ReaADR is moving from its current Lua application framework to one native C++
+REAPER extension. The migration is staged around the ADR Session Model so
+existing projects and still-unmigrated features remain compatible. See
+`CPP_MIGRATION.md` for the target architecture, sequencing, and cutover rules.
 
 ```text
-ReaADR Tools Manager
-  Import module
-  Cue management module
-  Session tools module
-  Reports module
-  Preferences module
-  Help module
-  ReaADR_Core
-  REAPER API
+Native REAPER extension
+  Native manager and commands
+  Application services
+  REAPER adapters
+  C++ ADR Session Model core
 ```
 
 ## Native Extension
 
 File: `extension/reaper_reaadr.cpp`
 
-Responsibilities:
+Current responsibilities:
 
 - Register the small public action set.
 - Add the top-level `ReaADR Tools` menu.
@@ -35,8 +33,12 @@ Responsibilities:
   - `ReaADR_ReadXlsxAsTsv` extracts the first worksheet from `.xlsx` files and
     returns tab-delimited text for the Lua import pipeline.
 
-The extension should stay thin. Avoid moving workflow logic into C++ unless a
-measured performance or integration limitation requires it.
+New workflow logic should follow the target layering in `CPP_MIGRATION.md`.
+During migration, keep REAPER API calls out of the standalone C++ domain core.
+
+The first native core module is `extension/reaadr_core/session_model.*`. It
+parses and serializes `adr_session_model_v1` without depending on REAPER and is
+compiled into the extension.
 
 ## Lua Application Layer
 

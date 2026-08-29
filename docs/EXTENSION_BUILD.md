@@ -1,15 +1,16 @@
 # ReaADR Extension Build Notes
 
-This wrapper keeps the ADR implementation in Lua and uses a small native REAPER extension for low-friction installation:
+The current release keeps most ADR behavior in Lua while the project migrates
+incrementally to a fully native C++ REAPER extension:
 
 1. The extension registers a small set of application entry-point actions.
 2. It adds a top-level `ReaADR Tools` menu for the unified manager, import, reports, and preferences.
 3. Feature scripts remain bundled as internal Lua modules used by the manager.
 
-## Application Framework
+## Transitional Application Framework
 
-ReaADR is transitioning from many standalone actions into a manager-first Lua
-application framework:
+Before the native migration began, ReaADR consolidated many standalone actions
+into the current manager-first Lua application framework:
 
 ```text
 ReaADR Tools Manager
@@ -22,9 +23,9 @@ ReaADR Tools Manager
   ReaADR Core / REAPER API helpers
 ```
 
-The current production implementation remains Lua/ReaScript. The native
-extension is intentionally thin: it installs the top-level menu, registers the
-limited public actions, and launches the Lua application.
+The current production implementation remains Lua/ReaScript. New native core
+modules are being introduced behind compatibility boundaries; the migration
+sequence is documented in `CPP_MIGRATION.md`.
 
 Additional documentation:
 
@@ -41,6 +42,12 @@ Development builds require the REAPER SDK and WDL revisions recorded in
 
 ```sh
 extension/fetch-dependencies.sh
+```
+
+The standalone native domain tests do not require the REAPER SDK:
+
+```sh
+make -C extension test
 ```
 
 The fetcher refuses to replace an existing dependency checkout at a different

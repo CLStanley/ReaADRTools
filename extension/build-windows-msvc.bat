@@ -33,10 +33,11 @@ if not exist "%DIST_REAADR_DIR%\scripts" mkdir "%DIST_REAADR_DIR%\scripts"
 if not exist "%DIST_REAADR_DIR%\assets" mkdir "%DIST_REAADR_DIR%\assets"
 
 pushd "%~dp0"
-cl /nologo /EHsc /O2 /LD ^
+cl /nologo /EHsc /O2 /LD /std:c++17 ^
   /I"%REAPER_SDK%\sdk" ^
   /I"%WDL%" ^
   reaper_reaadr.cpp ^
+  reaadr_core\session_model.cpp ^
   /Fe"%BUILD_DIR%\%TARGET%" ^
   /link user32.lib /DEF:reaper_reaadr.def
 

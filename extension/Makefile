@@ -7,6 +7,7 @@ REAPER_SDK := ../vendor/reaper-sdk
 WDL := ../vendor/WDL/WDL
 TARGET := reaper_reaadr-x86_64.so
 BUILD_DIR := ../build/extension
+TEST_TARGET := $(BUILD_DIR)/session_model_tests
 DIST_DIR := ../dist
 DIST_USERPLUGINS_DIR := $(DIST_DIR)/UserPlugins
 DIST_REAADR_DIR := $(DIST_DIR)/Scripts/ReaADRTools
@@ -15,8 +16,11 @@ CXX ?= g++
 CXXFLAGS ?= -std=c++17 -fPIC -O2 -Wall -Wextra
 CPPFLAGS += -isystem $(REAPER_SDK)/sdk -isystem $(WDL)
 LDFLAGS += -shared -ldl
+CORE_SOURCES := reaadr_core/session_model.cpp
+CORE_HEADERS := reaadr_core/session_model.hpp
+EXTENSION_SOURCES := reaper_reaadr.cpp $(CORE_SOURCES)
 
-.PHONY: all clean dist prepare-sdk
+.PHONY: all clean dist prepare-sdk test
 
 all: $(BUILD_DIR)/$(TARGET)
 
@@ -27,9 +31,16 @@ prepare-sdk:
 	fi
 	@if [ ! -e "$(REAPER_SDK)/WDL" ]; then ln -s ../WDL/WDL "$(REAPER_SDK)/WDL"; fi
 
-$(BUILD_DIR)/$(TARGET): reaper_reaadr.cpp | prepare-sdk
+$(BUILD_DIR)/$(TARGET): $(EXTENSION_SOURCES) $(CORE_HEADERS) | prepare-sdk
 	@mkdir -p "$(BUILD_DIR)"
-	$(CXX) $(CPPFLAGS) $(CXXFLAGS) $< -o $@ $(LDFLAGS)
+	$(CXX) $(CPPFLAGS) $(CXXFLAGS) $(EXTENSION_SOURCES) -o $@ $(LDFLAGS)
+
+$(TEST_TARGET): ../tests/session_model_tests.cpp $(CORE_SOURCES) $(CORE_HEADERS)
+	@mkdir -p "$(BUILD_DIR)"
+	$(CXX) -I. $(CXXFLAGS) ../tests/session_model_tests.cpp $(CORE_SOURCES) -o $@
+
+test: $(TEST_TARGET)
+	$(TEST_TARGET)
 
 dist: all
 	rm -rf "$(DIST_DIR)"

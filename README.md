@@ -1,11 +1,15 @@
 # ReaADR Tools
 
-ReaADR Tools is an ADR workflow extension for REAPER 7+. It combines a thin
-native REAPER extension with Lua/ReaScript modules for script import, cue
+ReaADR Tools is an ADR workflow extension for REAPER 7+. It currently combines
+a native REAPER extension with Lua/ReaScript modules for script import, cue
 generation, video overlays, character track organization, cue filtering,
 reporting, and session maintenance.
 It can also create editable cue regions from detected dialogue in selected
 audio/video media for script-building workflows.
+
+The project is migrating incrementally to an entirely C++ implementation. The
+[C++ Migration Plan](docs/CPP_MIGRATION.md) defines the compatibility rules,
+target architecture, and feature cutover sequence.
 
 ## Architecture Overview
 The system follows a hybrid architecture:
@@ -107,6 +111,7 @@ Run local deterministic checks without launching REAPER:
 
 ```sh
 tests/run.sh
+make -C extension test
 find scripts tests -type f -name '*.lua' -print0 | xargs -0 -n1 luac -p
 shellcheck packaging/*.sh packaging/*.command extension/*.sh tests/*.sh
 ```
