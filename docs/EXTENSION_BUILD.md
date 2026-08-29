@@ -133,9 +133,15 @@ Public actions:
 - `Quick Action 2`
 - `Quick Action 3`
 - `Quick Action 4`
+- `Validate Session Model (Native Preview)`
 
 Older standalone utility actions are unregistered by the extension and remain
 available internally through `Open Manager`.
+
+`Validate Session Model (Native Preview)` is the first fully native workflow
+action. It exercises the C++ project repository and session-model codec and is
+read-only; the broader Lua `Check Session` workflow remains available during
+the migration.
 
 Quick actions are configurable from `Open Manager > Preferences` with inline
 dropdowns. Each slot can run commonly used tools such as Import Cue Sheet,

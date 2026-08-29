@@ -37,7 +37,7 @@ belong in adapters at the extension boundary.
 
 ## Migration stages
 
-### Stage 0: model compatibility foundation (started)
+### Stage 0: model compatibility foundation (complete)
 
 - Parse and serialize `adr_session_model_v1` in a standalone C++ module.
 - Preserve unknown record types for forward compatibility.
@@ -48,7 +48,7 @@ belong in adapters at the extension boundary.
 Exit condition: C++ can safely inspect the canonical model without REAPER and
 without changing its representation.
 
-### Stage 1: native host and project repository
+### Stage 1: native host and project repository (implemented)
 
 - Wrap `GetProjExtState`/`SetProjExtState` behind a project repository.
 - Register native REAPER command IDs and a command hook instead of registering
@@ -59,7 +59,12 @@ without changing its representation.
 Exit condition: at least one public action executes entirely in C++ against the
 same project model.
 
-### Stage 2: domain and import services
+Implementation status: the repository, nested-safe RAII scopes, native command
+hook, and `Validate Session Model (Native Preview)` action are implemented and
+covered by host-independent tests. An in-REAPER smoke test is still required
+before removing or redirecting any Lua validation entry point.
+
+### Stage 2: domain and import services (started)
 
 - Port status normalization, timecode, CSV/TSV parsing, column mapping, stable
   IDs, model construction, cue replacement, and snapshots.
@@ -102,7 +107,18 @@ with no runtime Lua dependency.
 
 ## Current implementation
 
-`extension/reaadr_core/session_model.*` is the first target-architecture module.
-It owns field escaping, metadata encoding, v1 parsing, canonical serialization,
-and preservation of unknown records. `make -C extension test` runs it without
-the REAPER SDK; normal extension builds compile the same source into the plugin.
+The initial target-architecture modules now include:
+
+- `extension/reaadr_core/session_model.*`: v1 field escaping, metadata encoding,
+  parsing, canonical serialization, and preservation of unknown records.
+- `extension/reaadr_core/model_repository.*`: canonical session-model loading
+  and saving through a narrow project-state port.
+- `extension/reaadr_core/domain_utils.*`: Lua-compatible status normalization,
+  deterministic IDs, and non-drop-frame timecode parsing/formatting.
+- `extension/reaadr_reaper/project_state.*`: dynamically sized REAPER project
+  extstate access.
+- `extension/reaadr_reaper/project_transaction.*`: nested-safe undo and UI
+  refresh RAII scopes with conservative failure rollback.
+
+`make -C extension test` runs these modules without the REAPER SDK; normal
+extension builds compile the same sources into the plugin.

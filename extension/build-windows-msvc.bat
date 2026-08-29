@@ -38,6 +38,10 @@ cl /nologo /EHsc /O2 /LD /std:c++17 ^
   /I"%WDL%" ^
   reaper_reaadr.cpp ^
   reaadr_core\session_model.cpp ^
+  reaadr_core\model_repository.cpp ^
+  reaadr_core\domain_utils.cpp ^
+  reaadr_reaper\project_state.cpp ^
+  reaadr_reaper\project_transaction.cpp ^
   /Fe"%BUILD_DIR%\%TARGET%" ^
   /link user32.lib /DEF:reaper_reaadr.def
 

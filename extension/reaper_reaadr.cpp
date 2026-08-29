@@ -11,9 +11,16 @@
 #define REAPERAPI_WANT_GetAudioAccessorStartTime
 #define REAPERAPI_WANT_GetExtState
 #define REAPERAPI_WANT_GetMediaItemInfo_Value
+#define REAPERAPI_WANT_GetProjExtState
 #define REAPERAPI_WANT_GetResourcePath
 #define REAPERAPI_WANT_GetSelectedMediaItem
+#define REAPERAPI_WANT_PreventUIRefresh
+#define REAPERAPI_WANT_SetProjExtState
 #define REAPERAPI_WANT_ShowMessageBox
+#define REAPERAPI_WANT_Undo_BeginBlock2
+#define REAPERAPI_WANT_Undo_CanUndo2
+#define REAPERAPI_WANT_Undo_DoUndo2
+#define REAPERAPI_WANT_Undo_EndBlock2
 
 #ifdef _WIN32
 #ifndef NOMINMAX
@@ -38,6 +45,9 @@
 #include <reaper_plugin_functions.h>
 
 #include "reaadr_core/session_model.hpp"
+#include "reaadr_core/model_repository.hpp"
+#include "reaadr_reaper/project_state.hpp"
+#include "reaadr_reaper/project_transaction.hpp"
 
 #ifndef _WIN32
 #include <dlfcn.h>
@@ -47,6 +57,8 @@ namespace {
 
 constexpr int kMainSection = 0;
 constexpr const char* kReaADRMenuId = "ReaADR Tools";
+constexpr const char* kValidateSessionCommandName = "ReaADRValidateSessionModelNative";
+constexpr const char* kValidateSessionActionLabel = "ReaADR: Validate Session Model (Native Preview)";
 
 reaper_plugin_info_t* g_plugin = nullptr;
 REAPER_PLUGIN_HINSTANCE g_instance = nullptr;
@@ -61,6 +73,9 @@ GetMenuItemCountFn g_get_menu_item_count = nullptr;
 InsertMenuItemFn g_insert_menu_item = nullptr;
 SetMenuItemInfoFn g_set_menu_item_info = nullptr;
 std::string g_log_path;
+int g_validate_session_command_id = 0;
+gaccel_register_t g_validate_session_accel = {};
+bool g_native_command_hook_registered = false;
 const char kDetectDialogueSegmentsDef[] =
   "bool\0"
   "double,double,double,double,int,char*,int,char*,int\0"
@@ -89,6 +104,14 @@ std::vector<ScriptAction> g_actions = {
   {"Quick Action 2", "Scripts/ReaADRTools/scripts/ReaADR_Quick_Action_2.lua", 0},
   {"Quick Action 3", "Scripts/ReaADRTools/scripts/ReaADR_Quick_Action_3.lua", 0},
   {"Quick Action 4", "Scripts/ReaADRTools/scripts/ReaADR_Quick_Action_4.lua", 0},
+};
+
+// This action is native; the shared menu helpers only require its label and
+// command ID, so there is intentionally no script path.
+ScriptAction g_validate_session_action = {
+  "Validate Session Model (Native Preview)",
+  nullptr,
+  0,
 };
 
 std::vector<ScriptAction> g_legacy_actions = {
@@ -276,6 +299,90 @@ bool validate_session_model(const char* model, char* error_out, int error_out_sz
   if (result) return true;
   copy_to_buffer(reaadr::core::parse_error_message(result.error), error_out, error_out_sz);
   return false;
+}
+
+void run_validate_session_action()
+{
+  reaadr::reaper::ProjectStateStore project_state(
+    nullptr,
+    {GetProjExtState, SetProjExtState});
+  reaadr::core::SessionModelRepository repository(project_state);
+  const reaadr::core::SessionLoadResult result = repository.load();
+
+  if (!result) {
+    ShowMessageBox(reaadr::core::session_load_error_message(result), "ReaADR Session Model", 0);
+    return;
+  }
+
+  const reaadr::core::SessionModel& model = result.model;
+  const auto name = model.session.find("session_name");
+  std::ostringstream summary;
+  summary << "The ADR Session Model is valid.\n\n";
+  summary << "Session ID: " << model.session_id() << '\n';
+  if (name != model.session.end() && !name->second.empty()) summary << "Session: " << name->second << '\n';
+  summary << "Scripts: " << model.scripts.size() << '\n';
+  summary << "Characters: " << model.characters.size() << '\n';
+  summary << "Cues: " << model.cues.size() << '\n';
+  summary << "Tracks: " << model.tracks.size() << '\n';
+  summary << "Regions: " << model.regions.size();
+  const std::string message = summary.str();
+  ShowMessageBox(message.c_str(), "ReaADR Session Model", 0);
+}
+
+bool hook_native_command(int command, int)
+{
+  if (command != g_validate_session_command_id || command == 0) return false;
+  run_validate_session_action();
+  return true;
+}
+
+bool register_native_actions()
+{
+  if (!g_plugin) return false;
+
+  // The identifier is persisted in REAPER keyboard mappings, so it must never
+  // be renamed after release. The user-facing label may evolve independently.
+  g_validate_session_command_id = g_plugin->Register(
+    "command_id",
+    reinterpret_cast<void*>(const_cast<char*>(kValidateSessionCommandName)));
+  if (!g_validate_session_command_id) {
+    log_line("Could not allocate the native session validation command ID.");
+    return false;
+  }
+
+  g_validate_session_accel.accel.cmd = static_cast<WORD>(g_validate_session_command_id);
+  g_validate_session_accel.desc = kValidateSessionActionLabel;
+  if (!g_plugin->Register("gaccel", reinterpret_cast<void*>(&g_validate_session_accel))) {
+    log_line("Could not add the native session validation command to the Action List.");
+    g_validate_session_command_id = 0;
+    return false;
+  }
+  if (!g_plugin->Register("hookcommand", reinterpret_cast<void*>(hook_native_command))) {
+    g_plugin->Register("-gaccel", reinterpret_cast<void*>(&g_validate_session_accel));
+    g_validate_session_command_id = 0;
+    log_line("Could not register the native command hook.");
+    return false;
+  }
+
+  g_native_command_hook_registered = true;
+  g_validate_session_action.command_id = g_validate_session_command_id;
+  log_line("Registered native action: " + std::string(kValidateSessionActionLabel));
+  return true;
+}
+
+void unregister_native_actions()
+{
+  if (!g_plugin) return;
+  if (g_native_command_hook_registered) {
+    g_plugin->Register("-hookcommand", reinterpret_cast<void*>(hook_native_command));
+    g_native_command_hook_registered = false;
+  }
+  if (g_validate_session_command_id) {
+    g_plugin->Register("-gaccel", reinterpret_cast<void*>(&g_validate_session_accel));
+    g_validate_session_command_id = 0;
+    g_validate_session_action.command_id = 0;
+    g_validate_session_accel = {};
+  }
 }
 
 std::string read_text_file(const std::string& path)
@@ -751,8 +858,8 @@ void hook_custom_menu(const char* menu_id, void* menu, int flag)
   }
 
   HMENU hmenu = static_cast<HMENU>(menu);
-  int position = 0;
   const int existing_items = g_get_menu_item_count ? g_get_menu_item_count(hmenu) : 0;
+  int position = existing_items > 0 ? existing_items : 0;
 
   if (existing_items <= 0) {
     for (std::size_t i = 0; i < g_actions.size(); ++i) {
@@ -762,6 +869,7 @@ void hook_custom_menu(const char* menu_id, void* menu, int flag)
         add_menu_item_with_label(hmenu, position++, g_actions[i], quick_action_label(static_cast<int>(i)));
       }
     }
+    add_menu_item(hmenu, position, g_validate_session_action);
     log_line("Added top-level ReaADR Tools menu.");
     return;
   }
@@ -772,6 +880,16 @@ void hook_custom_menu(const char* menu_id, void* menu, int flag)
     } else {
       add_menu_item_with_label(hmenu, position++, g_actions[i], quick_action_label(static_cast<int>(i)));
     }
+  }
+  const int validation_position = static_cast<int>(g_actions.size());
+  if (validation_position < existing_items) {
+    update_menu_item_label(
+      hmenu,
+      validation_position,
+      g_validate_session_action,
+      g_validate_session_action.label);
+  } else {
+    add_menu_item(hmenu, position, g_validate_session_action);
   }
   log_line("Updated top-level ReaADR quick-action labels.");
 }
@@ -819,6 +937,7 @@ bool load(reaper_plugin_info_t* plugin)
   plugin->Register("APIdef_ReaADR_ReadXlsxAsTsv", reinterpret_cast<void*>(const_cast<char*>(kReadXlsxAsTsvDef)));
   plugin->Register("API_ReaADR_ValidateSessionModel", reinterpret_cast<void*>(validate_session_model));
   plugin->Register("APIdef_ReaADR_ValidateSessionModel", reinterpret_cast<void*>(const_cast<char*>(kValidateSessionModelDef)));
+  register_native_actions();
   register_scripts();
   load_menu_functions();
   if (AddCustomizableMenu) {
@@ -831,6 +950,7 @@ void unload()
 {
   log_line("Unloading ReaADR extension.");
   if (g_plugin) {
+    unregister_native_actions();
     g_plugin->Register("-hookcustommenu", reinterpret_cast<void*>(hook_custom_menu));
     g_plugin->Register("-API_ReaADR_DetectDialogueSegments", reinterpret_cast<void*>(detect_dialogue_segments));
     g_plugin->Register("-APIdef_ReaADR_DetectDialogueSegments", reinterpret_cast<void*>(const_cast<char*>(kDetectDialogueSegmentsDef)));

@@ -29,9 +29,13 @@ The system follows a hybrid architecture:
 - `Quick Action 2`
 - `Quick Action 3`
 - `Quick Action 4`
+- `Validate Session Model (Native Preview)`
 
 Older standalone scripts remain packaged as internal manager modules, but the
 extension unregisters them as public actions to keep REAPER's Action List clean.
+The native-preview validation action is the first public workflow action that
+runs entirely in C++; it reads and validates the same canonical project model
+without modifying the session.
 Quick actions are configured from `Open Manager > Preferences` with inline
 dropdowns. Overlay settings are available directly in `Open Manager > Video
 Overlays`.

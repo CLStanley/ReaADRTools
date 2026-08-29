@@ -1,4 +1,5 @@
 #include "session_model.hpp"
+#include "domain_utils.hpp"
 
 #include <array>
 #include <cctype>
@@ -228,7 +229,12 @@ ParseResult parse_session_model(const std::string& value)
       }
       else if (record_type == "script") result.model.scripts.push_back(std::move(fields));
       else if (record_type == "character") result.model.characters.push_back(std::move(fields));
-      else if (record_type == "cue") result.model.cues.push_back(std::move(fields));
+      else if (record_type == "cue") {
+        // Lua normalizes status while loading, so native readers must expose
+        // the same canonical workflow state before any feature is cut over.
+        fields["status"] = normalize_status(fields["status"]);
+        result.model.cues.push_back(std::move(fields));
+      }
       else if (record_type == "track") result.model.tracks.push_back(std::move(fields));
       else if (record_type == "region") result.model.regions.push_back(std::move(fields));
       else if (record_type == "import") result.model.imports.push_back(std::move(fields));

@@ -40,6 +40,11 @@ The first native core module is `extension/reaadr_core/session_model.*`. It
 parses and serializes `adr_session_model_v1` without depending on REAPER and is
 compiled into the extension.
 
+The native foundation also includes `model_repository.*` for canonical
+project-model access and `domain_utils.*` for status, stable-ID, and timecode
+rules. REAPER-specific extstate and transaction adapters live under
+`extension/reaadr_reaper/` so the domain modules remain host-independent.
+
 ## Lua Application Layer
 
 File: `scripts/ReaADR_App.lua`
