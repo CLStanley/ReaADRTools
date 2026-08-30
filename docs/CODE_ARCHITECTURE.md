@@ -53,10 +53,11 @@ model-only snapshot/save/revision/rollback sequence. `lane_assignment.*` keeps
 model construction and visible rendering on one deterministic overlap rule.
 `render_plan.*` compares canonical intent with an inspected project without
 calling REAPER, while `track_region_adapter.*` owns the actual track/region host
-calls and transactional plan application. These services are not invoked by
-the UI yet; Lua remains the single import/render writer until cue audio, ruler
-lanes, overlays, event publication, and the import UI are ready for one
-coordinated cutover.
+calls. `render_artifact_adapter.*` handles ruler lanes and explicitly owned cue
+audio, then coordinates all native render adapters under one transaction in
+dependency order. These services are not invoked by the UI yet; Lua remains the
+single import/render writer until generated WAV creation, filtering, overlays,
+event publication, and the import UI are ready for one coordinated cutover.
 
 ## Lua Application Layer
 

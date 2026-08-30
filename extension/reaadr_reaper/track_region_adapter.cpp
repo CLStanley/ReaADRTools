@@ -129,6 +129,11 @@ RenderApplyResult TrackRegionAdapter::apply(const core::RenderPlan& plan) const
 {
   RenderApplyResult result;
   if (plan.empty()) return result;
+  if (plan.minimum_ruler_lane_count != 0 || !plan.ruler_lane_mutations.empty() ||
+      !plan.region_lane_mutations.empty() || !plan.cue_audio_mutations.empty()) {
+    result.error = "The track/region adapter received mutations owned by another render adapter.";
+    return result;
+  }
   if (!apply_api_complete(api_)) {
     result.error = "The REAPER track/region mutation API is incomplete.";
     return result;
@@ -207,6 +212,12 @@ RenderApplyResult apply_render_plan_transactionally(ReaProject* project,
                                                     const std::string& description)
 {
   if (plan.empty()) return {};
+  if (plan.minimum_ruler_lane_count != 0 || !plan.ruler_lane_mutations.empty() ||
+      !plan.region_lane_mutations.empty() || !plan.cue_audio_mutations.empty()) {
+    RenderApplyResult result;
+    result.error = "The track/region-only renderer cannot apply ruler-lane or cue-audio mutations.";
+    return result;
+  }
   ProjectTransaction transaction(project, transaction_api, description);
   UiRefreshScope refresh(transaction_api.prevent_ui_refresh);
   TrackRegionAdapter adapter(project, render_api);

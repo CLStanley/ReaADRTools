@@ -93,14 +93,16 @@ file-selection UI, the rendering cutover, and the import cutover remain pending.
 Exit condition: project synchronization and recording workflows run natively.
 
 Implementation status: deterministic character-lane assignment and native
-track/region render planning are implemented without REAPER dependencies. A
-typed REAPER adapter can inspect a project and apply the resulting plan inside
-the native transaction and UI-refresh scopes. Track matching preserves the
-existing `ReaADR.role`/`ReaADR.key` contract, and stale region removal requires
-an exact ownership proof derived from the previous canonical model. Recording
-tracks are never automatically removed. The adapter is test-covered but is not
-yet a public writer; cue audio items, ruler lanes, filtering, overlays, event
-publication, and an in-REAPER smoke test remain before synchronization cutover.
+track, region, ruler-lane, and cue-audio render planning are implemented
+without REAPER dependencies. Typed adapters can inspect those artifacts and
+apply one complete dependency-ordered plan inside the native transaction and
+UI-refresh scopes. Track matching preserves the existing
+`ReaADR.role`/`ReaADR.key` contract. Stale region and cue-audio removal requires
+exact ownership evidence, media-source changes are revalidated immediately
+before mutation, and recording tracks/items are never automatically removed.
+The adapters are test-covered but are not yet public writers; generated WAV
+creation, filtering, overlays, event publication, and an in-REAPER smoke test
+remain before synchronization cutover.
 
 ### Stage 4: native UI and Lua removal
 
@@ -152,6 +154,9 @@ The initial target-architecture modules now include:
   refresh RAII scopes with conservative failure rollback.
 - `extension/reaadr_reaper/track_region_adapter.*`: testable project inspection
   and transactional application of native render plans.
+- `extension/reaadr_reaper/render_artifact_adapter.*`: ruler-lane and cue-audio
+  inspection/application plus the single-transaction complete-render
+  coordinator.
 
 `make -C extension test` runs these modules without the REAPER SDK; normal
 extension builds compile the same sources into the plugin.

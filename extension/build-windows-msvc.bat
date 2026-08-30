@@ -49,6 +49,7 @@ cl /nologo /EHsc /O2 /LD /std:c++17 ^
   reaadr_reaper\project_state.cpp ^
   reaadr_reaper\project_transaction.cpp ^
   reaadr_reaper\track_region_adapter.cpp ^
+  reaadr_reaper\render_artifact_adapter.cpp ^
   /Fe"%BUILD_DIR%\%TARGET%" ^
   /link user32.lib /DEF:reaper_reaadr.def
 

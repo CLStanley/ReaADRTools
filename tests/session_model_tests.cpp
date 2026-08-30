@@ -8,6 +8,7 @@
 #include "reaadr_core/session_mutation.hpp"
 #include "reaadr_reaper/project_state.hpp"
 #include "reaadr_reaper/project_transaction.hpp"
+#include "reaadr_reaper/render_artifact_adapter.hpp"
 #include "reaadr_reaper/track_region_adapter.hpp"
 
 #include <algorithm>
@@ -16,6 +17,8 @@
 #include <cstdlib>
 #include <iostream>
 #include <map>
+#include <memory>
+#include <set>
 #include <stdexcept>
 #include <string>
 #include <vector>
@@ -99,9 +102,27 @@ reaadr::reaper::TransactionApi fake_transaction_api()
   return {fake_begin, fake_end, fake_can_undo, fake_undo, fake_prevent_refresh};
 }
 
+struct FakeSource {
+  std::string path;
+  double length = 0.0;
+};
+
+struct FakeTake {
+  std::map<std::string, std::string> strings;
+  FakeSource* source = nullptr;
+};
+
+struct FakeItem {
+  std::map<std::string, std::string> strings;
+  std::map<std::string, double> values;
+  bool has_take = false;
+  FakeTake take;
+};
+
 struct FakeTrack {
   std::map<std::string, std::string> strings;
   int color = 0;
+  std::vector<std::unique_ptr<FakeItem>> items;
 };
 
 struct FakeRegion {
@@ -110,18 +131,38 @@ struct FakeRegion {
   double start_time = 0.0;
   double end_time = 0.0;
   int color = 0;
+  int ruler_lane = 0;
+};
+
+struct FakeRulerLane {
+  std::string name;
+  int color = 0;
+  bool hidden = false;
 };
 
 struct RenderAdapterProbe {
   std::vector<FakeTrack> tracks;
   std::vector<FakeRegion> regions;
+  std::vector<FakeRulerLane> ruler_lanes;
+  std::map<std::string, double> source_lengths;
+  std::set<FakeSource*> live_sources;
   bool fail_region_update = false;
+  bool fail_item_value = false;
   int next_region_id = 100;
   int window_adjustments = 0;
   int arrange_updates = 0;
 };
 
 RenderAdapterProbe render_adapter_probe;
+
+void destroy_fake_source(FakeSource* source)
+{
+  if (!source) return;
+  const auto found = render_adapter_probe.live_sources.find(source);
+  if (found == render_adapter_probe.live_sources.end()) return;
+  render_adapter_probe.live_sources.erase(found);
+  delete source;
+}
 
 FakeTrack* fake_track(MediaTrack* track)
 {
@@ -258,6 +299,232 @@ reaadr::reaper::TrackRegionApi fake_render_api()
     fake_color_from_native,
     fake_adjust_track_windows,
     fake_update_arrange,
+  };
+}
+
+double fake_get_set_project_info(ReaProject*, const char* parameter, double value, bool set)
+{
+  const std::string name = parameter ? parameter : "";
+  if (name == "RULER_LANE_COUNT") {
+    if (set && value >= 0.0) render_adapter_probe.ruler_lanes.resize(static_cast<std::size_t>(value));
+    return static_cast<double>(render_adapter_probe.ruler_lanes.size());
+  }
+  const auto colon = name.find(':');
+  if (colon == std::string::npos) return 0.0;
+  const int index = std::atoi(name.substr(colon + 1).c_str());
+  if (index < 0 || static_cast<std::size_t>(index) >= render_adapter_probe.ruler_lanes.size()) return 0.0;
+  FakeRulerLane& lane = render_adapter_probe.ruler_lanes[static_cast<std::size_t>(index)];
+  if (name.rfind("RULER_LANE_COLOR:", 0) == 0) {
+    if (set) lane.color = static_cast<int>(value);
+    return lane.color;
+  }
+  if (name.rfind("RULER_LANE_HIDDEN:", 0) == 0) {
+    if (set) lane.hidden = value != 0.0;
+    return lane.hidden ? 1.0 : 0.0;
+  }
+  return 0.0;
+}
+
+bool fake_get_set_project_info_string(ReaProject*, const char* parameter, char* value, bool set)
+{
+  if (!parameter || !value) return false;
+  const std::string name = parameter;
+  if (name.rfind("RULER_LANE_NAME:", 0) != 0) return false;
+  const int index = std::atoi(name.substr(std::strlen("RULER_LANE_NAME:")).c_str());
+  if (index < 0 || static_cast<std::size_t>(index) >= render_adapter_probe.ruler_lanes.size()) return false;
+  FakeRulerLane& lane = render_adapter_probe.ruler_lanes[static_cast<std::size_t>(index)];
+  if (set) lane.name = value;
+  else std::strcpy(value, lane.name.c_str());
+  return true;
+}
+
+ProjectMarker* fake_get_region_or_marker(ReaProject*, int index, const char*)
+{
+  if (index < 0 || static_cast<std::size_t>(index) >= render_adapter_probe.regions.size()) return nullptr;
+  return reinterpret_cast<ProjectMarker*>(&render_adapter_probe.regions[static_cast<std::size_t>(index)]);
+}
+
+double fake_get_region_value(ReaProject*, ProjectMarker* marker, const char* parameter)
+{
+  if (!marker || std::string(parameter ? parameter : "") != "I_LANENUMBER") return 0.0;
+  return reinterpret_cast<FakeRegion*>(marker)->ruler_lane;
+}
+
+double fake_set_region_value(ReaProject*, ProjectMarker* marker, const char* parameter, double value)
+{
+  if (!marker || std::string(parameter ? parameter : "") != "I_LANENUMBER") return 0.0;
+  reinterpret_cast<FakeRegion*>(marker)->ruler_lane = static_cast<int>(value);
+  return value;
+}
+
+reaadr::reaper::RulerLaneApi fake_ruler_lane_api()
+{
+  return {
+    fake_get_set_project_info,
+    fake_get_set_project_info_string,
+    fake_count_project_markers,
+    fake_enum_project_markers,
+    fake_get_region_or_marker,
+    fake_get_region_value,
+    fake_set_region_value,
+    fake_color_to_native,
+    fake_color_from_native,
+  };
+}
+
+FakeItem* fake_item(MediaItem* item) { return reinterpret_cast<FakeItem*>(item); }
+FakeTake* fake_take(MediaItem_Take* take) { return reinterpret_cast<FakeTake*>(take); }
+
+int fake_count_track_items(MediaTrack* track)
+{
+  return track ? static_cast<int>(fake_track(track)->items.size()) : -1;
+}
+
+MediaItem* fake_get_track_item(MediaTrack* track, int index)
+{
+  if (!track || index < 0 || static_cast<std::size_t>(index) >= fake_track(track)->items.size()) return nullptr;
+  return reinterpret_cast<MediaItem*>(fake_track(track)->items[static_cast<std::size_t>(index)].get());
+}
+
+bool fake_get_set_item_string(MediaItem* item, const char* parameter, char* value, bool set)
+{
+  if (!item || !parameter || !value) return false;
+  FakeItem* current = fake_item(item);
+  if (set) current->strings[parameter] = value;
+  else {
+    const auto found = current->strings.find(parameter);
+    std::strcpy(value, found == current->strings.end() ? "" : found->second.c_str());
+  }
+  return true;
+}
+
+double fake_get_item_value(MediaItem* item, const char* parameter)
+{
+  if (!item || !parameter) return 0.0;
+  const auto found = fake_item(item)->values.find(parameter);
+  return found == fake_item(item)->values.end() ? 0.0 : found->second;
+}
+
+bool fake_set_item_value(MediaItem* item, const char* parameter, double value)
+{
+  if (!item || !parameter || render_adapter_probe.fail_item_value) return false;
+  fake_item(item)->values[parameter] = value;
+  return true;
+}
+
+MediaItem* fake_add_item_to_track(MediaTrack* track)
+{
+  if (!track) return nullptr;
+  auto item = std::make_unique<FakeItem>();
+  FakeItem* pointer = item.get();
+  fake_track(track)->items.push_back(std::move(item));
+  return reinterpret_cast<MediaItem*>(pointer);
+}
+
+bool fake_delete_track_item(MediaTrack* track, MediaItem* item)
+{
+  if (!track || !item) return false;
+  auto& items = fake_track(track)->items;
+  const auto found = std::find_if(items.begin(), items.end(),
+    [&](const std::unique_ptr<FakeItem>& candidate) { return candidate.get() == fake_item(item); });
+  if (found == items.end()) return false;
+  destroy_fake_source((*found)->take.source);
+  items.erase(found);
+  return true;
+}
+
+bool fake_move_item_to_track(MediaItem* item, MediaTrack* destination)
+{
+  if (!item || !destination) return false;
+  for (FakeTrack& track : render_adapter_probe.tracks) {
+    const auto found = std::find_if(track.items.begin(), track.items.end(),
+      [&](const std::unique_ptr<FakeItem>& candidate) { return candidate.get() == fake_item(item); });
+    if (found == track.items.end()) continue;
+    std::unique_ptr<FakeItem> moved = std::move(*found);
+    track.items.erase(found);
+    fake_track(destination)->items.push_back(std::move(moved));
+    return true;
+  }
+  return false;
+}
+
+MediaItem_Take* fake_get_active_item_take(MediaItem* item)
+{
+  return item && fake_item(item)->has_take
+    ? reinterpret_cast<MediaItem_Take*>(&fake_item(item)->take)
+    : nullptr;
+}
+
+MediaItem_Take* fake_add_take_to_item(MediaItem* item)
+{
+  if (!item) return nullptr;
+  fake_item(item)->has_take = true;
+  return reinterpret_cast<MediaItem_Take*>(&fake_item(item)->take);
+}
+
+bool fake_get_set_take_string(MediaItem_Take* take, const char* parameter, char* value, bool set)
+{
+  if (!take || !parameter || !value) return false;
+  FakeTake* current = fake_take(take);
+  if (set) current->strings[parameter] = value;
+  else {
+    const auto found = current->strings.find(parameter);
+    std::strcpy(value, found == current->strings.end() ? "" : found->second.c_str());
+  }
+  return true;
+}
+
+void* fake_get_set_take_info(MediaItem_Take* take, const char* parameter, void* value)
+{
+  if (!take || std::string(parameter ? parameter : "") != "P_SOURCE") return nullptr;
+  FakeTake* current = fake_take(take);
+  FakeSource* old = current->source;
+  if (value) current->source = static_cast<FakeSource*>(value);
+  return old;
+}
+
+PCM_source* fake_create_source(const char* path)
+{
+  const std::string source_path = path ? path : "";
+  const auto found = render_adapter_probe.source_lengths.find(source_path);
+  if (found == render_adapter_probe.source_lengths.end()) return nullptr;
+  auto* source = new FakeSource{source_path, found->second};
+  render_adapter_probe.live_sources.insert(source);
+  return reinterpret_cast<PCM_source*>(source);
+}
+
+double fake_get_source_length(PCM_source* source, bool* length_is_quarters)
+{
+  if (length_is_quarters) *length_is_quarters = false;
+  return source ? reinterpret_cast<FakeSource*>(source)->length : 0.0;
+}
+
+void fake_destroy_source(PCM_source* source)
+{
+  destroy_fake_source(reinterpret_cast<FakeSource*>(source));
+}
+
+reaadr::reaper::CueAudioApi fake_cue_audio_api()
+{
+  return {
+    fake_count_tracks,
+    fake_get_track,
+    fake_get_set_track_string,
+    fake_count_track_items,
+    fake_get_track_item,
+    fake_get_set_item_string,
+    fake_get_item_value,
+    fake_set_item_value,
+    fake_add_item_to_track,
+    fake_delete_track_item,
+    fake_move_item_to_track,
+    fake_get_active_item_take,
+    fake_add_take_to_item,
+    fake_get_set_take_string,
+    fake_get_set_take_info,
+    fake_create_source,
+    fake_get_source_length,
+    fake_destroy_source,
   };
 }
 
@@ -822,7 +1089,7 @@ void test_track_region_adapter()
     {"P_NAME", "Old Name"},
     {"P_EXT:ReaADR.role", "character"},
     {"P_EXT:ReaADR.key", "Actor.lane1"},
-  }, fake_color_to_native(1, 2, 3) | custom_color_flag});
+  }, fake_color_to_native(1, 2, 3) | custom_color_flag, {}});
   render_adapter_probe.regions.push_back({7, "Existing", 1.0, 2.0,
     fake_color_to_native(1, 2, 3) | custom_color_flag});
 
@@ -889,6 +1156,167 @@ void test_track_region_adapter()
         "REAPER adapter refuses caller-supplied track deletion plans to protect recordings");
 }
 
+void test_extended_render_planner()
+{
+  reaadr::core::SessionModel previous;
+  previous.session = {{"session_id", "artifact-session"}};
+  previous.cues = {
+    {{"id", "A1"}, {"character", "Actor"}, {"start_time", "10"}, {"end_time", "12"}},
+    {{"id", "A2"}, {"character", "Actor"}, {"start_time", "12"}, {"end_time", "13"}},
+    {{"id", "OLD"}, {"character", "Actor"}, {"start_time", "20"}, {"end_time", "21"}},
+  };
+  reaadr::core::SessionModel current = previous;
+  current.cues.pop_back();
+
+  const reaadr::core::RgbColor actor_color = {175, 122, 197, true};
+  reaadr::core::ProjectRenderState project;
+  project.ruler_lanes = {
+    {0, "Actor", actor_color, false},
+    {1, "Wrong label", {}, true},
+  };
+  project.region_lanes = {
+    {"[ReaADR]:id=A1 ADR Cue A1 - Actor", 0},
+    {"[ReaADR]:id=A2 ADR Cue A2 - Actor", 0},
+  };
+  project.cue_audio_items = {
+    {0, 0, "cue_character", "Actor.lane1", "cue_audio", "A1", "/cue.wav",
+     "[ReaADR]:id=A1 Cue Audio A1 - Actor", 7.0, 3.0, false, true},
+    {0, 1, "cue_character", "Actor.lane1", "cue_audio", "A2", "/cue.wav",
+     "[ReaADR]:id=A2 Cue Audio A2 - Actor", 9.0, 3.0, false, true},
+    {0, 2, "cue_character", "Actor.lane1", "cue_audio", "A1", "/cue.wav",
+     "duplicate", 7.0, 3.0, false, true},
+    {0, 3, "cue_character", "Actor.lane1", "cue_audio", "OLD", "/cue.wav",
+     "old", 17.0, 3.0, false, true},
+    {0, 4, "cue_character", "Actor.lane1", "user_audio", "OLD", "/user.wav",
+     "user", 17.0, 3.0, false, true},
+  };
+
+  reaadr::core::RenderPlanOptions options;
+  options.cue_audio_path = "/cue.wav";
+  options.cue_audio_duration = 3.0;
+  const auto planned = reaadr::core::build_render_plan(current, &previous, project, options);
+  check(planned && planned.plan.minimum_ruler_lane_count == 0 &&
+          planned.plan.ruler_lane_mutations.size() == 1,
+        "extended render planning updates only ruler lanes that drifted");
+  check(planned.plan.region_lane_mutations.size() == 1 &&
+          planned.plan.region_lane_mutations[0].lane_index == 1,
+        "extended render planning assigns overlapping cue regions to their derived ruler lane");
+
+  int audio_updates = 0;
+  int audio_removals = 0;
+  bool replaces_unchanged_source = false;
+  bool touches_user_item = false;
+  for (const auto& mutation : planned.plan.cue_audio_mutations) {
+    if (mutation.kind == reaadr::core::RenderMutationKind::update) {
+      ++audio_updates;
+      replaces_unchanged_source = mutation.desired.replace_source;
+    } else if (mutation.kind == reaadr::core::RenderMutationKind::remove) {
+      ++audio_removals;
+      if (mutation.existing_item_index == 4) touches_user_item = true;
+    }
+  }
+  check(audio_updates == 1 && !replaces_unchanged_source,
+        "cue-audio planning moves a lane-changed item without needlessly replacing its source");
+  check(audio_removals == 2 && !touches_user_item,
+        "cue-audio cleanup removes owned duplicates and prior-model stale items but ignores user roles");
+
+  reaadr::core::RenderPlanOptions invalid_audio;
+  invalid_audio.cue_audio_path = "/cue.wav";
+  check(!reaadr::core::build_render_plan(current, &previous, project, invalid_audio),
+        "cue-audio planning requires a measured positive source duration");
+}
+
+void test_complete_render_adapter()
+{
+  render_adapter_probe = {};
+  render_adapter_probe.source_lengths["/cue.wav"] = 3.0;
+
+  reaadr::core::RenderPlan plan;
+  plan.track_mutations.push_back({
+    reaadr::core::RenderMutationKind::create, 0,
+    {"cue_character", "Actor.lane1", "Cue - Actor", {175, 122, 197, true}},
+  });
+  plan.region_mutations.push_back({
+    reaadr::core::RenderMutationKind::create, -1,
+    {"region-a1", "[ReaADR]:id=A1 ADR Cue A1 - Actor", 10.0, 12.0, {175, 122, 197, true}},
+  });
+  plan.minimum_ruler_lane_count = 1;
+  plan.ruler_lane_mutations.push_back({0, "Actor", {175, 122, 197, true}, false});
+  plan.region_lane_mutations.push_back({"[ReaADR]:id=A1 ADR Cue A1 - Actor", 0});
+  plan.cue_audio_mutations.push_back({
+    reaadr::core::RenderMutationKind::create, 0, 0,
+    {"A1", "Actor.lane1", "/cue.wav", "[ReaADR]:id=A1 Cue Audio A1 - Actor", 7.0, 3.0, true},
+  });
+
+  reaadr::reaper::CueAudioAdapter cue_adapter(nullptr, fake_cue_audio_api());
+  const auto source = cue_adapter.inspect_source("/cue.wav");
+  check(source && std::abs(source.duration - 3.0) < 0.000001,
+        "cue-audio adapter measures the REAPER source before domain planning");
+
+  transaction_probe = {};
+  const auto applied = reaadr::reaper::apply_complete_render_plan_transactionally(
+    nullptr, fake_render_api(), fake_ruler_lane_api(), fake_cue_audio_api(), fake_transaction_api(),
+    plan, "ReaADR: Render complete native artifacts");
+  check(applied && applied.tracks_and_regions.tracks_created == 1 &&
+          applied.tracks_and_regions.regions_created == 1 &&
+          applied.ruler_lanes.lanes_updated == 1 && applied.ruler_lanes.regions_assigned == 1 &&
+          applied.cue_audio.items_created == 1,
+        "complete rendering creates dependencies before ruler assignments and cue-audio items");
+  check(transaction_probe.begins == 1 && transaction_probe.ends == 1 &&
+          transaction_probe.refresh_balance == 0,
+        "complete native artifact rendering uses one balanced outer transaction");
+  check(render_adapter_probe.window_adjustments == 1 && render_adapter_probe.arrange_updates == 1,
+        "complete native artifact rendering performs one final project view refresh");
+  check(render_adapter_probe.tracks.size() == 1 && render_adapter_probe.tracks[0].items.size() == 1 &&
+          render_adapter_probe.regions.size() == 1 && render_adapter_probe.ruler_lanes.size() == 1,
+        "complete rendering materializes every planned project artifact");
+
+  const auto inspection = reaadr::reaper::inspect_complete_render_state(
+    nullptr, fake_render_api(), fake_ruler_lane_api(), fake_cue_audio_api());
+  check(inspection && inspection.state.ruler_lanes[0].name == "Actor" &&
+          inspection.state.region_lanes[0].lane_index == 0,
+        "complete inspection combines track, region, and ruler-lane state for replanning");
+  check(inspection && inspection.state.cue_audio_items.size() == 1 &&
+          inspection.state.cue_audio_items[0].cue_key == "A1" &&
+          inspection.state.cue_audio_items[0].has_take,
+        "complete inspection includes explicit cue-audio ownership and take state");
+
+  reaadr::core::SessionModel rendered_model;
+  rendered_model.session = {{"session_id", "complete-render-session"}};
+  rendered_model.cues = {{
+    {"id", "A1"}, {"character", "Actor"}, {"start_time", "10"}, {"end_time", "12"},
+    {"region_id", "region-a1"},
+  }};
+  reaadr::core::RenderPlanOptions rendered_options;
+  rendered_options.create_dialogue_tracks = false;
+  rendered_options.cue_audio_path = "/cue.wav";
+  rendered_options.cue_audio_duration = 3.0;
+  const auto idempotent = reaadr::core::build_render_plan(
+    rendered_model, &rendered_model, inspection.state, rendered_options);
+  check(idempotent && idempotent.plan.empty(),
+        "a complete inspected render produces an empty idempotent follow-up plan");
+
+  reaadr::core::RenderPlan stale_source_plan;
+  stale_source_plan.cue_audio_mutations.push_back({
+    reaadr::core::RenderMutationKind::create, 0, 0,
+    {"A2", "Actor.lane1", "/cue.wav", "A2", 9.0, 3.0, true},
+  });
+  render_adapter_probe.source_lengths["/cue.wav"] = 4.0;
+  transaction_probe = {};
+  transaction_probe.available_undo = "ReaADR: Stale cue source (failed)";
+  const auto failed = reaadr::reaper::apply_complete_render_plan_transactionally(
+    nullptr, fake_render_api(), fake_ruler_lane_api(), fake_cue_audio_api(), fake_transaction_api(),
+    stale_source_plan, "ReaADR: Stale cue source");
+  check(!failed && transaction_probe.undos == 1 && transaction_probe.refresh_balance == 0,
+        "cue-source changes fail and roll back the complete native render transaction");
+
+  for (FakeTrack& track : render_adapter_probe.tracks) {
+    for (const auto& item : track.items) destroy_fake_source(item->take.source);
+  }
+  check(render_adapter_probe.live_sources.empty(),
+        "cue-audio adapter test releases every transferred fake media source");
+}
+
 } // namespace
 
 int main()
@@ -907,6 +1335,8 @@ int main()
   test_session_commit_service();
   test_render_planner();
   test_track_region_adapter();
+  test_extended_render_planner();
+  test_complete_render_adapter();
   if (failures != 0) {
     std::cerr << failures << " native core test(s) failed\n";
     return EXIT_FAILURE;

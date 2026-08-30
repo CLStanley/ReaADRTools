@@ -37,9 +37,39 @@ struct ExistingRegion {
   RgbColor color;
 };
 
+struct ExistingRulerLane {
+  int index = 0;
+  std::string name;
+  RgbColor color;
+  bool hidden = false;
+};
+
+struct ExistingRegionLane {
+  std::string region_name;
+  int lane_index = 0;
+};
+
+struct ExistingCueAudioItem {
+  std::size_t track_index = 0;
+  std::size_t item_index = 0;
+  std::string track_role;
+  std::string track_key;
+  std::string role;
+  std::string cue_key;
+  std::string source_path;
+  std::string take_name;
+  double position = 0.0;
+  double length = 0.0;
+  bool loops_source = false;
+  bool has_take = false;
+};
+
 struct ProjectRenderState {
   std::vector<ExistingTrack> tracks;
   std::vector<ExistingRegion> regions;
+  std::vector<ExistingRulerLane> ruler_lanes;
+  std::vector<ExistingRegionLane> region_lanes;
+  std::vector<ExistingCueAudioItem> cue_audio_items;
 };
 
 struct DesiredTrack {
@@ -55,6 +85,28 @@ struct DesiredRegion {
   double start_time = 0.0;
   double end_time = 0.0;
   RgbColor color;
+};
+
+struct DesiredRulerLane {
+  int index = 0;
+  std::string name;
+  RgbColor color;
+  bool hidden = false;
+};
+
+struct RegionLaneMutation {
+  std::string region_name;
+  int lane_index = 0;
+};
+
+struct DesiredCueAudioItem {
+  std::string cue_key;
+  std::string target_track_key;
+  std::string source_path;
+  std::string take_name;
+  double position = 0.0;
+  double length = 0.0;
+  bool replace_source = false;
 };
 
 enum class RenderMutationKind {
@@ -75,11 +127,25 @@ struct RegionMutation {
   DesiredRegion desired;
 };
 
+struct CueAudioMutation {
+  RenderMutationKind kind = RenderMutationKind::create;
+  std::size_t existing_track_index = 0;
+  std::size_t existing_item_index = 0;
+  DesiredCueAudioItem desired;
+};
+
 struct RenderPlan {
   std::vector<TrackMutation> track_mutations;
   std::vector<RegionMutation> region_mutations;
+  int minimum_ruler_lane_count = 0;
+  std::vector<DesiredRulerLane> ruler_lane_mutations;
+  std::vector<RegionLaneMutation> region_lane_mutations;
+  std::vector<CueAudioMutation> cue_audio_mutations;
 
-  bool empty() const { return track_mutations.empty() && region_mutations.empty(); }
+  bool empty() const {
+    return track_mutations.empty() && region_mutations.empty() && minimum_ruler_lane_count == 0 &&
+      ruler_lane_mutations.empty() && region_lane_mutations.empty() && cue_audio_mutations.empty();
+  }
 };
 
 struct RenderPlanOptions {
@@ -87,6 +153,11 @@ struct RenderPlanOptions {
   double timing_epsilon = 0.0005;
   bool create_cue_tracks = true;
   bool create_dialogue_tracks = true;
+  bool configure_ruler_lanes = true;
+  // Cue audio is optional because the generated WAV belongs to the application
+  // layer. A positive measured duration and a path enable item planning.
+  std::string cue_audio_path;
+  double cue_audio_duration = 0.0;
 };
 
 struct RenderPlanResult {
