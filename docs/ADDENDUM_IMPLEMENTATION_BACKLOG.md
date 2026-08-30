@@ -12,7 +12,7 @@ code change, a user-visible workflow, or a documented constraint.
 | F - Reliability and integrity | Mostly implemented | Model-first import/update, ownership-scoped deletion, model snapshots, centralized Undo rollback, and QA logging exist. Durable logs need expansion. |
 | G - Session state model | Mostly implemented | `adr_session_model_v1` is the source of truth for imported/generated ADR data. Some compatibility paths still read REAPER state directly. |
 | H - Sync engine | Partial | Initial sync APIs exist and are used by refresh, cue edits, import, detection, and cue generation. Remaining work is drift resolution UI, merge handling, and broader incremental sync coverage. |
-| I - Event system | Partial | A synchronous typed event queue, bounded project-local event log, and subscription API now exist. UI windows still use `session_revision` polling. |
+| I - Event system | Partial | Lua provides the synchronous queue/subscriptions, and both Lua and C++ now publish to one bounded project-local event log. UI windows still use `session_revision` polling. |
 | J - Recovery and snapshots | Partial | Last-operation model snapshots and Undo-backed render rollback exist. Full snapshot history, restore UI, diffing, autosave, and crash recovery are not implemented. |
 
 ## Phase 1 - Safety Fixes And Documentation
@@ -123,6 +123,8 @@ Initial event types:
 
 Current event coverage:
 
+- Native session rendering publishes Lua-compatible `SessionSaved` and
+  `SyncFull` records with the shared monotonic event counter and retention cap.
 - Session saves emit one aggregate event with cue count and revision.
 - Cue status/edit/add/remove paths emit cue-level change events.
 - Import, dialogue detection, and marker/region cue generation emit aggregate

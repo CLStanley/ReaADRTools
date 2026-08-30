@@ -18,6 +18,13 @@ double positive_number_or(const std::string& value, double fallback)
   return *end == '\0' && std::isfinite(parsed) && parsed > 0.0 ? parsed : fallback;
 }
 
+void append_event_warning(SessionRenderResult& result, const std::string& warning)
+{
+  if (warning.empty()) return;
+  if (!result.event_warning.empty()) result.event_warning += " ";
+  result.event_warning += warning;
+}
+
 } // namespace
 
 SessionRenderResult SessionRenderService::commit_and_render(
@@ -104,6 +111,38 @@ SessionRenderResult SessionRenderService::commit_and_render(
           result.error = result.render.error;
           restore_model_after_project_rollback = true;
           transaction.mark_failed();
+        } else if (options.publish_events) {
+          core::EventPublishOptions event_options = options.event;
+          if (event_options.utc_timestamp.empty()) {
+            event_options.utc_timestamp = options.commit.utc_timestamp;
+          }
+          event_options.session_id = result.commit.model.session_id();
+          if (event_options.source.empty()) event_options.source = "native_session_render";
+
+          const core::Fields saved_payload = {
+            {"cue_count", std::to_string(result.commit.model.cues.size())},
+            {"operation", options.commit.replacement.last_operation},
+            {"revision", std::to_string(result.commit.revision)},
+          };
+          result.events.push_back(event_log_.publish("SessionSaved", saved_payload, event_options));
+          if (!result.events.back()) {
+            append_event_warning(result, "SessionSaved event publication failed: " +
+              result.events.back().error);
+          }
+
+          const core::Fields sync_payload = {
+            {"cue_audio_created", std::to_string(result.render.cue_audio.items_created)},
+            {"cue_audio_updated", std::to_string(result.render.cue_audio.items_updated)},
+            {"cue_count", std::to_string(result.commit.model.cues.size())},
+            {"regions_created", std::to_string(result.render.tracks_and_regions.regions_created)},
+            {"regions_updated", std::to_string(result.render.tracks_and_regions.regions_updated)},
+            {"tracks_created", std::to_string(result.render.tracks_and_regions.tracks_created)},
+          };
+          result.events.push_back(event_log_.publish("SyncFull", sync_payload, event_options));
+          if (!result.events.back()) {
+            append_event_warning(result, "SyncFull event publication failed: " +
+              result.events.back().error);
+          }
         }
       }
     }

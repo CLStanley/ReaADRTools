@@ -57,10 +57,13 @@ calls. `render_artifact_adapter.*` handles ruler lanes and explicitly owned cue
 audio, then coordinates all native render adapters under one transaction in
 dependency order. `cue_wav.*` generates the project-local countdown asset, and
 `session_render_service.*` keeps its model commit and complete visible render
-inside one rollback-aware application workflow. These services are not invoked
-by the UI yet; Lua remains the single import/render writer until filtering,
-overlays, event publication, and the import UI are ready for one coordinated
-cutover.
+inside one rollback-aware application workflow. `event_log.*` publishes that
+workflow's `SessionSaved` and `SyncFull` results to the same bounded project
+history read by Lua. Publication warnings remain separate from commit failures
+so callers do not retry an operation that already changed the model and
+project. These services are not invoked by the UI yet; Lua remains the single
+import/render writer until filtering, overlays, and the import UI are ready for
+one coordinated cutover.
 
 ## Lua Application Layer
 

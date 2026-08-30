@@ -28,8 +28,8 @@ struct SessionCommitResult {
 
 // Commits model intent only. REAPER tracks, regions, items, and FX must be
 // rendered by a higher application service inside the same outer transaction.
-// Until that renderer exists, this service is test infrastructure rather than
-// a user-facing native import writer.
+// SessionRenderService composes this narrow operation with project rendering;
+// keeping the model step separate also supports future headless import tests.
 SessionCommitResult commit_session_cues(SessionModelRepository& repository,
                                          const std::vector<Fields>& cues,
                                          const SessionCommitOptions& options);

@@ -80,7 +80,8 @@ complete cue-derived session construction are implemented in the native domain
 core. Cue replacement now preserves the existing session envelope while
 rebuilding cue-derived collections, and the model-only commit service performs
 snapshot/save/revision/rollback sequencing. These paths are test-covered but
-are not invoked by the UI yet. XLSX unification, event publication,
+are not invoked by the UI yet. Native `SessionSaved` and `SyncFull` publication
+now writes the same bounded project event history used by Lua. XLSX unification,
 file-selection UI, the rendering cutover, and the import cutover remain pending.
 
 ### Stage 3: REAPER rendering and recording workflows (started)
@@ -104,9 +105,11 @@ Native cue-WAV generation now creates the same mono 48 kHz/16-bit three-beep
 asset as Lua and publishes it through an atomic file replacement. A native
 session-render application service coordinates WAV validation, model commit,
 render planning, artifact application, project Undo, and post-Undo model
-snapshot restoration. The adapters and coordinator are test-covered but are
-not yet public writers; filtering, overlays, event publication, and an
-in-REAPER smoke test remain before synchronization cutover.
+snapshot restoration. Successful commits publish Lua-compatible persistent
+events without treating an observational logging failure as a failed render.
+The adapters and coordinator are test-covered but are not yet public writers;
+filtering, overlays, and an in-REAPER smoke test remain before synchronization
+cutover.
 
 ### Stage 4: native UI and Lua removal
 
@@ -154,6 +157,8 @@ The initial target-architecture modules now include:
   mutation planning with conservative ownership boundaries.
 - `extension/reaadr_core/cue_wav.*`: deterministic, Lua-compatible cue-beep
   synthesis and atomic WAV publication.
+- `extension/reaadr_core/event_log.*`: monotonic event IDs, Lua-compatible
+  event-line encoding, and bounded project history shared across both runtimes.
 - `extension/reaadr_reaper/project_state.*`: dynamically sized REAPER project
   extstate access.
 - `extension/reaadr_reaper/project_transaction.*`: nested-safe undo and UI
@@ -165,7 +170,8 @@ The initial target-architecture modules now include:
   coordinator.
 - `extension/reaadr_reaper/session_render_service.*`: application-level
   coordination of canonical model commits and visible project rendering, with
-  snapshot recovery after failed REAPER transactions.
+  snapshot recovery after failed REAPER transactions and success-event
+  publication.
 
 `make -C extension test` runs these modules without the REAPER SDK; normal
 extension builds compile the same sources into the plugin.

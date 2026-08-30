@@ -47,6 +47,7 @@ cl /nologo /EHsc /O2 /LD /std:c++17 ^
   reaadr_core\lane_assignment.cpp ^
   reaadr_core\render_plan.cpp ^
   reaadr_core\cue_wav.cpp ^
+  reaadr_core\event_log.cpp ^
   reaadr_reaper\project_state.cpp ^
   reaadr_reaper\project_transaction.cpp ^
   reaadr_reaper\track_region_adapter.cpp ^

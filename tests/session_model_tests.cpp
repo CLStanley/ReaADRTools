@@ -2,6 +2,7 @@
 #include "reaadr_core/domain_utils.hpp"
 #include "reaadr_core/cue_import.hpp"
 #include "reaadr_core/cue_wav.hpp"
+#include "reaadr_core/event_log.hpp"
 #include "reaadr_core/model_repository.hpp"
 #include "reaadr_core/render_plan.hpp"
 #include "reaadr_core/session_builder.hpp"
@@ -597,6 +598,48 @@ void test_cue_wav()
         "published native cue-WAV bytes exactly match the validated in-memory asset");
   std::remove(path.c_str());
   std::remove((path + ".reaadr.tmp").c_str());
+}
+
+void test_event_log_repository()
+{
+  FakeProjectStateStore store;
+  reaadr::core::EventLogRepository events(store);
+  check(events.load() && events.load().lines.empty(),
+        "a missing native event log loads as an empty compatibility history");
+
+  store.values["ReaADRTools:event_counter"] = "7";
+  store.values["ReaADRTools:event_log_v1"] = "old-event-1\nold-event-2";
+  reaadr::core::EventPublishOptions options;
+  options.utc_timestamp = "2026-08-30T15:00:00Z";
+  options.session_id = "session-evt";
+  options.source = "native test";
+  options.batch_id = "batch|1";
+  options.log_limit = 2;
+  const auto published = events.publish("CueUpdated", {
+    {"cue_count", "2"}, {"detail", "a|b"},
+  }, options);
+  const auto loaded = events.load();
+  const std::string expected =
+    "evt_00000008|2026-08-30T15%3A00%3A00Z|session-evt|CueUpdated|native test|"
+    "batch%7C1|cue_count%3D2%3Bdetail%3Da%7Cb";
+  check(published && published.counter == 8 && published.event.event_id == "evt_00000008" &&
+          store.values.at("ReaADRTools:event_counter") == "8",
+        "native event publication advances the Lua-compatible project counter");
+  check(loaded && loaded.lines.size() == 2 && loaded.lines[0] == "old-event-2" &&
+          loaded.lines[1] == expected,
+        "native event publication matches Lua encoding and bounded-log retention");
+
+  FakeProjectStateStore failing_store;
+  failing_store.failed_write_key = "ReaADRTools:event_log_v1";
+  failing_store.failed_writes_remaining = 1;
+  reaadr::core::EventLogRepository failing_events(failing_store);
+  const auto failed = failing_events.publish("SyncFull", {}, options);
+  check(!failed && failing_store.values.at("ReaADRTools:event_counter") == "1" &&
+          failing_store.values.count("ReaADRTools:event_log_v1") == 0,
+        "a failed event-log append reserves its ID without publishing a partial line");
+  const auto after_gap = failing_events.publish("SyncFull", {}, options);
+  check(after_gap && after_gap.event.event_id == "evt_00000002",
+        "native event IDs are never reused after a persistence failure");
 }
 
 void test_encoding()
@@ -1385,6 +1428,7 @@ void test_session_render_service()
   const std::string cue_path = "/tmp/reaadr-session-render-service-cue.wav";
   FakeProjectStateStore store;
   reaadr::core::SessionModelRepository repository(store);
+  reaadr::core::EventLogRepository events(store);
   render_adapter_probe = {};
   render_adapter_probe.source_lengths[cue_path] = 3.0;
 
@@ -1407,7 +1451,7 @@ void test_session_render_service()
   }};
   transaction_probe = {};
   reaadr::reaper::SessionRenderService service(
-    repository, nullptr, fake_render_api(), fake_ruler_lane_api(), fake_cue_audio_api(),
+    repository, events, nullptr, fake_render_api(), fake_ruler_lane_api(), fake_cue_audio_api(),
     fake_transaction_api());
   const auto rendered = service.commit_and_render(cues, options);
   const auto loaded = repository.load();
@@ -1420,6 +1464,21 @@ void test_session_render_service()
   check(render_adapter_probe.tracks.size() == 1 && render_adapter_probe.regions.size() == 1 &&
           render_adapter_probe.tracks[0].items.size() == 1,
         "session render service synchronizes native tracks, regions, lanes, and cue audio");
+  check(rendered.events.size() == 2 && rendered.event_warning.empty() &&
+          events.load().lines.size() == 2 &&
+          events.load().lines.back().find("|SyncFull|") != std::string::npos,
+        "successful native session rendering publishes SessionSaved and SyncFull events");
+
+  // Event history is diagnostic. A failed append must remain visible to the
+  // caller without misreporting an already committed session as failed.
+  store.failed_write_key = "ReaADRTools:event_log_v1";
+  store.failed_writes_remaining = 1;
+  transaction_probe = {};
+  const auto rendered_with_warning = service.commit_and_render(cues, options);
+  check(rendered_with_warning && !rendered_with_warning.event_warning.empty() &&
+          rendered_with_warning.events.size() == 2 && !rendered_with_warning.events[0] &&
+          rendered_with_warning.events[1],
+        "event persistence warnings do not turn a successful native render into a retryable failure");
 
   render_adapter_probe.fail_region_update = true;
   options.commit.replacement.build.frame_rate = "60";
@@ -1436,8 +1495,11 @@ void test_session_render_service()
         "existing timecode is retained while a failed render rolls back project and model");
   check(restored && restored.model.cues[0].at("line") == "First line" &&
           restored.model.cues[0].at("start_time") == "10" &&
-          repository.revision().revision == 3,
+          repository.revision().revision == 4,
         "render rollback republishes the prior canonical model under a fresh revision");
+  check(events.load().lines.size() == 3 &&
+          store.values.at("ReaADRTools:event_counter") == "4",
+        "failed rendering does not publish success events into project history");
 
   for (FakeTrack& track : render_adapter_probe.tracks) {
     for (const auto& item : track.items) destroy_fake_source(item->take.source);
@@ -1449,6 +1511,7 @@ void test_session_render_service()
   // not leave an empty value that later loads as a corrupt session.
   FakeProjectStateStore new_store;
   reaadr::core::SessionModelRepository new_repository(new_store);
+  reaadr::core::EventLogRepository new_events(new_store);
   render_adapter_probe = {};
   render_adapter_probe.source_lengths[cue_path] = 3.0;
   transaction_probe = {};
@@ -1456,7 +1519,7 @@ void test_session_render_service()
   options.render.timing_epsilon = std::nan("");
   options.commit.replacement.build.frame_rate = "30";
   reaadr::reaper::SessionRenderService new_service(
-    new_repository, nullptr, fake_render_api(), fake_ruler_lane_api(), fake_cue_audio_api(),
+    new_repository, new_events, nullptr, fake_render_api(), fake_ruler_lane_api(), fake_cue_audio_api(),
     fake_transaction_api());
   const auto first_render_failed = new_service.commit_and_render(cues, options);
   check(!first_render_failed && first_render_failed.model_rolled_back &&
@@ -1473,6 +1536,7 @@ int main()
 {
   test_encoding();
   test_cue_wav();
+  test_event_log_repository();
   test_model_round_trip();
   test_model_errors();
   test_lua_compatible_golden_blob();
