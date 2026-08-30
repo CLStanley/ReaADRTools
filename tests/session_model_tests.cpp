@@ -1,6 +1,7 @@
 #include "reaadr_core/session_model.hpp"
 #include "reaadr_core/domain_utils.hpp"
 #include "reaadr_core/cue_import.hpp"
+#include "reaadr_core/cue_wav.hpp"
 #include "reaadr_core/model_repository.hpp"
 #include "reaadr_core/render_plan.hpp"
 #include "reaadr_core/session_builder.hpp"
@@ -9,12 +10,16 @@
 #include "reaadr_reaper/project_state.hpp"
 #include "reaadr_reaper/project_transaction.hpp"
 #include "reaadr_reaper/render_artifact_adapter.hpp"
+#include "reaadr_reaper/session_render_service.hpp"
 #include "reaadr_reaper/track_region_adapter.hpp"
 
 #include <algorithm>
 #include <cmath>
 #include <cstring>
 #include <cstdlib>
+#include <cstdio>
+#include <fstream>
+#include <iterator>
 #include <iostream>
 #include <map>
 #include <memory>
@@ -44,7 +49,8 @@ public:
       if (failed_writes_remaining > 0) --failed_writes_remaining;
       return false;
     }
-    values[full_key] = value;
+    if (value.empty()) values.erase(full_key);
+    else values[full_key] = value;
     return true;
   }
 
@@ -534,6 +540,63 @@ void check(bool condition, const std::string& message)
     ++failures;
     std::cerr << "not ok - " << message << '\n';
   }
+}
+
+std::uint16_t read_le16(const std::vector<std::uint8_t>& bytes, std::size_t offset)
+{
+  return static_cast<std::uint16_t>(bytes[offset]) |
+    static_cast<std::uint16_t>(static_cast<std::uint16_t>(bytes[offset + 1]) << 8U);
+}
+
+std::uint32_t read_le32(const std::vector<std::uint8_t>& bytes, std::size_t offset)
+{
+  return static_cast<std::uint32_t>(bytes[offset]) |
+    (static_cast<std::uint32_t>(bytes[offset + 1]) << 8U) |
+    (static_cast<std::uint32_t>(bytes[offset + 2]) << 16U) |
+    (static_cast<std::uint32_t>(bytes[offset + 3]) << 24U);
+}
+
+void test_cue_wav()
+{
+  const auto cue_wav = reaadr::core::build_cue_wav();
+  check(cue_wav && cue_wav.bytes.size() == 288044 &&
+          std::string(cue_wav.bytes.begin(), cue_wav.bytes.begin() + 4) == "RIFF" &&
+          std::string(cue_wav.bytes.begin() + 8, cue_wav.bytes.begin() + 12) == "WAVE",
+        "native cue-WAV generation emits a complete three-second RIFF asset");
+  check(read_le16(cue_wav.bytes, 20) == 1 && read_le16(cue_wav.bytes, 22) == 1 &&
+          read_le32(cue_wav.bytes, 24) == 48000 && read_le16(cue_wav.bytes, 34) == 16 &&
+          read_le32(cue_wav.bytes, 40) == 288000,
+        "native cue-WAV header declares mono 48 kHz 16-bit PCM");
+
+  // A 1 kHz sine at 48 kHz reaches its first positive quarter-cycle after 12
+  // samples. Silence between beeps proves their frame-length gate is applied.
+  const auto sample = [&](std::size_t index) {
+    return static_cast<std::int16_t>(read_le16(cue_wav.bytes, 44 + index * 2));
+  };
+  check(sample(0) == 0 && sample(12) > 11000 && sample(3000) == 0 &&
+          sample(48000) == 0 && sample(48012) > 11000,
+        "native cue-WAV samples contain frame-length beeps at one-second intervals");
+
+  reaadr::core::CueWavOptions fallback;
+  fallback.frame_rate = 0.0;
+  const auto fallback_wav = reaadr::core::build_cue_wav(fallback);
+  check(fallback_wav && std::abs(fallback_wav.frame_rate - 24.0) < 0.000001,
+        "native cue-WAV generation retains the Lua 24 fps fallback");
+  fallback.amplitude = 1.1;
+  check(!reaadr::core::build_cue_wav(fallback),
+        "native cue-WAV generation rejects unsafe amplitude settings");
+
+  const std::string path = "/tmp/reaadr-native-cue-wav-test.wav";
+  std::string write_error;
+  check(reaadr::core::write_cue_wav_file(path, cue_wav.bytes, write_error),
+        "native cue-WAV writing atomically publishes the generated asset");
+  std::ifstream input(path, std::ios::binary);
+  const std::vector<std::uint8_t> written{
+    std::istreambuf_iterator<char>(input), std::istreambuf_iterator<char>()};
+  check(written == cue_wav.bytes,
+        "published native cue-WAV bytes exactly match the validated in-memory asset");
+  std::remove(path.c_str());
+  std::remove((path + ".reaadr.tmp").c_str());
 }
 
 void test_encoding()
@@ -1317,11 +1380,99 @@ void test_complete_render_adapter()
         "cue-audio adapter test releases every transferred fake media source");
 }
 
+void test_session_render_service()
+{
+  const std::string cue_path = "/tmp/reaadr-session-render-service-cue.wav";
+  FakeProjectStateStore store;
+  reaadr::core::SessionModelRepository repository(store);
+  render_adapter_probe = {};
+  render_adapter_probe.source_lengths[cue_path] = 3.0;
+
+  reaadr::reaper::SessionRenderOptions options;
+  options.commit.replacement.build.session_id = "native-render-session";
+  options.commit.replacement.build.frame_rate = "30";
+  options.commit.replacement.build.preroll_seconds = 2.5;
+  options.commit.replacement.last_operation = "native_commit_and_render";
+  options.commit.snapshot_label = "Native session render test";
+  options.commit.utc_timestamp = "2026-08-30T14:00:00Z";
+  options.render.create_dialogue_tracks = false;
+  // This intentionally differs from the commit setting. The service must use
+  // the canonical build preroll for both lane assignment and visible render.
+  options.render.preroll_seconds = 99.0;
+  options.cue_audio_path = cue_path;
+
+  const std::vector<reaadr::core::Fields> cues = {{
+    {"id", "A1"}, {"character", "Actor"}, {"start_time", "10"}, {"end_time", "12"},
+    {"line", "First line"}, {"script_id", "script"}, {"metadata", ""},
+  }};
+  transaction_probe = {};
+  reaadr::reaper::SessionRenderService service(
+    repository, nullptr, fake_render_api(), fake_ruler_lane_api(), fake_cue_audio_api(),
+    fake_transaction_api());
+  const auto rendered = service.commit_and_render(cues, options);
+  const auto loaded = repository.load();
+  check(rendered && loaded && loaded.model.cues.size() == 1 &&
+          loaded.model.cues[0].at("line") == "First line" && rendered.commit.revision == 1,
+        "session render service commits the canonical model before reporting success");
+  check(std::abs(rendered.cue_wav.frame_rate - 30.0) < 0.000001 &&
+          transaction_probe.begins == 1 && transaction_probe.ends == 1 && transaction_probe.undos == 0,
+        "session render service derives cue audio from model timecode and uses one outer undo block");
+  check(render_adapter_probe.tracks.size() == 1 && render_adapter_probe.regions.size() == 1 &&
+          render_adapter_probe.tracks[0].items.size() == 1,
+        "session render service synchronizes native tracks, regions, lanes, and cue audio");
+
+  render_adapter_probe.fail_region_update = true;
+  options.commit.replacement.build.frame_rate = "60";
+  transaction_probe = {};
+  transaction_probe.available_undo = options.undo_description + " (failed)";
+  const auto failed = service.commit_and_render({{
+    {"id", "A1"}, {"character", "Actor"}, {"start_time", "20"}, {"end_time", "22"},
+    {"line", "Must roll back"}, {"script_id", "script"}, {"metadata", ""},
+  }}, options);
+  const auto restored = repository.load();
+  check(!failed && failed.model_rolled_back &&
+          std::abs(failed.cue_wav.frame_rate - 30.0) < 0.000001 && transaction_probe.undos == 1 &&
+          transaction_probe.begins == 1 && transaction_probe.ends == 1,
+        "existing timecode is retained while a failed render rolls back project and model");
+  check(restored && restored.model.cues[0].at("line") == "First line" &&
+          restored.model.cues[0].at("start_time") == "10" &&
+          repository.revision().revision == 3,
+        "render rollback republishes the prior canonical model under a fresh revision");
+
+  for (FakeTrack& track : render_adapter_probe.tracks) {
+    for (const auto& item : track.items) destroy_fake_source(item->take.source);
+  }
+  check(render_adapter_probe.live_sources.empty(),
+        "session render service test releases transferred fake media sources");
+
+  // A failure during the first-ever render must delete the temporary model,
+  // not leave an empty value that later loads as a corrupt session.
+  FakeProjectStateStore new_store;
+  reaadr::core::SessionModelRepository new_repository(new_store);
+  render_adapter_probe = {};
+  render_adapter_probe.source_lengths[cue_path] = 3.0;
+  transaction_probe = {};
+  transaction_probe.available_undo = options.undo_description + " (failed)";
+  options.render.timing_epsilon = std::nan("");
+  options.commit.replacement.build.frame_rate = "30";
+  reaadr::reaper::SessionRenderService new_service(
+    new_repository, nullptr, fake_render_api(), fake_ruler_lane_api(), fake_cue_audio_api(),
+    fake_transaction_api());
+  const auto first_render_failed = new_service.commit_and_render(cues, options);
+  check(!first_render_failed && first_render_failed.model_rolled_back &&
+          new_repository.load().error == reaadr::core::SessionLoadError::missing,
+        "first-session render rollback restores a genuinely missing canonical model");
+
+  std::remove(cue_path.c_str());
+  std::remove((cue_path + ".reaadr.tmp").c_str());
+}
+
 } // namespace
 
 int main()
 {
   test_encoding();
+  test_cue_wav();
   test_model_round_trip();
   test_model_errors();
   test_lua_compatible_golden_blob();
@@ -1337,6 +1488,7 @@ int main()
   test_track_region_adapter();
   test_extended_render_planner();
   test_complete_render_adapter();
+  test_session_render_service();
   if (failures != 0) {
     std::cerr << failures << " native core test(s) failed\n";
     return EXIT_FAILURE;

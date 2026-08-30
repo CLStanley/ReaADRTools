@@ -100,9 +100,13 @@ UI-refresh scopes. Track matching preserves the existing
 `ReaADR.role`/`ReaADR.key` contract. Stale region and cue-audio removal requires
 exact ownership evidence, media-source changes are revalidated immediately
 before mutation, and recording tracks/items are never automatically removed.
-The adapters are test-covered but are not yet public writers; generated WAV
-creation, filtering, overlays, event publication, and an in-REAPER smoke test
-remain before synchronization cutover.
+Native cue-WAV generation now creates the same mono 48 kHz/16-bit three-beep
+asset as Lua and publishes it through an atomic file replacement. A native
+session-render application service coordinates WAV validation, model commit,
+render planning, artifact application, project Undo, and post-Undo model
+snapshot restoration. The adapters and coordinator are test-covered but are
+not yet public writers; filtering, overlays, event publication, and an
+in-REAPER smoke test remain before synchronization cutover.
 
 ### Stage 4: native UI and Lua removal
 
@@ -148,6 +152,8 @@ The initial target-architecture modules now include:
   allocation shared by model construction and rendering.
 - `extension/reaadr_core/render_plan.*`: host-independent track and region
   mutation planning with conservative ownership boundaries.
+- `extension/reaadr_core/cue_wav.*`: deterministic, Lua-compatible cue-beep
+  synthesis and atomic WAV publication.
 - `extension/reaadr_reaper/project_state.*`: dynamically sized REAPER project
   extstate access.
 - `extension/reaadr_reaper/project_transaction.*`: nested-safe undo and UI
@@ -157,6 +163,9 @@ The initial target-architecture modules now include:
 - `extension/reaadr_reaper/render_artifact_adapter.*`: ruler-lane and cue-audio
   inspection/application plus the single-transaction complete-render
   coordinator.
+- `extension/reaadr_reaper/session_render_service.*`: application-level
+  coordination of canonical model commits and visible project rendering, with
+  snapshot recovery after failed REAPER transactions.
 
 `make -C extension test` runs these modules without the REAPER SDK; normal
 extension builds compile the same sources into the plugin.

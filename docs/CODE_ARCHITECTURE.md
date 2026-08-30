@@ -55,9 +55,12 @@ model construction and visible rendering on one deterministic overlap rule.
 calling REAPER, while `track_region_adapter.*` owns the actual track/region host
 calls. `render_artifact_adapter.*` handles ruler lanes and explicitly owned cue
 audio, then coordinates all native render adapters under one transaction in
-dependency order. These services are not invoked by the UI yet; Lua remains the
-single import/render writer until generated WAV creation, filtering, overlays,
-event publication, and the import UI are ready for one coordinated cutover.
+dependency order. `cue_wav.*` generates the project-local countdown asset, and
+`session_render_service.*` keeps its model commit and complete visible render
+inside one rollback-aware application workflow. These services are not invoked
+by the UI yet; Lua remains the single import/render writer until filtering,
+overlays, event publication, and the import UI are ready for one coordinated
+cutover.
 
 ## Lua Application Layer
 

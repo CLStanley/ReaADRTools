@@ -46,10 +46,12 @@ cl /nologo /EHsc /O2 /LD /std:c++17 ^
   reaadr_core\session_commit.cpp ^
   reaadr_core\lane_assignment.cpp ^
   reaadr_core\render_plan.cpp ^
+  reaadr_core\cue_wav.cpp ^
   reaadr_reaper\project_state.cpp ^
   reaadr_reaper\project_transaction.cpp ^
   reaadr_reaper\track_region_adapter.cpp ^
   reaadr_reaper\render_artifact_adapter.cpp ^
+  reaadr_reaper\session_render_service.cpp ^
   /Fe"%BUILD_DIR%\%TARGET%" ^
   /link user32.lib /DEF:reaper_reaadr.def
 

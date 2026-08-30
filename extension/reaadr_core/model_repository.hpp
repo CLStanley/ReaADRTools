@@ -28,6 +28,9 @@ class ProjectStateStore {
 public:
   virtual ~ProjectStateStore() = default;
   virtual StateReadResult read(const char* name_space, const char* key) const = 0;
+  // REAPER treats an empty extstate value as deletion. Test and alternate
+  // stores must preserve that behavior so a first-session rollback can return
+  // the project to a genuinely missing-model state.
   virtual bool write(const char* name_space, const char* key, const std::string& value) = 0;
 };
 
