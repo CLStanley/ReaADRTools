@@ -49,10 +49,14 @@ Native import work continues in `cue_import.*`, which parses delimited text and
 maps it into cue records, and `session_builder.*`, which derives every
 cue-backed model collection. `session_mutation.*` preserves the model envelope
 while replacing those derived collections, and `session_commit.*` provides the
-model-only snapshot/save/revision/rollback sequence. These services are not
-invoked by the UI yet; Lua remains the single import writer until native REAPER
-rendering, event publication, and the import UI are ready for one coordinated
-cutover.
+model-only snapshot/save/revision/rollback sequence. `lane_assignment.*` keeps
+model construction and visible rendering on one deterministic overlap rule.
+`render_plan.*` compares canonical intent with an inspected project without
+calling REAPER, while `track_region_adapter.*` owns the actual track/region host
+calls and transactional plan application. These services are not invoked by
+the UI yet; Lua remains the single import/render writer until cue audio, ruler
+lanes, overlays, event publication, and the import UI are ready for one
+coordinated cutover.
 
 ## Lua Application Layer
 

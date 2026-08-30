@@ -81,9 +81,9 @@ core. Cue replacement now preserves the existing session envelope while
 rebuilding cue-derived collections, and the model-only commit service performs
 snapshot/save/revision/rollback sequencing. These paths are test-covered but
 are not invoked by the UI yet. XLSX unification, event publication,
-file-selection UI, REAPER rendering, and the import cutover remain pending.
+file-selection UI, the rendering cutover, and the import cutover remain pending.
 
-### Stage 3: REAPER rendering and recording workflows
+### Stage 3: REAPER rendering and recording workflows (started)
 
 - Port track/region/item/overlay rendering behind typed REAPER adapters.
 - Port character filtering, navigation, record-arm capture/restore, recording,
@@ -91,6 +91,16 @@ file-selection UI, REAPER rendering, and the import cutover remain pending.
 - Preserve the model-first render direction and transaction boundaries.
 
 Exit condition: project synchronization and recording workflows run natively.
+
+Implementation status: deterministic character-lane assignment and native
+track/region render planning are implemented without REAPER dependencies. A
+typed REAPER adapter can inspect a project and apply the resulting plan inside
+the native transaction and UI-refresh scopes. Track matching preserves the
+existing `ReaADR.role`/`ReaADR.key` contract, and stale region removal requires
+an exact ownership proof derived from the previous canonical model. Recording
+tracks are never automatically removed. The adapter is test-covered but is not
+yet a public writer; cue audio items, ruler lanes, filtering, overlays, event
+publication, and an in-REAPER smoke test remain before synchronization cutover.
 
 ### Stage 4: native UI and Lua removal
 
@@ -132,10 +142,16 @@ The initial target-architecture modules now include:
   session identity, metadata, history, runtime state, and unknown records.
 - `extension/reaadr_core/session_commit.*`: model-only snapshot, persistence,
   monotonic revision, and rollback orchestration.
+- `extension/reaadr_core/lane_assignment.*`: deterministic overlap-lane
+  allocation shared by model construction and rendering.
+- `extension/reaadr_core/render_plan.*`: host-independent track and region
+  mutation planning with conservative ownership boundaries.
 - `extension/reaadr_reaper/project_state.*`: dynamically sized REAPER project
   extstate access.
 - `extension/reaadr_reaper/project_transaction.*`: nested-safe undo and UI
   refresh RAII scopes with conservative failure rollback.
+- `extension/reaadr_reaper/track_region_adapter.*`: testable project inspection
+  and transactional application of native render plans.
 
 `make -C extension test` runs these modules without the REAPER SDK; normal
 extension builds compile the same sources into the plugin.

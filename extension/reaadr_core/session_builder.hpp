@@ -16,6 +16,9 @@ struct SessionBuildOptions {
   std::string frame_rate = "24";
   std::string refresh_version = "0";
   std::string last_operation = "save_session";
+  // Track records and rendering must use the same overlap window. Callers may
+  // override this when the project's overlay preroll setting is known.
+  double preroll_seconds = 3.0;
   bool cues_modified = false;
   bool tracks_modified = false;
   bool regions_modified = false;

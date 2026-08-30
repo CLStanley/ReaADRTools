@@ -2,11 +2,13 @@
 #include "reaadr_core/domain_utils.hpp"
 #include "reaadr_core/cue_import.hpp"
 #include "reaadr_core/model_repository.hpp"
+#include "reaadr_core/render_plan.hpp"
 #include "reaadr_core/session_builder.hpp"
 #include "reaadr_core/session_commit.hpp"
 #include "reaadr_core/session_mutation.hpp"
 #include "reaadr_reaper/project_state.hpp"
 #include "reaadr_reaper/project_transaction.hpp"
+#include "reaadr_reaper/track_region_adapter.hpp"
 
 #include <algorithm>
 #include <cmath>
@@ -16,6 +18,7 @@
 #include <map>
 #include <stdexcept>
 #include <string>
+#include <vector>
 
 namespace {
 
@@ -94,6 +97,168 @@ void fake_prevent_refresh(int amount) { transaction_probe.refresh_balance += amo
 reaadr::reaper::TransactionApi fake_transaction_api()
 {
   return {fake_begin, fake_end, fake_can_undo, fake_undo, fake_prevent_refresh};
+}
+
+struct FakeTrack {
+  std::map<std::string, std::string> strings;
+  int color = 0;
+};
+
+struct FakeRegion {
+  int id = -1;
+  std::string name;
+  double start_time = 0.0;
+  double end_time = 0.0;
+  int color = 0;
+};
+
+struct RenderAdapterProbe {
+  std::vector<FakeTrack> tracks;
+  std::vector<FakeRegion> regions;
+  bool fail_region_update = false;
+  int next_region_id = 100;
+  int window_adjustments = 0;
+  int arrange_updates = 0;
+};
+
+RenderAdapterProbe render_adapter_probe;
+
+FakeTrack* fake_track(MediaTrack* track)
+{
+  return reinterpret_cast<FakeTrack*>(track);
+}
+
+int fake_count_tracks(ReaProject*)
+{
+  return static_cast<int>(render_adapter_probe.tracks.size());
+}
+
+MediaTrack* fake_get_track(ReaProject*, int index)
+{
+  if (index < 0 || static_cast<std::size_t>(index) >= render_adapter_probe.tracks.size()) return nullptr;
+  return reinterpret_cast<MediaTrack*>(&render_adapter_probe.tracks[static_cast<std::size_t>(index)]);
+}
+
+void fake_insert_track(int index, bool)
+{
+  if (index < 0 || static_cast<std::size_t>(index) > render_adapter_probe.tracks.size()) return;
+  render_adapter_probe.tracks.insert(render_adapter_probe.tracks.begin() + index, FakeTrack{});
+}
+
+bool fake_get_set_track_string(MediaTrack* track, const char* parameter, char* value, bool set)
+{
+  if (!track || !parameter || !value) return false;
+  FakeTrack* current = fake_track(track);
+  if (set) {
+    current->strings[parameter] = value;
+  } else {
+    const auto found = current->strings.find(parameter);
+    std::strcpy(value, found == current->strings.end() ? "" : found->second.c_str());
+  }
+  return true;
+}
+
+double fake_get_track_value(MediaTrack* track, const char* parameter)
+{
+  return track && std::string(parameter ? parameter : "") == "I_CUSTOMCOLOR" ? fake_track(track)->color : 0.0;
+}
+
+bool fake_set_track_value(MediaTrack* track, const char* parameter, double value)
+{
+  if (!track || std::string(parameter ? parameter : "") != "I_CUSTOMCOLOR") return false;
+  fake_track(track)->color = static_cast<int>(value);
+  return true;
+}
+
+int fake_count_project_markers(ReaProject*, int* markers, int* regions)
+{
+  if (markers) *markers = 0;
+  if (regions) *regions = static_cast<int>(render_adapter_probe.regions.size());
+  return static_cast<int>(render_adapter_probe.regions.size());
+}
+
+int fake_enum_project_markers(ReaProject*, int index, bool* is_region, double* start_time,
+                              double* end_time, const char** name, int* id, int* color)
+{
+  if (index < 0 || static_cast<std::size_t>(index) >= render_adapter_probe.regions.size()) return 0;
+  const FakeRegion& region = render_adapter_probe.regions[static_cast<std::size_t>(index)];
+  if (is_region) *is_region = true;
+  if (start_time) *start_time = region.start_time;
+  if (end_time) *end_time = region.end_time;
+  if (name) *name = region.name.c_str();
+  if (id) *id = region.id;
+  if (color) *color = region.color;
+  return 1;
+}
+
+bool fake_set_project_marker(ReaProject*, int id, bool is_region, double start_time,
+                             double end_time, const char* name, int color, int)
+{
+  if (!is_region || render_adapter_probe.fail_region_update) return false;
+  for (FakeRegion& region : render_adapter_probe.regions) {
+    if (region.id != id) continue;
+    region.start_time = start_time;
+    region.end_time = end_time;
+    region.name = name ? name : "";
+    region.color = color;
+    return true;
+  }
+  return false;
+}
+
+int fake_add_project_marker(ReaProject*, bool is_region, double start_time, double end_time,
+                            const char* name, int, int color)
+{
+  if (!is_region) return -1;
+  const int id = render_adapter_probe.next_region_id++;
+  render_adapter_probe.regions.push_back({id, name ? name : "", start_time, end_time, color});
+  return id;
+}
+
+bool fake_delete_project_marker(ReaProject*, int id, bool is_region)
+{
+  if (!is_region) return false;
+  const auto found = std::find_if(render_adapter_probe.regions.begin(), render_adapter_probe.regions.end(),
+    [id](const FakeRegion& region) { return region.id == id; });
+  if (found == render_adapter_probe.regions.end()) return false;
+  render_adapter_probe.regions.erase(found);
+  return true;
+}
+
+int fake_color_to_native(int red, int green, int blue)
+{
+  return red | (green << 8) | (blue << 16);
+}
+
+void fake_color_from_native(int color, int* red, int* green, int* blue)
+{
+  if (red) *red = color & 0xff;
+  if (green) *green = (color >> 8) & 0xff;
+  if (blue) *blue = (color >> 16) & 0xff;
+}
+
+void fake_adjust_track_windows(bool) { ++render_adapter_probe.window_adjustments; }
+void fake_update_arrange() { ++render_adapter_probe.arrange_updates; }
+
+reaadr::reaper::TrackRegionApi fake_render_api()
+{
+  return {
+    fake_count_tracks,
+    fake_get_track,
+    fake_insert_track,
+    fake_get_set_track_string,
+    fake_get_track_value,
+    fake_set_track_value,
+    fake_count_project_markers,
+    fake_enum_project_markers,
+    fake_set_project_marker,
+    fake_add_project_marker,
+    fake_delete_project_marker,
+    fake_color_to_native,
+    fake_color_from_native,
+    fake_adjust_track_windows,
+    fake_update_arrange,
+  };
 }
 
 void check(bool condition, const std::string& message)
@@ -386,13 +551,12 @@ void test_session_builder()
       {"line", "First"}, {"status", "pending"}, {"script_id", "script-1"},
       {"script_name", "Episode 1"}, {"import_timestamp", "2026-08-29T12:00:00Z"},
       {"metadata", reaadr::core::serialize_metadata({{"Studio Note", "Keep"}})},
-      {"_reaadr_lane", "1"},
     },
     {
       {"id", "002"}, {"character", "Miyuki"}, {"start_time", "2"}, {"end_time", "3"},
       {"line", "Second"}, {"status", "recording"}, {"script_id", "script-1"},
       {"script_name", "Episode 1"}, {"import_timestamp", "2026-08-29T12:00:00Z"},
-      {"metadata", ""}, {"_reaadr_lane", "2"},
+      {"metadata", ""},
     },
   };
   reaadr::core::SessionBuildOptions options;
@@ -419,7 +583,7 @@ void test_session_builder()
         "transient lane fields do not leak into the canonical cue model");
   check(built.model.tracks[0].at("track_name") == "Miyuki Cues" &&
           built.model.tracks[2].at("track_name") == "Miyuki Cues #2",
-        "session builder names base and overlap lane tracks consistently");
+        "session builder derives and names overlap lanes without transient caller fields");
   check(static_cast<bool>(reaadr::core::parse_session_model(
           reaadr::core::serialize_session_model(built.model))),
         "a built session survives canonical model serialization");
@@ -567,6 +731,164 @@ void test_session_commit_service()
         "failed commit rollback publishes a fresh revision for observers");
 }
 
+void test_render_planner()
+{
+  reaadr::core::SessionModel previous;
+  previous.session = {{"session_id", "render-session"}};
+  previous.cues = {
+    {{"id", "A1"}, {"character", "Actor"}, {"start_time", "10"}, {"end_time", "12"},
+     {"region_id", "region-a1"}},
+    {{"id", "A2"}, {"character", "Actor"}, {"start_time", "12"}, {"end_time", "13"},
+     {"region_id", "region-a2"}},
+    {{"id", "OLD"}, {"character", "Actor"}, {"start_time", "20"}, {"end_time", "21"},
+     {"region_id", "region-old"}},
+  };
+  reaadr::core::SessionModel current = previous;
+  current.cues.pop_back();
+
+  const reaadr::core::RgbColor actor_color = {175, 122, 197, true};
+  reaadr::core::ProjectRenderState project;
+  project.tracks = {
+    {0, "cue_character", "Actor.lane1", "Cue - Actor", actor_color},
+    // A legacy exact-name track without ownership metadata may be adopted and
+    // tagged; an already-owned foreign track would not qualify for adoption.
+    {1, "", "", "Actor", {}},
+  };
+  project.regions = {
+    {10, "[ReaADR]:id=A1 ADR Cue A1 - Actor", 10.0, 12.0, actor_color},
+    {11, "[ReaADR]:id=A2 ADR Cue A2 - Actor", 11.5, 13.0, actor_color},
+    {12, "[ReaADR]:id=OLD ADR Cue OLD - Actor", 20.0, 21.0, actor_color},
+    {13, "[ReaADR] personal ADR Cue", 30.0, 31.0, actor_color},
+  };
+
+  const auto planned = reaadr::core::build_render_plan(current, &previous, project);
+  check(static_cast<bool>(planned), "native rendering plan succeeds for a valid canonical model");
+  check(planned.plan.track_mutations.size() == 3,
+        "render planning reuses exact ownership, adopts an unowned exact name, and creates overlap tracks");
+  check(planned.plan.track_mutations[0].kind == reaadr::core::RenderMutationKind::update &&
+          planned.plan.track_mutations[0].project_index == 1,
+        "legacy exact-name track adoption is an explicit metadata update");
+
+  int updated_regions = 0;
+  int removed_regions = 0;
+  bool removed_user_region = false;
+  for (const auto& mutation : planned.plan.region_mutations) {
+    if (mutation.kind == reaadr::core::RenderMutationKind::update) ++updated_regions;
+    if (mutation.kind == reaadr::core::RenderMutationKind::remove) {
+      ++removed_regions;
+      if (mutation.existing_id == 13) removed_user_region = true;
+    }
+  }
+  check(updated_regions == 1, "render planning updates only the region whose timing drifted");
+  check(removed_regions == 1 && !removed_user_region,
+        "stale cleanup removes only an exact region proven by the previous model");
+
+  const auto without_ownership_proof = reaadr::core::build_render_plan(current, nullptr, project);
+  check(without_ownership_proof && without_ownership_proof.plan.region_mutations.size() == 1,
+        "render planning never infers stale-region ownership from a broad name substring");
+
+  reaadr::core::SessionModel duplicate_regions = current;
+  duplicate_regions.cues.push_back({
+    {"id", "A1"}, {"character", "Actor"}, {"start_time", "40"}, {"end_time", "41"},
+  });
+  check(!reaadr::core::build_render_plan(duplicate_regions, nullptr, {}),
+        "render planning rejects duplicate generated region identities before mutation");
+
+  reaadr::core::SessionModel invalid_timing = current;
+  invalid_timing.cues[0]["start_time"] = "not-a-number";
+  check(!reaadr::core::build_render_plan(invalid_timing, nullptr, {}),
+        "render planning rejects invalid timing before any host call");
+
+  reaadr::core::SessionModel unrelated_previous = previous;
+  unrelated_previous.session["session_id"] = "another-session";
+  check(!reaadr::core::build_render_plan(current, &unrelated_previous, project),
+        "stale cleanup refuses ownership evidence from another session");
+
+  reaadr::core::SessionModel colliding_keys;
+  colliding_keys.session = {{"session_id", "unicode-key-session"}};
+  colliding_keys.cues = {
+    {{"id", "1"}, {"character", "雪"}, {"start_time", "1"}, {"end_time", "2"}},
+    {{"id", "2"}, {"character", "雨"}, {"start_time", "5"}, {"end_time", "6"}},
+  };
+  check(!reaadr::core::build_render_plan(colliding_keys, nullptr, {}),
+        "render planning reports legacy key collisions instead of merging distinct character tracks");
+}
+
+void test_track_region_adapter()
+{
+  constexpr int custom_color_flag = 0x1000000;
+  render_adapter_probe = {};
+  render_adapter_probe.tracks.push_back({{
+    {"P_NAME", "Old Name"},
+    {"P_EXT:ReaADR.role", "character"},
+    {"P_EXT:ReaADR.key", "Actor.lane1"},
+  }, fake_color_to_native(1, 2, 3) | custom_color_flag});
+  render_adapter_probe.regions.push_back({7, "Existing", 1.0, 2.0,
+    fake_color_to_native(1, 2, 3) | custom_color_flag});
+
+  reaadr::reaper::TrackRegionAdapter adapter(nullptr, fake_render_api());
+  const auto inspection = adapter.inspect();
+  check(inspection && inspection.state.tracks.size() == 1 && inspection.state.regions.size() == 1,
+        "REAPER adapter inspects owned tracks and regions through injected host calls");
+  check(inspection.state.tracks[0].color == reaadr::core::RgbColor{1, 2, 3, true},
+        "REAPER adapter converts platform-native colors back to domain RGB");
+
+  reaadr::core::RenderPlan plan;
+  plan.track_mutations.push_back({
+    reaadr::core::RenderMutationKind::update, 0,
+    {"character", "Actor.lane1", "Actor", {175, 122, 197, true}},
+  });
+  plan.track_mutations.push_back({
+    reaadr::core::RenderMutationKind::create, 0,
+    {"cue_character", "Actor.lane1", "Cue - Actor", {175, 122, 197, true}},
+  });
+  plan.region_mutations.push_back({
+    reaadr::core::RenderMutationKind::update, 7,
+    {"region-existing", "Existing", 1.5, 2.5, {175, 122, 197, true}},
+  });
+  plan.region_mutations.push_back({
+    reaadr::core::RenderMutationKind::create, -1,
+    {"region-new", "New", 3.0, 4.0, {72, 201, 176, true}},
+  });
+
+  transaction_probe = {};
+  const auto applied = reaadr::reaper::apply_render_plan_transactionally(
+    nullptr, fake_render_api(), fake_transaction_api(), plan, "ReaADR: Render native tracks and regions");
+  check(applied && applied.tracks_created == 1 && applied.tracks_updated == 1 &&
+          applied.regions_created == 1 && applied.regions_updated == 1,
+        "transactional adapter applies the complete planned track/region mutation set");
+  check(transaction_probe.begins == 1 && transaction_probe.ends == 1 && transaction_probe.refresh_balance == 0,
+        "successful rendering is one undo point with balanced UI refresh suppression");
+  check(render_adapter_probe.tracks[0].strings.at("P_NAME") == "Actor" &&
+          render_adapter_probe.tracks[1].strings.at("P_EXT:ReaADR.role") == "cue_character",
+        "track application writes names and explicit ownership metadata");
+  check(render_adapter_probe.window_adjustments == 1 && render_adapter_probe.arrange_updates == 1,
+        "successful rendering refreshes REAPER's track and arrange views once");
+
+  render_adapter_probe.fail_region_update = true;
+  transaction_probe = {};
+  transaction_probe.available_undo = "ReaADR: Failed render (failed)";
+  reaadr::core::RenderPlan failing_plan;
+  failing_plan.region_mutations.push_back({
+    reaadr::core::RenderMutationKind::update, 7,
+    {"region-existing", "Existing", 8.0, 9.0, {175, 122, 197, true}},
+  });
+  const auto failed = reaadr::reaper::apply_render_plan_transactionally(
+    nullptr, fake_render_api(), fake_transaction_api(), failing_plan, "ReaADR: Failed render");
+  check(!failed && transaction_probe.undos == 1,
+        "a host mutation failure marks and rolls back only the matching render transaction");
+  check(transaction_probe.refresh_balance == 0,
+        "failed rendering still balances UI refresh suppression");
+
+  reaadr::core::RenderPlan forbidden_track_delete;
+  forbidden_track_delete.track_mutations.push_back({
+    reaadr::core::RenderMutationKind::remove, 0,
+    {"character", "Actor.lane1", "Actor", {175, 122, 197, true}},
+  });
+  check(!adapter.apply(forbidden_track_delete),
+        "REAPER adapter refuses caller-supplied track deletion plans to protect recordings");
+}
+
 } // namespace
 
 int main()
@@ -583,6 +905,8 @@ int main()
   test_session_builder();
   test_session_cue_replacement();
   test_session_commit_service();
+  test_render_planner();
+  test_track_region_adapter();
   if (failures != 0) {
     std::cerr << failures << " native core test(s) failed\n";
     return EXIT_FAILURE;

@@ -1,13 +1,13 @@
 #include "session_builder.hpp"
 
 #include "domain_utils.hpp"
+#include "lane_assignment.hpp"
 
 #include <algorithm>
 #include <cmath>
 #include <cstdlib>
 #include <iomanip>
 #include <map>
-#include <limits>
 #include <sstream>
 #include <utility>
 
@@ -57,14 +57,6 @@ double number_or(const std::string& value, double fallback)
   return end && end != cleaned.c_str() && *end == '\0' ? parsed : fallback;
 }
 
-int lane_for_cue(const Fields& cue)
-{
-  const double parsed = number_or(field(cue, "_reaadr_lane"), 1.0);
-  if (!std::isfinite(parsed) || parsed < 1.0) return 1;
-  if (parsed >= static_cast<double>(std::numeric_limits<int>::max())) return std::numeric_limits<int>::max();
-  return static_cast<int>(parsed);
-}
-
 struct ScriptAccumulator {
   Fields fields;
   std::vector<std::string> characters;
@@ -90,6 +82,11 @@ SessionBuildResult build_session_model(const std::vector<Fields>& cues, const Se
     result.error = "A session ID is required to build the ADR Session Model.";
     return result;
   }
+  const LaneAssignmentResult lane_assignment = assign_character_lanes(cues, options.preroll_seconds);
+  if (!lane_assignment) {
+    result.error = lane_assignment.error;
+    return result;
+  }
 
   SessionModel& model = result.model;
   model.session = {{"session_id", options.session_id}, {"session_name", options.session_name}};
@@ -113,7 +110,8 @@ SessionBuildResult build_session_model(const std::vector<Fields>& cues, const Se
   std::vector<TrackAccumulator> tracks;
   std::map<std::string, std::size_t> track_indexes;
 
-  for (const Fields& source_cue : cues) {
+  for (std::size_t cue_index = 0; cue_index < cues.size(); ++cue_index) {
+    const Fields& source_cue = cues[cue_index];
     Fields cue = source_cue;
     std::string script_id = trim(field(cue, "script_id"));
     if (script_id.empty()) script_id = "manual";
@@ -161,7 +159,7 @@ SessionBuildResult build_session_model(const std::vector<Fields>& cues, const Se
     }
     ++characters[character_indexes[character_id]].cue_count;
 
-    const int lane = lane_for_cue(cue);
+    const int lane = lane_assignment.lanes[cue_index];
     const std::string lane_text = std::to_string(lane);
     const std::string cue_track_id = stable_id("track", {character_id, "cues", lane_text});
     const std::string dialogue_track_id = stable_id("track", {character_id, "dialogue", lane_text});
