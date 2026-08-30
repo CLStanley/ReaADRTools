@@ -42,6 +42,8 @@ cl /nologo /EHsc /O2 /LD /std:c++17 ^
   reaadr_core\domain_utils.cpp ^
   reaadr_core\cue_import.cpp ^
   reaadr_core\session_builder.cpp ^
+  reaadr_core\session_mutation.cpp ^
+  reaadr_core\session_commit.cpp ^
   reaadr_reaper\project_state.cpp ^
   reaadr_reaper\project_transaction.cpp ^
   /Fe"%BUILD_DIR%\%TARGET%" ^

@@ -3,6 +3,8 @@
 #include "reaadr_core/cue_import.hpp"
 #include "reaadr_core/model_repository.hpp"
 #include "reaadr_core/session_builder.hpp"
+#include "reaadr_core/session_commit.hpp"
+#include "reaadr_core/session_mutation.hpp"
 #include "reaadr_reaper/project_state.hpp"
 #include "reaadr_reaper/project_transaction.hpp"
 
@@ -30,12 +32,20 @@ public:
 
   bool write(const char* name_space, const char* key, const std::string& value) override
   {
-    values[std::string(name_space) + ":" + key] = value;
-    return writes_succeed;
+    const std::string full_key = std::string(name_space) + ":" + key;
+    if (!writes_succeed) return false;
+    if (!failed_write_key.empty() && full_key == failed_write_key && failed_writes_remaining != 0) {
+      if (failed_writes_remaining > 0) --failed_writes_remaining;
+      return false;
+    }
+    values[full_key] = value;
+    return true;
   }
 
   std::map<std::string, std::string> values;
   bool writes_succeed = true;
+  std::string failed_write_key;
+  int failed_writes_remaining = 0;
 };
 
 std::string project_state_value;
@@ -197,6 +207,42 @@ void test_model_repository()
   const auto loaded = repository.load();
   check(static_cast<bool>(loaded) && loaded.model.session_id() == "session_repository",
         "repository loads the saved canonical model");
+
+  check(repository.revision().revision == 0, "missing session revision defaults to zero");
+  const auto first_revision = repository.bump_revision();
+  check(first_revision && first_revision.revision == 1 &&
+          store.values.at("ReaADRTools:session_revision") == "1",
+        "repository persists a monotonic session revision");
+
+  const std::string saved_blob = store.values.at("ReaADRTools:adr_session_model_v1");
+  const auto snapshot = repository.create_snapshot("Native mutation", "2026-08-30T12:00:00Z");
+  check(snapshot && snapshot.snapshot.model_blob == saved_blob && snapshot.snapshot.revision == "1",
+        "repository snapshots the model and its revision together");
+  check(store.values.at("ReaADRTools:session_snapshot_last_label") == "Native mutation" &&
+          store.values.at("ReaADRTools:session_snapshot_last_timestamp") == "2026-08-30T12:00:00Z",
+        "repository persists snapshot audit fields");
+
+  store.values["ReaADRTools:adr_session_model_v1"] = "session\tsession_id=mutated";
+  store.values["ReaADRTools:adr_session_id"] = "mutated";
+  store.values["ReaADRTools:session_revision"] = "8";
+  const auto restored = repository.restore_snapshot(snapshot.snapshot);
+  check(restored && restored.revision == 9,
+        "snapshot restore publishes one revision newer than current state");
+  check(store.values.at("ReaADRTools:adr_session_model_v1") == saved_blob &&
+          store.values.at("ReaADRTools:adr_session_id") == "session_repository" &&
+          store.values.at("ReaADRTools:session_revision") == "9",
+        "snapshot restore synchronizes model intent, session identity, and revision");
+
+  reaadr::core::SessionSnapshot newer_snapshot = snapshot.snapshot;
+  newer_snapshot.revision = "20";
+  const auto newer_restore = repository.restore_snapshot(newer_snapshot);
+  check(newer_restore && newer_restore.revision == 21,
+        "snapshot restore remains monotonic when the snapshot revision is newer");
+
+  store.failed_write_key = "ReaADRTools:session_revision";
+  store.failed_writes_remaining = 1;
+  check(!repository.bump_revision(), "revision persistence failures are reported");
+  store.failed_write_key.clear();
 }
 
 void test_reaper_project_state_adapter()
@@ -210,6 +256,8 @@ void test_reaper_project_state_adapter()
         "REAPER extstate adapter grows its buffer for large models");
   check(store.write("ReaADRTools", "key", "written"), "REAPER extstate adapter writes values");
   check(project_state_written == "written", "REAPER extstate adapter forwards the complete value");
+  check(store.write("ReaADRTools", "key", ""),
+        "REAPER extstate adapter accepts a zero-sized deletion result");
 
   project_state_exists = false;
   check(store.read("ReaADRTools", "missing").error == reaadr::core::StateReadError::not_found,
@@ -381,6 +429,144 @@ void test_session_builder()
         "session builder refuses to create an anonymous source-of-truth model");
 }
 
+void test_session_cue_replacement()
+{
+  reaadr::core::SessionBuildOptions initial_options;
+  initial_options.session_id = "preserved-session";
+  initial_options.session_name = "Original Name";
+  initial_options.project_metadata = {{"client", "Original Client"}};
+  initial_options.frame_rate = "23.976";
+  initial_options.refresh_version = "12";
+  const auto initial = reaadr::core::build_session_model({{
+    {"id", "OLD-1"}, {"character", "Old Actor"}, {"start_time", "1"}, {"end_time", "2"},
+    {"line", "Old line"}, {"script_id", "old-script"}, {"script_name", "Old Script"},
+    {"metadata", ""},
+  }}, initial_options);
+  check(static_cast<bool>(initial), "replacement fixture builds its initial model");
+
+  reaadr::core::SessionModel existing = initial.model;
+  existing.state["active_script_id"] = "old-script";
+  existing.state["future_state"] = "preserve";
+  existing.dirty_flags["future_dirty"] = "preserve";
+  existing.unknown_records.push_back("future_record\tvalue=preserve");
+  existing.scripts[0]["metadata"] = "studio=preserve";
+  existing.characters[0]["metadata"] = "voice=preserve";
+  existing.imports[0]["file_hash"] = "original-import-hash";
+  existing.scripts.push_back({
+    {"script_id", "removed-script"}, {"script_name", "Historical"},
+    {"cue_count", "4"}, {"metadata", "history=preserve"},
+  });
+  existing.characters.push_back({
+    {"character_id", "removed-character"}, {"character_name", "Historical Actor"},
+    {"cue_count", "4"}, {"metadata", "history=preserve"},
+  });
+
+  const std::vector<reaadr::core::Fields> replacement_cues = {
+    {
+      {"id", "NEW-1"}, {"character", "Old Actor"}, {"start_time", "10"}, {"end_time", "11"},
+      {"line", "Updated line"}, {"script_id", "old-script"}, {"script_name", "Updated Script Name"},
+      {"metadata", ""},
+    },
+    {
+      {"id", "NEW-2"}, {"character", "New Actor"}, {"start_time", "12"}, {"end_time", "13"},
+      {"line", "New line"}, {"script_id", "new-script"}, {"script_name", "New Script"},
+      {"metadata", ""},
+    },
+  };
+  reaadr::core::CueReplacementOptions options;
+  options.build.session_id = "must-not-replace-existing-id";
+  options.build.frame_rate = "60";
+  options.last_operation = "native_replace";
+  const auto replacement = reaadr::core::replace_session_cues(&existing, replacement_cues, options);
+  check(static_cast<bool>(replacement), "native cue replacement succeeds");
+  const auto& model = replacement.model;
+  check(model.session_id() == "preserved-session" && model.session.at("session_name") == "Original Name",
+        "cue replacement preserves session identity and name");
+  check(model.project_metadata.at("client") == "Original Client" && model.timecode.at("frame_rate") == "23.976",
+        "cue replacement preserves project metadata and timecode");
+  check(model.state.at("active_script_id") == "old-script" && model.state.at("future_state") == "preserve" &&
+          model.state.at("last_operation") == "native_replace",
+        "cue replacement preserves runtime state while recording its operation");
+  check(model.dirty_flags.at("future_dirty") == "preserve" &&
+          model.dirty_flags.at("cues_modified") == "true",
+        "cue replacement preserves future dirty flags and marks cues modified");
+  check(model.unknown_records == existing.unknown_records,
+        "cue replacement preserves unknown future model records");
+  check(model.cues.size() == 2 && model.regions.size() == 2 && model.tracks.size() == 4,
+        "cue replacement completely rebuilds cue-derived collections");
+  check(model.scripts[0].at("metadata") == "studio=preserve" &&
+          model.scripts[0].at("script_name") == "Updated Script Name" &&
+          model.scripts[0].at("cue_count") == "1",
+        "cue replacement merges derived script fields without erasing metadata");
+  check(model.scripts[1].at("cue_count") == "0" && model.scripts[1].at("metadata") == "history=preserve",
+        "historical scripts remain available with a zero active cue count");
+  check(model.characters[1].at("cue_count") == "0" && model.characters[1].at("metadata") == "history=preserve",
+        "historical characters remain available with preserved metadata");
+  check(model.imports[0].at("file_hash") == "original-import-hash" && model.imports.size() == 2,
+        "existing import identity wins while new script history is appended");
+  check(replacement_cues[0].count("character_id") == 0,
+        "cue replacement does not mutate caller-owned cue rows");
+
+  reaadr::core::CueReplacementOptions new_session_options;
+  new_session_options.build.session_id = "new-session";
+  const auto new_session = reaadr::core::replace_session_cues(nullptr, replacement_cues, new_session_options);
+  check(new_session && new_session.model.session_id() == "new-session",
+        "cue replacement can construct the initial model when no session exists");
+
+  const auto emptied = reaadr::core::replace_session_cues(&existing, {}, options);
+  check(emptied && emptied.model.cues.empty() && emptied.model.tracks.empty() && emptied.model.regions.empty(),
+        "cue replacement preserves a valid model-backed session with zero cues");
+  check(emptied.model.scripts[0].at("cue_count") == "0" &&
+          emptied.model.characters[0].at("cue_count") == "0",
+        "empty replacement retains historical records with zero active cue counts");
+}
+
+void test_session_commit_service()
+{
+  FakeProjectStateStore store;
+  reaadr::core::SessionModelRepository repository(store);
+  reaadr::core::SessionBuildOptions initial_options;
+  initial_options.session_id = "commit-session";
+  const auto initial = reaadr::core::build_session_model({{
+    {"id", "1"}, {"character", "Actor"}, {"start_time", "0"}, {"end_time", "1"},
+    {"line", "Before"}, {"script_id", "script"}, {"metadata", ""},
+  }}, initial_options);
+  check(repository.save(initial.model), "commit fixture saves its initial model");
+  store.values["ReaADRTools:session_revision"] = "5";
+
+  reaadr::core::SessionCommitOptions options;
+  options.replacement.build.session_id = "ignored-for-existing-session";
+  options.replacement.last_operation = "native_commit";
+  options.snapshot_label = "Native commit test";
+  options.utc_timestamp = "2026-08-30T13:00:00Z";
+  const std::vector<reaadr::core::Fields> updated_cues = {{
+    {"id", "2"}, {"character", "Actor"}, {"start_time", "2"}, {"end_time", "3"},
+    {"line", "After"}, {"script_id", "script"}, {"metadata", ""},
+  }};
+
+  const auto committed = reaadr::core::commit_session_cues(repository, updated_cues, options);
+  check(committed && committed.revision == 6 && committed.model.cues[0].at("line") == "After",
+        "model-only commit snapshots, replaces, saves, and bumps revision");
+  check(store.values.at("ReaADRTools:session_snapshot_last_label") == "Native commit test",
+        "model-only commit persists its safety snapshot before mutation");
+
+  const std::string committed_blob = store.values.at("ReaADRTools:adr_session_model_v1");
+  const std::string committed_id = store.values.at("ReaADRTools:adr_session_id");
+  store.failed_write_key = "ReaADRTools:session_revision";
+  store.failed_writes_remaining = 1;
+  const auto failed = reaadr::core::commit_session_cues(repository, {{
+    {"id", "3"}, {"character", "Actor"}, {"start_time", "4"}, {"end_time", "5"},
+    {"line", "Must roll back"}, {"script_id", "script"}, {"metadata", ""},
+  }}, options);
+  check(!failed && failed.rolled_back,
+        "a revision failure triggers model snapshot rollback");
+  check(store.values.at("ReaADRTools:adr_session_model_v1") == committed_blob &&
+          store.values.at("ReaADRTools:adr_session_id") == committed_id,
+        "failed commit rollback restores the prior model and compatibility ID");
+  check(store.values.at("ReaADRTools:session_revision") == "7",
+        "failed commit rollback publishes a fresh revision for observers");
+}
+
 } // namespace
 
 int main()
@@ -395,6 +581,8 @@ int main()
   test_domain_utilities();
   test_cue_import();
   test_session_builder();
+  test_session_cue_replacement();
+  test_session_commit_service();
   if (failures != 0) {
     std::cerr << failures << " native core test(s) failed\n";
     return EXIT_FAILURE;

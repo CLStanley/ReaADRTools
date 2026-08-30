@@ -315,11 +315,13 @@ void run_validate_session_action()
   }
 
   const reaadr::core::SessionModel& model = result.model;
+  const reaadr::core::RevisionResult revision = repository.revision();
   const auto name = model.session.find("session_name");
   std::ostringstream summary;
   summary << "The ADR Session Model is valid.\n\n";
   summary << "Session ID: " << model.session_id() << '\n';
   if (name != model.session.end() && !name->second.empty()) summary << "Session: " << name->second << '\n';
+  if (revision) summary << "Revision: " << revision.revision << '\n';
   summary << "Scripts: " << model.scripts.size() << '\n';
   summary << "Characters: " << model.characters.size() << '\n';
   summary << "Cues: " << model.cues.size() << '\n';

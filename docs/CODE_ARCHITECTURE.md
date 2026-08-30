@@ -45,11 +45,14 @@ project-model access and `domain_utils.*` for status, stable-ID, and timecode
 rules. REAPER-specific extstate and transaction adapters live under
 `extension/reaadr_reaper/` so the domain modules remain host-independent.
 
-Native import work now begins in `cue_import.*`, which parses delimited text and
+Native import work continues in `cue_import.*`, which parses delimited text and
 maps it into cue records, and `session_builder.*`, which derives every
-cue-backed model collection. These modules are intentionally not project
-writers yet; Lua remains the single import writer until native cue replacement,
-transactions, and the import UI are ready for one coordinated cutover.
+cue-backed model collection. `session_mutation.*` preserves the model envelope
+while replacing those derived collections, and `session_commit.*` provides the
+model-only snapshot/save/revision/rollback sequence. These services are not
+invoked by the UI yet; Lua remains the single import writer until native REAPER
+rendering, event publication, and the import UI are ready for one coordinated
+cutover.
 
 ## Lua Application Layer
 
@@ -372,6 +375,12 @@ This is currently a last-operation model snapshot, not a snapshot history or
 crash-recovery system. Full recovery work should add named restore points,
 snapshot diffing, restore UI, autosave/crash detection, and full-sync-after-
 restore behavior.
+
+The native equivalents in `model_repository.*` and `session_commit.*` preserve
+the same last-operation snapshot boundary. Native rollback additionally keeps
+the compatibility `adr_session_id` index synchronized with the restored model.
+They intentionally make no claim to restore rendered REAPER objects; that must
+remain the responsibility of the outer transaction and renderer.
 
 Destructive operations must remain scoped and confirmed. They should delete
 only ReaADR-owned generated objects, identified by names or extstate such as

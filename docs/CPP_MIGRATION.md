@@ -77,8 +77,11 @@ Exit condition: import and model mutation no longer require Lua.
 Implementation status: status/timecode/stable-ID utilities, CSV/TSV text
 inspection, column aliases and mapping, row validation, metadata retention, and
 complete cue-derived session construction are implemented in the native domain
-core. They are test-covered but are not project writers yet. Cue replacement,
-snapshots, file-selection UI, and the import cutover remain pending.
+core. Cue replacement now preserves the existing session envelope while
+rebuilding cue-derived collections, and the model-only commit service performs
+snapshot/save/revision/rollback sequencing. These paths are test-covered but
+are not invoked by the UI yet. XLSX unification, event publication,
+file-selection UI, REAPER rendering, and the import cutover remain pending.
 
 ### Stage 3: REAPER rendering and recording workflows
 
@@ -125,6 +128,10 @@ The initial target-architecture modules now include:
   cue validation, and retention of unmapped studio metadata.
 - `extension/reaadr_core/session_builder.*`: construction of scripts,
   characters, cues, lane tracks, regions, and import identity from cue rows.
+- `extension/reaadr_core/session_mutation.*`: cue replacement that retains
+  session identity, metadata, history, runtime state, and unknown records.
+- `extension/reaadr_core/session_commit.*`: model-only snapshot, persistence,
+  monotonic revision, and rollback orchestration.
 - `extension/reaadr_reaper/project_state.*`: dynamically sized REAPER project
   extstate access.
 - `extension/reaadr_reaper/project_transaction.*`: nested-safe undo and UI

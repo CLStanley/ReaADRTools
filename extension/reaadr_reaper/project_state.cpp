@@ -35,7 +35,9 @@ core::StateReadResult ProjectStateStore::read(const char* name_space, const char
 bool ProjectStateStore::write(const char* name_space, const char* key, const std::string& value)
 {
   if (!api_.set) return false;
-  return api_.set(project_, name_space, key, value.c_str()) > 0;
+  // SetProjExtState returns the namespace's resulting size. Zero is a valid
+  // result when deleting an empty/last value, so only negative values fail.
+  return api_.set(project_, name_space, key, value.c_str()) >= 0;
 }
 
 } // namespace reaadr::reaper
