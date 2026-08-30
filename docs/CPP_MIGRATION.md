@@ -107,9 +107,13 @@ session-render application service coordinates WAV validation, model commit,
 render planning, artifact application, project Undo, and post-Undo model
 snapshot restoration. Successful commits publish Lua-compatible persistent
 events without treating an observational logging failure as a failed render.
+Native character-filter state, lane-aware planning, and typed mute/region-
+visibility adapters now preserve active recording-pass filters after a full
+render. Filter mutations revalidate track metadata and exact model-derived
+region identity before writing, and participate in the same outer rollback.
 The adapters and coordinator are test-covered but are not yet public writers;
-filtering, overlays, and an in-REAPER smoke test remain before synchronization
-cutover.
+the character-filter UI cutover, overlays, and an in-REAPER smoke test remain
+before synchronization cutover.
 
 ### Stage 4: native UI and Lua removal
 
@@ -159,6 +163,8 @@ The initial target-architecture modules now include:
   synthesis and atomic WAV publication.
 - `extension/reaadr_core/event_log.*`: monotonic event IDs, Lua-compatible
   event-line encoding, and bounded project history shared across both runtimes.
+- `extension/reaadr_core/character_filter.*`: compatible project filter state,
+  character/lane selection rules, and ownership-scoped mutation planning.
 - `extension/reaadr_reaper/project_state.*`: dynamically sized REAPER project
   extstate access.
 - `extension/reaadr_reaper/project_transaction.*`: nested-safe undo and UI
@@ -172,6 +178,8 @@ The initial target-architecture modules now include:
   coordination of canonical model commits and visible project rendering, with
   snapshot recovery after failed REAPER transactions and success-event
   publication.
+- `extension/reaadr_reaper/character_filter_adapter.*`: verified track mute and
+  generated-region visibility inspection/application under native Undo.
 
 `make -C extension test` runs these modules without the REAPER SDK; normal
 extension builds compile the same sources into the plugin.

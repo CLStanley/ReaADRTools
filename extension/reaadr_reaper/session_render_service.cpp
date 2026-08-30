@@ -47,6 +47,15 @@ SessionRenderResult SessionRenderService::commit_and_render(
     result.error = core::session_load_error_message(loaded);
     return result;
   }
+  core::CharacterFilterState filter_state;
+  if (options.apply_character_filter) {
+    const core::CharacterFilterLoadResult loaded_filter = character_filter_.load();
+    if (!loaded_filter) {
+      result.error = loaded_filter.error;
+      return result;
+    }
+    filter_state = loaded_filter.state;
+  }
 
   // Generate and validate the deterministic media asset before changing the
   // model or project. Existing sessions retain their canonical timecode during
@@ -87,6 +96,9 @@ SessionRenderResult SessionRenderService::commit_and_render(
   bool restore_model_after_project_rollback = false;
   {
     ProjectTransaction transaction(project_, transaction_api_, options.undo_description);
+    // Keep the full model/render/filter sequence visually atomic. Narrow
+    // adapters may add nested suppression scopes, which safely join this one.
+    UiRefreshScope refresh(transaction_api_.prevent_ui_refresh);
     result.commit = core::commit_session_cues(repository_, cues, options.commit);
     if (!result.commit) {
       result.error = result.commit.error;
@@ -111,37 +123,71 @@ SessionRenderResult SessionRenderService::commit_and_render(
           result.error = result.render.error;
           restore_model_after_project_rollback = true;
           transaction.mark_failed();
-        } else if (options.publish_events) {
-          core::EventPublishOptions event_options = options.event;
-          if (event_options.utc_timestamp.empty()) {
-            event_options.utc_timestamp = options.commit.utc_timestamp;
+        } else {
+          bool filter_applied = true;
+          if (options.apply_character_filter) {
+            const CharacterFilterInspectionResult filter_inspection =
+              inspect_character_filter_project(project_, track_region_api_, ruler_lane_api_);
+            if (!filter_inspection) {
+              result.error = filter_inspection.error;
+              filter_applied = false;
+            } else {
+              const core::CharacterFilterPlanResult filter_plan =
+                core::build_character_filter_plan(
+                  result.commit.model, filter_state, filter_inspection.state,
+                  options.commit.replacement.build.preroll_seconds);
+              if (!filter_plan) {
+                result.error = filter_plan.error;
+                filter_applied = false;
+              } else {
+                result.character_filter_plan = filter_plan.plan;
+                result.character_filter = apply_character_filter_plan_transactionally(
+                  project_, track_region_api_, ruler_lane_api_, transaction_api_,
+                  result.character_filter_plan, options.undo_description);
+                if (!result.character_filter) {
+                  result.error = result.character_filter.error;
+                  filter_applied = false;
+                }
+              }
+            }
+            if (!filter_applied) {
+              restore_model_after_project_rollback = true;
+              transaction.mark_failed();
+            }
           }
-          event_options.session_id = result.commit.model.session_id();
-          if (event_options.source.empty()) event_options.source = "native_session_render";
 
-          const core::Fields saved_payload = {
-            {"cue_count", std::to_string(result.commit.model.cues.size())},
-            {"operation", options.commit.replacement.last_operation},
-            {"revision", std::to_string(result.commit.revision)},
-          };
-          result.events.push_back(event_log_.publish("SessionSaved", saved_payload, event_options));
-          if (!result.events.back()) {
-            append_event_warning(result, "SessionSaved event publication failed: " +
-              result.events.back().error);
-          }
+          if (filter_applied && options.publish_events) {
+            core::EventPublishOptions event_options = options.event;
+            if (event_options.utc_timestamp.empty()) {
+              event_options.utc_timestamp = options.commit.utc_timestamp;
+            }
+            event_options.session_id = result.commit.model.session_id();
+            if (event_options.source.empty()) event_options.source = "native_session_render";
 
-          const core::Fields sync_payload = {
-            {"cue_audio_created", std::to_string(result.render.cue_audio.items_created)},
-            {"cue_audio_updated", std::to_string(result.render.cue_audio.items_updated)},
-            {"cue_count", std::to_string(result.commit.model.cues.size())},
-            {"regions_created", std::to_string(result.render.tracks_and_regions.regions_created)},
-            {"regions_updated", std::to_string(result.render.tracks_and_regions.regions_updated)},
-            {"tracks_created", std::to_string(result.render.tracks_and_regions.tracks_created)},
-          };
-          result.events.push_back(event_log_.publish("SyncFull", sync_payload, event_options));
-          if (!result.events.back()) {
-            append_event_warning(result, "SyncFull event publication failed: " +
-              result.events.back().error);
+            const core::Fields saved_payload = {
+              {"cue_count", std::to_string(result.commit.model.cues.size())},
+              {"operation", options.commit.replacement.last_operation},
+              {"revision", std::to_string(result.commit.revision)},
+            };
+            result.events.push_back(event_log_.publish("SessionSaved", saved_payload, event_options));
+            if (!result.events.back()) {
+              append_event_warning(result, "SessionSaved event publication failed: " +
+                result.events.back().error);
+            }
+
+            const core::Fields sync_payload = {
+              {"cue_audio_created", std::to_string(result.render.cue_audio.items_created)},
+              {"cue_audio_updated", std::to_string(result.render.cue_audio.items_updated)},
+              {"cue_count", std::to_string(result.commit.model.cues.size())},
+              {"regions_created", std::to_string(result.render.tracks_and_regions.regions_created)},
+              {"regions_updated", std::to_string(result.render.tracks_and_regions.regions_updated)},
+              {"tracks_created", std::to_string(result.render.tracks_and_regions.tracks_created)},
+            };
+            result.events.push_back(event_log_.publish("SyncFull", sync_payload, event_options));
+            if (!result.events.back()) {
+              append_event_warning(result, "SyncFull event publication failed: " +
+                result.events.back().error);
+            }
           }
         }
       }

@@ -3,6 +3,7 @@
 #include "reaadr_core/cue_wav.hpp"
 #include "reaadr_core/event_log.hpp"
 #include "reaadr_core/session_commit.hpp"
+#include "character_filter_adapter.hpp"
 #include "render_artifact_adapter.hpp"
 
 #include <string>
@@ -19,6 +20,7 @@ struct SessionRenderOptions {
   core::EventPublishOptions event;
   std::string cue_audio_path;
   std::string undo_description = "ReaADR: Commit and render session cues";
+  bool apply_character_filter = true;
   bool publish_events = true;
 };
 
@@ -26,6 +28,8 @@ struct SessionRenderResult {
   core::SessionCommitResult commit;
   core::RenderPlan plan;
   CompleteRenderApplyResult render;
+  core::CharacterFilterPlan character_filter_plan;
+  CharacterFilterApplyResult character_filter;
   core::CueWavResult cue_wav;
   std::vector<core::EventPublishResult> events;
   // Event history is observational and must never turn an already successful
@@ -45,6 +49,7 @@ class SessionRenderService {
 public:
   SessionRenderService(core::SessionModelRepository& repository,
                        core::EventLogRepository& event_log,
+                       core::CharacterFilterRepository& character_filter,
                        ReaProject* project,
                        TrackRegionApi track_region_api,
                        RulerLaneApi ruler_lane_api,
@@ -52,6 +57,7 @@ public:
                        TransactionApi transaction_api)
     : repository_(repository),
       event_log_(event_log),
+      character_filter_(character_filter),
       project_(project),
       track_region_api_(track_region_api),
       ruler_lane_api_(ruler_lane_api),
@@ -66,6 +72,7 @@ public:
 private:
   core::SessionModelRepository& repository_;
   core::EventLogRepository& event_log_;
+  core::CharacterFilterRepository& character_filter_;
   ReaProject* project_ = nullptr;
   TrackRegionApi track_region_api_;
   RulerLaneApi ruler_lane_api_;

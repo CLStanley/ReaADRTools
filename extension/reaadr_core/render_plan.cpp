@@ -1,4 +1,5 @@
 #include "render_plan.hpp"
+#include "domain_utils.hpp"
 #include "lane_assignment.hpp"
 
 #include <algorithm>
@@ -36,47 +37,6 @@ bool parse_number(const std::string& value, double& output)
   char* end = nullptr;
   output = std::strtod(cleaned.c_str(), &end);
   return !cleaned.empty() && end && end != cleaned.c_str() && *end == '\0' && std::isfinite(output);
-}
-
-std::string sanitize_token(const std::string& value)
-{
-  const std::string cleaned = trim_ascii(value);
-  std::string result;
-  bool in_whitespace = false;
-  for (unsigned char byte : cleaned) {
-    const bool whitespace =
-      byte == ' ' || byte == '\t' || byte == '\n' || byte == '\r' || byte == '\f' || byte == '\v';
-    if (whitespace) {
-      if (!result.empty() && !in_whitespace) result.push_back('_');
-      in_whitespace = true;
-      continue;
-    }
-    in_whitespace = false;
-    // Lua's %w is ASCII in the REAPER environment used by this project. UTF-8
-    // bytes are intentionally omitted to retain existing generated keys.
-    const bool alphanumeric =
-      (byte >= 'a' && byte <= 'z') || (byte >= 'A' && byte <= 'Z') || (byte >= '0' && byte <= '9');
-    if (alphanumeric || byte == '_' || byte == '-' || byte == '.') result.push_back(static_cast<char>(byte));
-  }
-  while (!result.empty() && result.back() == '_') result.pop_back();
-  return result;
-}
-
-std::string character_name(const Fields& cue)
-{
-  const std::string name = trim_ascii(field(cue, "character"));
-  return name.empty() ? "Unassigned" : name;
-}
-
-std::string cue_key(const Fields& cue)
-{
-  const std::string id = sanitize_token(field(cue, "id"));
-  return id.empty() ? field(cue, "source_line") : id;
-}
-
-std::string region_name(const Fields& cue)
-{
-  return "[ReaADR]:id=" + cue_key(cue) + " ADR Cue " + field(cue, "id") + " - " + character_name(cue);
 }
 
 RgbColor character_color(const std::string& character)
@@ -145,12 +105,30 @@ std::set<std::string> generated_region_names(const SessionModel& model)
   for (const Fields& cue : model.cues) {
     // An incomplete historical cue is not sufficient proof that a similarly
     // named project region belongs to ReaADR.
-    if (!cue_key(cue).empty()) names.insert(region_name(cue));
+    if (!render_cue_key(cue).empty()) names.insert(render_region_name(cue));
   }
   return names;
 }
 
 } // namespace
+
+std::string render_character_name(const Fields& cue)
+{
+  const std::string name = trim_ascii(field(cue, "character"));
+  return name.empty() ? "Unassigned" : name;
+}
+
+std::string render_cue_key(const Fields& cue)
+{
+  const std::string id = sanitize_token(field(cue, "id"));
+  return id.empty() ? field(cue, "source_line") : id;
+}
+
+std::string render_region_name(const Fields& cue)
+{
+  return "[ReaADR]:id=" + render_cue_key(cue) + " ADR Cue " + field(cue, "id") + " - " +
+    render_character_name(cue);
+}
 
 bool operator==(const RgbColor& left, const RgbColor& right)
 {
@@ -204,14 +182,14 @@ RenderPlanResult build_render_plan(const SessionModel& model,
     const Fields& cue = model.cues[index];
     CueRenderInfo info;
     info.cue = &cue;
-    info.character = character_name(cue);
+    info.character = render_character_name(cue);
     if (!parse_number(field(cue, "start_time"), info.start_time) ||
         !parse_number(field(cue, "end_time"), info.end_time) ||
         info.end_time < info.start_time) {
       result.error = "Cue " + field(cue, "id") + " has invalid render timing.";
       return result;
     }
-    if (cue_key(cue).empty()) {
+    if (render_cue_key(cue).empty()) {
       result.error = "Cue " + field(cue, "id") + " has no stable render key.";
       return result;
     }
@@ -255,7 +233,7 @@ RenderPlanResult build_render_plan(const SessionModel& model,
 
     DesiredRegion region;
     region.model_region_id = field(*info.cue, "region_id");
-    region.name = region_name(*info.cue);
+    region.name = render_region_name(*info.cue);
     region.start_time = info.start_time;
     region.end_time = info.end_time;
     region.color = color;
@@ -267,7 +245,7 @@ RenderPlanResult build_render_plan(const SessionModel& model,
 
     if (render_cue_audio) {
       DesiredCueAudioItem item;
-      item.cue_key = cue_key(*info.cue);
+      item.cue_key = render_cue_key(*info.cue);
       item.target_track_key = key;
       item.source_path = options.cue_audio_path;
       item.take_name = "[ReaADR]:id=" + item.cue_key + " Cue Audio " +
@@ -311,7 +289,7 @@ RenderPlanResult build_render_plan(const SessionModel& model,
         }
         desired_lane_index += lane_count;
       }
-      const std::string name = region_name(*info.cue);
+      const std::string name = render_region_name(*info.cue);
       const auto found = std::find_if(existing.region_lanes.begin(), existing.region_lanes.end(),
         [&](const ExistingRegionLane& assignment) { return assignment.region_name == name; });
       if (found == existing.region_lanes.end() || found->lane_index != desired_lane_index) {
@@ -413,7 +391,7 @@ RenderPlanResult build_render_plan(const SessionModel& model,
     std::set<std::string> previously_owned_keys;
     if (previous_model) {
       for (const Fields& cue : previous_model->cues) {
-        const std::string key = cue_key(cue);
+        const std::string key = render_cue_key(cue);
         if (!key.empty()) previously_owned_keys.insert(key);
       }
     }

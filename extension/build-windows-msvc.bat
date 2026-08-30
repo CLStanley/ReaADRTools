@@ -48,11 +48,13 @@ cl /nologo /EHsc /O2 /LD /std:c++17 ^
   reaadr_core\render_plan.cpp ^
   reaadr_core\cue_wav.cpp ^
   reaadr_core\event_log.cpp ^
+  reaadr_core\character_filter.cpp ^
   reaadr_reaper\project_state.cpp ^
   reaadr_reaper\project_transaction.cpp ^
   reaadr_reaper\track_region_adapter.cpp ^
   reaadr_reaper\render_artifact_adapter.cpp ^
   reaadr_reaper\session_render_service.cpp ^
+  reaadr_reaper\character_filter_adapter.cpp ^
   /Fe"%BUILD_DIR%\%TARGET%" ^
   /link user32.lib /DEF:reaper_reaadr.def
 

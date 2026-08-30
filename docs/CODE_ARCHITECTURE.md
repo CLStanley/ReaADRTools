@@ -61,9 +61,12 @@ inside one rollback-aware application workflow. `event_log.*` publishes that
 workflow's `SessionSaved` and `SyncFull` results to the same bounded project
 history read by Lua. Publication warnings remain separate from commit failures
 so callers do not retry an operation that already changed the model and
-project. These services are not invoked by the UI yet; Lua remains the single
-import/render writer until filtering, overlays, and the import UI are ready for
-one coordinated cutover.
+project. `character_filter.*` and `character_filter_adapter.*` load the existing
+Lua-compatible selection, derive lane-aware mutations from the canonical model,
+and reapply owned track mute and generated-region visibility state before the
+outer render transaction completes. These services are not invoked directly by
+the UI yet; Lua remains the single import/render writer until the filter UI,
+overlays, and import UI are ready for coordinated cutover.
 
 ## Lua Application Layer
 

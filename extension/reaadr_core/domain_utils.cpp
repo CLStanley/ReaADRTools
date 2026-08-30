@@ -108,6 +108,32 @@ std::string stable_id(const std::string& prefix, const std::vector<std::string>&
   return output.str();
 }
 
+std::string sanitize_token(const std::string& value)
+{
+  const std::string cleaned = trim_ascii(value);
+  std::string result;
+  bool in_whitespace = false;
+  for (unsigned char byte : cleaned) {
+    const bool whitespace =
+      byte == ' ' || byte == '\t' || byte == '\n' || byte == '\r' || byte == '\f' || byte == '\v';
+    if (whitespace) {
+      if (!result.empty() && !in_whitespace) result.push_back('_');
+      in_whitespace = true;
+      continue;
+    }
+    in_whitespace = false;
+    // Lua's %w is ASCII in the REAPER environment used by this project.
+    const bool alphanumeric =
+      (byte >= 'a' && byte <= 'z') || (byte >= 'A' && byte <= 'Z') ||
+      (byte >= '0' && byte <= '9');
+    if (alphanumeric || byte == '_' || byte == '-' || byte == '.') {
+      result.push_back(static_cast<char>(byte));
+    }
+  }
+  while (!result.empty() && result.back() == '_') result.pop_back();
+  return result;
+}
+
 TimecodeParseResult parse_timecode(const std::string& value, double frame_rate)
 {
   const std::string trimmed = trim_ascii(value);

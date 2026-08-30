@@ -15,6 +15,11 @@ std::string normalize_status(const std::string& status);
 // import snapshots. Parts are joined with '|', matching Lua's stable_id helper.
 std::string stable_id(const std::string& prefix, const std::vector<std::string>& parts);
 
+// Produces the ASCII ownership token used by cue IDs, character track keys,
+// and character filters. This intentionally mirrors Lua's sanitize_token and
+// is shared so those independently rendered artifacts cannot drift.
+std::string sanitize_token(const std::string& value);
+
 struct TimecodeParseResult {
   std::optional<double> seconds;
   std::string error;

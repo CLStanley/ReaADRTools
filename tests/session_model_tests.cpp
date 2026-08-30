@@ -130,6 +130,7 @@ struct FakeTrack {
   std::map<std::string, std::string> strings;
   int color = 0;
   std::vector<std::unique_ptr<FakeItem>> items;
+  bool muted = false;
 };
 
 struct FakeRegion {
@@ -139,6 +140,7 @@ struct FakeRegion {
   double end_time = 0.0;
   int color = 0;
   int ruler_lane = 0;
+  bool hidden = false;
 };
 
 struct FakeRulerLane {
@@ -154,6 +156,8 @@ struct RenderAdapterProbe {
   std::map<std::string, double> source_lengths;
   std::set<FakeSource*> live_sources;
   bool fail_region_update = false;
+  bool fail_track_mute = false;
+  bool fail_region_hidden = false;
   bool fail_item_value = false;
   int next_region_id = 100;
   int window_adjustments = 0;
@@ -208,14 +212,26 @@ bool fake_get_set_track_string(MediaTrack* track, const char* parameter, char* v
 
 double fake_get_track_value(MediaTrack* track, const char* parameter)
 {
-  return track && std::string(parameter ? parameter : "") == "I_CUSTOMCOLOR" ? fake_track(track)->color : 0.0;
+  if (!track) return 0.0;
+  const std::string name = parameter ? parameter : "";
+  if (name == "I_CUSTOMCOLOR") return fake_track(track)->color;
+  if (name == "B_MUTE") return fake_track(track)->muted ? 1.0 : 0.0;
+  return 0.0;
 }
 
 bool fake_set_track_value(MediaTrack* track, const char* parameter, double value)
 {
-  if (!track || std::string(parameter ? parameter : "") != "I_CUSTOMCOLOR") return false;
-  fake_track(track)->color = static_cast<int>(value);
-  return true;
+  if (!track) return false;
+  const std::string name = parameter ? parameter : "";
+  if (name == "I_CUSTOMCOLOR") {
+    fake_track(track)->color = static_cast<int>(value);
+    return true;
+  }
+  if (name == "B_MUTE" && !render_adapter_probe.fail_track_mute) {
+    fake_track(track)->muted = value != 0.0;
+    return true;
+  }
+  return false;
 }
 
 int fake_count_project_markers(ReaProject*, int* markers, int* regions)
@@ -353,15 +369,26 @@ ProjectMarker* fake_get_region_or_marker(ReaProject*, int index, const char*)
 
 double fake_get_region_value(ReaProject*, ProjectMarker* marker, const char* parameter)
 {
-  if (!marker || std::string(parameter ? parameter : "") != "I_LANENUMBER") return 0.0;
-  return reinterpret_cast<FakeRegion*>(marker)->ruler_lane;
+  if (!marker) return 0.0;
+  const std::string name = parameter ? parameter : "";
+  if (name == "I_LANENUMBER") return reinterpret_cast<FakeRegion*>(marker)->ruler_lane;
+  if (name == "B_HIDDEN") return reinterpret_cast<FakeRegion*>(marker)->hidden ? 1.0 : 0.0;
+  return 0.0;
 }
 
 double fake_set_region_value(ReaProject*, ProjectMarker* marker, const char* parameter, double value)
 {
-  if (!marker || std::string(parameter ? parameter : "") != "I_LANENUMBER") return 0.0;
-  reinterpret_cast<FakeRegion*>(marker)->ruler_lane = static_cast<int>(value);
-  return value;
+  if (!marker) return 0.0;
+  const std::string name = parameter ? parameter : "";
+  if (name == "I_LANENUMBER") {
+    reinterpret_cast<FakeRegion*>(marker)->ruler_lane = static_cast<int>(value);
+    return value;
+  }
+  if (name == "B_HIDDEN" && !render_adapter_probe.fail_region_hidden) {
+    reinterpret_cast<FakeRegion*>(marker)->hidden = value != 0.0;
+    return value;
+  }
+  return 0.0;
 }
 
 reaadr::reaper::RulerLaneApi fake_ruler_lane_api()
@@ -1187,6 +1214,96 @@ void test_render_planner()
         "render planning reports legacy key collisions instead of merging distinct character tracks");
 }
 
+void test_character_filter()
+{
+  check(reaadr::core::sanitize_token("  Lead Actor! ") == "Lead_Actor" &&
+          reaadr::core::character_filter_key("  Lead Actor! ") == "lead_actor" &&
+          reaadr::core::character_filter_target_key("Lead Actor", 2) == "lead_actor.lane2",
+        "native character-filter keys share Lua-compatible ownership sanitization");
+  check(reaadr::core::encode_character_filter_tokens({"lead_actor.lane2", "beta"}) ==
+          "beta,lead_actor.lane2",
+        "native character-filter encoding sorts the same persisted tokens as Lua");
+
+  FakeProjectStateStore store;
+  reaadr::core::CharacterFilterRepository repository(store);
+  const auto selected = reaadr::core::parse_character_filter_state("lead_actor.lane2", true);
+  check(repository.save(selected), "native character-filter state persists through the project repository");
+  const auto loaded = repository.load();
+  check(loaded && loaded.state.enabled() && loaded.state.hide_inactive_regions &&
+          reaadr::core::character_lane_is_active(loaded.state, "Lead Actor", 2) &&
+          !reaadr::core::character_lane_is_active(loaded.state, "Lead Actor", 1),
+        "native character-filter repository retains lane-specific selection semantics");
+
+  reaadr::core::SessionBuildOptions build_options;
+  build_options.session_id = "filter-session";
+  build_options.preroll_seconds = 3.0;
+  const auto built = reaadr::core::build_session_model({
+    {{"id", "A1"}, {"character", "Lead Actor"}, {"start_time", "10"}, {"end_time", "12"}},
+    {{"id", "A2"}, {"character", "Lead Actor"}, {"start_time", "11"}, {"end_time", "13"}},
+    {{"id", "B1"}, {"character", "Beta"}, {"start_time", "20"}, {"end_time", "21"}},
+  }, build_options);
+  check(static_cast<bool>(built), "character-filter fixture builds a canonical session model");
+
+  reaadr::core::CharacterFilterProjectState project;
+  project.tracks = {
+    {0, "cue_character", "Lead_Actor.lane1", false},
+    {1, "character", "Lead_Actor.lane2", true},
+    {2, "user_audio", "Lead_Actor.lane1", false},
+    {3, "cue_character", "Beta.lane1", false},
+  };
+  project.regions = {
+    {10, "[ReaADR]:id=A1 ADR Cue A1 - Lead Actor", false},
+    {11, "[ReaADR]:id=A2 ADR Cue A2 - Lead Actor", true},
+    {12, "[ReaADR]:id=B1 ADR Cue B1 - Beta", false},
+    {13, "User Region", false},
+  };
+  const auto planned = reaadr::core::build_character_filter_plan(
+    built.model, loaded.state, project, 3.0);
+  check(planned && planned.plan.track_mutations.size() == 3 &&
+          planned.plan.region_mutations.size() == 3,
+        "native filter planning updates drifted owned tracks and exact model regions only");
+
+  render_adapter_probe = {};
+  for (const auto& track : project.tracks) {
+    FakeTrack fake;
+    fake.strings = {{"P_EXT:ReaADR.role", track.role}, {"P_EXT:ReaADR.key", track.key}};
+    fake.muted = track.muted;
+    render_adapter_probe.tracks.push_back(std::move(fake));
+  }
+  for (const auto& region : project.regions) {
+    render_adapter_probe.regions.push_back({
+      region.id, region.name, 0.0, 1.0, 0, 0, region.hidden,
+    });
+  }
+  transaction_probe = {};
+  const auto applied = reaadr::reaper::apply_character_filter_plan_transactionally(
+    nullptr, fake_render_api(), fake_ruler_lane_api(), fake_transaction_api(),
+    planned.plan, "ReaADR: Native character filter test");
+  check(applied && applied.tracks_muted == 2 && applied.tracks_unmuted == 1 &&
+          applied.regions_hidden == 2 && applied.regions_shown == 1,
+        "native character-filter adapter applies mute and region visibility changes transactionally");
+  check(!render_adapter_probe.tracks[2].muted && !render_adapter_probe.regions[3].hidden,
+        "native character filtering leaves non-owned tracks and regions unchanged");
+
+  const auto inspected = reaadr::reaper::inspect_character_filter_project(
+    nullptr, fake_render_api(), fake_ruler_lane_api());
+  const auto idempotent = inspected
+    ? reaadr::core::build_character_filter_plan(built.model, loaded.state, inspected.state, 3.0)
+    : reaadr::core::CharacterFilterPlanResult{};
+  check(inspected && idempotent && idempotent.plan.empty(),
+        "an inspected native character filter produces an empty idempotent follow-up plan");
+
+  reaadr::core::CharacterFilterPlan stale;
+  stale.track_mutations.push_back({0, "cue_character", "wrong-key", false});
+  transaction_probe = {};
+  transaction_probe.available_undo = "ReaADR: Stale native filter (failed)";
+  const auto failed = reaadr::reaper::apply_character_filter_plan_transactionally(
+    nullptr, fake_render_api(), fake_ruler_lane_api(), fake_transaction_api(), stale,
+    "ReaADR: Stale native filter");
+  check(!failed && transaction_probe.undos == 1 && transaction_probe.refresh_balance == 0,
+        "stale character-filter ownership fails inside a balanced rollback transaction");
+}
+
 void test_track_region_adapter()
 {
   constexpr int custom_color_flag = 0x1000000;
@@ -1429,6 +1546,9 @@ void test_session_render_service()
   FakeProjectStateStore store;
   reaadr::core::SessionModelRepository repository(store);
   reaadr::core::EventLogRepository events(store);
+  reaadr::core::CharacterFilterRepository character_filter(store);
+  check(character_filter.save(reaadr::core::parse_character_filter_state("__none__", true)),
+        "session render fixture saves an active native character filter");
   render_adapter_probe = {};
   render_adapter_probe.source_lengths[cue_path] = 3.0;
 
@@ -1451,7 +1571,8 @@ void test_session_render_service()
   }};
   transaction_probe = {};
   reaadr::reaper::SessionRenderService service(
-    repository, events, nullptr, fake_render_api(), fake_ruler_lane_api(), fake_cue_audio_api(),
+    repository, events, character_filter, nullptr, fake_render_api(), fake_ruler_lane_api(),
+    fake_cue_audio_api(),
     fake_transaction_api());
   const auto rendered = service.commit_and_render(cues, options);
   const auto loaded = repository.load();
@@ -1462,8 +1583,9 @@ void test_session_render_service()
           transaction_probe.begins == 1 && transaction_probe.ends == 1 && transaction_probe.undos == 0,
         "session render service derives cue audio from model timecode and uses one outer undo block");
   check(render_adapter_probe.tracks.size() == 1 && render_adapter_probe.regions.size() == 1 &&
-          render_adapter_probe.tracks[0].items.size() == 1,
-        "session render service synchronizes native tracks, regions, lanes, and cue audio");
+          render_adapter_probe.tracks[0].items.size() == 1 &&
+          render_adapter_probe.tracks[0].muted && render_adapter_probe.regions[0].hidden,
+        "session render service synchronizes artifacts and reapplies the persisted character filter");
   check(rendered.events.size() == 2 && rendered.event_warning.empty() &&
           events.load().lines.size() == 2 &&
           events.load().lines.back().find("|SyncFull|") != std::string::npos,
@@ -1480,7 +1602,9 @@ void test_session_render_service()
           rendered_with_warning.events[1],
         "event persistence warnings do not turn a successful native render into a retryable failure");
 
-  render_adapter_probe.fail_region_update = true;
+  check(character_filter.save(reaadr::core::parse_character_filter_state("actor", false)),
+        "session render fixture changes its persisted character filter");
+  render_adapter_probe.fail_region_hidden = true;
   options.commit.replacement.build.frame_rate = "60";
   transaction_probe = {};
   transaction_probe.available_undo = options.undo_description + " (failed)";
@@ -1492,7 +1616,7 @@ void test_session_render_service()
   check(!failed && failed.model_rolled_back &&
           std::abs(failed.cue_wav.frame_rate - 30.0) < 0.000001 && transaction_probe.undos == 1 &&
           transaction_probe.begins == 1 && transaction_probe.ends == 1,
-        "existing timecode is retained while a failed render rolls back project and model");
+        "a character-filter failure preserves timecode and rolls back project and model");
   check(restored && restored.model.cues[0].at("line") == "First line" &&
           restored.model.cues[0].at("start_time") == "10" &&
           repository.revision().revision == 4,
@@ -1512,6 +1636,7 @@ void test_session_render_service()
   FakeProjectStateStore new_store;
   reaadr::core::SessionModelRepository new_repository(new_store);
   reaadr::core::EventLogRepository new_events(new_store);
+  reaadr::core::CharacterFilterRepository new_character_filter(new_store);
   render_adapter_probe = {};
   render_adapter_probe.source_lengths[cue_path] = 3.0;
   transaction_probe = {};
@@ -1519,7 +1644,8 @@ void test_session_render_service()
   options.render.timing_epsilon = std::nan("");
   options.commit.replacement.build.frame_rate = "30";
   reaadr::reaper::SessionRenderService new_service(
-    new_repository, new_events, nullptr, fake_render_api(), fake_ruler_lane_api(), fake_cue_audio_api(),
+    new_repository, new_events, new_character_filter, nullptr, fake_render_api(),
+    fake_ruler_lane_api(), fake_cue_audio_api(),
     fake_transaction_api());
   const auto first_render_failed = new_service.commit_and_render(cues, options);
   check(!first_render_failed && first_render_failed.model_rolled_back &&
@@ -1549,6 +1675,7 @@ int main()
   test_session_cue_replacement();
   test_session_commit_service();
   test_render_planner();
+  test_character_filter();
   test_track_region_adapter();
   test_extended_render_planner();
   test_complete_render_adapter();

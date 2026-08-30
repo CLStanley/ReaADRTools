@@ -24,7 +24,8 @@ code change, a user-visible workflow, or a documented constraint.
 - Preserve and isolate complete record-arm state for Record Current Cue. (Done.)
 - Keep model save and generated-project rendering in one Undo-owned operation.
   (Done for import, generation, region timing, Cue Manager add/remove, refresh,
-  setup, filtering, and character clearing.)
+  setup, filtering, and character clearing. The native full-render coordinator
+  now reapplies persisted filter state inside this same operation.)
 - Document current selected-media behavior as speech-region detection, not
   transcription.
 - Document the current recovery model as last-operation rollback, not snapshot

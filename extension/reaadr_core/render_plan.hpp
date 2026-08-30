@@ -8,6 +8,13 @@
 
 namespace reaadr::core {
 
+// Shared render identities are public because cleanup, filtering, and future
+// overlay adapters must resolve exactly the same generated objects as the main
+// renderer. Keeping one implementation protects the ownership boundary.
+std::string render_character_name(const Fields& cue);
+std::string render_cue_key(const Fields& cue);
+std::string render_region_name(const Fields& cue);
+
 // Colors are kept as RGB in the domain layer because REAPER's packed native
 // color representation differs by operating system. The adapter performs the
 // platform-specific conversion immediately before reading or writing REAPER.
