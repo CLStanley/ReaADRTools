@@ -2,6 +2,7 @@
 
 #include "reaadr_core/cue_wav.hpp"
 #include "reaadr_core/event_log.hpp"
+#include "reaadr_core/region_timing_sync.hpp"
 #include "reaadr_core/session_commit.hpp"
 #include "character_filter_adapter.hpp"
 #include "render_artifact_adapter.hpp"
@@ -20,6 +21,7 @@ struct SessionRenderOptions {
   core::EventPublishOptions event;
   std::string cue_audio_path;
   std::string undo_description = "ReaADR: Commit and render session cues";
+  std::string commit_event_type = "SessionSaved";
   bool apply_character_filter = true;
   bool publish_events = true;
 };
@@ -38,6 +40,19 @@ struct SessionRenderResult {
   std::string event_warning;
   std::string error;
   bool model_rolled_back = false;
+
+  explicit operator bool() const { return error.empty(); }
+};
+
+struct RegionTimingRenderOptions {
+  SessionRenderOptions session;
+  core::RegionTimingSyncOptions timing;
+};
+
+struct RegionTimingRenderResult {
+  core::RegionTimingSyncResult timing;
+  SessionRenderResult render;
+  std::string error;
 
   explicit operator bool() const { return error.empty(); }
 };
@@ -68,6 +83,11 @@ public:
 
   SessionRenderResult commit_and_render(const std::vector<core::Fields>& cues,
                                         const SessionRenderOptions& options);
+
+  // Accepts user-moved generated regions as timing edits, then rebuilds every
+  // cue-derived model record and visible artifact through the same transaction.
+  RegionTimingRenderResult sync_region_timings_and_render(
+    const RegionTimingRenderOptions& options);
 
 private:
   core::SessionModelRepository& repository_;

@@ -58,15 +58,21 @@ audio, then coordinates all native render adapters under one transaction in
 dependency order. `cue_wav.*` generates the project-local countdown asset, and
 `session_render_service.*` keeps its model commit and complete visible render
 inside one rollback-aware application workflow. `event_log.*` publishes that
-workflow's `SessionSaved` and `SyncFull` results to the same bounded project
-history read by Lua. Publication warnings remain separate from commit failures
-so callers do not retry an operation that already changed the model and
-project. `character_filter.*` and `character_filter_adapter.*` load the existing
+workflow's operation-specific commit event (`SessionSaved` or
+`CueTimingUpdated`) and `SyncFull` result to the same bounded project history
+read by Lua. Publication warnings remain separate from commit failures so
+callers do not retry an operation that already changed the model and project.
+`character_filter.*` and `character_filter_adapter.*` load the existing
 Lua-compatible selection, derive lane-aware mutations from the canonical model,
 and reapply owned track mute and generated-region visibility state before the
-outer render transaction completes. These services are not invoked directly by
-the UI yet; Lua remains the single import/render writer until the filter UI,
-overlays, and import UI are ready for coordinated cutover.
+outer render transaction completes. `region_timing_sync.*` is the explicit
+reverse-sync exception to the model-first render direction: it accepts timing
+only from uniquely matched generated region names, then
+`session_render_service.*` rebuilds canonical derived records and visible cue
+audio in the existing rollback-aware transaction. These services are not
+invoked directly by the UI yet; Lua remains the single import/render writer
+until the relevant native UI and in-REAPER smoke tests are ready for coordinated
+cutover.
 
 ## Lua Application Layer
 

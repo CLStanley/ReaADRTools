@@ -4,6 +4,7 @@
 #include "reaadr_core/cue_wav.hpp"
 #include "reaadr_core/event_log.hpp"
 #include "reaadr_core/model_repository.hpp"
+#include "reaadr_core/region_timing_sync.hpp"
 #include "reaadr_core/render_plan.hpp"
 #include "reaadr_core/session_builder.hpp"
 #include "reaadr_core/session_commit.hpp"
@@ -1304,6 +1305,60 @@ void test_character_filter()
         "stale character-filter ownership fails inside a balanced rollback transaction");
 }
 
+void test_region_timing_sync()
+{
+  reaadr::core::SessionModel model;
+  model.session = {{"session_id", "region-sync-session"}};
+  model.cues = {
+    {{"id", "A1"}, {"character", "Actor"}, {"start_time", "10"}, {"end_time", "12"},
+     {"line", "Keep every non-timing field"}},
+    {{"id", "B2"}, {"character", "Beta"}, {"start_time", "20"}, {"end_time", "22"}},
+  };
+  const std::string first_name = reaadr::core::render_region_name(model.cues[0]);
+  const std::string second_name = reaadr::core::render_region_name(model.cues[1]);
+
+  const auto synchronized = reaadr::core::sync_cue_timings_from_regions(model, {
+    {10, first_name, 15.25, 17.5, {}},
+    {11, "User Region", 100.0, 101.0, {}},
+  });
+  check(synchronized && synchronized.changed_cues == 1 && synchronized.missing_regions == 1 &&
+          synchronized.cues[0].at("start_time") == "15.25" &&
+          synchronized.cues[0].at("end_time") == "17.5" &&
+          synchronized.cues[0].at("line") == "Keep every non-timing field" &&
+          synchronized.cues[1].at("start_time") == "20",
+        "region timing sync updates exact owned matches while preserving cue data and missing cues");
+
+  const auto within_tolerance = reaadr::core::sync_cue_timings_from_regions(model, {
+    {10, first_name, 10.0004, 11.9996, {}},
+    {11, second_name, 20.0, 22.0, {}},
+  });
+  check(within_tolerance && within_tolerance.changed_cues == 0 &&
+          within_tolerance.missing_regions == 0 &&
+          within_tolerance.cues[0].at("start_time") == "10",
+        "region timing sync preserves canonical values when drift is within tolerance");
+
+  const auto reversed = reaadr::core::sync_cue_timings_from_regions(model, {
+    {10, first_name, 15.0, 14.0, {}},
+  });
+  check(reversed && reversed.changed_cues == 1 &&
+          reversed.cues[0].at("start_time") == "15" &&
+          reversed.cues[0].at("end_time") == "15",
+        "region timing sync clamps a reversed project region to a non-negative duration");
+
+  const auto ambiguous = reaadr::core::sync_cue_timings_from_regions(model, {
+    {10, first_name, 15.0, 16.0, {}},
+    {12, first_name, 17.0, 18.0, {}},
+  });
+  check(!ambiguous && ambiguous.error.find("Multiple project regions") != std::string::npos,
+        "region timing sync rejects ambiguous generated-region ownership");
+
+  reaadr::core::RegionTimingSyncOptions invalid_options;
+  invalid_options.timing_epsilon = std::nan("");
+  const auto invalid = reaadr::core::sync_cue_timings_from_regions(
+    model, {{10, first_name, 15.0, 16.0, {}}}, invalid_options);
+  check(!invalid, "region timing sync rejects an invalid timing tolerance");
+}
+
 void test_track_region_adapter()
 {
   constexpr int custom_color_flag = 0x1000000;
@@ -1656,6 +1711,92 @@ void test_session_render_service()
   std::remove((cue_path + ".reaadr.tmp").c_str());
 }
 
+void test_region_timing_render_service()
+{
+  const std::string cue_path = "/tmp/reaadr-region-timing-render-service-cue.wav";
+  FakeProjectStateStore store;
+  reaadr::core::SessionModelRepository repository(store);
+  reaadr::core::EventLogRepository events(store);
+  reaadr::core::CharacterFilterRepository character_filter(store);
+  render_adapter_probe = {};
+  render_adapter_probe.source_lengths[cue_path] = 3.0;
+
+  reaadr::reaper::SessionRenderOptions render_options;
+  render_options.commit.replacement.build.session_id = "region-render-session";
+  render_options.commit.replacement.build.preroll_seconds = 3.0;
+  render_options.commit.replacement.last_operation = "initial_render";
+  render_options.commit.utc_timestamp = "2026-08-30T15:00:00Z";
+  render_options.event.utc_timestamp = render_options.commit.utc_timestamp;
+  render_options.event.source = "region_timing_test";
+  render_options.render.create_dialogue_tracks = false;
+  render_options.cue_audio_path = cue_path;
+
+  reaadr::reaper::SessionRenderService service(
+    repository, events, character_filter, nullptr, fake_render_api(), fake_ruler_lane_api(),
+    fake_cue_audio_api(), fake_transaction_api());
+  const std::vector<reaadr::core::Fields> cues = {{
+    {"id", "A1"}, {"character", "Actor"}, {"start_time", "10"}, {"end_time", "12"},
+    {"line", "Moved line"}, {"script_id", "script"}, {"metadata", ""},
+  }};
+  transaction_probe = {};
+  const auto initial = service.commit_and_render(cues, render_options);
+  check(initial && render_adapter_probe.regions.size() == 1,
+        "region timing render fixture creates a synchronized native session");
+
+  render_adapter_probe.regions[0].start_time = 14.0;
+  render_adapter_probe.regions[0].end_time = 16.0;
+  reaadr::reaper::RegionTimingRenderOptions sync_options;
+  sync_options.session = render_options;
+  transaction_probe = {};
+  const auto synchronized = service.sync_region_timings_and_render(sync_options);
+  const auto loaded = repository.load();
+  check(synchronized && synchronized.timing.changed_cues == 1 && loaded &&
+          loaded.model.cues[0].at("start_time") == "14" &&
+          loaded.model.cues[0].at("end_time") == "16" &&
+          loaded.model.regions[0].at("start_time") == "14" &&
+          loaded.model.dirty_flags.at("regions_modified") == "true" &&
+          loaded.model.state.at("last_operation") == "update_cues_from_regions",
+        "region timing render service promotes visible timing into every canonical derived record");
+  check(transaction_probe.begins == 1 && transaction_probe.ends == 1 &&
+          transaction_probe.undos == 0 &&
+          std::abs(render_adapter_probe.regions[0].start_time - 14.0) < 0.000001 &&
+          std::abs(render_adapter_probe.tracks[0].items[0]->values.at("D_POSITION") - 11.0) < 0.000001,
+        "region timing render service rebuilds dependent cue audio in one project transaction");
+  const auto event_log = events.load();
+  check(event_log && event_log.lines.size() == 4 &&
+          event_log.lines[2].find("|CueTimingUpdated|") != std::string::npos &&
+          event_log.lines[3].find("|SyncFull|") != std::string::npos,
+        "region timing render service publishes the Lua-compatible timing and sync events");
+
+  const std::uint64_t revision = repository.revision().revision;
+  transaction_probe = {};
+  const auto unchanged = service.sync_region_timings_and_render(sync_options);
+  check(unchanged && unchanged.timing.changed_cues == 0 &&
+          repository.revision().revision == revision && transaction_probe.begins == 0,
+        "unchanged region timing is a true no-op without a model revision or Undo point");
+
+  render_adapter_probe.regions[0].start_time = 18.0;
+  render_adapter_probe.regions[0].end_time = 20.0;
+  render_adapter_probe.fail_item_value = true;
+  transaction_probe = {};
+  transaction_probe.available_undo = "ReaADR: update cues from regions (failed)";
+  const auto failed = service.sync_region_timings_and_render(sync_options);
+  const auto restored = repository.load();
+  check(!failed && failed.render.model_rolled_back && transaction_probe.undos == 1 &&
+          restored && restored.model.cues[0].at("start_time") == "14" &&
+          events.load().lines.size() == 4,
+        "failed region timing rendering rolls back the model and publishes no success events");
+  render_adapter_probe.fail_item_value = false;
+
+  for (FakeTrack& track : render_adapter_probe.tracks) {
+    for (const auto& item : track.items) destroy_fake_source(item->take.source);
+  }
+  check(render_adapter_probe.live_sources.empty(),
+        "region timing render service test releases transferred fake media sources");
+  std::remove(cue_path.c_str());
+  std::remove((cue_path + ".reaadr.tmp").c_str());
+}
+
 } // namespace
 
 int main()
@@ -1676,10 +1817,12 @@ int main()
   test_session_commit_service();
   test_render_planner();
   test_character_filter();
+  test_region_timing_sync();
   test_track_region_adapter();
   test_extended_render_planner();
   test_complete_render_adapter();
   test_session_render_service();
+  test_region_timing_render_service();
   if (failures != 0) {
     std::cerr << failures << " native core test(s) failed\n";
     return EXIT_FAILURE;

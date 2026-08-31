@@ -90,6 +90,8 @@ SessionBuildResult replace_session_cues(const SessionModel* existing,
 
   replacement.state["last_operation"] = options.last_operation;
   replacement.dirty_flags["cues_modified"] = "true";
+  if (build_options.tracks_modified) replacement.dirty_flags["tracks_modified"] = "true";
+  if (build_options.regions_modified) replacement.dirty_flags["regions_modified"] = "true";
   derived.model = std::move(replacement);
   return derived;
 }

@@ -169,9 +169,9 @@ SessionRenderResult SessionRenderService::commit_and_render(
               {"operation", options.commit.replacement.last_operation},
               {"revision", std::to_string(result.commit.revision)},
             };
-            result.events.push_back(event_log_.publish("SessionSaved", saved_payload, event_options));
+            result.events.push_back(event_log_.publish(options.commit_event_type, saved_payload, event_options));
             if (!result.events.back()) {
-              append_event_warning(result, "SessionSaved event publication failed: " +
+              append_event_warning(result, options.commit_event_type + " event publication failed: " +
                 result.events.back().error);
             }
 
@@ -202,6 +202,41 @@ SessionRenderResult SessionRenderService::commit_and_render(
     result.model_rolled_back = static_cast<bool>(restored);
     if (!restored) result.error += " Model snapshot rollback also failed: " + restored.error;
   }
+  return result;
+}
+
+RegionTimingRenderResult SessionRenderService::sync_region_timings_and_render(
+  const RegionTimingRenderOptions& options)
+{
+  RegionTimingRenderResult result;
+  const core::SessionLoadResult loaded = repository_.load();
+  if (!loaded) {
+    result.error = core::session_load_error_message(loaded);
+    return result;
+  }
+
+  const ProjectInspectionResult inspected =
+    TrackRegionAdapter(project_, track_region_api_).inspect();
+  if (!inspected) {
+    result.error = inspected.error;
+    return result;
+  }
+  result.timing = core::sync_cue_timings_from_regions(
+    loaded.model, inspected.state.regions, options.timing);
+  if (!result.timing) {
+    result.error = result.timing.error;
+    return result;
+  }
+  if (result.timing.changed_cues == 0) return result;
+
+  SessionRenderOptions render_options = options.session;
+  render_options.commit.replacement.last_operation = "update_cues_from_regions";
+  render_options.commit.replacement.build.regions_modified = true;
+  render_options.commit.snapshot_label = "Update Cues From Regions";
+  render_options.undo_description = "ReaADR: update cues from regions";
+  render_options.commit_event_type = "CueTimingUpdated";
+  result.render = commit_and_render(result.timing.cues, render_options);
+  if (!result.render) result.error = result.render.error;
   return result;
 }
 

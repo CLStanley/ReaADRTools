@@ -49,6 +49,7 @@ cl /nologo /EHsc /O2 /LD /std:c++17 ^
   reaadr_core\cue_wav.cpp ^
   reaadr_core\event_log.cpp ^
   reaadr_core\character_filter.cpp ^
+  reaadr_core\region_timing_sync.cpp ^
   reaadr_reaper\project_state.cpp ^
   reaadr_reaper\project_transaction.cpp ^
   reaadr_reaper\track_region_adapter.cpp ^
