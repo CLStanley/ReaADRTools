@@ -21,7 +21,9 @@ code change, a user-visible workflow, or a documented constraint.
   logging, undo, and manager return data stay consistent.
 - Keep destructive character clearing protected by a session snapshot before
   model mutation and generated-artifact removal.
-- Preserve and isolate complete record-arm state for Record Current Cue. (Done.)
+- Preserve and isolate complete record-arm state for Record Current Cue. (Done
+  in Lua and implemented behind the test-covered native record-arm boundary;
+  recording UI/transport cutover remains.)
 - Keep model save and generated-project rendering in one Undo-owned operation.
   (Done for import, generation, region timing, Cue Manager add/remove, refresh,
   setup, filtering, and character clearing. The native full-render coordinator
@@ -63,6 +65,9 @@ Initial migration targets:
 - Port explicit region timing adoption to the native domain and render
   coordinator. (Implemented and test-covered; native UI cutover and in-REAPER
   smoke testing remain.)
+- Port canonical cue navigation and paired manager/overlay selection state to
+  native services. (Implemented and test-covered; native command/UI cutover and
+  in-REAPER smoke testing remain.)
 - Return one consistent summary shape:
   - `sync_type`
   - `session_id`

@@ -1,16 +1,20 @@
 #include "reaadr_core/session_model.hpp"
 #include "reaadr_core/domain_utils.hpp"
 #include "reaadr_core/cue_import.hpp"
+#include "reaadr_core/cue_navigation.hpp"
 #include "reaadr_core/cue_wav.hpp"
 #include "reaadr_core/event_log.hpp"
 #include "reaadr_core/model_repository.hpp"
 #include "reaadr_core/region_timing_sync.hpp"
+#include "reaadr_core/record_arm.hpp"
 #include "reaadr_core/render_plan.hpp"
 #include "reaadr_core/session_builder.hpp"
 #include "reaadr_core/session_commit.hpp"
 #include "reaadr_core/session_mutation.hpp"
 #include "reaadr_reaper/project_state.hpp"
 #include "reaadr_reaper/project_transaction.hpp"
+#include "reaadr_reaper/cue_navigation_service.hpp"
+#include "reaadr_reaper/record_arm_adapter.hpp"
 #include "reaadr_reaper/render_artifact_adapter.hpp"
 #include "reaadr_reaper/session_render_service.hpp"
 #include "reaadr_reaper/track_region_adapter.hpp"
@@ -81,6 +85,34 @@ int fake_set_project_state(ReaProject*, const char*, const char*, const char* va
   return static_cast<int>(project_state_written.size());
 }
 
+int navigation_play_state = 0;
+double navigation_play_position = 0.0;
+double navigation_cursor_position = 0.0;
+int navigation_cursor_moves = 0;
+bool navigation_move_view = false;
+bool navigation_seek_play = false;
+
+int fake_get_play_state() { return navigation_play_state; }
+double fake_get_play_position() { return navigation_play_position; }
+double fake_get_cursor_position() { return navigation_cursor_position; }
+void fake_set_edit_cursor_position(double position, bool move_view, bool seek_play)
+{
+  navigation_cursor_position = position;
+  navigation_move_view = move_view;
+  navigation_seek_play = seek_play;
+  ++navigation_cursor_moves;
+}
+
+reaadr::reaper::CueNavigationApi fake_navigation_api()
+{
+  return {
+    fake_get_play_state,
+    fake_get_play_position,
+    fake_get_cursor_position,
+    fake_set_edit_cursor_position,
+  };
+}
+
 struct TransactionProbe {
   int begins = 0;
   int ends = 0;
@@ -132,6 +164,7 @@ struct FakeTrack {
   int color = 0;
   std::vector<std::unique_ptr<FakeItem>> items;
   bool muted = false;
+  double record_armed = 0.0;
 };
 
 struct FakeRegion {
@@ -158,6 +191,8 @@ struct RenderAdapterProbe {
   std::set<FakeSource*> live_sources;
   bool fail_region_update = false;
   bool fail_track_mute = false;
+  FakeTrack* fail_record_arm_track = nullptr;
+  std::set<FakeTrack*> invalid_record_arm_tracks;
   bool fail_region_hidden = false;
   bool fail_item_value = false;
   int next_region_id = 100;
@@ -217,6 +252,7 @@ double fake_get_track_value(MediaTrack* track, const char* parameter)
   const std::string name = parameter ? parameter : "";
   if (name == "I_CUSTOMCOLOR") return fake_track(track)->color;
   if (name == "B_MUTE") return fake_track(track)->muted ? 1.0 : 0.0;
+  if (name == "I_RECARM") return fake_track(track)->record_armed;
   return 0.0;
 }
 
@@ -232,7 +268,27 @@ bool fake_set_track_value(MediaTrack* track, const char* parameter, double value
     fake_track(track)->muted = value != 0.0;
     return true;
   }
+  if (name == "I_RECARM" && fake_track(track) != render_adapter_probe.fail_record_arm_track) {
+    fake_track(track)->record_armed = value;
+    return true;
+  }
   return false;
+}
+
+bool fake_validate_record_arm_track(ReaProject*, MediaTrack* track)
+{
+  return track && render_adapter_probe.invalid_record_arm_tracks.count(fake_track(track)) == 0;
+}
+
+reaadr::reaper::RecordArmApi fake_record_arm_api()
+{
+  return {
+    fake_count_tracks,
+    fake_get_track,
+    fake_validate_record_arm_track,
+    fake_get_track_value,
+    fake_set_track_value,
+  };
 }
 
 int fake_count_project_markers(ReaProject*, int* markers, int* regions)
@@ -1359,6 +1415,197 @@ void test_region_timing_sync()
   check(!invalid, "region timing sync rejects an invalid timing tolerance");
 }
 
+void test_cue_navigation()
+{
+  reaadr::core::SessionModel model;
+  model.session = {{"session_id", "navigation-session"}};
+  model.cues = {
+    {{"id", "B"}, {"character", "Actor"}, {"start_time", "20"}, {"end_time", "22"}},
+    {{"id", "A2"}, {"character", "Actor"}, {"start_time", "10"}, {"end_time", "12"}},
+    {{"id", "C"}, {"character", "Actor"}, {"start_time", "30"}, {"end_time", "32"}},
+    {{"id", "A1"}, {"character", "Actor"}, {"start_time", "10"}, {"end_time", "11"}},
+  };
+  const auto catalog = reaadr::core::build_cue_navigation_catalog(model);
+  check(catalog && catalog.cues.size() == 4 && catalog.cues[0].cue_id == "A1" &&
+          catalog.cues[1].cue_id == "A2" && catalog.cues[2].cue_id == "B" &&
+          catalog.cues[3].cue_id == "C",
+        "native cue navigation sorts by timeline position and cue ID like Lua");
+  check(reaadr::core::find_next_cue(catalog.cues, 10.0)->cue_id == "B" &&
+          reaadr::core::find_previous_cue(catalog.cues, 20.0)->cue_id == "A2" &&
+          reaadr::core::find_next_cue(catalog.cues, 30.0)->cue_id == "A1" &&
+          reaadr::core::find_previous_cue(catalog.cues, 10.0)->cue_id == "C",
+        "native next and previous navigation retain epsilon and wraparound behavior");
+  check(reaadr::core::find_cue_by_id(catalog.cues, " A2 ")->cue_id == "A2" &&
+          reaadr::core::find_cue_by_id(catalog.cues, "a")->cue_id == "A1" &&
+          reaadr::core::find_cue_at_position(catalog.cues, 10.5)->cue_id == "A1",
+        "native cue lookup preserves exact, partial case-insensitive, and inclusive position matching");
+
+  reaadr::core::SessionModel duplicate_model = model;
+  duplicate_model.cues.push_back({
+    {"id", "B!"}, {"character", "Actor"}, {"start_time", "40"}, {"end_time", "42"},
+  });
+  check(!reaadr::core::build_cue_navigation_catalog(duplicate_model),
+        "native cue navigation rejects ambiguous persisted selection keys");
+  reaadr::core::SessionModel invalid_model = model;
+  invalid_model.cues[0]["start_time"] = "not-a-time";
+  check(!reaadr::core::build_cue_navigation_catalog(invalid_model),
+        "native cue navigation rejects invalid canonical timing");
+
+  FakeProjectStateStore selection_store;
+  selection_store.values["ReaADRTools:manager_selected_cue_key"] = "A1";
+  selection_store.values["ReaADRTools:active_overlay_cue_key"] = "A1";
+  reaadr::core::CueSelectionRepository selection_repository(selection_store);
+  selection_store.failed_write_key = "ReaADRTools:active_overlay_cue_key";
+  selection_store.failed_writes_remaining = 1;
+  const auto selection_failed = selection_repository.save_selected_cue("B");
+  check(!selection_failed && selection_failed.rolled_back &&
+          selection_store.values.at("ReaADRTools:manager_selected_cue_key") == "A1" &&
+          selection_store.values.at("ReaADRTools:active_overlay_cue_key") == "A1",
+        "paired native cue selection rolls back if the overlay key cannot be persisted");
+
+  FakeProjectStateStore service_store;
+  reaadr::core::SessionModelRepository model_repository(service_store);
+  check(model_repository.save(model), "cue-navigation fixture saves a canonical session model");
+  reaadr::core::CueSelectionRepository service_selection(service_store);
+  reaadr::reaper::CueNavigationService service(
+    model_repository, service_selection, fake_navigation_api());
+
+  navigation_play_state = 0;
+  navigation_cursor_position = 10.0;
+  navigation_cursor_moves = 0;
+  const auto next = service.navigate_next();
+  check(next && next.cue.cue_id == "B" && navigation_cursor_position == 20.0 &&
+          navigation_cursor_moves == 1 && navigation_move_view && !navigation_seek_play &&
+          service_store.values.at("ReaADRTools:manager_selected_cue_key") == "B" &&
+          service_store.values.at("ReaADRTools:active_overlay_cue_key") == "B",
+        "native next-cue navigation synchronizes selection before moving the edit cursor");
+
+  navigation_play_state = 1;
+  navigation_play_position = 20.0;
+  navigation_cursor_position = 99.0;
+  const auto playing_next = service.navigate_next();
+  check(playing_next && playing_next.cue.cue_id == "C" && navigation_cursor_position == 30.0,
+        "native navigation uses play position while REAPER is playing");
+  const auto jumped = service.navigate_to_id("a2");
+  check(jumped && jumped.cue.cue_id == "A2" && navigation_cursor_position == 10.0 &&
+          model_repository.revision().revision == 0,
+        "native ID navigation moves to canonical timing without creating a model revision");
+
+  service_store.failed_write_key = "ReaADRTools:active_overlay_cue_key";
+  service_store.failed_writes_remaining = 1;
+  const double cursor_before_failure = navigation_cursor_position;
+  const auto failed_jump = service.navigate_to_id("B");
+  check(!failed_jump && failed_jump.selection.rolled_back &&
+          navigation_cursor_position == cursor_before_failure &&
+          service_store.values.at("ReaADRTools:manager_selected_cue_key") == "A2" &&
+          service_store.values.at("ReaADRTools:active_overlay_cue_key") == "A2",
+        "native navigation leaves the cursor and prior selection intact after persistence failure");
+}
+
+void test_record_arm_manager()
+{
+  const auto domain_plan = reaadr::core::build_record_arm_isolation_plan(
+    {{0, 1.0}, {1, 0.0}, {2, 1.0}}, 1);
+  check(domain_plan && domain_plan.mutations.size() == 3 &&
+          domain_plan.mutations[0].armed == 0.0 &&
+          domain_plan.mutations[1].armed == 1.0 &&
+          domain_plan.mutations[2].armed == 0.0,
+        "native record-arm planning isolates exactly one captured target");
+  check(!reaadr::core::build_record_arm_isolation_plan({{0, 1.0}, {0, 0.0}}, 0) &&
+          !reaadr::core::build_record_arm_isolation_plan({{0, 1.0}}, 2),
+        "native record-arm planning rejects duplicate entries and an unknown target");
+
+  render_adapter_probe = {};
+  render_adapter_probe.tracks.resize(3);
+  render_adapter_probe.tracks[0].record_armed = 1.0;
+  render_adapter_probe.tracks[1].record_armed = 0.0;
+  render_adapter_probe.tracks[2].record_armed = 1.0;
+  MediaTrack* first = fake_get_track(nullptr, 0);
+  MediaTrack* second = fake_get_track(nullptr, 1);
+  MediaTrack* third = fake_get_track(nullptr, 2);
+  reaadr::reaper::RecordArmManager manager(
+    nullptr, fake_record_arm_api(), fake_transaction_api());
+
+  transaction_probe = {};
+  const auto isolated = manager.capture_and_isolate(second);
+  check(isolated && manager.has_snapshot() &&
+          render_adapter_probe.tracks[0].record_armed == 0.0 &&
+          render_adapter_probe.tracks[1].record_armed == 1.0 &&
+          render_adapter_probe.tracks[2].record_armed == 0.0 &&
+          transaction_probe.begins == 1 && transaction_probe.ends == 1 &&
+          transaction_probe.refresh_balance == 0,
+        "native record-arm capture isolates a target in one balanced transaction");
+
+  transaction_probe = {};
+  const auto reisolated = manager.capture_and_isolate(third);
+  check(reisolated && manager.has_snapshot() &&
+          render_adapter_probe.tracks[0].record_armed == 0.0 &&
+          render_adapter_probe.tracks[1].record_armed == 0.0 &&
+          render_adapter_probe.tracks[2].record_armed == 1.0,
+        "native record-arm isolation can change loop targets without replacing the original snapshot");
+
+  transaction_probe = {};
+  const auto restored = manager.restore();
+  const auto restored_again = manager.restore();
+  check(restored && restored_again && !manager.has_snapshot() &&
+          render_adapter_probe.tracks[0].record_armed == 1.0 &&
+          render_adapter_probe.tracks[1].record_armed == 0.0 &&
+          render_adapter_probe.tracks[2].record_armed == 1.0 &&
+          transaction_probe.begins == 1 && transaction_probe.ends == 1,
+        "native record-arm restoration is complete and idempotent");
+
+  render_adapter_probe = {};
+  render_adapter_probe.tracks.resize(3);
+  render_adapter_probe.tracks[0].record_armed = 1.0;
+  render_adapter_probe.tracks[2].record_armed = 1.0;
+  first = fake_get_track(nullptr, 0);
+  second = fake_get_track(nullptr, 1);
+  third = fake_get_track(nullptr, 2);
+  reaadr::reaper::RecordArmManager failing_manager(
+    nullptr, fake_record_arm_api(), fake_transaction_api());
+  render_adapter_probe.fail_record_arm_track = fake_track(third);
+  transaction_probe = {};
+  const auto isolation_failed = failing_manager.capture_and_isolate(second);
+  check(!isolation_failed && isolation_failed.restored_after_failure &&
+          !failing_manager.has_snapshot() &&
+          render_adapter_probe.tracks[0].record_armed == 1.0 &&
+          render_adapter_probe.tracks[1].record_armed == 0.0 &&
+          render_adapter_probe.tracks[2].record_armed == 1.0 &&
+          transaction_probe.end_description == "ReaADR: isolate recording track (failed)" &&
+          transaction_probe.refresh_balance == 0,
+        "failed native isolation compensates earlier mutations and releases a new snapshot");
+
+  render_adapter_probe.fail_record_arm_track = nullptr;
+  check(static_cast<bool>(failing_manager.capture_and_isolate(second)),
+        "record-arm restore-failure fixture isolates its target");
+  render_adapter_probe.fail_record_arm_track = fake_track(first);
+  transaction_probe = {};
+  const auto restore_failed = failing_manager.restore();
+  check(!restore_failed && failing_manager.has_snapshot() &&
+          render_adapter_probe.tracks[1].record_armed == 0.0 &&
+          render_adapter_probe.tracks[2].record_armed == 1.0,
+        "native record-arm restore retains only tracks that need a retry");
+  render_adapter_probe.fail_record_arm_track = nullptr;
+  check(failing_manager.restore() && !failing_manager.has_snapshot() &&
+          render_adapter_probe.tracks[0].record_armed == 1.0,
+        "native record-arm restoration completes after a transient host failure");
+
+  render_adapter_probe = {};
+  render_adapter_probe.tracks.resize(2);
+  render_adapter_probe.tracks[0].record_armed = 1.0;
+  first = fake_get_track(nullptr, 0);
+  second = fake_get_track(nullptr, 1);
+  reaadr::reaper::RecordArmManager deleted_track_manager(
+    nullptr, fake_record_arm_api(), fake_transaction_api());
+  check(static_cast<bool>(deleted_track_manager.capture_and_isolate(second)),
+        "deleted-track restore fixture captures record-arm state");
+  render_adapter_probe.invalid_record_arm_tracks.insert(fake_track(first));
+  const auto deleted_restored = deleted_track_manager.restore();
+  check(deleted_restored && deleted_restored.tracks_skipped == 1 &&
+          !deleted_track_manager.has_snapshot(),
+        "native record-arm restoration safely skips tracks deleted during deferred recording");
+}
+
 void test_track_region_adapter()
 {
   constexpr int custom_color_flag = 0x1000000;
@@ -1818,6 +2065,8 @@ int main()
   test_render_planner();
   test_character_filter();
   test_region_timing_sync();
+  test_cue_navigation();
+  test_record_arm_manager();
   test_track_region_adapter();
   test_extended_render_planner();
   test_complete_render_adapter();

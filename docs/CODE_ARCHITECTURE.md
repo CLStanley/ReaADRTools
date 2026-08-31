@@ -69,10 +69,18 @@ outer render transaction completes. `region_timing_sync.*` is the explicit
 reverse-sync exception to the model-first render direction: it accepts timing
 only from uniquely matched generated region names, then
 `session_render_service.*` rebuilds canonical derived records and visible cue
-audio in the existing rollback-aware transaction. These services are not
-invoked directly by the UI yet; Lua remains the single import/render writer
-until the relevant native UI and in-REAPER smoke tests are ready for coordinated
-cutover.
+audio in the existing rollback-aware transaction. `cue_navigation.*` builds a
+validated, Lua-compatible timeline catalog directly from the canonical model
+and owns the paired manager/overlay selection keys. Its
+`cue_navigation_service.*` application boundary resolves play/edit position and
+moves the edit cursor without a model revision or Undo point. `record_arm.*`
+defines complete single-target isolation intent, while
+`record_arm_adapter.*` owns the transient REAPER track handles, revalidation,
+compensating failure recovery, and idempotent restore/retry behavior needed by
+the future native recording coordinator. These services are not invoked
+directly by the UI yet; Lua remains the public workflow layer until the
+relevant native command/UI wiring and in-REAPER smoke tests are ready for
+coordinated cutover.
 
 ## Lua Application Layer
 
@@ -126,7 +134,9 @@ the public `ReaADR` table:
 - `ReaADR_Core_Persistence.lua` serializes and mutates the Session Model.
 - `ReaADR_Core_Transactions.lua` owns nested-safe Undo and UI-refresh scopes.
 - `ReaADR_Core_Ownership.lua` contains deletion-boundary predicates.
-- `ReaADR_Record_Arm.lua` captures, isolates, and restores record-arm state.
+- `ReaADR_Record_Arm.lua` captures, isolates, and restores record-arm state for
+  the transitional Lua recording UI; `record_arm.*` and
+  `record_arm_adapter.*` provide its test-covered native replacement boundary.
 
 ## ADR Session Model
 

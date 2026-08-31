@@ -116,9 +116,21 @@ operation accepts only exact model-derived region names, rejects ambiguous
 ownership, preserves missing cues, and feeds changed timing back through the
 complete model/render transaction. This rebuilds derived region records and
 cue audio together while unchanged projects remain revision- and Undo-free.
+Native cue navigation now derives one validated timeline catalog from the
+canonical model, preserving Lua-compatible ordering, lookup, epsilon, and
+wraparound rules. Its application service chooses play or edit-cursor position,
+atomically synchronizes the manager/overlay selection keys, and moves the
+cursor without changing the session revision or creating an Undo point.
+Native record-arm planning and its stateful REAPER manager now preserve the
+complete pre-recording arm snapshot across repeated loop-target isolation.
+Every track handle is revalidated before use; deleted tracks are skipped during
+restore, isolation failures compensate earlier writes, and transient restore
+failures retain only the entries that still need retrying. Each batch joins the
+native transaction and UI-refresh scopes.
 The adapters and coordinator are test-covered but are not yet public writers;
-the region-sync and character-filter UI cutovers, navigation, recording,
-generated-cue cleanup, overlays, and in-REAPER smoke tests remain.
+the region-sync, character-filter, and navigation command/UI cutovers,
+the recording transport/status coordinator, generated-cue cleanup, overlays,
+and in-REAPER smoke tests remain.
 
 ### Stage 4: native UI and Lua removal
 
@@ -172,6 +184,10 @@ The initial target-architecture modules now include:
   character/lane selection rules, and ownership-scoped mutation planning.
 - `extension/reaadr_core/region_timing_sync.*`: exact-ownership import of
   deliberate generated-region timing edits into canonical cue records.
+- `extension/reaadr_core/cue_navigation.*`: canonical cue ordering, lookup,
+  wraparound selection, and paired manager/overlay selection persistence.
+- `extension/reaadr_core/record_arm.*`: complete single-target arm-isolation
+  planning over a preserved original snapshot.
 - `extension/reaadr_reaper/project_state.*`: dynamically sized REAPER project
   extstate access.
 - `extension/reaadr_reaper/project_transaction.*`: nested-safe undo and UI
@@ -187,6 +203,10 @@ The initial target-architecture modules now include:
   publication, including the explicit region-timing update workflow.
 - `extension/reaadr_reaper/character_filter_adapter.*`: verified track mute and
   generated-region visibility inspection/application under native Undo.
+- `extension/reaadr_reaper/cue_navigation_service.*`: play/edit-position-aware
+  cursor navigation backed only by the canonical session model.
+- `extension/reaadr_reaper/record_arm_adapter.*`: revalidated track-arm capture,
+  isolation, compensation, idempotent restoration, and targeted retry.
 
 `make -C extension test` runs these modules without the REAPER SDK; normal
 extension builds compile the same sources into the plugin.
