@@ -179,6 +179,9 @@ and user/dialogue media remains untouched. The public cleanup command and
 model-persistence coordinator now coordinates inspection, project mutation,
 snapshot recovery, and canonical cue persistence in one native transaction;
 public command wiring remains part of the native UI cutover.
+Native character-filter application now also coordinates canonical filter
+state, lane-aware planning, transactional REAPER mutation, and persistence;
+the existing Lua filter window remains a compatibility UI.
 These domain operations and adapters are test-covered but are not yet public
 writers; the region-sync, character-filter, and navigation command/UI cutovers,
 the deferred recording frame/UI wiring, generated-cue cleanup, other overlay
@@ -295,6 +298,8 @@ The initial target-architecture modules now include:
   checked deletion of generated cue artifacts while preserving user objects.
 - `extension/reaadr_reaper/cue_cleanup_application_service.*`: native
   inspection, snapshot, project mutation, and canonical-model cleanup boundary.
+- `extension/reaadr_reaper/character_filter_application_service.*`: native
+  filter-state persistence and transactional planner/adapter coordination.
 
 `make -C extension test` runs these modules without the REAPER SDK; normal
 extension builds compile the same sources into the plugin.

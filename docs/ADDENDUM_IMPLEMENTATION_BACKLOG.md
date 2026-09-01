@@ -42,6 +42,8 @@ code change, a user-visible workflow, or a documented constraint.
   are implemented and test-covered; the application coordinator now includes
   canonical model persistence and snapshot recovery, while public command
   wiring remains.)
+- Coordinate native character-filter state, planning, and REAPER mutation.
+  (Application service is implemented; native manager/filter UI wiring remains.)
 - Keep model save and generated-project rendering in one Undo-owned operation.
   (Done for import, generation, region timing, Cue Manager add/remove, refresh,
   setup, filtering, and character clearing. The native full-render coordinator

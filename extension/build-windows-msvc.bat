@@ -75,6 +75,7 @@ cl /nologo /EHsc /O2 /LD /std:c++17 ^
   reaadr_reaper\overlay_application_service.cpp ^
   reaadr_reaper\cue_cleanup_adapter.cpp ^
   reaadr_reaper\cue_cleanup_application_service.cpp ^
+  reaadr_reaper\character_filter_application_service.cpp ^
   /Fe"%BUILD_DIR%\%TARGET%" ^
   /link user32.lib /DEF:reaper_reaadr.def
 
