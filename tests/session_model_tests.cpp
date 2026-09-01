@@ -25,6 +25,7 @@
 #include "reaadr_reaper/overlay_application_service.hpp"
 #include "reaadr_reaper/cue_cleanup_adapter.hpp"
 #include "reaadr_reaper/cue_cleanup_application_service.hpp"
+#include "reaadr_reaper/character_filter_application_service.hpp"
 #include "reaadr_reaper/cue_navigation_service.hpp"
 #include "reaadr_reaper/record_arm_adapter.hpp"
 #include "reaadr_reaper/recording_setup_adapter.hpp"
@@ -2773,6 +2774,46 @@ void test_cue_cleanup_application_service()
         "cleanup application service persists remaining canonical cues after project cleanup");
 }
 
+reaadr::core::CharacterFilterProjectState filter_application_state;
+reaadr::core::CharacterFilterPlan filter_application_plan;
+reaadr::reaper::CharacterFilterInspectionResult fake_filter_application_inspect(std::string* error)
+{
+  if (error) error->clear();
+  return {filter_application_state, {}};
+}
+reaadr::reaper::CharacterFilterApplyResult fake_filter_application_apply(
+  const reaadr::core::CharacterFilterPlan& plan, std::string* error)
+{
+  if (error) error->clear();
+  filter_application_plan = plan;
+  return {0, static_cast<int>(plan.track_mutations.size()), 0,
+          static_cast<int>(plan.region_mutations.size()), {}};
+}
+
+void test_character_filter_application_service()
+{
+  FakeProjectStateStore store;
+  reaadr::core::SessionModel model;
+  model.session["session_id"] = "filter-service";
+  model.cues = {{{"id", "A1"}, {"character", "Actor"}, {"start_time", "1"}, {"end_time", "2"}}};
+  reaadr::core::SessionModelRepository sessions(store);
+  reaadr::core::CharacterFilterRepository filters(store);
+  check(sessions.save(model), "filter application fixture saves its canonical model");
+  filter_application_state = {};
+  filter_application_state.tracks.push_back({0, "character", "actor.lane1", true});
+  filter_application_state.regions.push_back({10, reaadr::core::render_region_name(model.cues[0]), true});
+  const auto before = filters.load();
+  reaadr::reaper::CharacterFilterApplicationService service(
+    sessions, filters, fake_transaction_api(),
+    {fake_filter_application_inspect, fake_filter_application_apply});
+  const auto result = service.apply({"Actor"}, true);
+  const auto after = filters.load();
+  check(result && result.applied.tracks_unmuted == 1 && result.applied.regions_shown == 1 &&
+          after && after.state.encoded_selection == "actor" && after.state.hide_inactive_regions &&
+          filter_application_plan.track_mutations.size() == 1 && before,
+        "character-filter application service persists state after transactional native updates");
+}
+
 void test_track_region_adapter()
 {
   constexpr int custom_color_flag = 0x1000000;
@@ -3243,6 +3284,7 @@ int main()
   test_cue_cleanup_plan();
   test_cue_cleanup_adapter();
   test_cue_cleanup_application_service();
+  test_character_filter_application_service();
   test_overlay_refresh_adapter();
   test_track_region_adapter();
   test_extended_render_planner();
