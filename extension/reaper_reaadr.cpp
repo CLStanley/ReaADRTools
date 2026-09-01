@@ -3,6 +3,7 @@
 #define REAPERAPI_WANT_AddCustomizableMenu
 #define REAPERAPI_WANT_AddRemoveReaScript
 #define REAPERAPI_WANT_CountSelectedMediaItems
+#define REAPERAPI_WANT_CountTracks
 #define REAPERAPI_WANT_CreateTakeAudioAccessor
 #define REAPERAPI_WANT_DestroyAudioAccessor
 #define REAPERAPI_WANT_GetActiveTake
@@ -12,15 +13,33 @@
 #define REAPERAPI_WANT_GetExtState
 #define REAPERAPI_WANT_GetMediaItemInfo_Value
 #define REAPERAPI_WANT_GetProjExtState
+#define REAPERAPI_WANT_GetRegionOrMarker
+#define REAPERAPI_WANT_GetRegionOrMarkerInfo_Value
 #define REAPERAPI_WANT_GetResourcePath
 #define REAPERAPI_WANT_GetSelectedMediaItem
+#define REAPERAPI_WANT_GetTrack
+#define REAPERAPI_WANT_GetSetMediaItemInfo_String
+#define REAPERAPI_WANT_GetSetMediaTrackInfo_String
+#define REAPERAPI_WANT_EnumProjectMarkers3
 #define REAPERAPI_WANT_PreventUIRefresh
 #define REAPERAPI_WANT_SetProjExtState
 #define REAPERAPI_WANT_ShowMessageBox
+#define REAPERAPI_WANT_TimeMap_curFrameRate
+#define REAPERAPI_WANT_TrackFX_AddByName
+#define REAPERAPI_WANT_TrackFX_Delete
+#define REAPERAPI_WANT_TrackFX_GetCount
+#define REAPERAPI_WANT_TrackFX_GetEnabled
+#define REAPERAPI_WANT_TrackFX_GetNamedConfigParm
+#define REAPERAPI_WANT_TrackFX_SetEnabled
+#define REAPERAPI_WANT_TrackFX_SetNamedConfigParm
+#define REAPERAPI_WANT_TrackList_AdjustWindows
+#define REAPERAPI_WANT_UpdateArrange
 #define REAPERAPI_WANT_Undo_BeginBlock2
 #define REAPERAPI_WANT_Undo_CanUndo2
 #define REAPERAPI_WANT_Undo_DoUndo2
 #define REAPERAPI_WANT_Undo_EndBlock2
+#define REAPERAPI_WANT_ValidatePtr2
+#define REAPERAPI_WANT_GetNumRegionsOrMarkers
 
 #ifdef _WIN32
 #ifndef NOMINMAX
@@ -29,6 +48,7 @@
 #endif
 
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <cstdio>
 #include <cstdlib>
@@ -46,6 +66,8 @@
 
 #include "reaadr_core/session_model.hpp"
 #include "reaadr_core/model_repository.hpp"
+#include "reaadr_reaper/overlay_application_service.hpp"
+#include "reaadr_reaper/overlay_refresh_adapter.hpp"
 #include "reaadr_reaper/project_state.hpp"
 #include "reaadr_reaper/project_transaction.hpp"
 
@@ -59,6 +81,8 @@ constexpr int kMainSection = 0;
 constexpr const char* kReaADRMenuId = "ReaADR Tools";
 constexpr const char* kValidateSessionCommandName = "ReaADRValidateSessionModelNative";
 constexpr const char* kValidateSessionActionLabel = "ReaADR: Validate Session Model (Native Preview)";
+constexpr const char* kRefreshOverlayCommandName = "ReaADRRefreshVideoOverlayNative";
+constexpr const char* kRefreshOverlayActionLabel = "ReaADR: Refresh Video Overlay (Native)";
 
 reaper_plugin_info_t* g_plugin = nullptr;
 REAPER_PLUGIN_HINSTANCE g_instance = nullptr;
@@ -75,6 +99,8 @@ SetMenuItemInfoFn g_set_menu_item_info = nullptr;
 std::string g_log_path;
 int g_validate_session_command_id = 0;
 gaccel_register_t g_validate_session_accel = {};
+int g_refresh_overlay_command_id = 0;
+gaccel_register_t g_refresh_overlay_accel = {};
 bool g_native_command_hook_registered = false;
 const char kDetectDialogueSegmentsDef[] =
   "bool\0"
@@ -110,6 +136,12 @@ std::vector<ScriptAction> g_actions = {
 // command ID, so there is intentionally no script path.
 ScriptAction g_validate_session_action = {
   "Validate Session Model (Native Preview)",
+  nullptr,
+  0,
+};
+
+ScriptAction g_refresh_overlay_action = {
+  "Refresh Video Overlay (Native)",
   nullptr,
   0,
 };
@@ -331,11 +363,145 @@ void run_validate_session_action()
   ShowMessageBox(message.c_str(), "ReaADR Session Model", 0);
 }
 
+MediaTrack* native_overlay_get_track(ReaProject* project, int index)
+{
+  return GetTrack ? GetTrack(project, index) : nullptr;
+}
+
+bool native_overlay_validate_track(ReaProject* project, MediaTrack* track)
+{
+  return ValidatePtr2 && ValidatePtr2(project, track, "MediaTrack*");
+}
+
+bool native_overlay_get_set_track_string(MediaTrack* track, const char* parameter,
+                                         char* value, bool set_value)
+{
+  return GetSetMediaTrackInfo_String &&
+    GetSetMediaTrackInfo_String(track, parameter, value, set_value);
+}
+
+std::string selected_overlay_cue_key_from_regions()
+{
+  if (!GetNumRegionsOrMarkers || !EnumProjectMarkers3 || !GetRegionOrMarker ||
+      !GetRegionOrMarkerInfo_Value) return {};
+  const int count = GetNumRegionsOrMarkers(nullptr);
+  for (int index = 0; index < count; ++index) {
+    bool is_region = false;
+    const char* name = nullptr;
+    if (!EnumProjectMarkers3(nullptr, index, &is_region, nullptr, nullptr, &name, nullptr, nullptr) ||
+        !is_region || !name) continue;
+    ProjectMarker* marker = GetRegionOrMarker(nullptr, index, "");
+    if (!marker || GetRegionOrMarkerInfo_Value(nullptr, marker, "B_UISEL") == 0.0) continue;
+    const std::string text(name);
+    const std::string marker_prefix = "[ReaADR]:id=";
+    const std::size_t begin = text.find(marker_prefix);
+    if (begin == std::string::npos) continue;
+    const std::size_t value_begin = begin + marker_prefix.size();
+    const std::size_t value_end = text.find_first_of(" \t\r\n", value_begin);
+    return text.substr(value_begin, value_end == std::string::npos ? std::string::npos : value_end - value_begin);
+  }
+  return {};
+}
+
+reaadr::reaper::OverlaySelectionInput native_overlay_selection()
+{
+  reaadr::reaper::OverlaySelectionInput selection;
+  selection.selected_region_cue_key = selected_overlay_cue_key_from_regions();
+  if (CountSelectedMediaItems && GetSelectedMediaItem && GetSetMediaItemInfo_String) {
+    const int count = CountSelectedMediaItems(nullptr);
+    std::array<char, 4096> value = {};
+    for (int index = 0; index < count; ++index) {
+      MediaItem* item = GetSelectedMediaItem(nullptr, index);
+      if (item && GetSetMediaItemInfo_String(item, "P_EXT:ReaADR.cue_key", value.data(), false) &&
+          value[0] != '\0') {
+        selection.selected_item_cue_key = value.data();
+        break;
+      }
+    }
+  }
+  return selection;
+}
+
+double native_overlay_frame_rate()
+{
+  bool drop_frame = false;
+  const double frame_rate = TimeMap_curFrameRate
+    ? TimeMap_curFrameRate(nullptr, &drop_frame) : 24.0;
+  return std::isfinite(frame_rate) && frame_rate > 0.0 ? frame_rate : 24.0;
+}
+
+reaadr::reaper::OverlayRefreshApi native_overlay_refresh_api()
+{
+  return {
+    CountTracks,
+    native_overlay_get_track,
+    native_overlay_validate_track,
+    native_overlay_get_set_track_string,
+    TrackFX_GetCount,
+    TrackFX_GetNamedConfigParm,
+    TrackFX_GetEnabled,
+    TrackFX_AddByName,
+    TrackFX_Delete,
+    TrackFX_SetNamedConfigParm,
+    TrackFX_SetEnabled,
+    TrackList_AdjustWindows,
+    UpdateArrange,
+  };
+}
+
+reaadr::reaper::TransactionApi native_overlay_transaction_api()
+{
+  return {
+    Undo_BeginBlock2,
+    Undo_EndBlock2,
+    Undo_CanUndo2,
+    Undo_DoUndo2,
+    PreventUIRefresh,
+  };
+}
+
+bool native_overlay_refresh_callback(
+  const reaadr::core::OverlayRefreshOptions& options, std::string* error)
+{
+  const auto applied = reaadr::reaper::refresh_generated_overlay_transactionally(
+    nullptr, native_overlay_refresh_api(), native_overlay_transaction_api(), options,
+    "ReaADR: refresh video overlay");
+  if (!applied && error) *error = applied.error;
+  return static_cast<bool>(applied);
+}
+
+void run_refresh_overlay_action()
+{
+  reaadr::reaper::ProjectStateStore project_state(
+    nullptr, {GetProjExtState, SetProjExtState});
+  reaadr::core::SessionModelRepository sessions(project_state);
+  reaadr::core::OverlaySettingsRepository settings(project_state);
+  reaadr::core::CueSelectionRepository selections(project_state);
+  reaadr::core::CharacterFilterRepository filters(project_state);
+  const reaadr::reaper::OverlayApplicationApi api = {
+    native_overlay_frame_rate, native_overlay_selection, native_overlay_refresh_callback,
+  };
+  reaadr::reaper::OverlayApplicationService service(sessions, settings, selections, filters, api);
+  const auto result = service.refresh();
+  if (!result) {
+    ShowMessageBox(result.error.c_str(), "ReaADR Video Overlay", 0);
+    return;
+  }
+  log_line("Native overlay refresh completed; displayed cues=" +
+    std::to_string(result.displayed_cue_count));
+}
+
 bool hook_native_command(int command, int)
 {
-  if (command != g_validate_session_command_id || command == 0) return false;
-  run_validate_session_action();
-  return true;
+  if (command == g_validate_session_command_id && command != 0) {
+    run_validate_session_action();
+    return true;
+  }
+  if (command == g_refresh_overlay_command_id && command != 0) {
+    run_refresh_overlay_action();
+    return true;
+  }
+  return false;
 }
 
 bool register_native_actions()
@@ -368,6 +534,20 @@ bool register_native_actions()
 
   g_native_command_hook_registered = true;
   g_validate_session_action.command_id = g_validate_session_command_id;
+  g_refresh_overlay_command_id = g_plugin->Register(
+    "command_id", reinterpret_cast<void*>(const_cast<char*>(kRefreshOverlayCommandName)));
+  if (g_refresh_overlay_command_id) {
+    g_refresh_overlay_accel.accel.cmd = static_cast<WORD>(g_refresh_overlay_command_id);
+    g_refresh_overlay_accel.desc = kRefreshOverlayActionLabel;
+    if (g_plugin->Register("gaccel", reinterpret_cast<void*>(&g_refresh_overlay_accel))) {
+      g_refresh_overlay_action.command_id = g_refresh_overlay_command_id;
+    } else {
+      g_refresh_overlay_command_id = 0;
+      log_line("Could not add the native overlay refresh command to the Action List.");
+    }
+  } else {
+    log_line("Could not allocate the native overlay refresh command ID.");
+  }
   log_line("Registered native action: " + std::string(kValidateSessionActionLabel));
   return true;
 }
@@ -384,6 +564,12 @@ void unregister_native_actions()
     g_validate_session_command_id = 0;
     g_validate_session_action.command_id = 0;
     g_validate_session_accel = {};
+  }
+  if (g_refresh_overlay_command_id) {
+    g_plugin->Register("-gaccel", reinterpret_cast<void*>(&g_refresh_overlay_accel));
+    g_refresh_overlay_command_id = 0;
+    g_refresh_overlay_action.command_id = 0;
+    g_refresh_overlay_accel = {};
   }
 }
 
@@ -872,6 +1058,7 @@ void hook_custom_menu(const char* menu_id, void* menu, int flag)
       }
     }
     add_menu_item(hmenu, position, g_validate_session_action);
+    add_menu_item(hmenu, position + 1, g_refresh_overlay_action);
     log_line("Added top-level ReaADR Tools menu.");
     return;
   }
@@ -892,6 +1079,13 @@ void hook_custom_menu(const char* menu_id, void* menu, int flag)
       g_validate_session_action.label);
   } else {
     add_menu_item(hmenu, position, g_validate_session_action);
+  }
+  const int refresh_position = validation_position + 1;
+  if (refresh_position < existing_items) {
+    update_menu_item_label(hmenu, refresh_position, g_refresh_overlay_action,
+      g_refresh_overlay_action.label);
+  } else {
+    add_menu_item(hmenu, position + 1, g_refresh_overlay_action);
   }
   log_line("Updated top-level ReaADR quick-action labels.");
 }

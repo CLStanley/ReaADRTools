@@ -165,10 +165,14 @@ visual-cue behavior.
 The native overlay application coordinator now composes those inputs and
 forwards one immutable refresh request to the transactional FX adapter,
 including explicit disabled and retryable failure outcomes.
+The extension now exposes a native refresh action that binds current REAPER
+selection, frame rate, project state, and FX APIs to that coordinator. The
+legacy Lua action remains registered for compatibility while broader command
+and UI cutover proceeds.
 These domain operations and adapters are test-covered but are not yet public
 writers; the region-sync, character-filter, and navigation command/UI cutovers,
-the deferred recording frame/UI wiring, native REAPER callback binding,
-generated-cue cleanup, other overlay UI, and in-REAPER smoke tests remain.
+the deferred recording frame/UI wiring, generated-cue cleanup, other overlay
+UI, and in-REAPER smoke tests remain.
 
 ### Stage 4: native UI and Lua removal
 

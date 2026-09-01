@@ -97,8 +97,9 @@ Lua-compatible project preference contract, while `overlay_eel.*` generates
 the owned Video Processor source from canonical cues with deterministic
 selection and shared character/lane filtering. These services are not invoked
 directly by the UI yet; Lua remains the public workflow layer until native
-REAPER callback binding, deferred command/UI wiring, and in-REAPER smoke tests
-are ready for coordinated cutover.
+command/UI wiring and in-REAPER smoke tests are ready for coordinated cutover.
+The extension's native refresh action now supplies the REAPER selection,
+frame-rate, project-state, and FX callback bindings for this path.
 
 ## Lua Application Layer
 
