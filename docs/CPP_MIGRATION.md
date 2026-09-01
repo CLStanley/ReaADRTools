@@ -156,11 +156,16 @@ generated-code marker. They refuse duplicate ownership, preserve unrelated
 user FX, update owned effects in place, remove only exact generated effects,
 revalidate plans immediately before mutation, and compensate failed create or
 update attempts inside the native transaction boundary.
+Native overlay settings now read and write every Lua-compatible project key,
+with typed defaults and compensation for partial writes. Native EEL generation
+uses canonical model cues, shared overlap-lane filtering, deterministic
+region/item/active selection precedence, and the existing generated-code
+ownership marker while preserving the current text, timing, metadata, and
+visual-cue behavior.
 These domain operations and adapters are test-covered but are not yet public
 writers; the region-sync, character-filter, and navigation command/UI cutovers,
-the deferred recording frame/UI wiring, native overlay settings/EEL generation
-and callback binding, generated-cue cleanup, other overlay UI, and in-REAPER
-smoke tests remain.
+the deferred recording frame/UI wiring, native overlay callback binding,
+generated-cue cleanup, other overlay UI, and in-REAPER smoke tests remain.
 
 ### Stage 4: native UI and Lua removal
 
@@ -227,6 +232,11 @@ The initial target-architecture modules now include:
   idempotent snapshot/revision commit with rollback.
 - `extension/reaadr_core/recording_preferences.*`: compatibility persistence
   for the per-project Lua recording-preroll setting.
+- `extension/reaadr_core/overlay_settings.*`: typed persistence for the complete
+  Lua-compatible per-project overlay preference set.
+- `extension/reaadr_core/overlay_eel.*`: deterministic Video Processor source
+  generation from canonical cues, native selection state, and shared
+  character/lane filtering.
 - `extension/reaadr_core/overlay_refresh.*`: exact source-track/FX ownership and
   create/update/remove planning for generated video overlays.
 - `extension/reaadr_reaper/project_state.*`: dynamically sized REAPER project

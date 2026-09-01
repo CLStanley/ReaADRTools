@@ -56,6 +56,8 @@ cl /nologo /EHsc /O2 /LD /std:c++17 ^
   reaadr_core\recording_transport.cpp ^
   reaadr_core\cue_status.cpp ^
   reaadr_core\recording_preferences.cpp ^
+  reaadr_core\overlay_settings.cpp ^
+  reaadr_core\overlay_eel.cpp ^
   reaadr_core\overlay_refresh.cpp ^
   reaadr_reaper\project_state.cpp ^
   reaadr_reaper\project_transaction.cpp ^

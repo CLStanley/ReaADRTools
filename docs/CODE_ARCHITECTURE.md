@@ -92,10 +92,13 @@ actions, refreshes the overlay through a narrow adapter port, rolls model/view
 state back together on failure, and retains idempotent retry work.
 `overlay_refresh.*` and `overlay_refresh_adapter.*` implement the exact
 source-track/generated-FX ownership, stale-plan revalidation, in-place update,
-and compensation boundary behind that port. These services are not invoked
+and compensation boundary behind that port. `overlay_settings.*` owns the full
+Lua-compatible project preference contract, while `overlay_eel.*` generates
+the owned Video Processor source from canonical cues with deterministic
+selection and shared character/lane filtering. These services are not invoked
 directly by the UI yet; Lua remains the public workflow layer until native
-overlay settings/EEL generation, callback binding, deferred command/UI wiring,
-and in-REAPER smoke tests are ready for coordinated cutover.
+callback binding, deferred command/UI wiring, and in-REAPER smoke tests are
+ready for coordinated cutover.
 
 ## Lua Application Layer
 
@@ -288,6 +291,12 @@ placeholders to the Session Model before sync renders the cues into REAPER.
 
 The overlay is generated as source code for REAPER's Video Processor FX on the
 ADR Source Video track.
+
+The native `overlay_settings.*` and `overlay_eel.*` domain modules now mirror
+the transitional settings and source-generation contract without REAPER SDK
+dependencies. Lua remains the public caller until the native project callbacks
+bind selection, frame rate, settings, generation, and transactional FX refresh
+into one application service.
 
 Overlay code is regenerated when settings change, cue status changes, character
 filtering hides regions, or the user refreshes the overlay.

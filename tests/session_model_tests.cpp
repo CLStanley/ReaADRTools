@@ -6,7 +6,9 @@
 #include "reaadr_core/cue_wav.hpp"
 #include "reaadr_core/event_log.hpp"
 #include "reaadr_core/model_repository.hpp"
+#include "reaadr_core/overlay_eel.hpp"
 #include "reaadr_core/overlay_refresh.hpp"
+#include "reaadr_core/overlay_settings.hpp"
 #include "reaadr_core/region_timing_sync.hpp"
 #include "reaadr_core/record_arm.hpp"
 #include "reaadr_core/recording_setup.hpp"
@@ -2403,6 +2405,122 @@ void test_overlay_refresh_adapter()
         "disabling overlays removes only the exactly owned generated effect");
 }
 
+void test_overlay_settings_and_eel()
+{
+  FakeProjectStateStore store;
+  store.values["ReaADRTools:overlay.enabled"] = "no";
+  store.values["ReaADRTools:overlay.show_metadata"] = "yes";
+  store.values["ReaADRTools:overlay.show_flash"] = "TRUE";
+  store.values["ReaADRTools:overlay.text_color"] = "yellow";
+  store.values["ReaADRTools:overlay.metadata_fields"] = "Media Time, Project Name";
+  store.values["ReaADRTools:overlay.preroll_seconds"] = " 2.5 ";
+  reaadr::core::OverlaySettingsRepository repository(store);
+  auto loaded = repository.load();
+  check(loaded && !loaded.settings.enabled && loaded.settings.show_metadata &&
+          !loaded.settings.show_flash && loaded.settings.text_color == "yellow" &&
+          loaded.settings.metadata_fields == "Media Time, Project Name" &&
+          std::abs(loaded.settings.preroll_seconds - 2.5) < 0.000001 &&
+          loaded.settings.include_preroll_each_loop,
+        "native overlay settings load the exact Lua keys, defaults, and boolean grammar");
+
+  loaded.settings.show_character = false;
+  loaded.settings.include_preroll_each_loop = false;
+  loaded.settings.preroll_seconds = 4.25;
+  auto saved = repository.save(loaded.settings);
+  check(saved && saved.changed &&
+          store.values.at("ReaADRTools:overlay.show_character") == "0" &&
+          store.values.at("ReaADRTools:overlay.include_preroll_each_loop") == "0" &&
+          store.values.at("ReaADRTools:overlay.preroll_seconds") == "4.25" &&
+          repository.load().settings == loaded.settings,
+        "native overlay settings save all Lua-compatible project preferences");
+  saved = repository.save(loaded.settings);
+  check(saved && !saved.changed, "unchanged native overlay settings are a persistence no-op");
+
+  FakeProjectStateStore failing_store;
+  reaadr::core::OverlaySettingsRepository failing_repository(failing_store);
+  reaadr::core::OverlaySettings changed_defaults;
+  changed_defaults.show_character = false;
+  failing_store.failed_write_key = "ReaADRTools:overlay.show_character";
+  failing_store.failed_writes_remaining = 1;
+  const auto failed_save = failing_repository.save(changed_defaults);
+  check(!failed_save && failing_store.values.empty() &&
+          failing_repository.load().settings == reaadr::core::OverlaySettings{},
+        "failed batch overlay preference persistence restores prior project extstate");
+
+  reaadr::core::SessionModel model;
+  model.cues = {
+    {{"id", "B"}, {"character", "Beta"}, {"start_time", "10"}, {"end_time", "12"},
+     {"line", "Earlier line"}, {"notes", ""}, {"direction", ""},
+     {"cue_type", "ADR"}, {"status", "Not Recorded"}, {"source_line", "2"},
+     {"metadata", ""}},
+    {{"id", "C"}, {"character", "Actor"}, {"start_time", "20"}, {"end_time", "21"},
+     {"line", "Say \"quoted\" text\\path\nnow"}, {"notes", "whisper"},
+     {"direction", "ignored"}, {"cue_type", "Walla"}, {"status", "recorded"},
+     {"source_line", "3"},
+     {"metadata", reaadr::core::serialize_metadata({
+       {"media_time", "01:02:03:04"}, {"Project Name", "Example"}})}},
+  };
+  reaadr::core::OverlayEelOptions options;
+  options.frame_rate = 23.976;
+  options.selected_region_cue_key = "C";
+  options.selected_item_cue_key = "B";
+  options.active_overlay_cue_key = "B";
+  options.settings.text_color = " YELLOW ";
+  options.settings.show_project_timer = false;
+  options.settings.show_flash = false;
+  options.settings.show_metadata = true;
+  options.settings.metadata_fields = "Media Time,Project Name";
+  auto generated = reaadr::core::build_overlay_eel(model, options);
+  const std::size_t selected_position = generated.video_code.find("#cue_number = \"Cue #C\"");
+  const std::size_t other_position = generated.video_code.find("#cue_number = \"Cue #B\"");
+  check(generated && generated.displayed_cue_count == 2 &&
+          generated.selected_cue_key == "C" &&
+          generated.video_code.rfind(reaadr::core::kOverlayCodeMarker, 0) == 0 &&
+          generated.video_code.find("display_fps = 24;") != std::string::npos &&
+          selected_position < other_position,
+        "native EEL generation is ownership-marked and prioritizes region selection deterministically");
+  check(generated.video_code.find("#cue_tc = \"00:00:20:00\"") != std::string::npos &&
+          generated.video_code.find("#direction = \"(whisper)\"") != std::string::npos &&
+          generated.video_code.find("#media_time = \"01:02:03:04\"") != std::string::npos &&
+          generated.video_code.find("#metadata_2 = \"Project Name: Example\"") != std::string::npos &&
+          generated.video_code.find("#dialogue_1 = \"Say \\\"quoted\\\" text\\\\path now\"") != std::string::npos &&
+          generated.video_code.find("gfx_set(0.000, 0.682, 0.937, 1)") != std::string::npos &&
+          generated.video_code.find("gfx_set(1, 0.93, 0.48, 1)") != std::string::npos,
+        "native EEL generation preserves overlay text, metadata, status, escaping, and color behavior");
+  check(generated.video_code.find("Timeline SMPTE") == std::string::npos &&
+          generated.video_code.find("flash =") == std::string::npos &&
+          generated.video_code.find(
+            "overlay_drawn == 0 && now >= 17.000000 && now <= 21.000000 ? (") != std::string::npos &&
+          generated.video_code.find(
+            "overlay_drawn == 0 && now >= 7.000000 && now <= 12.000000 && (now >= 10.000000 || active_region_count == 0)") != std::string::npos,
+        "native EEL toggles and selected-cue preroll overlap rules match the transitional overlay");
+
+  reaadr::core::SessionModel filtered_model;
+  filtered_model.cues = {
+    {{"id", "A1"}, {"character", "Actor"}, {"start_time", "10"}, {"end_time", "12"}},
+    {{"id", "A2"}, {"character", "Actor"}, {"start_time", "11"}, {"end_time", "13"}},
+    {{"id", "B1"}, {"character", "Beta"}, {"start_time", "20"}, {"end_time", "22"}},
+  };
+  reaadr::core::OverlayEelOptions filtered_options;
+  filtered_options.settings.preroll_seconds = 3.0;
+  filtered_options.character_filter =
+    reaadr::core::parse_character_filter_state("actor.lane2", true);
+  generated = reaadr::core::build_overlay_eel(filtered_model, filtered_options);
+  check(generated && generated.displayed_cue_count == 1 &&
+          generated.video_code.find("Cue #A2") != std::string::npos &&
+          generated.video_code.find("Cue #A1") == std::string::npos &&
+          generated.video_code.find("Cue #B1") == std::string::npos,
+        "native EEL generation filters canonical cues by the shared overlap-lane assignment");
+  filtered_options.character_filter.hide_inactive_regions = false;
+  generated = reaadr::core::build_overlay_eel(filtered_model, filtered_options);
+  check(generated && generated.displayed_cue_count == 3,
+        "active character selection does not hide overlay cues unless region hiding is enabled");
+
+  filtered_model.cues[0]["start_time"] = "invalid";
+  check(!reaadr::core::build_overlay_eel(filtered_model, {}),
+        "native EEL generation rejects malformed canonical cue timing");
+}
+
 void test_track_region_adapter()
 {
   constexpr int custom_color_flag = 0x1000000;
@@ -2868,6 +2986,7 @@ int main()
   test_recording_transport();
   test_recording_transport_executor();
   test_recording_application_service();
+  test_overlay_settings_and_eel();
   test_overlay_refresh_adapter();
   test_track_region_adapter();
   test_extended_render_planner();

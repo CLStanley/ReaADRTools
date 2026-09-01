@@ -34,7 +34,8 @@ code change, a user-visible workflow, or a documented constraint.
   canonical Recorded-status commit, CueUpdated publication, preference writes,
   overlay rollback, and retry coordination are implemented. Native overlay-FX
   ownership/mutation adaptation is implemented with failed-update compensation;
-  overlay EEL generation/binding and deferred recording UI wiring remain.)
+  complete overlay settings persistence and EEL generation are also implemented
+  in the native domain. Callback binding and deferred recording UI wiring remain.)
 - Keep model save and generated-project rendering in one Undo-owned operation.
   (Done for import, generation, region timing, Cue Manager add/remove, refresh,
   setup, filtering, and character clearing. The native full-render coordinator
