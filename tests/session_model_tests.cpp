@@ -8,6 +8,7 @@
 #include "reaadr_core/region_timing_sync.hpp"
 #include "reaadr_core/record_arm.hpp"
 #include "reaadr_core/recording_setup.hpp"
+#include "reaadr_core/recording_transport.hpp"
 #include "reaadr_core/render_plan.hpp"
 #include "reaadr_core/session_builder.hpp"
 #include "reaadr_core/session_commit.hpp"
@@ -1708,6 +1709,112 @@ void test_recording_setup()
   stale_recording_track_reads = 0;
 }
 
+void test_recording_transport()
+{
+  const reaadr::core::RecordingTransportContext context{7.0, 10.0, 12.0};
+  reaadr::core::RecordingTransportState state;
+  auto transition = reaadr::core::advance_recording_transport(
+    state, context, {reaadr::core::RecordingTransportEvent::start, 0, 0.0});
+  check(transition && transition.state.mode == reaadr::core::RecordingTransportMode::preroll &&
+          !transition.state.operation_finalized && transition.actions.move_cursor &&
+          transition.actions.cursor_position == 7.0 && transition.actions.isolate_recording_track &&
+          transition.actions.play && !transition.actions.record &&
+          transition.actions.refresh_active_cue,
+        "native recording transport starts a first take in preroll with explicit host intents");
+
+  transition = reaadr::core::advance_recording_transport(
+    transition.state, context, {reaadr::core::RecordingTransportEvent::tick, 1, 10.0});
+  check(transition && transition.state.mode == reaadr::core::RecordingTransportMode::recording &&
+          transition.state.take_count == 1 && transition.actions.record,
+        "native recording transport punches in at the canonical cue start");
+
+  transition = reaadr::core::advance_recording_transport(
+    transition.state, context, {reaadr::core::RecordingTransportEvent::tick, 5, 12.0});
+  check(transition && transition.state.mode == reaadr::core::RecordingTransportMode::idle &&
+          transition.state.operation_finalized && transition.actions.stop &&
+          transition.actions.restore_record_arm && transition.actions.finalize_recorded_takes,
+        "native recording transport stops and finalizes a completed non-loop take");
+
+  reaadr::core::RecordingTransportState externally_stopped;
+  externally_stopped.mode = reaadr::core::RecordingTransportMode::preroll;
+  externally_stopped.operation_finalized = false;
+  const auto preroll_stopped = reaadr::core::advance_recording_transport(
+    externally_stopped, context, {reaadr::core::RecordingTransportEvent::tick, 0, 8.0});
+  check(preroll_stopped && preroll_stopped.state.mode == reaadr::core::RecordingTransportMode::idle &&
+          preroll_stopped.actions.restore_record_arm &&
+          !preroll_stopped.actions.stop && !preroll_stopped.actions.finalize_recorded_takes,
+        "external stop during preroll cleans up without counting or finalizing a take");
+
+  reaadr::core::RecordingTransportState loop_state;
+  loop_state.loop_enabled = true;
+  auto loop = reaadr::core::advance_recording_transport(
+    loop_state, context, {reaadr::core::RecordingTransportEvent::start, 0, 0.0});
+  check(loop && loop.actions.configure_loop_range && loop.state.loop_range_active,
+        "loop recording configures its range before the first preroll");
+  loop = reaadr::core::advance_recording_transport(
+    loop.state, context, {reaadr::core::RecordingTransportEvent::tick, 1, 10.0});
+  loop = reaadr::core::advance_recording_transport(
+    loop.state, context, {reaadr::core::RecordingTransportEvent::tick, 5, 12.0});
+  check(loop && loop.state.mode == reaadr::core::RecordingTransportMode::loop_wait &&
+          loop.state.take_count == 1 && loop.actions.stop &&
+          !loop.actions.restore_record_arm && !loop.actions.finalize_recorded_takes,
+        "completed loop take waits for transport settlement without releasing recording state");
+  loop = reaadr::core::advance_recording_transport(
+    loop.state, context, {reaadr::core::RecordingTransportEvent::tick, 0, 12.0});
+  check(loop && loop.state.mode == reaadr::core::RecordingTransportMode::preroll &&
+          loop.actions.move_cursor && loop.actions.cursor_position == 7.0 &&
+          loop.actions.isolate_recording_track && loop.actions.play,
+        "settled loop transport starts the next take through the shared preroll path");
+
+  reaadr::core::RecordingTransportState toggled;
+  auto toggle = reaadr::core::advance_recording_transport(
+    toggled, context, {reaadr::core::RecordingTransportEvent::toggle_loop, 0, 0.0});
+  check(toggle && toggle.state.loop_enabled && toggle.state.loop_range_active &&
+          toggle.actions.configure_loop_range,
+        "enabling loop recording configures the bounded preroll-to-cue-end range");
+  toggle = reaadr::core::advance_recording_transport(
+    toggle.state, context,
+    {reaadr::core::RecordingTransportEvent::toggle_preroll_each_loop, 0, 0.0});
+  check(toggle && !toggle.state.include_preroll_each_loop && !toggle.state.loop_range_active &&
+          toggle.actions.restore_loop_range && toggle.actions.persist_preroll_preference,
+        "disabling per-loop preroll restores the user's loop range and persists the choice");
+  toggle = reaadr::core::advance_recording_transport(
+    toggle.state, context,
+    {reaadr::core::RecordingTransportEvent::toggle_preroll_each_loop, 0, 0.0});
+  check(toggle && toggle.state.include_preroll_each_loop && toggle.state.loop_range_active &&
+          toggle.actions.configure_loop_range && toggle.actions.persist_preroll_preference,
+        "re-enabling per-loop preroll configures the loop range and persists the choice");
+
+  reaadr::core::RecordingTransportState immediate_loop;
+  immediate_loop.mode = reaadr::core::RecordingTransportMode::loop_wait;
+  immediate_loop.loop_enabled = true;
+  immediate_loop.include_preroll_each_loop = false;
+  immediate_loop.operation_finalized = false;
+  immediate_loop.take_count = 1;
+  const auto immediate = reaadr::core::advance_recording_transport(
+    immediate_loop, context, {reaadr::core::RecordingTransportEvent::tick, 0, 12.0});
+  check(immediate && immediate.state.mode == reaadr::core::RecordingTransportMode::recording &&
+          immediate.state.take_count == 2 && immediate.actions.cursor_position == 10.0 &&
+          immediate.actions.record && !immediate.actions.play,
+        "loop recording can start subsequent takes immediately when per-loop preroll is disabled");
+
+  reaadr::core::RecordingTransportState abort_state;
+  abort_state.mode = reaadr::core::RecordingTransportMode::recording;
+  abort_state.operation_finalized = false;
+  abort_state.loop_range_active = true;
+  abort_state.take_count = 2;
+  const auto aborted = reaadr::core::advance_recording_transport(
+    abort_state, context, {reaadr::core::RecordingTransportEvent::abort, 5, 11.0});
+  check(aborted && aborted.state.mode == reaadr::core::RecordingTransportMode::idle &&
+          aborted.actions.stop && aborted.actions.restore_loop_range &&
+          aborted.actions.restore_record_arm && aborted.actions.finalize_recorded_takes,
+        "recording abort converges transport, loop, arm, and take cleanup into one transition");
+
+  const auto invalid = reaadr::core::advance_recording_transport(
+    {}, {11.0, 10.0, 12.0}, {reaadr::core::RecordingTransportEvent::start, 0, 0.0});
+  check(!invalid, "native recording transport rejects an invalid preroll window");
+}
+
 void test_track_region_adapter()
 {
   constexpr int custom_color_flag = 0x1000000;
@@ -2170,6 +2277,7 @@ int main()
   test_cue_navigation();
   test_record_arm_manager();
   test_recording_setup();
+  test_recording_transport();
   test_track_region_adapter();
   test_extended_render_planner();
   test_complete_render_adapter();

@@ -81,9 +81,13 @@ the future native recording coordinator. `recording_setup.*` shares canonical
 lane assignment with rendering, resolves cue/preroll timing and exact owned
 recording-track intent, and `recording_setup_adapter.*` revalidates the chosen
 track immediately before handing its non-owning handle to record-arm/transport
-code. These services are not invoked directly by the UI yet; Lua remains the
-public workflow layer until the relevant native command/UI wiring and in-REAPER
-smoke tests are ready for coordinated cutover.
+code. `recording_transport.*` centralizes the Lua-compatible preroll, punch-in,
+cue-end, repeat, and cleanup state transitions as ordered host intents. The
+future deferred REAPER coordinator must execute those intents before accepting
+the returned state, which keeps partial host failures from advancing the
+workflow. These services are not invoked directly by the UI yet; Lua remains
+the public workflow layer until the relevant native command/UI wiring and
+in-REAPER smoke tests are ready for coordinated cutover.
 
 ## Lua Application Layer
 

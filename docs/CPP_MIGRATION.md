@@ -133,10 +133,16 @@ owned `character` track. Exact lane ownership is preferred, the established
 lane fallback remains compatibility-only, duplicate matches fail closed, and
 the REAPER adapter revalidates role/key metadata immediately before returning
 the target handle to the future transport coordinator.
-The adapters and coordinator are test-covered but are not yet public writers;
-the region-sync, character-filter, and navigation command/UI cutovers,
-the recording transport/status coordinator, generated-cue cleanup, overlays,
-and in-REAPER smoke tests remain.
+The native recording transport state machine now owns the deterministic
+preroll, punch-in, cue-end stop, loop restart, user-stop/abort cleanup, and loop
+preference transitions. It emits ordered host intents rather than calling
+REAPER, so the future deferred coordinator can apply actions only after
+revalidating the setup and can retain the last committed state if an action
+fails.
+These domain operations and adapters are test-covered but are not yet public
+writers; the region-sync, character-filter, and navigation command/UI cutovers,
+the REAPER recording action executor and deferred status/UI coordinator,
+generated-cue cleanup, overlays, and in-REAPER smoke tests remain.
 
 ### Stage 4: native UI and Lua removal
 
@@ -196,6 +202,9 @@ The initial target-architecture modules now include:
   planning over a preserved original snapshot.
 - `extension/reaadr_core/recording_setup.*`: selected-cue timing, overlap-lane,
   preroll-window, and owned recording-track resolution.
+- `extension/reaadr_core/recording_transport.*`: deterministic preroll,
+  punch-in, looping, stop, cleanup, and preference transitions expressed as
+  ordered host intents.
 - `extension/reaadr_reaper/project_state.*`: dynamically sized REAPER project
   extstate access.
 - `extension/reaadr_reaper/project_transaction.*`: nested-safe undo and UI
