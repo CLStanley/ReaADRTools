@@ -89,10 +89,13 @@ accepts the new state. `cue_status.*` and `recording_preferences.*` own focused
 canonical status and compatibility preference persistence. The
 `recording_application_service.*` coordinator consumes the executor's pending
 actions, refreshes the overlay through a narrow adapter port, rolls model/view
-state back together on failure, and retains idempotent retry work. These
-services are not invoked directly by the UI yet; Lua remains the public workflow
-layer until the native overlay-FX adapter, deferred command/UI wiring, and
-in-REAPER smoke tests are ready for coordinated cutover.
+state back together on failure, and retains idempotent retry work.
+`overlay_refresh.*` and `overlay_refresh_adapter.*` implement the exact
+source-track/generated-FX ownership, stale-plan revalidation, in-place update,
+and compensation boundary behind that port. These services are not invoked
+directly by the UI yet; Lua remains the public workflow layer until native
+overlay settings/EEL generation, callback binding, deferred command/UI wiring,
+and in-REAPER smoke tests are ready for coordinated cutover.
 
 ## Lua Application Layer
 

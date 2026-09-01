@@ -150,10 +150,17 @@ selection, commits `Recorded` status through a focused snapshot/revision
 operation, and publishes `CueUpdated`. Overlay failure restores exact selection
 state or the canonical model snapshot and retains the failed action for an
 idempotent retry without duplicate revisions or events.
+Native overlay refresh planning and its REAPER adapter now locate only the
+exact owned `source_video` track and recognize the established renamed-FX or
+generated-code marker. They refuse duplicate ownership, preserve unrelated
+user FX, update owned effects in place, remove only exact generated effects,
+revalidate plans immediately before mutation, and compensate failed create or
+update attempts inside the native transaction boundary.
 These domain operations and adapters are test-covered but are not yet public
 writers; the region-sync, character-filter, and navigation command/UI cutovers,
-the deferred recording frame/UI wiring, the native overlay-FX refresh adapter,
-generated-cue cleanup, other overlays, and in-REAPER smoke tests remain.
+the deferred recording frame/UI wiring, native overlay settings/EEL generation
+and callback binding, generated-cue cleanup, other overlay UI, and in-REAPER
+smoke tests remain.
 
 ### Stage 4: native UI and Lua removal
 
@@ -220,6 +227,8 @@ The initial target-architecture modules now include:
   idempotent snapshot/revision commit with rollback.
 - `extension/reaadr_core/recording_preferences.*`: compatibility persistence
   for the per-project Lua recording-preroll setting.
+- `extension/reaadr_core/overlay_refresh.*`: exact source-track/FX ownership and
+  create/update/remove planning for generated video overlays.
 - `extension/reaadr_reaper/project_state.*`: dynamically sized REAPER project
   extstate access.
 - `extension/reaadr_reaper/project_transaction.*`: nested-safe undo and UI
@@ -247,6 +256,9 @@ The initial target-architecture modules now include:
 - `extension/reaadr_reaper/recording_application_service.*`: retryable
   selection, preference, canonical Recorded-status, overlay-refresh, and
   CueUpdated-event coordination with model/view rollback.
+- `extension/reaadr_reaper/overlay_refresh_adapter.*`: revalidated generated-FX
+  inspection and transactional create/update/remove application with user-FX
+  preservation and failed-mutation compensation.
 
 `make -C extension test` runs these modules without the REAPER SDK; normal
 extension builds compile the same sources into the plugin.

@@ -6,6 +6,7 @@
 #include "reaadr_core/cue_wav.hpp"
 #include "reaadr_core/event_log.hpp"
 #include "reaadr_core/model_repository.hpp"
+#include "reaadr_core/overlay_refresh.hpp"
 #include "reaadr_core/region_timing_sync.hpp"
 #include "reaadr_core/record_arm.hpp"
 #include "reaadr_core/recording_setup.hpp"
@@ -17,6 +18,7 @@
 #include "reaadr_core/session_mutation.hpp"
 #include "reaadr_reaper/project_state.hpp"
 #include "reaadr_reaper/project_transaction.hpp"
+#include "reaadr_reaper/overlay_refresh_adapter.hpp"
 #include "reaadr_reaper/cue_navigation_service.hpp"
 #include "reaadr_reaper/record_arm_adapter.hpp"
 #include "reaadr_reaper/recording_setup_adapter.hpp"
@@ -166,12 +168,19 @@ struct FakeItem {
   FakeTake take;
 };
 
+struct FakeFx {
+  std::string renamed_name;
+  std::string video_code;
+  bool enabled = false;
+};
+
 struct FakeTrack {
   std::map<std::string, std::string> strings;
   int color = 0;
   std::vector<std::unique_ptr<FakeItem>> items;
   bool muted = false;
   double record_armed = 0.0;
+  std::vector<FakeFx> effects;
 };
 
 struct FakeRegion {
@@ -202,6 +211,11 @@ struct RenderAdapterProbe {
   std::set<FakeTrack*> invalid_record_arm_tracks;
   bool fail_region_hidden = false;
   bool fail_item_value = false;
+  bool fail_overlay_add = false;
+  bool fail_overlay_delete = false;
+  std::string fail_overlay_set_parameter;
+  int fail_overlay_set_remaining = 0;
+  int last_overlay_instantiate = 0;
   int next_region_id = 100;
   int window_adjustments = 0;
   int arrange_updates = 0;
@@ -317,6 +331,106 @@ reaadr::reaper::RecordingSetupApi fake_recording_setup_api()
     fake_get_recording_track,
     fake_validate_record_arm_track,
     fake_get_set_track_string,
+  };
+}
+
+int fake_track_fx_get_count(MediaTrack* track)
+{
+  return track ? static_cast<int>(fake_track(track)->effects.size()) : -1;
+}
+
+bool fake_track_fx_get_named_config(MediaTrack* track, int fx_index,
+                                    const char* parameter, char* value, int value_size)
+{
+  if (!track || fx_index < 0 || !parameter || !value || value_size <= 0 ||
+      static_cast<std::size_t>(fx_index) >= fake_track(track)->effects.size()) {
+    return false;
+  }
+  const FakeFx& effect = fake_track(track)->effects[static_cast<std::size_t>(fx_index)];
+  const std::string name = parameter;
+  const std::string* source = nullptr;
+  if (name == "renamed_name") source = &effect.renamed_name;
+  else if (name == "VIDEO_CODE") source = &effect.video_code;
+  else return false;
+  std::snprintf(value, static_cast<std::size_t>(value_size), "%s", source->c_str());
+  return true;
+}
+
+bool fake_track_fx_get_enabled(MediaTrack* track, int fx_index)
+{
+  return track && fx_index >= 0 &&
+    static_cast<std::size_t>(fx_index) < fake_track(track)->effects.size() &&
+    fake_track(track)->effects[static_cast<std::size_t>(fx_index)].enabled;
+}
+
+int fake_track_fx_add_by_name(MediaTrack* track, const char*, bool, int instantiate)
+{
+  if (!track || render_adapter_probe.fail_overlay_add) return -1;
+  render_adapter_probe.last_overlay_instantiate = instantiate;
+  fake_track(track)->effects.push_back({});
+  return static_cast<int>(fake_track(track)->effects.size() - 1);
+}
+
+bool fake_track_fx_delete(MediaTrack* track, int fx_index)
+{
+  if (!track || render_adapter_probe.fail_overlay_delete || fx_index < 0 ||
+      static_cast<std::size_t>(fx_index) >= fake_track(track)->effects.size()) {
+    return false;
+  }
+  fake_track(track)->effects.erase(fake_track(track)->effects.begin() + fx_index);
+  return true;
+}
+
+bool fake_track_fx_set_named_config(MediaTrack* track, int fx_index,
+                                    const char* parameter, const char* value)
+{
+  if (!track || fx_index < 0 || !parameter ||
+      static_cast<std::size_t>(fx_index) >= fake_track(track)->effects.size()) {
+    return false;
+  }
+  const std::string name = parameter;
+  if (render_adapter_probe.fail_overlay_set_parameter == name &&
+      render_adapter_probe.fail_overlay_set_remaining != 0) {
+    if (render_adapter_probe.fail_overlay_set_remaining > 0) {
+      --render_adapter_probe.fail_overlay_set_remaining;
+    }
+    return false;
+  }
+  FakeFx& effect = fake_track(track)->effects[static_cast<std::size_t>(fx_index)];
+  if (name == "renamed_name") effect.renamed_name = value ? value : "";
+  else if (name == "VIDEO_CODE") effect.video_code = value ? value : "";
+  else if (name != "DONE") return false;
+  return true;
+}
+
+void fake_track_fx_set_enabled(MediaTrack* track, int fx_index, bool enabled)
+{
+  if (!track || fx_index < 0 ||
+      static_cast<std::size_t>(fx_index) >= fake_track(track)->effects.size()) {
+    return;
+  }
+  fake_track(track)->effects[static_cast<std::size_t>(fx_index)].enabled = enabled;
+}
+
+void fake_adjust_track_windows(bool);
+void fake_update_arrange();
+
+reaadr::reaper::OverlayRefreshApi fake_overlay_refresh_api()
+{
+  return {
+    fake_count_tracks,
+    fake_get_track,
+    fake_validate_record_arm_track,
+    fake_get_set_track_string,
+    fake_track_fx_get_count,
+    fake_track_fx_get_named_config,
+    fake_track_fx_get_enabled,
+    fake_track_fx_add_by_name,
+    fake_track_fx_delete,
+    fake_track_fx_set_named_config,
+    fake_track_fx_set_enabled,
+    fake_adjust_track_windows,
+    fake_update_arrange,
   };
 }
 
@@ -2157,6 +2271,138 @@ void test_recording_application_service()
         "recording event publication warning does not retry an applied model/view commit");
 }
 
+void test_overlay_refresh_adapter()
+{
+  const std::string old_code =
+    std::string(reaadr::core::kOverlayCodeMarker) + "\nold_overlay();";
+  const std::string new_code =
+    std::string(reaadr::core::kOverlayCodeMarker) + "\nnew_overlay();";
+  const reaadr::core::OverlayRefreshOptions enabled{true, new_code};
+
+  check(!reaadr::core::build_overlay_refresh_plan({}, enabled),
+        "overlay planner requires the exact owned source-video track");
+  std::vector<reaadr::core::ExistingOverlayTrack> domain_tracks = {
+    {0, "source_video", "source_video", {
+      {0, "User Video Processor", "user_code();", true},
+    }},
+  };
+  auto planned = reaadr::core::build_overlay_refresh_plan(domain_tracks, enabled);
+  check(planned && planned.plan.mutation == reaadr::core::OverlayMutationKind::create,
+        "overlay planner ignores unowned user effects when creating its generated effect");
+
+  domain_tracks[0].effects.push_back({1, "", old_code, false});
+  planned = reaadr::core::build_overlay_refresh_plan(domain_tracks, enabled);
+  check(planned && planned.plan.mutation == reaadr::core::OverlayMutationKind::update &&
+          planned.plan.existing.fx_index == 1,
+        "overlay planner recognizes the Lua-compatible generated-code ownership marker");
+  domain_tracks[0].effects[1] = {
+    1, reaadr::core::kOverlayFxName, new_code, true,
+  };
+  planned = reaadr::core::build_overlay_refresh_plan(domain_tracks, enabled);
+  check(planned && planned.plan.mutation == reaadr::core::OverlayMutationKind::none,
+        "overlay planner treats an exact enabled overlay as a no-op");
+
+  auto duplicates = domain_tracks;
+  duplicates.push_back({1, "source_video", "source_video", {}});
+  check(!reaadr::core::build_overlay_refresh_plan(duplicates, enabled),
+        "overlay planner fails closed for duplicate owned source-video tracks");
+  domain_tracks[0].effects.push_back({2, reaadr::core::kOverlayFxName, old_code, true});
+  check(!reaadr::core::build_overlay_refresh_plan(domain_tracks, enabled),
+        "overlay planner refuses ambiguous generated overlay ownership");
+
+  render_adapter_probe = {};
+  render_adapter_probe.tracks.resize(1);
+  FakeTrack& source_track = render_adapter_probe.tracks[0];
+  source_track.strings = {
+    {"P_EXT:ReaADR.role", "source_video"},
+    {"P_EXT:ReaADR.key", "source_video"},
+  };
+  source_track.effects.push_back({"User Video Processor", "user_code();", true});
+  transaction_probe = {};
+  auto applied = reaadr::reaper::refresh_generated_overlay_transactionally(
+    nullptr, fake_overlay_refresh_api(), fake_transaction_api(), enabled,
+    "ReaADR: refresh video overlay");
+  check(applied && applied.effects_created == 1 && source_track.effects.size() == 2 &&
+          source_track.effects[0].renamed_name == "User Video Processor" &&
+          source_track.effects[1].renamed_name == reaadr::core::kOverlayFxName &&
+          source_track.effects[1].video_code == new_code &&
+          source_track.effects[1].enabled &&
+          render_adapter_probe.last_overlay_instantiate == -1 &&
+          transaction_probe.refresh_balance == 0,
+        "overlay adapter creates a distinct owned Video processor without adopting user FX");
+
+  const int adjustments = render_adapter_probe.window_adjustments;
+  applied = reaadr::reaper::refresh_generated_overlay_transactionally(
+    nullptr, fake_overlay_refresh_api(), fake_transaction_api(), enabled,
+    "ReaADR: refresh video overlay");
+  check(applied && applied.effects_created == 0 && applied.effects_updated == 0 &&
+          render_adapter_probe.window_adjustments == adjustments,
+        "unchanged overlay refresh avoids FX and window mutations");
+
+  const reaadr::core::OverlayRefreshOptions update_options{true, old_code};
+  applied = reaadr::reaper::refresh_generated_overlay_transactionally(
+    nullptr, fake_overlay_refresh_api(), fake_transaction_api(), update_options,
+    "ReaADR: refresh video overlay");
+  check(applied && applied.effects_updated == 1 && source_track.effects.size() == 2 &&
+          source_track.effects[1].video_code == old_code,
+        "overlay adapter updates its existing effect in place and preserves chain order");
+
+  const auto inspected = reaadr::reaper::inspect_overlay_project(
+    nullptr, fake_overlay_refresh_api());
+  planned = reaadr::core::build_overlay_refresh_plan(inspected.tracks, enabled);
+  source_track.strings["P_EXT:ReaADR.role"] = "user_video";
+  applied = reaadr::reaper::apply_overlay_refresh_plan_transactionally(
+    nullptr, fake_overlay_refresh_api(), fake_transaction_api(), planned.plan,
+    "ReaADR: refresh video overlay");
+  check(!applied && source_track.effects[1].video_code == old_code,
+        "overlay adapter rejects stale source-track ownership before FX mutation");
+  source_track.strings["P_EXT:ReaADR.role"] = "source_video";
+
+  source_track.effects.resize(1);
+  render_adapter_probe.fail_overlay_set_parameter = "VIDEO_CODE";
+  render_adapter_probe.fail_overlay_set_remaining = 1;
+  applied = reaadr::reaper::refresh_generated_overlay_transactionally(
+    nullptr, fake_overlay_refresh_api(), fake_transaction_api(), enabled,
+    "ReaADR: refresh video overlay");
+  check(!applied && applied.restored_after_failure && source_track.effects.size() == 1 &&
+          source_track.effects[0].renamed_name == "User Video Processor",
+        "failed overlay creation removes only the incomplete generated effect");
+
+  render_adapter_probe.fail_overlay_set_parameter.clear();
+  applied = reaadr::reaper::refresh_generated_overlay_transactionally(
+    nullptr, fake_overlay_refresh_api(), fake_transaction_api(), update_options,
+    "ReaADR: refresh video overlay");
+  check(applied && source_track.effects.size() == 2 &&
+          source_track.effects[1].video_code == old_code,
+        "overlay failure fixture recreates a valid owned effect");
+  render_adapter_probe.fail_overlay_set_parameter = "VIDEO_CODE";
+  render_adapter_probe.fail_overlay_set_remaining = 1;
+  applied = reaadr::reaper::refresh_generated_overlay_transactionally(
+    nullptr, fake_overlay_refresh_api(), fake_transaction_api(), enabled,
+    "ReaADR: refresh video overlay");
+  check(!applied && applied.restored_after_failure && source_track.effects.size() == 2 &&
+          source_track.effects[1].video_code == old_code,
+        "failed overlay update restores the prior generated configuration");
+
+  render_adapter_probe.fail_overlay_set_parameter.clear();
+  source_track.effects.push_back({reaadr::core::kOverlayFxName, new_code, true});
+  const std::size_t ambiguous_count = source_track.effects.size();
+  applied = reaadr::reaper::refresh_generated_overlay_transactionally(
+    nullptr, fake_overlay_refresh_api(), fake_transaction_api(), enabled,
+    "ReaADR: refresh video overlay");
+  check(!applied && source_track.effects.size() == ambiguous_count,
+        "overlay adapter leaves ambiguous generated effects untouched");
+
+  source_track.effects.pop_back();
+  const reaadr::core::OverlayRefreshOptions disabled{false, {}};
+  applied = reaadr::reaper::refresh_generated_overlay_transactionally(
+    nullptr, fake_overlay_refresh_api(), fake_transaction_api(), disabled,
+    "ReaADR: disable video overlay");
+  check(applied && applied.effects_removed == 1 && source_track.effects.size() == 1 &&
+          source_track.effects[0].renamed_name == "User Video Processor",
+        "disabling overlays removes only the exactly owned generated effect");
+}
+
 void test_track_region_adapter()
 {
   constexpr int custom_color_flag = 0x1000000;
@@ -2165,7 +2411,7 @@ void test_track_region_adapter()
     {"P_NAME", "Old Name"},
     {"P_EXT:ReaADR.role", "character"},
     {"P_EXT:ReaADR.key", "Actor.lane1"},
-  }, fake_color_to_native(1, 2, 3) | custom_color_flag, {}});
+  }, fake_color_to_native(1, 2, 3) | custom_color_flag, {}, false, 0.0, {}});
   render_adapter_probe.regions.push_back({7, "Existing", 1.0, 2.0,
     fake_color_to_native(1, 2, 3) | custom_color_flag});
 
@@ -2622,6 +2868,7 @@ int main()
   test_recording_transport();
   test_recording_transport_executor();
   test_recording_application_service();
+  test_overlay_refresh_adapter();
   test_track_region_adapter();
   test_extended_render_planner();
   test_complete_render_adapter();
