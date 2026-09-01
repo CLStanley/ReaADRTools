@@ -176,7 +176,9 @@ Native generated-cue cleanup now has a proof-of-ownership domain plan and
 transactional REAPER adapter. It removes only exact selected-character cue
 regions, cue-audio items, and `cue_character` tracks; stale plans fail closed
 and user/dialogue media remains untouched. The public cleanup command and
-model-persistence coordinator remain part of the native UI cutover.
+model-persistence coordinator now coordinates inspection, project mutation,
+snapshot recovery, and canonical cue persistence in one native transaction;
+public command wiring remains part of the native UI cutover.
 These domain operations and adapters are test-covered but are not yet public
 writers; the region-sync, character-filter, and navigation command/UI cutovers,
 the deferred recording frame/UI wiring, generated-cue cleanup, other overlay
@@ -291,6 +293,8 @@ The initial target-architecture modules now include:
   generation before the transactional refresh callback.
 - `extension/reaadr_reaper/cue_cleanup_adapter.*`: transactional, stale-plan-
   checked deletion of generated cue artifacts while preserving user objects.
+- `extension/reaadr_reaper/cue_cleanup_application_service.*`: native
+  inspection, snapshot, project mutation, and canonical-model cleanup boundary.
 
 `make -C extension test` runs these modules without the REAPER SDK; normal
 extension builds compile the same sources into the plugin.
