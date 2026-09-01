@@ -1,6 +1,7 @@
 #include "reaadr_core/session_model.hpp"
 #include "reaadr_core/domain_utils.hpp"
 #include "reaadr_core/cue_import.hpp"
+#include "reaadr_core/cue_cleanup.hpp"
 #include "reaadr_core/cue_navigation.hpp"
 #include "reaadr_core/cue_status.hpp"
 #include "reaadr_core/cue_wav.hpp"
@@ -22,6 +23,7 @@
 #include "reaadr_reaper/project_transaction.hpp"
 #include "reaadr_reaper/overlay_refresh_adapter.hpp"
 #include "reaadr_reaper/overlay_application_service.hpp"
+#include "reaadr_reaper/cue_cleanup_adapter.hpp"
 #include "reaadr_reaper/cue_navigation_service.hpp"
 #include "reaadr_reaper/record_arm_adapter.hpp"
 #include "reaadr_reaper/recording_setup_adapter.hpp"
@@ -759,6 +761,36 @@ bool fake_delete_track_item(MediaTrack* track, MediaItem* item)
   destroy_fake_source((*found)->take.source);
   items.erase(found);
   return true;
+}
+
+bool fake_delete_cleanup_track(ReaProject*, MediaTrack* track)
+{
+  if (!track) return false;
+  auto& tracks = render_adapter_probe.tracks;
+  const auto found = std::find_if(tracks.begin(), tracks.end(),
+    [&](const FakeTrack& candidate) { return &candidate == fake_track(track); });
+  if (found == tracks.end()) return false;
+  tracks.erase(found);
+  return true;
+}
+
+reaadr::reaper::CueCleanupApi fake_cue_cleanup_api()
+{
+  return {
+    fake_count_tracks,
+    fake_get_track,
+    fake_get_set_track_string,
+    fake_count_track_items,
+    fake_get_track_item,
+    fake_get_set_item_string,
+    fake_delete_track_item,
+    fake_delete_cleanup_track,
+    fake_count_project_markers,
+    fake_enum_project_markers,
+    fake_delete_project_marker,
+    fake_adjust_track_windows,
+    fake_update_arrange,
+  };
 }
 
 bool fake_move_item_to_track(MediaItem* item, MediaTrack* destination)
@@ -2592,6 +2624,98 @@ void test_overlay_application_service()
         "native overlay application service preserves adapter failure details for retry/UI handling");
 }
 
+void test_cue_cleanup_plan()
+{
+  reaadr::core::SessionModel model;
+  model.session["session_id"] = "cleanup";
+  model.cues = {
+    {{"id", "A1"}, {"character", "Actor"}, {"start_time", "1"}, {"end_time", "2"}},
+    {{"id", "B1"}, {"character", "Beta"}, {"start_time", "3"}, {"end_time", "4"}},
+  };
+  reaadr::core::ProjectRenderState existing;
+  existing.regions = {
+    {10, reaadr::core::render_region_name(model.cues[0]), 1.0, 2.0, {}},
+    {11, reaadr::core::render_region_name(model.cues[1]), 3.0, 4.0, {}},
+  };
+  existing.tracks = {
+    {2, "cue_character", "actor.lane1", "Cue - Actor", {}},
+    {3, "character", "actor.lane1", "Actor", {}},
+    {4, "cue_character", "beta.lane1", "Cue - Beta", {}},
+  };
+  existing.cue_audio_items = {
+    {2, 0, "cue_character", "actor.lane1", "cue_audio", "A1", {}, {}, 0.0, 1.0, false, true},
+    {4, 0, "cue_character", "beta.lane1", "cue_audio", "B1", {}, {}, 0.0, 1.0, false, true},
+    {2, 1, "cue_character", "actor.lane1", "user_audio", "A1", {}, {}, 0.0, 1.0, false, true},
+  };
+  auto planned = reaadr::core::build_cue_cleanup_plan(model, existing, {"Actor"});
+  check(planned && planned.remaining_cues.size() == 1 &&
+          planned.remaining_cues[0].at("id") == "B1" &&
+          planned.plan.cue_keys == std::vector<std::string>{"A1"} &&
+          planned.plan.regions.size() == 1 && planned.plan.regions[0].id == 10 &&
+          planned.plan.cue_audio_items.size() == 1 &&
+          planned.plan.cue_audio_items[0].track_index == 2 &&
+          planned.plan.cue_audio_items[0].item_index == 0 &&
+          planned.plan.cue_character_tracks.size() == 1 &&
+          planned.plan.cue_character_tracks[0].project_index == 2,
+        "cue cleanup plans only exact selected-character regions, cue audio, and cue tracks");
+  check(!reaadr::core::build_cue_cleanup_plan(model, existing, {}).error.empty(),
+        "cue cleanup rejects an empty destructive selection");
+  auto duplicate_regions = existing;
+  duplicate_regions.regions.push_back(existing.regions[0]);
+  check(!reaadr::core::build_cue_cleanup_plan(model, duplicate_regions, {"Actor"}),
+        "cue cleanup fails closed on duplicate generated regions");
+}
+
+void test_cue_cleanup_adapter()
+{
+  render_adapter_probe = {};
+  const std::string generated_name = "[ReaADR]:id=A1 ADR Cue A1 - Actor";
+  render_adapter_probe.regions = {
+    {10, generated_name, 1.0, 2.0, 0},
+    {11, "User region", 4.0, 5.0, 0},
+  };
+  FakeTrack cue_track{{
+    {"P_EXT:ReaADR.role", "cue_character"},
+    {"P_EXT:ReaADR.key", "actor.lane1"},
+  }};
+  auto generated_item = std::make_unique<FakeItem>();
+  generated_item->strings["P_EXT:ReaADR.role"] = "cue_audio";
+  generated_item->strings["P_EXT:ReaADR.cue_key"] = "A1";
+  auto user_item = std::make_unique<FakeItem>();
+  user_item->strings["P_EXT:ReaADR.role"] = "user_audio";
+  user_item->strings["P_EXT:ReaADR.cue_key"] = "A1";
+  cue_track.items.push_back(std::move(generated_item));
+  cue_track.items.push_back(std::move(user_item));
+  render_adapter_probe.tracks.push_back(std::move(cue_track));
+  render_adapter_probe.tracks.push_back({{
+    {"P_EXT:ReaADR.role", "character"}, {"P_EXT:ReaADR.key", "actor.lane1"}
+  }});
+  render_adapter_probe.tracks.push_back({{
+    {"P_EXT:ReaADR.role", "cue_character"}, {"P_EXT:ReaADR.key", "beta.lane1"}
+  }});
+
+  reaadr::core::CueCleanupPlan plan;
+  plan.cue_keys = {"A1"};
+  plan.regions.push_back({10, generated_name});
+  plan.cue_audio_items.push_back({0, 0, "A1"});
+  plan.cue_character_tracks.push_back({0, "actor.lane1"});
+  transaction_probe = {};
+  const auto applied = reaadr::reaper::apply_cue_cleanup_plan_transactionally(
+    nullptr, fake_cue_cleanup_api(), fake_transaction_api(), plan, "ReaADR: clear cues");
+  check(applied && applied.cues_removed == 1 && applied.regions_removed == 1 &&
+          applied.cue_audio_removed == 1 && applied.tracks_removed == 1,
+        "cue cleanup adapter deletes only owned artifacts in one transaction");
+
+  reaadr::core::CueCleanupPlan stale;
+  stale.regions.push_back({99, "missing"});
+  transaction_probe = {};
+  transaction_probe.available_undo = "ReaADR: clear cues (failed)";
+  const auto rejected = reaadr::reaper::apply_cue_cleanup_plan_transactionally(
+    nullptr, fake_cue_cleanup_api(), fake_transaction_api(), stale, "ReaADR: clear cues");
+  check(!rejected && transaction_probe.undos == 1,
+        "cue cleanup adapter rolls back when a planned artifact becomes stale");
+}
+
 void test_track_region_adapter()
 {
   constexpr int custom_color_flag = 0x1000000;
@@ -3059,6 +3183,8 @@ int main()
   test_recording_application_service();
   test_overlay_settings_and_eel();
   test_overlay_application_service();
+  test_cue_cleanup_plan();
+  test_cue_cleanup_adapter();
   test_overlay_refresh_adapter();
   test_track_region_adapter();
   test_extended_render_planner();

@@ -37,6 +37,10 @@ code change, a user-visible workflow, or a documented constraint.
   complete overlay settings persistence, EEL generation, and native input
   composition and the native refresh-action REAPER callback binding are also
   implemented. Deferred recording UI wiring remains.)
+- Port generated-cue cleanup ownership predicates to the native boundary.
+  (The exact selected-character cleanup plan and transactional REAPER adapter
+  are implemented and test-covered; public command wiring and canonical model
+  persistence remain.)
 - Keep model save and generated-project rendering in one Undo-owned operation.
   (Done for import, generation, region timing, Cue Manager add/remove, refresh,
   setup, filtering, and character clearing. The native full-render coordinator

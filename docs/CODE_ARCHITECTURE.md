@@ -448,6 +448,10 @@ generated artifacts. Stale cleanup only targets old selected-character cues
 that no longer exist in the replacement import, which avoids deleting newly
 rebuilt cue items with matching cue IDs.
 
+The native cue-cleanup plan revalidates exact generated region names, cue keys,
+and cue-character track keys immediately before deletion, so an outdated plan
+fails closed instead of broadening its scope.
+
 On a failed full sync, the outer transaction closes its undo block, invokes
 REAPER Undo to restore project objects, restores the model snapshot, balances
 UI refresh suppression, and logs the error. Cleanup predicates only match

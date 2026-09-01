@@ -49,6 +49,7 @@ cl /nologo /EHsc /O2 /LD /std:c++17 ^
   reaadr_core\cue_wav.cpp ^
   reaadr_core\event_log.cpp ^
   reaadr_core\character_filter.cpp ^
+  reaadr_core\cue_cleanup.cpp ^
   reaadr_core\region_timing_sync.cpp ^
   reaadr_core\cue_navigation.cpp ^
   reaadr_core\record_arm.cpp ^
@@ -72,6 +73,7 @@ cl /nologo /EHsc /O2 /LD /std:c++17 ^
   reaadr_reaper\recording_application_service.cpp ^
   reaadr_reaper\overlay_refresh_adapter.cpp ^
   reaadr_reaper\overlay_application_service.cpp ^
+  reaadr_reaper\cue_cleanup_adapter.cpp ^
   /Fe"%BUILD_DIR%\%TARGET%" ^
   /link user32.lib /DEF:reaper_reaadr.def
 

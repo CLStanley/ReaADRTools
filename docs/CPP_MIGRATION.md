@@ -172,6 +172,11 @@ and UI cutover proceeds.
 Native Next Cue, Previous Cue, and prompt-backed Jump To Cue actions now bind
 the existing navigation service to REAPER transport/cursor APIs and paired
 selection persistence.
+Native generated-cue cleanup now has a proof-of-ownership domain plan and
+transactional REAPER adapter. It removes only exact selected-character cue
+regions, cue-audio items, and `cue_character` tracks; stale plans fail closed
+and user/dialogue media remains untouched. The public cleanup command and
+model-persistence coordinator remain part of the native UI cutover.
 These domain operations and adapters are test-covered but are not yet public
 writers; the region-sync, character-filter, and navigation command/UI cutovers,
 the deferred recording frame/UI wiring, generated-cue cleanup, other overlay
@@ -249,6 +254,8 @@ The initial target-architecture modules now include:
   character/lane filtering.
 - `extension/reaadr_core/overlay_refresh.*`: exact source-track/FX ownership and
   create/update/remove planning for generated video overlays.
+- `extension/reaadr_core/cue_cleanup.*`: exact selected-character ownership
+  planning for generated regions, cue audio, and cue-character tracks.
 - `extension/reaadr_reaper/project_state.*`: dynamically sized REAPER project
   extstate access.
 - `extension/reaadr_reaper/project_transaction.*`: nested-safe undo and UI
@@ -282,6 +289,8 @@ The initial target-architecture modules now include:
 - `extension/reaadr_reaper/overlay_application_service.*`: native composition
   of persisted settings, canonical model, selection/filter state, and EEL
   generation before the transactional refresh callback.
+- `extension/reaadr_reaper/cue_cleanup_adapter.*`: transactional, stale-plan-
+  checked deletion of generated cue artifacts while preserving user objects.
 
 `make -C extension test` runs these modules without the REAPER SDK; normal
 extension builds compile the same sources into the plugin.
