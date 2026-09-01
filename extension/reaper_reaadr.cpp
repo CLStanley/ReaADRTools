@@ -40,6 +40,10 @@
 #define REAPERAPI_WANT_Undo_EndBlock2
 #define REAPERAPI_WANT_ValidatePtr2
 #define REAPERAPI_WANT_GetNumRegionsOrMarkers
+#define REAPERAPI_WANT_GetCursorPosition
+#define REAPERAPI_WANT_GetPlayPosition
+#define REAPERAPI_WANT_GetPlayState
+#define REAPERAPI_WANT_SetEditCurPos
 
 #ifdef _WIN32
 #ifndef NOMINMAX
@@ -68,6 +72,7 @@
 #include "reaadr_core/model_repository.hpp"
 #include "reaadr_reaper/overlay_application_service.hpp"
 #include "reaadr_reaper/overlay_refresh_adapter.hpp"
+#include "reaadr_reaper/cue_navigation_service.hpp"
 #include "reaadr_reaper/project_state.hpp"
 #include "reaadr_reaper/project_transaction.hpp"
 
@@ -83,6 +88,8 @@ constexpr const char* kValidateSessionCommandName = "ReaADRValidateSessionModelN
 constexpr const char* kValidateSessionActionLabel = "ReaADR: Validate Session Model (Native Preview)";
 constexpr const char* kRefreshOverlayCommandName = "ReaADRRefreshVideoOverlayNative";
 constexpr const char* kRefreshOverlayActionLabel = "ReaADR: Refresh Video Overlay (Native)";
+constexpr const char* kNextCueCommandName = "ReaADRNextCueNative";
+constexpr const char* kPreviousCueCommandName = "ReaADRPreviousCueNative";
 
 reaper_plugin_info_t* g_plugin = nullptr;
 REAPER_PLUGIN_HINSTANCE g_instance = nullptr;
@@ -101,6 +108,10 @@ int g_validate_session_command_id = 0;
 gaccel_register_t g_validate_session_accel = {};
 int g_refresh_overlay_command_id = 0;
 gaccel_register_t g_refresh_overlay_accel = {};
+int g_next_cue_command_id = 0;
+gaccel_register_t g_next_cue_accel = {};
+int g_previous_cue_command_id = 0;
+gaccel_register_t g_previous_cue_accel = {};
 bool g_native_command_hook_registered = false;
 const char kDetectDialogueSegmentsDef[] =
   "bool\0"
@@ -145,6 +156,8 @@ ScriptAction g_refresh_overlay_action = {
   nullptr,
   0,
 };
+ScriptAction g_next_cue_action = {"Next Cue (Native)", nullptr, 0};
+ScriptAction g_previous_cue_action = {"Previous Cue (Native)", nullptr, 0};
 
 std::vector<ScriptAction> g_legacy_actions = {
   {"Import Script", "Scripts/ReaADRTools/scripts/ReaADR_Import_Script.lua", 0},
@@ -491,6 +504,24 @@ void run_refresh_overlay_action()
     std::to_string(result.displayed_cue_count));
 }
 
+void run_cue_navigation_action(bool next)
+{
+  reaadr::reaper::ProjectStateStore project_state(
+    nullptr, {GetProjExtState, SetProjExtState});
+  reaadr::core::SessionModelRepository sessions(project_state);
+  reaadr::core::CueSelectionRepository selections(project_state);
+  const reaadr::reaper::CueNavigationApi api = {
+    GetPlayState, GetPlayPosition, GetCursorPosition, SetEditCurPos,
+  };
+  reaadr::reaper::CueNavigationService service(sessions, selections, api);
+  const auto result = next ? service.navigate_next() : service.navigate_previous();
+  if (!result) {
+    ShowMessageBox(result.error.c_str(), "ReaADR Cue Navigation", 0);
+    return;
+  }
+  log_line(std::string("Native cue navigation moved to ") + result.selection.state.active_overlay_cue_key);
+}
+
 bool hook_native_command(int command, int)
 {
   if (command == g_validate_session_command_id && command != 0) {
@@ -499,6 +530,14 @@ bool hook_native_command(int command, int)
   }
   if (command == g_refresh_overlay_command_id && command != 0) {
     run_refresh_overlay_action();
+    return true;
+  }
+  if (command == g_next_cue_command_id && command != 0) {
+    run_cue_navigation_action(true);
+    return true;
+  }
+  if (command == g_previous_cue_command_id && command != 0) {
+    run_cue_navigation_action(false);
     return true;
   }
   return false;
@@ -548,6 +587,30 @@ bool register_native_actions()
   } else {
     log_line("Could not allocate the native overlay refresh command ID.");
   }
+  const auto register_secondary_action = [=](const char* command_name,
+                                              const char* label,
+                                              int& command_id,
+                                              gaccel_register_t& accel,
+                                              ScriptAction& action) {
+    command_id = g_plugin->Register(
+      "command_id", reinterpret_cast<void*>(const_cast<char*>(command_name)));
+    if (!command_id) {
+      log_line(std::string("Could not allocate native command: ") + label);
+      return;
+    }
+    accel.accel.cmd = static_cast<WORD>(command_id);
+    accel.desc = label;
+    if (g_plugin->Register("gaccel", reinterpret_cast<void*>(&accel))) {
+      action.command_id = command_id;
+    } else {
+      command_id = 0;
+      log_line(std::string("Could not add native command to the Action List: ") + label);
+    }
+  };
+  register_secondary_action(kNextCueCommandName, "ReaADR: Next Cue (Native)",
+    g_next_cue_command_id, g_next_cue_accel, g_next_cue_action);
+  register_secondary_action(kPreviousCueCommandName, "ReaADR: Previous Cue (Native)",
+    g_previous_cue_command_id, g_previous_cue_accel, g_previous_cue_action);
   log_line("Registered native action: " + std::string(kValidateSessionActionLabel));
   return true;
 }
@@ -570,6 +633,18 @@ void unregister_native_actions()
     g_refresh_overlay_command_id = 0;
     g_refresh_overlay_action.command_id = 0;
     g_refresh_overlay_accel = {};
+  }
+  if (g_next_cue_command_id) {
+    g_plugin->Register("-gaccel", reinterpret_cast<void*>(&g_next_cue_accel));
+    g_next_cue_command_id = 0;
+    g_next_cue_action.command_id = 0;
+    g_next_cue_accel = {};
+  }
+  if (g_previous_cue_command_id) {
+    g_plugin->Register("-gaccel", reinterpret_cast<void*>(&g_previous_cue_accel));
+    g_previous_cue_command_id = 0;
+    g_previous_cue_action.command_id = 0;
+    g_previous_cue_accel = {};
   }
 }
 
@@ -1059,6 +1134,8 @@ void hook_custom_menu(const char* menu_id, void* menu, int flag)
     }
     add_menu_item(hmenu, position, g_validate_session_action);
     add_menu_item(hmenu, position + 1, g_refresh_overlay_action);
+    add_menu_item(hmenu, position + 2, g_next_cue_action);
+    add_menu_item(hmenu, position + 3, g_previous_cue_action);
     log_line("Added top-level ReaADR Tools menu.");
     return;
   }
@@ -1086,6 +1163,18 @@ void hook_custom_menu(const char* menu_id, void* menu, int flag)
       g_refresh_overlay_action.label);
   } else {
     add_menu_item(hmenu, position + 1, g_refresh_overlay_action);
+  }
+  const int next_position = validation_position + 2;
+  if (next_position < existing_items) {
+    update_menu_item_label(hmenu, next_position, g_next_cue_action, g_next_cue_action.label);
+  } else {
+    add_menu_item(hmenu, position + 2, g_next_cue_action);
+  }
+  const int previous_position = validation_position + 3;
+  if (previous_position < existing_items) {
+    update_menu_item_label(hmenu, previous_position, g_previous_cue_action, g_previous_cue_action.label);
+  } else {
+    add_menu_item(hmenu, position + 3, g_previous_cue_action);
   }
   log_line("Updated top-level ReaADR quick-action labels.");
 }

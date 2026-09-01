@@ -79,8 +79,9 @@ Initial migration targets:
   coordinator. (Implemented and test-covered; native UI cutover and in-REAPER
   smoke testing remain.)
 - Port canonical cue navigation and paired manager/overlay selection state to
-  native services. (Implemented and test-covered; native command/UI cutover and
-  in-REAPER smoke testing remain.)
+  native services. (Implemented and test-covered; native Next/Previous Cue
+  actions are now bound, while Jump To Cue UI and in-REAPER smoke testing
+  remain.)
 - Return one consistent summary shape:
   - `sync_type`
   - `session_id`

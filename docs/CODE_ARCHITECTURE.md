@@ -100,6 +100,9 @@ directly by the UI yet; Lua remains the public workflow layer until native
 command/UI wiring and in-REAPER smoke tests are ready for coordinated cutover.
 The extension's native refresh action now supplies the REAPER selection,
 frame-rate, project-state, and FX callback bindings for this path.
+Native Next Cue and Previous Cue actions likewise bind the canonical navigation
+service to REAPER cursor/transport callbacks; Jump To Cue still needs a native
+input surface.
 
 ## Lua Application Layer
 
