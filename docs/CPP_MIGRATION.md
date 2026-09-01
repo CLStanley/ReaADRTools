@@ -127,6 +127,12 @@ Every track handle is revalidated before use; deleted tracks are skipped during
 restore, isolation failures compensate earlier writes, and transient restore
 failures retain only the entries that still need retrying. Each batch joins the
 native transaction and UI-refresh scopes.
+Native recording setup now resolves a selected canonical cue through the shared
+overlap-lane algorithm, computes its bounded preroll window, and selects only an
+owned `character` track. Exact lane ownership is preferred, the established
+lane fallback remains compatibility-only, duplicate matches fail closed, and
+the REAPER adapter revalidates role/key metadata immediately before returning
+the target handle to the future transport coordinator.
 The adapters and coordinator are test-covered but are not yet public writers;
 the region-sync, character-filter, and navigation command/UI cutovers,
 the recording transport/status coordinator, generated-cue cleanup, overlays,
@@ -188,6 +194,8 @@ The initial target-architecture modules now include:
   wraparound selection, and paired manager/overlay selection persistence.
 - `extension/reaadr_core/record_arm.*`: complete single-target arm-isolation
   planning over a preserved original snapshot.
+- `extension/reaadr_core/recording_setup.*`: selected-cue timing, overlap-lane,
+  preroll-window, and owned recording-track resolution.
 - `extension/reaadr_reaper/project_state.*`: dynamically sized REAPER project
   extstate access.
 - `extension/reaadr_reaper/project_transaction.*`: nested-safe undo and UI
@@ -207,6 +215,8 @@ The initial target-architecture modules now include:
   cursor navigation backed only by the canonical session model.
 - `extension/reaadr_reaper/record_arm_adapter.*`: revalidated track-arm capture,
   isolation, compensation, idempotent restoration, and targeted retry.
+- `extension/reaadr_reaper/recording_setup_adapter.*`: narrow track inspection
+  and final ownership revalidation before recording handoff.
 
 `make -C extension test` runs these modules without the REAPER SDK; normal
 extension builds compile the same sources into the plugin.

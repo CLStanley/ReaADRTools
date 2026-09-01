@@ -7,6 +7,7 @@
 #include "reaadr_core/model_repository.hpp"
 #include "reaadr_core/region_timing_sync.hpp"
 #include "reaadr_core/record_arm.hpp"
+#include "reaadr_core/recording_setup.hpp"
 #include "reaadr_core/render_plan.hpp"
 #include "reaadr_core/session_builder.hpp"
 #include "reaadr_core/session_commit.hpp"
@@ -15,6 +16,7 @@
 #include "reaadr_reaper/project_transaction.hpp"
 #include "reaadr_reaper/cue_navigation_service.hpp"
 #include "reaadr_reaper/record_arm_adapter.hpp"
+#include "reaadr_reaper/recording_setup_adapter.hpp"
 #include "reaadr_reaper/render_artifact_adapter.hpp"
 #include "reaadr_reaper/session_render_service.hpp"
 #include "reaadr_reaper/track_region_adapter.hpp"
@@ -288,6 +290,28 @@ reaadr::reaper::RecordArmApi fake_record_arm_api()
     fake_validate_record_arm_track,
     fake_get_track_value,
     fake_set_track_value,
+  };
+}
+
+int stale_recording_track_index = -1;
+int stale_recording_track_reads = 0;
+
+MediaTrack* fake_get_recording_track(ReaProject* project, int index)
+{
+  MediaTrack* track = fake_get_track(project, index);
+  if (track && index == stale_recording_track_index && ++stale_recording_track_reads == 2) {
+    fake_track(track)->strings["P_EXT:ReaADR.role"] = "user_audio";
+  }
+  return track;
+}
+
+reaadr::reaper::RecordingSetupApi fake_recording_setup_api()
+{
+  return {
+    fake_count_tracks,
+    fake_get_recording_track,
+    fake_validate_record_arm_track,
+    fake_get_set_track_string,
   };
 }
 
@@ -1606,6 +1630,84 @@ void test_record_arm_manager()
         "native record-arm restoration safely skips tracks deleted during deferred recording");
 }
 
+void test_recording_setup()
+{
+  reaadr::core::SessionModel model;
+  model.session = {{"session_id", "recording-setup-session"}};
+  model.cues = {
+    {{"id", "A1"}, {"character", "Actor"}, {"start_time", "10"}, {"end_time", "12"}},
+    {{"id", "A2"}, {"character", "Actor"}, {"start_time", "11"}, {"end_time", "13"}},
+    {{"id", "B1"}, {"character", "Beta"}, {"start_time", "20"}, {"end_time", "22"}},
+  };
+  const std::vector<reaadr::core::ExistingTrack> tracks = {
+    {0, "user_audio", "Actor.lane2", "User", {}},
+    {1, "character", "Actor.lane1", "Actor", {}},
+    {2, "character", "Actor.lane2", "Actor 2", {}},
+    {3, "character", "Beta.lane1", "Beta", {}},
+  };
+  reaadr::core::RecordingSetupOptions options;
+  options.cue_key = "A2";
+  options.preroll_seconds = 3.0;
+  const auto planned = reaadr::core::build_recording_setup_plan(model, tracks, options);
+  check(planned && planned.plan.cue_model_index == 1 && planned.plan.lane == 2 &&
+          planned.plan.track_project_index == 2 && !planned.plan.used_lane_fallback &&
+          planned.plan.cue_start == 11.0 && planned.plan.cue_end == 13.0 &&
+          planned.plan.record_start == 8.0,
+        "native recording setup resolves canonical timing, overlap lane, preroll, and exact owned track");
+
+  const std::vector<reaadr::core::ExistingTrack> fallback_tracks = {
+    {1, "character", "Actor.lane1", "Actor", {}},
+    {2, "user_audio", "Actor.lane2", "User", {}},
+  };
+  const auto fallback =
+    reaadr::core::build_recording_setup_plan(model, fallback_tracks, options);
+  check(fallback && fallback.plan.track_project_index == 1 && fallback.plan.used_lane_fallback,
+        "native recording setup retains the Lua lane-one compatibility fallback without adopting user tracks");
+
+  std::vector<reaadr::core::ExistingTrack> ambiguous_tracks = tracks;
+  ambiguous_tracks.push_back({4, "character", "actor.lane2", "Duplicate", {}});
+  check(!reaadr::core::build_recording_setup_plan(model, ambiguous_tracks, options),
+        "native recording setup rejects duplicate exact ownership matches");
+  reaadr::core::RecordingSetupOptions invalid_options = options;
+  invalid_options.preroll_seconds = std::nan("");
+  check(!reaadr::core::build_recording_setup_plan(model, tracks, invalid_options),
+        "native recording setup rejects invalid preroll");
+
+  FakeProjectStateStore store;
+  reaadr::core::SessionModelRepository repository(store);
+  check(repository.save(model), "recording-setup fixture saves its canonical session");
+  render_adapter_probe = {};
+  render_adapter_probe.tracks.resize(3);
+  render_adapter_probe.tracks[0].strings = {
+    {"P_EXT:ReaADR.role", "character"}, {"P_EXT:ReaADR.key", "Actor.lane1"},
+    {"P_NAME", "Actor"},
+  };
+  render_adapter_probe.tracks[1].strings = {
+    {"P_EXT:ReaADR.role", "character"}, {"P_EXT:ReaADR.key", "Actor.lane2"},
+    {"P_NAME", "Actor 2"},
+  };
+  render_adapter_probe.tracks[2].strings = {
+    {"P_EXT:ReaADR.role", "character"}, {"P_EXT:ReaADR.key", "Beta.lane1"},
+    {"P_NAME", "Beta"},
+  };
+  stale_recording_track_index = -1;
+  stale_recording_track_reads = 0;
+  reaadr::reaper::RecordingSetupService service(
+    repository, nullptr, fake_recording_setup_api());
+  const auto prepared = service.prepare(options);
+  check(prepared && prepared.target_track == fake_get_track(nullptr, 1) &&
+          prepared.plan.expected_track_key == "Actor.lane2",
+        "native recording setup adapter returns a revalidated non-owning target handle");
+
+  stale_recording_track_index = 1;
+  stale_recording_track_reads = 0;
+  const auto stale = service.prepare(options);
+  check(!stale && !stale.target_track && stale.error.find("changed") != std::string::npos,
+        "native recording setup fails closed when target ownership changes after inspection");
+  stale_recording_track_index = -1;
+  stale_recording_track_reads = 0;
+}
+
 void test_track_region_adapter()
 {
   constexpr int custom_color_flag = 0x1000000;
@@ -2067,6 +2169,7 @@ int main()
   test_region_timing_sync();
   test_cue_navigation();
   test_record_arm_manager();
+  test_recording_setup();
   test_track_region_adapter();
   test_extended_render_planner();
   test_complete_render_adapter();

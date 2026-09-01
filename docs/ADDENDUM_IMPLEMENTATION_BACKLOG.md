@@ -24,6 +24,9 @@ code change, a user-visible workflow, or a documented constraint.
 - Preserve and isolate complete record-arm state for Record Current Cue. (Done
   in Lua and implemented behind the test-covered native record-arm boundary;
   recording UI/transport cutover remains.)
+- Resolve selected cue timing, overlap lane, preroll window, and owned recording
+  track in the native domain/adapter boundary. (Implemented and test-covered;
+  deferred transport and recording UI cutover remain.)
 - Keep model save and generated-project rendering in one Undo-owned operation.
   (Done for import, generation, region timing, Cue Manager add/remove, refresh,
   setup, filtering, and character clearing. The native full-render coordinator

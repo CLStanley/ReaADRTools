@@ -77,10 +77,13 @@ moves the edit cursor without a model revision or Undo point. `record_arm.*`
 defines complete single-target isolation intent, while
 `record_arm_adapter.*` owns the transient REAPER track handles, revalidation,
 compensating failure recovery, and idempotent restore/retry behavior needed by
-the future native recording coordinator. These services are not invoked
-directly by the UI yet; Lua remains the public workflow layer until the
-relevant native command/UI wiring and in-REAPER smoke tests are ready for
-coordinated cutover.
+the future native recording coordinator. `recording_setup.*` shares canonical
+lane assignment with rendering, resolves cue/preroll timing and exact owned
+recording-track intent, and `recording_setup_adapter.*` revalidates the chosen
+track immediately before handing its non-owning handle to record-arm/transport
+code. These services are not invoked directly by the UI yet; Lua remains the
+public workflow layer until the relevant native command/UI wiring and in-REAPER
+smoke tests are ready for coordinated cutover.
 
 ## Lua Application Layer
 
