@@ -24,6 +24,7 @@
 #include "reaadr_reaper/overlay_refresh_adapter.hpp"
 #include "reaadr_reaper/overlay_application_service.hpp"
 #include "reaadr_reaper/cue_cleanup_adapter.hpp"
+#include "reaadr_reaper/cue_cleanup_application_service.hpp"
 #include "reaadr_reaper/cue_navigation_service.hpp"
 #include "reaadr_reaper/record_arm_adapter.hpp"
 #include "reaadr_reaper/recording_setup_adapter.hpp"
@@ -2716,6 +2717,62 @@ void test_cue_cleanup_adapter()
         "cue cleanup adapter rolls back when a planned artifact becomes stale");
 }
 
+reaadr::core::ProjectRenderState cleanup_application_state;
+reaadr::core::CueCleanupPlan cleanup_application_plan;
+bool cleanup_application_apply_ok = true;
+
+reaadr::core::ProjectRenderState fake_cleanup_application_inspect(std::string* error)
+{
+  if (error) error->clear();
+  return cleanup_application_state;
+}
+
+reaadr::reaper::CueCleanupApplyResult fake_cleanup_application_apply(
+  const reaadr::core::CueCleanupPlan& plan, std::string* error)
+{
+  if (error) error->clear();
+  cleanup_application_plan = plan;
+  reaadr::reaper::CueCleanupApplyResult result;
+  if (!cleanup_application_apply_ok) {
+    result.error = "simulated cleanup failure";
+    if (error) *error = result.error;
+    return result;
+  }
+  result.cues_removed = static_cast<int>(plan.cue_keys.size());
+  result.regions_removed = static_cast<int>(plan.regions.size());
+  result.cue_audio_removed = static_cast<int>(plan.cue_audio_items.size());
+  result.tracks_removed = static_cast<int>(plan.cue_character_tracks.size());
+  return result;
+}
+
+void test_cue_cleanup_application_service()
+{
+  FakeProjectStateStore store;
+  reaadr::core::SessionModel model;
+  model.session["session_id"] = "cleanup-service";
+  model.cues = {
+    {{"id", "A1"}, {"character", "Actor"}, {"start_time", "1"}, {"end_time", "2"}},
+    {{"id", "B1"}, {"character", "Beta"}, {"start_time", "3"}, {"end_time", "4"}},
+  };
+  reaadr::core::SessionModelRepository sessions(store);
+  check(sessions.save(model), "cleanup application fixture saves its canonical model");
+  cleanup_application_state = {};
+  cleanup_application_state.regions.push_back({10, reaadr::core::render_region_name(model.cues[0]), 1.0, 2.0, {}});
+  cleanup_application_state.cue_audio_items.push_back({0, 0, "cue_character", "actor.lane1", "cue_audio", "A1", {}, {}, 0.0, 1.0, false, true});
+  cleanup_application_state.tracks.push_back({0, "cue_character", "actor.lane1", "Cue - Actor", {}});
+  cleanup_application_plan = {};
+  cleanup_application_apply_ok = true;
+  reaadr::reaper::CueCleanupApplicationService service(
+    sessions, fake_transaction_api(), {fake_cleanup_application_inspect,
+      fake_cleanup_application_apply, "2026-09-01T00:00:00Z"});
+  const auto result = service.clear_characters({"Actor"});
+  const auto loaded = sessions.load();
+  check(result && result.cues_removed == 1 && loaded && loaded.model.cues.size() == 1 &&
+          loaded.model.cues[0].at("id") == "B1" && cleanup_application_plan.cue_keys ==
+          std::vector<std::string>{"A1"},
+        "cleanup application service persists remaining canonical cues after project cleanup");
+}
+
 void test_track_region_adapter()
 {
   constexpr int custom_color_flag = 0x1000000;
@@ -3185,6 +3242,7 @@ int main()
   test_overlay_application_service();
   test_cue_cleanup_plan();
   test_cue_cleanup_adapter();
+  test_cue_cleanup_application_service();
   test_overlay_refresh_adapter();
   test_track_region_adapter();
   test_extended_render_planner();
