@@ -132,23 +132,28 @@ overlap-lane algorithm, computes its bounded preroll window, and selects only an
 owned `character` track. Exact lane ownership is preferred, the established
 lane fallback remains compatibility-only, duplicate matches fail closed, and
 the REAPER adapter revalidates role/key metadata immediately before returning
-the target handle to the future transport coordinator.
+the target handle to the transport executor.
 The native recording transport state machine now owns the deterministic
 preroll, punch-in, cue-end stop, loop restart, user-stop/abort cleanup, and loop
 preference transitions. It emits ordered host intents rather than calling
-REAPER, so the future deferred coordinator can apply actions only after
-revalidating the setup and can retain the last committed state if an action
-fails.
+REAPER, so the executor can apply actions only after revalidating the setup and
+can retain the last committed state if an action fails.
 The native recording transport executor now applies the immediate stop,
 loop-range, cursor, record-arm, and play/record intents according to their
 declared ordering. It preserves the user's original loop range across passes
 and compensates loop/arm changes when a take cannot start. Model-first
 cue/status updates and preference writes are returned as explicit pending work
 rather than being performed at the asynchronous REAPER boundary.
+The native recording application coordinator now consumes that pending work.
+It persists the Lua-compatible preroll preference, synchronizes the paired cue
+selection, commits `Recorded` status through a focused snapshot/revision
+operation, and publishes `CueUpdated`. Overlay failure restores exact selection
+state or the canonical model snapshot and retains the failed action for an
+idempotent retry without duplicate revisions or events.
 These domain operations and adapters are test-covered but are not yet public
 writers; the region-sync, character-filter, and navigation command/UI cutovers,
-the deferred recording status/UI coordinator, generated-cue cleanup, overlays,
-and in-REAPER smoke tests remain.
+the deferred recording frame/UI wiring, the native overlay-FX refresh adapter,
+generated-cue cleanup, other overlays, and in-REAPER smoke tests remain.
 
 ### Stage 4: native UI and Lua removal
 
@@ -211,6 +216,10 @@ The initial target-architecture modules now include:
 - `extension/reaadr_core/recording_transport.*`: deterministic preroll,
   punch-in, looping, stop, cleanup, and preference transitions expressed as
   ordered host intents.
+- `extension/reaadr_core/cue_status.*`: focused canonical status mutation and
+  idempotent snapshot/revision commit with rollback.
+- `extension/reaadr_core/recording_preferences.*`: compatibility persistence
+  for the per-project Lua recording-preroll setting.
 - `extension/reaadr_reaper/project_state.*`: dynamically sized REAPER project
   extstate access.
 - `extension/reaadr_reaper/project_transaction.*`: nested-safe undo and UI
@@ -235,6 +244,9 @@ The initial target-architecture modules now include:
 - `extension/reaadr_reaper/recording_transport_executor.*`: ordered REAPER loop,
   cursor, record-arm, and transport execution with failed-start compensation
   and deferred model/status application actions.
+- `extension/reaadr_reaper/recording_application_service.*`: retryable
+  selection, preference, canonical Recorded-status, overlay-refresh, and
+  CueUpdated-event coordination with model/view rollback.
 
 `make -C extension test` runs these modules without the REAPER SDK; normal
 extension builds compile the same sources into the plugin.

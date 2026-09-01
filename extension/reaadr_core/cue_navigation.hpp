@@ -69,6 +69,9 @@ public:
   explicit CueSelectionRepository(ProjectStateStore& store) : store_(store) {}
 
   CueSelectionLoadResult load() const;
+  // Supports exact compensation when manager and overlay selection differed
+  // before a multi-step application operation.
+  CueSelectionSaveResult save_state(const CueSelectionState& state);
   CueSelectionSaveResult save_selected_cue(const std::string& cue_key);
 
   static constexpr const char* kNamespace = SessionModelRepository::kNamespace;

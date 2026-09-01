@@ -178,6 +178,11 @@ CueSelectionLoadResult CueSelectionRepository::load() const
 
 CueSelectionSaveResult CueSelectionRepository::save_selected_cue(const std::string& cue_key)
 {
+  return save_state({cue_key, cue_key});
+}
+
+CueSelectionSaveResult CueSelectionRepository::save_state(const CueSelectionState& state)
+{
   CueSelectionSaveResult result;
   const CueSelectionLoadResult previous = load();
   if (!previous) {
@@ -185,18 +190,20 @@ CueSelectionSaveResult CueSelectionRepository::save_selected_cue(const std::stri
     return result;
   }
   result.state = previous.state;
-  if (previous.state.manager_selected_cue_key == cue_key &&
-      previous.state.active_overlay_cue_key == cue_key) {
+  if (previous.state.manager_selected_cue_key == state.manager_selected_cue_key &&
+      previous.state.active_overlay_cue_key == state.active_overlay_cue_key) {
     return result;
   }
 
-  const bool manager_changed = previous.state.manager_selected_cue_key != cue_key;
-  if (manager_changed && !store_.write(kNamespace, kManagerSelectionKey, cue_key)) {
+  const bool manager_changed =
+    previous.state.manager_selected_cue_key != state.manager_selected_cue_key;
+  if (manager_changed &&
+      !store_.write(kNamespace, kManagerSelectionKey, state.manager_selected_cue_key)) {
     result.error = "Could not persist the manager cue selection.";
     return result;
   }
-  if (previous.state.active_overlay_cue_key != cue_key &&
-      !store_.write(kNamespace, kActiveOverlayKey, cue_key)) {
+  if (previous.state.active_overlay_cue_key != state.active_overlay_cue_key &&
+      !store_.write(kNamespace, kActiveOverlayKey, state.active_overlay_cue_key)) {
     result.error = "Could not persist the active overlay cue selection.";
     if (manager_changed) {
       result.rolled_back = store_.write(
@@ -206,7 +213,7 @@ CueSelectionSaveResult CueSelectionRepository::save_selected_cue(const std::stri
     return result;
   }
 
-  result.state = {cue_key, cue_key};
+  result.state = state;
   result.changed = true;
   return result;
 }

@@ -85,11 +85,14 @@ code. `recording_transport.*` centralizes the Lua-compatible preroll, punch-in,
 cue-end, repeat, and cleanup state transitions as ordered host intents. The
 `recording_transport_executor.*` boundary applies immediate REAPER loop, cursor,
 record-arm, and transport intents, compensating failed take starts before it
-accepts the new state. Canonical cue/status changes and preference persistence
-remain pending for the future model-first deferred coordinator. These services
-are not invoked directly by the UI yet; Lua remains the public workflow layer
-until the relevant native command/UI wiring and in-REAPER smoke tests are ready
-for coordinated cutover.
+accepts the new state. `cue_status.*` and `recording_preferences.*` own focused
+canonical status and compatibility preference persistence. The
+`recording_application_service.*` coordinator consumes the executor's pending
+actions, refreshes the overlay through a narrow adapter port, rolls model/view
+state back together on failure, and retains idempotent retry work. These
+services are not invoked directly by the UI yet; Lua remains the public workflow
+layer until the native overlay-FX adapter, deferred command/UI wiring, and
+in-REAPER smoke tests are ready for coordinated cutover.
 
 ## Lua Application Layer
 

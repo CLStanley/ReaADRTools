@@ -31,7 +31,9 @@ code change, a user-visible workflow, or a documented constraint.
   engine. (Implemented and test-covered for preroll, punch-in, loop restart,
   loop preferences, stop/abort, arm restoration, and take finalization; the
   ordered REAPER executor and failed-start compensation are also implemented;
-  deferred status publication and UI coordination remain.)
+  canonical Recorded-status commit, CueUpdated publication, preference writes,
+  overlay rollback, and retry coordination are implemented. Native overlay-FX
+  adaptation and deferred recording UI wiring remain.)
 - Keep model save and generated-project rendering in one Undo-owned operation.
   (Done for import, generation, region timing, Cue Manager add/remove, refresh,
   setup, filtering, and character clearing. The native full-render coordinator

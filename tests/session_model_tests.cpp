@@ -2,6 +2,7 @@
 #include "reaadr_core/domain_utils.hpp"
 #include "reaadr_core/cue_import.hpp"
 #include "reaadr_core/cue_navigation.hpp"
+#include "reaadr_core/cue_status.hpp"
 #include "reaadr_core/cue_wav.hpp"
 #include "reaadr_core/event_log.hpp"
 #include "reaadr_core/model_repository.hpp"
@@ -9,6 +10,7 @@
 #include "reaadr_core/record_arm.hpp"
 #include "reaadr_core/recording_setup.hpp"
 #include "reaadr_core/recording_transport.hpp"
+#include "reaadr_core/recording_preferences.hpp"
 #include "reaadr_core/render_plan.hpp"
 #include "reaadr_core/session_builder.hpp"
 #include "reaadr_core/session_commit.hpp"
@@ -18,6 +20,7 @@
 #include "reaadr_reaper/cue_navigation_service.hpp"
 #include "reaadr_reaper/record_arm_adapter.hpp"
 #include "reaadr_reaper/recording_setup_adapter.hpp"
+#include "reaadr_reaper/recording_application_service.hpp"
 #include "reaadr_reaper/recording_transport_executor.hpp"
 #include "reaadr_reaper/render_artifact_adapter.hpp"
 #include "reaadr_reaper/session_render_service.hpp"
@@ -371,6 +374,15 @@ reaadr::reaper::RecordingTransportApi fake_recording_transport_api()
     fake_set_recording_cursor,
     fake_run_recording_command,
   };
+}
+
+bool recording_overlay_refresh_succeeds = true;
+int recording_overlay_refreshes = 0;
+
+bool fake_refresh_recording_overlay()
+{
+  ++recording_overlay_refreshes;
+  return recording_overlay_refresh_succeeds;
 }
 
 int fake_count_project_markers(ReaProject*, int* markers, int* regions)
@@ -1984,6 +1996,167 @@ void test_recording_transport_executor()
         "recording executor compensates loop and arm state when preroll cannot start");
 }
 
+void test_recording_application_service()
+{
+  reaadr::core::SessionBuildOptions build_options;
+  build_options.session_id = "recording-application-session";
+  const auto built = reaadr::core::build_session_model({{
+    {"id", "A1"}, {"character", "Actor"}, {"start_time", "10"},
+    {"end_time", "12"}, {"line", "Line"}, {"status", "Not Recorded"},
+    {"script_id", "script-1"}, {"metadata", ""},
+  }}, build_options);
+  check(static_cast<bool>(built),
+        "recording application fixture builds a canonical session");
+
+  const auto updated = reaadr::core::update_cue_status(built.model, {
+    "A1", " recorded ", "record_cue",
+  });
+  check(updated && updated.changed && updated.normalized_status == "Recorded" &&
+          updated.cue.at("status") == "Recorded" &&
+          updated.model.regions == built.model.regions &&
+          updated.model.tracks == built.model.tracks &&
+          updated.model.state.at("last_operation") == "record_cue",
+        "cue status mutation updates only canonical workflow state and preserves derived records");
+
+  reaadr::core::SessionModel duplicate = built.model;
+  duplicate.cues.push_back(duplicate.cues.front());
+  check(!reaadr::core::update_cue_status(duplicate, {"A1", "Recorded", "record_cue"}),
+        "cue status mutation fails closed when a cue key is ambiguous");
+
+  FakeProjectStateStore commit_store;
+  reaadr::core::SessionModelRepository commit_repository(commit_store);
+  check(commit_repository.save(built.model), "cue status commit fixture saves its session");
+  commit_store.values["ReaADRTools:session_revision"] = "4";
+  reaadr::core::CueStatusCommitOptions commit_options;
+  commit_options.update = {"A1", "Recorded", "record_cue"};
+  commit_options.snapshot_label = "Finalize Recording Takes";
+  commit_options.utc_timestamp = "2026-08-31T15:00:00Z";
+  auto committed = reaadr::core::commit_cue_status(commit_repository, commit_options);
+  check(committed && committed.update.changed && committed.revision == 5 &&
+          commit_repository.load().model.cues[0].at("status") == "Recorded",
+        "cue status commit snapshots, persists, and revises canonical recording state");
+  committed = reaadr::core::commit_cue_status(commit_repository, commit_options);
+  check(committed && !committed.update.changed && committed.revision == 5,
+        "repeating an applied cue status commit is revision-free");
+
+  commit_options.update.status = "Approved";
+  commit_store.failed_write_key = "ReaADRTools:session_revision";
+  commit_store.failed_writes_remaining = 1;
+  const auto failed_commit =
+    reaadr::core::commit_cue_status(commit_repository, commit_options);
+  check(!failed_commit && failed_commit.rolled_back &&
+          commit_repository.load().model.cues[0].at("status") == "Recorded" &&
+          commit_repository.revision().revision == 6,
+        "cue status revision failure restores the prior canonical model with a fresh revision");
+
+  FakeProjectStateStore preference_store;
+  reaadr::core::RecordingPreferenceRepository preference_repository(preference_store);
+  check(preference_repository.load().include_preroll_each_loop,
+        "missing native recording preference uses the Lua-compatible true default");
+  auto preference = preference_repository.save_include_preroll_each_loop(false);
+  check(preference && preference.changed &&
+          preference_store.values.at(
+            "ReaADRTools:overlay.include_preroll_each_loop") == "0" &&
+          !preference_repository.load().include_preroll_each_loop,
+        "native recording preference writes the transitional Lua project key");
+  preference = preference_repository.save_include_preroll_each_loop(false);
+  check(preference && !preference.changed,
+        "unchanged recording preference persistence is a no-op");
+
+  FakeProjectStateStore app_store;
+  reaadr::core::SessionModelRepository app_repository(app_store);
+  check(app_repository.save(built.model), "recording coordinator fixture saves its session");
+  app_store.values["ReaADRTools:session_revision"] = "2";
+  reaadr::core::CueSelectionRepository selection_repository(app_store);
+  reaadr::core::RecordingPreferenceRepository app_preferences(app_store);
+  reaadr::core::EventLogRepository events(app_store);
+  recording_overlay_refresh_succeeds = true;
+  recording_overlay_refreshes = 0;
+  transaction_probe = {};
+  reaadr::reaper::RecordingApplicationService service(
+    app_repository, selection_repository, app_preferences, events, nullptr,
+    fake_transaction_api(), {fake_refresh_recording_overlay});
+  reaadr::reaper::RecordingApplicationOptions options;
+  options.cue_key = "A1";
+  options.include_preroll_each_loop = false;
+  options.status_commit.snapshot_label = "Finalize Native Recording";
+  options.status_commit.utc_timestamp = "2026-08-31T15:05:00Z";
+  options.event.utc_timestamp = "2026-08-31T15:05:00Z";
+
+  reaadr::reaper::PendingRecordingApplicationActions pending;
+  pending.refresh_active_cue = true;
+  auto applied = service.apply(pending, options);
+  check(applied && !applied.remaining.refresh_active_cue &&
+          app_store.values.at("ReaADRTools:manager_selected_cue_key") == "A1" &&
+          app_store.values.at("ReaADRTools:active_overlay_cue_key") == "A1" &&
+          applied.overlay_refreshes == 1,
+        "recording coordinator synchronizes canonical selection before refreshing the overlay");
+
+  pending = {};
+  pending.persist_preroll_preference = true;
+  applied = service.apply(pending, options);
+  check(applied && !applied.remaining.persist_preroll_preference &&
+          applied.preference.changed &&
+          app_store.values.at("ReaADRTools:overlay.include_preroll_each_loop") == "0",
+        "recording coordinator consumes preference work through the compatibility repository");
+
+  pending = {};
+  pending.finalize_recorded_takes = true;
+  applied = service.apply(pending, options);
+  check(applied && !applied.remaining.finalize_recorded_takes &&
+          applied.status.update.changed && app_repository.revision().revision == 3 &&
+          app_repository.load().model.cues[0].at("status") == "Recorded" &&
+          applied.event && events.load().lines.size() == 1,
+        "recording coordinator commits Recorded status, refreshes overlay, and publishes CueUpdated");
+  applied = service.apply(pending, options);
+  check(applied && !applied.status.update.changed &&
+          app_repository.revision().revision == 3 && events.load().lines.size() == 1,
+        "recording finalization retry refreshes the overlay without duplicate revision or event");
+
+  app_store.values["ReaADRTools:manager_selected_cue_key"] = "previous-manager";
+  app_store.values["ReaADRTools:active_overlay_cue_key"] = "previous-overlay";
+  recording_overlay_refresh_succeeds = false;
+  pending = {};
+  pending.refresh_active_cue = true;
+  applied = service.apply(pending, options);
+  check(!applied && applied.remaining.refresh_active_cue &&
+          applied.selection_rolled_back &&
+          app_store.values.at("ReaADRTools:manager_selected_cue_key") == "previous-manager" &&
+          app_store.values.at("ReaADRTools:active_overlay_cue_key") == "previous-overlay",
+        "failed recording overlay refresh restores the exact prior paired selection");
+
+  check(app_repository.save(built.model),
+        "recording coordinator rollback fixture restores Not Recorded status");
+  const std::size_t events_before_failure = events.load().lines.size();
+  pending = {};
+  pending.finalize_recorded_takes = true;
+  applied = service.apply(pending, options);
+  check(!applied && applied.remaining.finalize_recorded_takes &&
+          applied.model_rolled_back &&
+          app_repository.load().model.cues[0].at("status") == "Not Recorded" &&
+          events.load().lines.size() == events_before_failure,
+        "failed post-recording overlay refresh restores canonical status and retains retry work");
+
+  recording_overlay_refresh_succeeds = true;
+  applied = service.apply(applied.remaining, options);
+  check(applied && !applied.remaining.finalize_recorded_takes &&
+          app_repository.load().model.cues[0].at("status") == "Recorded" &&
+          events.load().lines.size() == events_before_failure + 1,
+        "retained recording finalization succeeds once overlay refresh recovers");
+
+  check(app_repository.save(built.model),
+        "recording event-warning fixture restores Not Recorded status");
+  const std::size_t events_before_warning = events.load().lines.size();
+  app_store.failed_write_key = "ReaADRTools:event_log_v1";
+  app_store.failed_writes_remaining = 1;
+  applied = service.apply(pending, options);
+  check(applied && !applied.remaining.finalize_recorded_takes &&
+          !applied.event_warning.empty() &&
+          app_repository.load().model.cues[0].at("status") == "Recorded" &&
+          events.load().lines.size() == events_before_warning,
+        "recording event publication warning does not retry an applied model/view commit");
+}
+
 void test_track_region_adapter()
 {
   constexpr int custom_color_flag = 0x1000000;
@@ -2448,6 +2621,7 @@ int main()
   test_recording_setup();
   test_recording_transport();
   test_recording_transport_executor();
+  test_recording_application_service();
   test_track_region_adapter();
   test_extended_render_planner();
   test_complete_render_adapter();
