@@ -169,12 +169,13 @@ The extension now exposes a native refresh action that binds current REAPER
 selection, frame rate, project state, and FX APIs to that coordinator. The
 legacy Lua action remains registered for compatibility while broader command
 and UI cutover proceeds.
-Native Next Cue and Previous Cue actions now bind the existing navigation
-service to REAPER transport/cursor APIs and paired selection persistence.
+Native Next Cue, Previous Cue, and prompt-backed Jump To Cue actions now bind
+the existing navigation service to REAPER transport/cursor APIs and paired
+selection persistence.
 These domain operations and adapters are test-covered but are not yet public
 writers; the region-sync, character-filter, and navigation command/UI cutovers,
-the deferred recording frame/UI wiring, Jump To Cue input, generated-cue
-cleanup, other overlay UI, and in-REAPER smoke tests remain.
+the deferred recording frame/UI wiring, generated-cue cleanup, other overlay
+UI, and in-REAPER smoke tests remain.
 
 ### Stage 4: native UI and Lua removal
 
