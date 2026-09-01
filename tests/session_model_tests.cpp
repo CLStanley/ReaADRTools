@@ -21,6 +21,7 @@
 #include "reaadr_reaper/project_state.hpp"
 #include "reaadr_reaper/project_transaction.hpp"
 #include "reaadr_reaper/overlay_refresh_adapter.hpp"
+#include "reaadr_reaper/overlay_application_service.hpp"
 #include "reaadr_reaper/cue_navigation_service.hpp"
 #include "reaadr_reaper/record_arm_adapter.hpp"
 #include "reaadr_reaper/recording_setup_adapter.hpp"
@@ -499,6 +500,32 @@ bool fake_refresh_recording_overlay()
 {
   ++recording_overlay_refreshes;
   return recording_overlay_refresh_succeeds;
+}
+
+struct OverlayApplicationProbe {
+  reaadr::core::OverlayRefreshOptions refresh;
+  bool succeeds = true;
+  std::string error;
+};
+
+OverlayApplicationProbe overlay_application_probe;
+
+double fake_overlay_frame_rate()
+{
+  return 29.97;
+}
+
+reaadr::reaper::OverlaySelectionInput fake_overlay_selection()
+{
+  return {"C", "B"};
+}
+
+bool fake_apply_overlay_refresh(const reaadr::core::OverlayRefreshOptions& options,
+                               std::string* error)
+{
+  overlay_application_probe.refresh = options;
+  if (!overlay_application_probe.succeeds && error) *error = overlay_application_probe.error;
+  return overlay_application_probe.succeeds;
 }
 
 int fake_count_project_markers(ReaProject*, int* markers, int* regions)
@@ -2521,6 +2548,50 @@ void test_overlay_settings_and_eel()
         "native EEL generation rejects malformed canonical cue timing");
 }
 
+void test_overlay_application_service()
+{
+  FakeProjectStateStore store;
+  reaadr::core::SessionModel model;
+  model.session["session_id"] = "overlay-app";
+  model.cues = {
+    {{"id", "B"}, {"character", "Beta"}, {"start_time", "10"}, {"end_time", "12"}},
+    {{"id", "C"}, {"character", "Actor"}, {"start_time", "20"}, {"end_time", "21"}},
+  };
+  reaadr::core::SessionModelRepository sessions(store);
+  reaadr::core::OverlaySettingsRepository settings(store);
+  reaadr::core::CueSelectionRepository selections(store);
+  reaadr::core::CharacterFilterRepository filters(store);
+  check(sessions.save(model), "overlay application fixture saves the canonical session");
+  overlay_application_probe = {};
+  const reaadr::reaper::OverlayApplicationApi api = {
+    fake_overlay_frame_rate, fake_overlay_selection, fake_apply_overlay_refresh,
+  };
+  reaadr::reaper::OverlayApplicationService service(
+    sessions, settings, selections, filters, api);
+  auto applied = service.refresh();
+  check(applied && applied.displayed_cue_count == 2 &&
+          applied.refresh.enabled &&
+          applied.refresh.video_code.rfind(reaadr::core::kOverlayCodeMarker, 0) == 0 &&
+          applied.refresh.video_code.find("display_fps = 30;") != std::string::npos &&
+          applied.refresh.video_code.find("Cue #C") < applied.refresh.video_code.find("Cue #B") &&
+          overlay_application_probe.refresh.video_code == applied.refresh.video_code,
+        "native overlay application service composes model, settings, selection, frame rate, and FX refresh");
+
+  reaadr::core::OverlaySettings disabled;
+  disabled.enabled = false;
+  check(static_cast<bool>(settings.save(disabled)),
+        "overlay application fixture disables persisted overlays");
+  applied = service.refresh();
+  check(applied && !applied.refresh.enabled && applied.refresh.video_code.empty(),
+        "native overlay application service forwards a disabled setting without generating code");
+
+  overlay_application_probe.succeeds = false;
+  overlay_application_probe.error = "simulated FX failure";
+  applied = service.refresh();
+  check(!applied && applied.error == "simulated FX failure",
+        "native overlay application service preserves adapter failure details for retry/UI handling");
+}
+
 void test_track_region_adapter()
 {
   constexpr int custom_color_flag = 0x1000000;
@@ -2987,6 +3058,7 @@ int main()
   test_recording_transport_executor();
   test_recording_application_service();
   test_overlay_settings_and_eel();
+  test_overlay_application_service();
   test_overlay_refresh_adapter();
   test_track_region_adapter();
   test_extended_render_planner();

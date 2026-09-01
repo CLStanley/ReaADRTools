@@ -71,6 +71,7 @@ cl /nologo /EHsc /O2 /LD /std:c++17 ^
   reaadr_reaper\recording_transport_executor.cpp ^
   reaadr_reaper\recording_application_service.cpp ^
   reaadr_reaper\overlay_refresh_adapter.cpp ^
+  reaadr_reaper\overlay_application_service.cpp ^
   /Fe"%BUILD_DIR%\%TARGET%" ^
   /link user32.lib /DEF:reaper_reaadr.def
 

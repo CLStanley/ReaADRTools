@@ -162,9 +162,12 @@ uses canonical model cues, shared overlap-lane filtering, deterministic
 region/item/active selection precedence, and the existing generated-code
 ownership marker while preserving the current text, timing, metadata, and
 visual-cue behavior.
+The native overlay application coordinator now composes those inputs and
+forwards one immutable refresh request to the transactional FX adapter,
+including explicit disabled and retryable failure outcomes.
 These domain operations and adapters are test-covered but are not yet public
 writers; the region-sync, character-filter, and navigation command/UI cutovers,
-the deferred recording frame/UI wiring, native overlay callback binding,
+the deferred recording frame/UI wiring, native REAPER callback binding,
 generated-cue cleanup, other overlay UI, and in-REAPER smoke tests remain.
 
 ### Stage 4: native UI and Lua removal
@@ -269,6 +272,9 @@ The initial target-architecture modules now include:
 - `extension/reaadr_reaper/overlay_refresh_adapter.*`: revalidated generated-FX
   inspection and transactional create/update/remove application with user-FX
   preservation and failed-mutation compensation.
+- `extension/reaadr_reaper/overlay_application_service.*`: native composition
+  of persisted settings, canonical model, selection/filter state, and EEL
+  generation before the transactional refresh callback.
 
 `make -C extension test` runs these modules without the REAPER SDK; normal
 extension builds compile the same sources into the plugin.

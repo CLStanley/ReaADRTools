@@ -37,13 +37,15 @@ REAPER_SOURCES := reaadr_reaper/project_state.cpp reaadr_reaper/project_transact
 	reaadr_reaper/session_render_service.cpp reaadr_reaper/character_filter_adapter.cpp \
 	reaadr_reaper/cue_navigation_service.cpp reaadr_reaper/record_arm_adapter.cpp \
 	reaadr_reaper/recording_setup_adapter.cpp reaadr_reaper/recording_transport_executor.cpp \
-	reaadr_reaper/recording_application_service.cpp reaadr_reaper/overlay_refresh_adapter.cpp
+	reaadr_reaper/recording_application_service.cpp reaadr_reaper/overlay_refresh_adapter.cpp \
+	reaadr_reaper/overlay_application_service.cpp
 REAPER_HEADERS := reaadr_reaper/project_state.hpp reaadr_reaper/project_transaction.hpp \
 	reaadr_reaper/track_region_adapter.hpp reaadr_reaper/render_artifact_adapter.hpp \
 	reaadr_reaper/session_render_service.hpp reaadr_reaper/character_filter_adapter.hpp \
 	reaadr_reaper/cue_navigation_service.hpp reaadr_reaper/record_arm_adapter.hpp \
 	reaadr_reaper/recording_setup_adapter.hpp reaadr_reaper/recording_transport_executor.hpp \
-	reaadr_reaper/recording_application_service.hpp reaadr_reaper/overlay_refresh_adapter.hpp
+	reaadr_reaper/recording_application_service.hpp reaadr_reaper/overlay_refresh_adapter.hpp \
+	reaadr_reaper/overlay_application_service.hpp
 NATIVE_SOURCES := $(CORE_SOURCES) $(REAPER_SOURCES)
 NATIVE_HEADERS := $(CORE_HEADERS) $(REAPER_HEADERS)
 EXTENSION_SOURCES := reaper_reaadr.cpp $(NATIVE_SOURCES)
