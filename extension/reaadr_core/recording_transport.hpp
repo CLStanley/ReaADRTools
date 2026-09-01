@@ -41,18 +41,18 @@ struct RecordingTransportInput {
   double play_position = 0.0;
 };
 
-// Booleans are host intents, not side effects. The future REAPER coordinator
-// applies them in declaration order, keeping this deferred transport state
-// machine deterministic and independently testable.
+// Booleans are intents, not side effects. The REAPER executor applies the
+// immediate prefix in declaration order; the application coordinator consumes
+// the final model/status intents after host execution succeeds.
 struct RecordingTransportActions {
-  bool configure_loop_range = false;
+  bool stop = false;
   bool restore_loop_range = false;
+  bool configure_loop_range = false;
   bool move_cursor = false;
   double cursor_position = 0.0;
   bool isolate_recording_track = false;
   bool play = false;
   bool record = false;
-  bool stop = false;
   bool restore_record_arm = false;
   bool refresh_active_cue = false;
   bool finalize_recorded_takes = false;

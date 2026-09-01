@@ -139,10 +139,16 @@ preference transitions. It emits ordered host intents rather than calling
 REAPER, so the future deferred coordinator can apply actions only after
 revalidating the setup and can retain the last committed state if an action
 fails.
+The native recording transport executor now applies the immediate stop,
+loop-range, cursor, record-arm, and play/record intents according to their
+declared ordering. It preserves the user's original loop range across passes
+and compensates loop/arm changes when a take cannot start. Model-first
+cue/status updates and preference writes are returned as explicit pending work
+rather than being performed at the asynchronous REAPER boundary.
 These domain operations and adapters are test-covered but are not yet public
 writers; the region-sync, character-filter, and navigation command/UI cutovers,
-the REAPER recording action executor and deferred status/UI coordinator,
-generated-cue cleanup, overlays, and in-REAPER smoke tests remain.
+the deferred recording status/UI coordinator, generated-cue cleanup, overlays,
+and in-REAPER smoke tests remain.
 
 ### Stage 4: native UI and Lua removal
 
@@ -226,6 +232,9 @@ The initial target-architecture modules now include:
   isolation, compensation, idempotent restoration, and targeted retry.
 - `extension/reaadr_reaper/recording_setup_adapter.*`: narrow track inspection
   and final ownership revalidation before recording handoff.
+- `extension/reaadr_reaper/recording_transport_executor.*`: ordered REAPER loop,
+  cursor, record-arm, and transport execution with failed-start compensation
+  and deferred model/status application actions.
 
 `make -C extension test` runs these modules without the REAPER SDK; normal
 extension builds compile the same sources into the plugin.

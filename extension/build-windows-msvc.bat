@@ -63,6 +63,7 @@ cl /nologo /EHsc /O2 /LD /std:c++17 ^
   reaadr_reaper\cue_navigation_service.cpp ^
   reaadr_reaper\record_arm_adapter.cpp ^
   reaadr_reaper\recording_setup_adapter.cpp ^
+  reaadr_reaper\recording_transport_executor.cpp ^
   /Fe"%BUILD_DIR%\%TARGET%" ^
   /link user32.lib /DEF:reaper_reaadr.def
 

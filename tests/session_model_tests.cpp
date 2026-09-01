@@ -18,6 +18,7 @@
 #include "reaadr_reaper/cue_navigation_service.hpp"
 #include "reaadr_reaper/record_arm_adapter.hpp"
 #include "reaadr_reaper/recording_setup_adapter.hpp"
+#include "reaadr_reaper/recording_transport_executor.hpp"
 #include "reaadr_reaper/render_artifact_adapter.hpp"
 #include "reaadr_reaper/session_render_service.hpp"
 #include "reaadr_reaper/track_region_adapter.hpp"
@@ -313,6 +314,62 @@ reaadr::reaper::RecordingSetupApi fake_recording_setup_api()
     fake_get_recording_track,
     fake_validate_record_arm_track,
     fake_get_set_track_string,
+  };
+}
+
+struct RecordingTransportProbe {
+  double loop_start = 0.0;
+  double loop_end = 0.0;
+  double cursor_position = 0.0;
+  bool cursor_move_view = false;
+  bool cursor_seek_play = false;
+  bool fail_get_loop = false;
+  bool fail_set_loop = false;
+  bool fail_cursor = false;
+  int fail_command = 0;
+  std::vector<int> commands;
+};
+
+RecordingTransportProbe recording_transport_probe;
+
+bool fake_get_loop_time_range(double* start, double* end)
+{
+  if (recording_transport_probe.fail_get_loop || !start || !end) return false;
+  *start = recording_transport_probe.loop_start;
+  *end = recording_transport_probe.loop_end;
+  return true;
+}
+
+bool fake_set_loop_time_range(double start, double end)
+{
+  if (recording_transport_probe.fail_set_loop) return false;
+  recording_transport_probe.loop_start = start;
+  recording_transport_probe.loop_end = end;
+  return true;
+}
+
+bool fake_set_recording_cursor(double position, bool move_view, bool seek_play)
+{
+  if (recording_transport_probe.fail_cursor) return false;
+  recording_transport_probe.cursor_position = position;
+  recording_transport_probe.cursor_move_view = move_view;
+  recording_transport_probe.cursor_seek_play = seek_play;
+  return true;
+}
+
+bool fake_run_recording_command(int command)
+{
+  recording_transport_probe.commands.push_back(command);
+  return recording_transport_probe.fail_command != command;
+}
+
+reaadr::reaper::RecordingTransportApi fake_recording_transport_api()
+{
+  return {
+    fake_get_loop_time_range,
+    fake_set_loop_time_range,
+    fake_set_recording_cursor,
+    fake_run_recording_command,
   };
 }
 
@@ -1815,6 +1872,118 @@ void test_recording_transport()
   check(!invalid, "native recording transport rejects an invalid preroll window");
 }
 
+void test_recording_transport_executor()
+{
+  render_adapter_probe = {};
+  render_adapter_probe.tracks.resize(2);
+  render_adapter_probe.tracks[0].record_armed = 1.0;
+  render_adapter_probe.tracks[1].record_armed = 0.0;
+  transaction_probe = {};
+  recording_transport_probe = {};
+  recording_transport_probe.loop_start = 20.0;
+  recording_transport_probe.loop_end = 25.0;
+
+  const reaadr::core::RecordingTransportContext context{7.0, 10.0, 12.0};
+  reaadr::core::RecordingTransportState state;
+  state.loop_enabled = true;
+  auto transition = reaadr::core::advance_recording_transport(
+    state, context, {reaadr::core::RecordingTransportEvent::start, 0, 0.0});
+  reaadr::reaper::RecordArmManager arm_manager(
+    nullptr, fake_record_arm_api(), fake_transaction_api());
+  reaadr::reaper::RecordingTransportExecutor executor(
+    arm_manager, fake_recording_transport_api());
+  MediaTrack* target = fake_get_track(nullptr, 1);
+  auto applied = executor.apply(transition, context, target);
+  check(applied && applied.state_accepted && executor.has_active_loop_range() &&
+          recording_transport_probe.loop_start == 7.0 &&
+          recording_transport_probe.loop_end == 12.0 &&
+          recording_transport_probe.cursor_position == 7.0 &&
+          recording_transport_probe.cursor_move_view &&
+          !recording_transport_probe.cursor_seek_play &&
+          recording_transport_probe.commands == std::vector<int>{1007} &&
+          render_adapter_probe.tracks[0].record_armed == 0.0 &&
+          render_adapter_probe.tracks[1].record_armed == 1.0 &&
+          applied.pending.refresh_active_cue,
+        "recording executor configures the loop, isolates the track, and starts preroll in order");
+
+  transition = reaadr::core::advance_recording_transport(
+    transition.state, context, {reaadr::core::RecordingTransportEvent::tick, 1, 10.0});
+  applied = executor.apply(transition, context, target);
+  check(applied && applied.state_accepted &&
+          recording_transport_probe.commands == std::vector<int>({1007, 1013}),
+        "recording executor punches in through the REAPER record command");
+
+  transition = reaadr::core::advance_recording_transport(
+    transition.state, context, {reaadr::core::RecordingTransportEvent::tick, 5, 12.0});
+  applied = executor.apply(transition, context, target);
+  check(applied && applied.state_accepted &&
+          recording_transport_probe.commands == std::vector<int>({1007, 1013, 1016}) &&
+          executor.has_active_loop_range() && arm_manager.has_snapshot(),
+        "recording executor stops a loop pass without prematurely restoring operation state");
+
+  transition = reaadr::core::advance_recording_transport(
+    transition.state, context,
+    {reaadr::core::RecordingTransportEvent::stop_requested, 0, 12.0});
+  recording_transport_probe.fail_set_loop = true;
+  applied = executor.apply(transition, context, target);
+  check(!applied && !applied.state_accepted && executor.has_active_loop_range() &&
+          arm_manager.has_snapshot() &&
+          render_adapter_probe.tracks[1].record_armed == 1.0,
+        "recording executor retains cleanup state when the user's loop range cannot be restored");
+  recording_transport_probe.fail_set_loop = false;
+  applied = executor.apply(transition, context, target);
+  check(applied && applied.state_accepted && !executor.has_active_loop_range() &&
+          recording_transport_probe.loop_start == 20.0 &&
+          recording_transport_probe.loop_end == 25.0 &&
+          render_adapter_probe.tracks[0].record_armed == 1.0 &&
+          render_adapter_probe.tracks[1].record_armed == 0.0 &&
+          !arm_manager.has_snapshot() && applied.pending.finalize_recorded_takes,
+        "recording executor restores the user's loop and arm state before deferring take finalization");
+
+  const auto preference = reaadr::core::advance_recording_transport(
+    {}, context,
+    {reaadr::core::RecordingTransportEvent::toggle_preroll_each_loop, 0, 0.0});
+  applied = executor.apply(preference, context, target);
+  check(applied && applied.state_accepted && applied.pending.persist_preroll_preference,
+        "recording executor leaves preference persistence to the application coordinator");
+
+  render_adapter_probe.tracks[0].record_armed = 1.0;
+  render_adapter_probe.tracks[1].record_armed = 0.0;
+  recording_transport_probe = {};
+  recording_transport_probe.loop_start = 30.0;
+  recording_transport_probe.loop_end = 35.0;
+  recording_transport_probe.fail_cursor = true;
+  reaadr::reaper::RecordArmManager failure_arm_manager(
+    nullptr, fake_record_arm_api(), fake_transaction_api());
+  reaadr::reaper::RecordingTransportExecutor failure_executor(
+    failure_arm_manager, fake_recording_transport_api());
+  const auto failed_start = failure_executor.apply(
+    reaadr::core::advance_recording_transport(
+      state, context, {reaadr::core::RecordingTransportEvent::start, 0, 0.0}),
+    context, target);
+  check(!failed_start && !failed_start.state_accepted &&
+          !failure_executor.has_active_loop_range() &&
+          recording_transport_probe.loop_start == 30.0 &&
+          recording_transport_probe.loop_end == 35.0 &&
+          !failure_arm_manager.has_snapshot(),
+        "recording executor restores a configured loop range when cursor setup fails");
+
+  recording_transport_probe.fail_cursor = false;
+  recording_transport_probe.fail_command = 1007;
+  const auto failed_play = failure_executor.apply(
+    reaadr::core::advance_recording_transport(
+      state, context, {reaadr::core::RecordingTransportEvent::start, 0, 0.0}),
+    context, target);
+  check(!failed_play && !failed_play.state_accepted &&
+          !failure_executor.has_active_loop_range() &&
+          recording_transport_probe.loop_start == 30.0 &&
+          recording_transport_probe.loop_end == 35.0 &&
+          render_adapter_probe.tracks[0].record_armed == 1.0 &&
+          render_adapter_probe.tracks[1].record_armed == 0.0 &&
+          !failure_arm_manager.has_snapshot(),
+        "recording executor compensates loop and arm state when preroll cannot start");
+}
+
 void test_track_region_adapter()
 {
   constexpr int custom_color_flag = 0x1000000;
@@ -2278,6 +2447,7 @@ int main()
   test_record_arm_manager();
   test_recording_setup();
   test_recording_transport();
+  test_recording_transport_executor();
   test_track_region_adapter();
   test_extended_render_planner();
   test_complete_render_adapter();
