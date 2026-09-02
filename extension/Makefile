@@ -25,6 +25,7 @@ CORE_SOURCES := reaadr_core/session_model.cpp reaadr_core/model_repository.cpp r
 	reaadr_core/manager_preferences.cpp \
 	reaadr_core/manager_view_model.cpp \
 	reaadr_core/manager_navigation.cpp \
+	reaadr_core/manager_ui_contract.cpp \
 	reaadr_core/cue_manager_ui_contract.cpp \
 	reaadr_core/region_timing_sync.cpp reaadr_core/cue_navigation.cpp reaadr_core/record_arm.cpp \
 	reaadr_core/recording_setup.cpp reaadr_core/recording_transport.cpp reaadr_core/cue_status.cpp \
@@ -39,6 +40,7 @@ CORE_HEADERS := reaadr_core/session_model.hpp reaadr_core/model_repository.hpp r
 	reaadr_core/manager_preferences.hpp \
 	reaadr_core/manager_view_model.hpp \
 	reaadr_core/manager_navigation.hpp \
+	reaadr_core/manager_ui_contract.hpp \
 	reaadr_core/cue_manager_ui_contract.hpp \
 	reaadr_core/region_timing_sync.hpp reaadr_core/cue_navigation.hpp reaadr_core/record_arm.hpp \
 	reaadr_core/recording_setup.hpp reaadr_core/recording_transport.hpp reaadr_core/cue_status.hpp \

@@ -12,6 +12,7 @@
 #include "reaadr_core/overlay_settings.hpp"
 #include "reaadr_core/manager_preferences.hpp"
 #include "reaadr_core/manager_view_model.hpp"
+#include "reaadr_core/manager_ui_contract.hpp"
 #include "reaadr_core/manager_navigation.hpp"
 #include "reaadr_core/cue_manager_ui_contract.hpp"
 #include "reaadr_core/region_timing_sync.hpp"
@@ -2755,6 +2756,11 @@ void test_manager_navigation()
   check(layout.width == 1040 && layout.height == 880 && layout.min_width == 1040 &&
           layout.min_height == 880 && layout.dock == 0,
         "native Manager layout contract matches the established window defaults");
+  const auto& ui = reaadr::core::manager_ui_contract();
+  check(ui.header.width == 992 && ui.header.height == 78 && ui.tab_bar.y == 108 &&
+          ui.quick_actions.width == 420 && ui.content.x == 464 && ui.footer.y == 810 &&
+          ui.sections.size() == 7 && ui.sections[4].key == "overlay",
+        "native Manager UI contract mirrors the Lua window structure");
 
   FakeProjectStateStore store;
   store.values["ReaADRTools:ui.window.manager.width"] = "900";
