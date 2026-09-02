@@ -180,6 +180,9 @@ quick-action behavior.
 The REAPER boundary now supplies that adapter from `GetExtState` and
 `SetExtState`, while project settings continue through `GetProjExtState` and
 `SetProjExtState`.
+The native `ManagerViewModel` now composes this preference state with the
+canonical session name, revision, and filtered Cue Manager rows in one render
+payload, giving a future graphical view a consistent snapshot per frame.
 The extension now exposes a native refresh action that binds current REAPER
 selection, frame rate, project state, and FX APIs to that coordinator. The
 legacy Lua action remains registered for compatibility while broader command

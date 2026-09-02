@@ -11,6 +11,7 @@
 #include "reaadr_core/overlay_refresh.hpp"
 #include "reaadr_core/overlay_settings.hpp"
 #include "reaadr_core/manager_preferences.hpp"
+#include "reaadr_core/manager_view_model.hpp"
 #include "reaadr_core/region_timing_sync.hpp"
 #include "reaadr_core/record_arm.hpp"
 #include "reaadr_core/recording_setup.hpp"
@@ -2676,6 +2677,23 @@ void test_manager_preferences()
         "native Manager Preferences persists global quick-action slots");
 }
 
+void test_manager_view_model()
+{
+  reaadr::core::SessionModel model;
+  model.session["session_id"] = "manager-session";
+  model.session["session_name"] = "Manager Preview";
+  model.cues = {{{"id", "A"}, {"character", "Actor"}, {"start_time", "1"},
+                 {"end_time", "2"}, {"dialogue", "Hello"}, {"type", "ADR"},
+                 {"status", "Not Recorded"}}};
+  reaadr::core::ManagerPreferences preferences;
+  reaadr::core::CueManagerViewOptions options;
+  options.query = "hello";
+  const auto view = reaadr::core::build_manager_view_model(model, preferences, options, "7");
+  check(view && view.session_name == "Manager Preview" && view.revision == "7" &&
+          view.cues.rows.size() == 1 && view.cues.rows.front().cue_key == "A",
+        "native Manager view model combines session, preferences, and filtered cues");
+}
+
 void test_overlay_application_service()
 {
   FakeProjectStateStore store;
@@ -3413,6 +3431,7 @@ int main()
   test_recording_application_service();
   test_overlay_settings_and_eel();
   test_manager_preferences();
+  test_manager_view_model();
   test_overlay_application_service();
   test_cue_cleanup_plan();
   test_cue_manager_model();
