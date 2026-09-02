@@ -1,5 +1,7 @@
 #include "manager_preferences.hpp"
 #include <array>
+#include <cmath>
+#include <cstdlib>
 namespace reaadr::core {
 
 namespace {
@@ -141,6 +143,51 @@ ManagerPreferencesResult update_manager_preferences(const ManagerPreferences& cu
   if (key == "overlay_profile") {
     result.changed = apply_overlay_profile(result.preferences.overlay, value);
     if (!result.changed) result.error = "Unknown overlay profile: " + value;
+    return result;
+  }
+  struct OverlayFlag { const char* key; bool OverlaySettings::*member; };
+  static constexpr std::array<OverlayFlag, 23> overlay_flags = {{
+    {"enabled", &OverlaySettings::enabled}, {"show_cue_id", &OverlaySettings::show_cue_id},
+    {"show_character", &OverlaySettings::show_character}, {"show_dialogue", &OverlaySettings::show_dialogue},
+    {"show_cue_timecode", &OverlaySettings::show_cue_timecode}, {"show_project_timer", &OverlaySettings::show_project_timer},
+    {"show_visual_cue", &OverlaySettings::show_visual_cue}, {"show_direction", &OverlaySettings::show_direction},
+    {"show_cue_type", &OverlaySettings::show_cue_type}, {"show_streamer", &OverlaySettings::show_streamer},
+    {"show_flash", &OverlaySettings::show_flash}, {"show_status", &OverlaySettings::show_status},
+    {"show_metadata", &OverlaySettings::show_metadata}, {"bg_cue_id", &OverlaySettings::bg_cue_id},
+    {"bg_character", &OverlaySettings::bg_character}, {"bg_cue_timecode", &OverlaySettings::bg_cue_timecode},
+    {"bg_project_timer", &OverlaySettings::bg_project_timer}, {"bg_dialogue", &OverlaySettings::bg_dialogue},
+    {"bg_direction", &OverlaySettings::bg_direction}, {"bg_cue_type", &OverlaySettings::bg_cue_type},
+    {"bg_status", &OverlaySettings::bg_status}, {"bg_metadata", &OverlaySettings::bg_metadata},
+    {"include_preroll_each_loop", &OverlaySettings::include_preroll_each_loop},
+  }};
+  for (const auto& field : overlay_flags) {
+    if (key != field.key) continue;
+    if (value != "0" && value != "1") { result.error = "Overlay preference flags must be 0 or 1."; return result; }
+    const bool next = value == "1";
+    result.changed = result.preferences.overlay.*(field.member) != next;
+    result.preferences.overlay.*(field.member) = next;
+    return result;
+  }
+  if (key == "text_color") {
+    const std::string next = normalize_overlay_text_color(value);
+    result.changed = result.preferences.overlay.text_color != next;
+    result.preferences.overlay.text_color = next;
+    return result;
+  }
+  if (key == "metadata_fields") {
+    const std::string next = normalize_overlay_metadata_fields(value);
+    result.changed = result.preferences.overlay.metadata_fields != next;
+    result.preferences.overlay.metadata_fields = next;
+    return result;
+  }
+  if (key == "preroll_seconds") {
+    char* end = nullptr;
+    const double next = std::strtod(value.c_str(), &end);
+    if (!end || end == value.c_str() || *end != '\0' || !std::isfinite(next) || next < 0.0) {
+      result.error = "Overlay preroll must be a non-negative number."; return result;
+    }
+    result.changed = result.preferences.overlay.preroll_seconds != next;
+    result.preferences.overlay.preroll_seconds = next;
     return result;
   }
   if (key.rfind("quick_action_", 0) == 0 && key.size() == 14 && key.back() >= '1' && key.back() <= '4') {

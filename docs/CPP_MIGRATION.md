@@ -196,6 +196,9 @@ native renderer.
 Overlay settings also expose deterministic preset detection so the native
 Preferences view can select the matching Actor, Engineer, Studio, or Minimal
 profile and distinguish custom combinations.
+The update API now edits every catalogued overlay field directly, normalizing
+colors and metadata lists and rejecting invalid or negative preroll values so
+native controls can commit changes without Lua-side validation.
 The Cue Manager UI contract now likewise publishes its eight table columns
 and nine action-bar commands, including editability and the Lua help/tool-tip
 copy used by the visual workflow.

@@ -2658,6 +2658,15 @@ void test_manager_preferences()
   updated = reaadr::core::update_manager_preferences(preferences, "cue_manager_auto_dock", "1");
   check(updated && updated.changed && updated.preferences.cue_manager_auto_dock,
         "native Manager Preferences updates navigation and docking toggles");
+  updated = reaadr::core::update_manager_preferences(preferences, "show_character", "0");
+  check(updated && updated.changed && !updated.preferences.overlay.show_character,
+        "native Manager Preferences edits individual overlay controls");
+  updated = reaadr::core::update_manager_preferences(preferences, "metadata_fields", "PGID, Custom");
+  check(updated && updated.preferences.overlay.metadata_fields ==
+          "PGID,Custom,Media Time,Watermark Timestamp,Asset Date Code,Project Name",
+        "native Manager Preferences normalizes metadata field edits");
+  check(reaadr::core::update_manager_preferences(preferences, "preroll_seconds", "-1").error.size() > 0,
+        "native Manager Preferences rejects invalid overlay timing");
   check(!reaadr::core::update_manager_preferences(preferences, "tooltips", "maybe") &&
           !reaadr::core::update_manager_preferences(preferences, "unknown", "1"),
         "native Manager Preferences rejects invalid values and unknown keys");
