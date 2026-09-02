@@ -10,6 +10,7 @@
 #include "reaadr_core/overlay_eel.hpp"
 #include "reaadr_core/overlay_refresh.hpp"
 #include "reaadr_core/overlay_settings.hpp"
+#include "reaadr_core/manager_preferences.hpp"
 #include "reaadr_core/region_timing_sync.hpp"
 #include "reaadr_core/record_arm.hpp"
 #include "reaadr_core/recording_setup.hpp"
@@ -2597,6 +2598,29 @@ void test_overlay_settings_and_eel()
         "native EEL generation rejects malformed canonical cue timing");
 }
 
+void test_manager_preferences()
+{
+  reaadr::core::ManagerPreferences preferences;
+  check(preferences.quick_actions[0] == "import" && preferences.tooltips &&
+          preferences.navigation_wrap && !preferences.remember_layout &&
+          !preferences.cue_manager_auto_dock,
+        "native Manager Preferences defaults match the established Manager workflow");
+
+  auto updated = reaadr::core::update_manager_preferences(preferences, "overlay_profile", "minimal");
+  check(updated && updated.changed && !updated.preferences.overlay.show_character &&
+          !updated.preferences.overlay.show_direction && updated.preferences.overlay.show_dialogue,
+        "native Manager Preferences applies overlay presets through the shared settings model");
+  updated = reaadr::core::update_manager_preferences(preferences, "quick_action_2", "refresh_overlay");
+  check(updated && updated.changed && updated.preferences.quick_actions[1] == "refresh_overlay",
+        "native Manager Preferences updates numbered quick-action slots");
+  updated = reaadr::core::update_manager_preferences(preferences, "cue_manager_auto_dock", "1");
+  check(updated && updated.changed && updated.preferences.cue_manager_auto_dock,
+        "native Manager Preferences updates navigation and docking toggles");
+  check(!reaadr::core::update_manager_preferences(preferences, "tooltips", "maybe") &&
+          !reaadr::core::update_manager_preferences(preferences, "unknown", "1"),
+        "native Manager Preferences rejects invalid values and unknown keys");
+}
+
 void test_overlay_application_service()
 {
   FakeProjectStateStore store;
@@ -3333,6 +3357,7 @@ int main()
   test_recording_transport_executor();
   test_recording_application_service();
   test_overlay_settings_and_eel();
+  test_manager_preferences();
   test_overlay_application_service();
   test_cue_cleanup_plan();
   test_cue_manager_model();

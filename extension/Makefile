@@ -22,6 +22,7 @@ CORE_SOURCES := reaadr_core/session_model.cpp reaadr_core/model_repository.cpp r
 	reaadr_core/cue_wav.cpp reaadr_core/event_log.cpp reaadr_core/character_filter.cpp \
 	reaadr_core/cue_cleanup.cpp \
 	reaadr_core/cue_manager_model.cpp \
+	reaadr_core/manager_preferences.cpp \
 	reaadr_core/region_timing_sync.cpp reaadr_core/cue_navigation.cpp reaadr_core/record_arm.cpp \
 	reaadr_core/recording_setup.cpp reaadr_core/recording_transport.cpp reaadr_core/cue_status.cpp \
 	reaadr_core/recording_preferences.cpp reaadr_core/overlay_settings.cpp \
@@ -32,6 +33,7 @@ CORE_HEADERS := reaadr_core/session_model.hpp reaadr_core/model_repository.hpp r
 	reaadr_core/cue_wav.hpp reaadr_core/event_log.hpp reaadr_core/character_filter.hpp \
 	reaadr_core/cue_cleanup.hpp \
 	reaadr_core/cue_manager_model.hpp \
+	reaadr_core/manager_preferences.hpp \
 	reaadr_core/region_timing_sync.hpp reaadr_core/cue_navigation.hpp reaadr_core/record_arm.hpp \
 	reaadr_core/recording_setup.hpp reaadr_core/recording_transport.hpp reaadr_core/cue_status.hpp \
 	reaadr_core/recording_preferences.hpp reaadr_core/overlay_settings.hpp \

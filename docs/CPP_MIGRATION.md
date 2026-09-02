@@ -165,6 +165,11 @@ visual-cue behavior.
 The native overlay application coordinator now composes those inputs and
 forwards one immutable refresh request to the transactional FX adapter,
 including explicit disabled and retryable failure outcomes.
+The native Manager Preferences state contract now models the established
+Manager's overlay presets, quick-action slots, layout/tooltips/navigation
+toggles, and Cue Manager docking preference. Its validated updates are kept
+in the domain core so the eventual graphical Manager can bind to one
+deterministic state model while Lua compatibility remains available.
 The extension now exposes a native refresh action that binds current REAPER
 selection, frame rate, project state, and FX APIs to that coordinator. The
 legacy Lua action remains registered for compatibility while broader command
