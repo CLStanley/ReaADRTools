@@ -240,6 +240,8 @@ That invariant is evaluated on parsed numeric, MM:SS, and SMPTE timecode
 values rather than relying on string comparison.
 Accepted non-numeric timing edits are canonicalized to numeric seconds before
 being written, matching Lua's `update_cached_cue` representation.
+The edit contract also supports unique Cue ID renames and rejects collisions,
+matching the Lua inline ID editor without creating duplicate canonical keys.
 Sortable headers are validated against the native contract; unknown sort keys
 fall back safely to the established start-time ordering.
 Those catalogs are presentation constraints only; canonical cue edits retain

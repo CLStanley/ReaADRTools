@@ -105,6 +105,16 @@ CueManagerEditResult edit_cue_manager_row(const SessionModel& model,
   if (matches == 0) { result.error = "The cue ID is not present in the canonical session."; return result; }
   if (matches > 1) { result.error = "Multiple cues match the cue ID."; return result; }
   Fields& cue = result.model.cues[selected];
+  if (!options.new_cue_key.empty() && options.new_cue_key != options.cue_key) {
+    for (std::size_t index = 0; index < result.model.cues.size(); ++index) {
+      if (index != selected && field(result.model.cues[index], "id") == options.new_cue_key) {
+        result.error = "The new cue ID is already in use.";
+        return result;
+      }
+    }
+    cue["id"] = options.new_cue_key;
+    result.changed = true;
+  }
   double frame_rate = 24.0;
   const auto frame_rate_field = result.model.timecode.find("frame_rate");
   if (frame_rate_field != result.model.timecode.end()) {

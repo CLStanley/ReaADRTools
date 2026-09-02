@@ -2909,6 +2909,13 @@ void test_cue_manager_model()
   check(smpte_edit && smpte_edit.model.cues[0].at("start_time") == "3" &&
           smpte_edit.model.cues[0].at("end_time") == "4",
         "native cue manager canonicalizes accepted SMPTE edits to numeric seconds");
+  const auto renamed = reaadr::core::edit_cue_manager_row(model,
+    {"A1", "", "", "D", "", "", "", "A2"});
+  check(renamed && renamed.changed && renamed.model.cues[0].at("id") == "A2",
+        "native cue manager supports unique cue ID edits");
+  check(!reaadr::core::edit_cue_manager_row(model,
+    {"A1", "", "", "D", "", "", "", "B1"}),
+        "native cue manager rejects duplicate cue ID edits");
   FakeProjectStateStore store;
   reaadr::core::SessionModelRepository repository(store);
   check(repository.save(model), "native cue manager commit fixture saves its model");
