@@ -1,4 +1,5 @@
 #include "cue_manager_model.hpp"
+#include "cue_manager_ui_contract.hpp"
 #include <utility>
 #include <algorithm>
 #include <cstdlib>
@@ -63,10 +64,11 @@ CueManagerModel build_cue_manager_view(const SessionModel& model,
     if (key == "end_time") return row.end_time;
     return row.start_time;
   };
-  if (!options.sort_key.empty()) {
+  const std::string sort_key = is_cue_manager_sort_key(options.sort_key) ? options.sort_key : "start_time";
+  if (!sort_key.empty()) {
     std::stable_sort(result.rows.begin(), result.rows.end(), [&](const CueManagerRow& left, const CueManagerRow& right) {
-      const std::string a = value_for(left, options.sort_key);
-      const std::string b = value_for(right, options.sort_key);
+      const std::string a = value_for(left, sort_key);
+      const std::string b = value_for(right, sort_key);
       char* end_a = nullptr; char* end_b = nullptr;
       const double number_a = std::strtod(a.c_str(), &end_a);
       const double number_b = std::strtod(b.c_str(), &end_b);

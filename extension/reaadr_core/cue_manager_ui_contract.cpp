@@ -43,4 +43,10 @@ const std::vector<std::string>& cue_manager_type_choices()
   return choices;
 }
 
+bool is_cue_manager_sort_key(const std::string& key)
+{
+  return key == "id" || key == "character" || key == "start_time" || key == "end_time" ||
+    key == "status" || key == "cue_type" || key == "line" || key == "notes";
+}
+
 } // namespace reaadr::core

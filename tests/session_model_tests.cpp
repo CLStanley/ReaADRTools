@@ -2763,6 +2763,10 @@ void test_cue_manager_ui_contract()
           actions.back().key == "info" && statuses.size() == 5 &&
           statuses[2] == "Recorded" && types.size() == 8 && types[2] == "Effort",
         "native Cue Manager contract mirrors the Lua table columns and action bar");
+  check(reaadr::core::is_cue_manager_sort_key("start_time") &&
+          reaadr::core::is_cue_manager_sort_key("notes") &&
+          !reaadr::core::is_cue_manager_sort_key("unknown"),
+        "native Cue Manager validates sortable header keys");
 }
 
 void test_overlay_application_service()

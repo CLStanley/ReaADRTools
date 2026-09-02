@@ -228,6 +228,8 @@ The native contract also publishes the exact five status and eight cue-type
 choices used by Lua's inline dropdown editors.
 Cue Manager view filtering now also supports stable ascending/descending sorts
 for the Lua table's headers, including numeric timing comparisons.
+Sortable headers are validated against the native contract; unknown sort keys
+fall back safely to the established start-time ordering.
 Those catalogs are presentation constraints only; canonical cue edits retain
 legacy custom status/type values so existing sessions remain writable during
 the transition.
