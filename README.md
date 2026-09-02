@@ -110,8 +110,9 @@ projects, recordings, or project-local ReaADR Session Model data.
 
 ## Development Notes
 
-The native extension is now the only installed workflow runtime. Remaining UI
-and command cutover is tracked in `docs/CPP_MIGRATION.md`.
+The native extension is now the only installed workflow runtime. Native UI
+cutover must preserve the established ReaADR Tools Manager and visual Cue
+Manager designs; remaining parity work is tracked in `docs/CPP_MIGRATION.md`.
 
 Run local deterministic checks without launching REAPER:
 

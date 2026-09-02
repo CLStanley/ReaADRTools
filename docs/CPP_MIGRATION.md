@@ -192,6 +192,13 @@ the native extension is the only installed runtime.
 
 - Replace manager, cue editor, preferences, filter, overlay, and report windows
   with one native manager UI.
+- UI parity target: the native replacement must follow the established ReaADR
+  Tools Manager design from the Lua application, including its Preferences,
+  Video Overlay, filter, help, quick-action, refresh, and error/retry surfaces.
+  “Cue Manager” specifically means the visual cue-management window launched
+  by Open Cue Manager: its cue list, selection, editing, status/type controls,
+  timing/region workflows, and visible synchronization behavior—not a text
+  summary or a generic status prompt.
 - Reach feature parity for every existing UI control, persisted preference,
   keyboard/menu action, refresh path, and error/retry dialog before removing
   its compatibility implementation. A read-only summary or reduced input
