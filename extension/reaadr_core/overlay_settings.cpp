@@ -113,6 +113,31 @@ bool apply_overlay_profile(OverlaySettings& settings, const std::string& profile
   return true;
 }
 
+std::string normalize_overlay_metadata_fields(const std::string& value)
+{
+  static const std::array<const char*, 6> defaults = {
+    "PGID", "MID", "Media Time", "Watermark Timestamp", "Asset Date Code", "Project Name"};
+  std::vector<std::string> fields;
+  std::stringstream input(value);
+  std::string field;
+  while (std::getline(input, field, ',')) {
+    const auto first = field.find_first_not_of(" \t\r\n");
+    const auto last = field.find_last_not_of(" \t\r\n");
+    if (first != std::string::npos) fields.push_back(field.substr(first, last - first + 1));
+  }
+  for (std::size_t i = fields.size(); i < defaults.size(); ++i) fields.emplace_back(defaults[i]);
+  std::ostringstream output;
+  for (std::size_t i = 0; i < fields.size(); ++i) { if (i) output << ','; output << fields[i]; }
+  return output.str();
+}
+
+std::string normalize_overlay_text_color(const std::string& value)
+{
+  std::string normalized = value;
+  for (char& byte : normalized) if (byte >= 'A' && byte <= 'Z') byte = static_cast<char>(byte - 'A' + 'a');
+  return normalized == "yellow" ? "yellow" : "white";
+}
+
 OverlaySettingsLoadResult OverlaySettingsRepository::load() const
 {
   OverlaySettingsLoadResult result;

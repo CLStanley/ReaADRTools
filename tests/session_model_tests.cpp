@@ -2478,6 +2478,11 @@ void test_overlay_settings_and_eel()
         "native overlay profiles match the Manager Minimal preset");
   check(!reaadr::core::apply_overlay_profile(profile, "unknown"),
         "native overlay profiles reject unknown names");
+  check(reaadr::core::normalize_overlay_text_color("YELLOW") == "yellow" &&
+          reaadr::core::normalize_overlay_text_color("blue") == "white" &&
+          reaadr::core::normalize_overlay_metadata_fields(" PGID, , Custom ") ==
+            "PGID,Custom,Media Time,Watermark Timestamp,Asset Date Code,Project Name",
+        "native overlay preferences normalize colors and fill metadata defaults like the Manager");
   FakeProjectStateStore store;
   store.values["ReaADRTools:overlay.enabled"] = "no";
   store.values["ReaADRTools:overlay.show_metadata"] = "yes";
