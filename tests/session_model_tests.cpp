@@ -1,16 +1,36 @@
 #include "reaadr_core/session_model.hpp"
 #include "reaadr_core/domain_utils.hpp"
 #include "reaadr_core/cue_import.hpp"
+#include "reaadr_core/cue_cleanup.hpp"
+#include "reaadr_core/cue_navigation.hpp"
+#include "reaadr_core/cue_status.hpp"
 #include "reaadr_core/cue_wav.hpp"
 #include "reaadr_core/event_log.hpp"
 #include "reaadr_core/model_repository.hpp"
+#include "reaadr_core/overlay_eel.hpp"
+#include "reaadr_core/overlay_refresh.hpp"
+#include "reaadr_core/overlay_settings.hpp"
 #include "reaadr_core/region_timing_sync.hpp"
+#include "reaadr_core/record_arm.hpp"
+#include "reaadr_core/recording_setup.hpp"
+#include "reaadr_core/recording_transport.hpp"
+#include "reaadr_core/recording_preferences.hpp"
 #include "reaadr_core/render_plan.hpp"
 #include "reaadr_core/session_builder.hpp"
 #include "reaadr_core/session_commit.hpp"
 #include "reaadr_core/session_mutation.hpp"
 #include "reaadr_reaper/project_state.hpp"
 #include "reaadr_reaper/project_transaction.hpp"
+#include "reaadr_reaper/overlay_refresh_adapter.hpp"
+#include "reaadr_reaper/overlay_application_service.hpp"
+#include "reaadr_reaper/cue_cleanup_adapter.hpp"
+#include "reaadr_reaper/cue_cleanup_application_service.hpp"
+#include "reaadr_reaper/character_filter_application_service.hpp"
+#include "reaadr_reaper/cue_navigation_service.hpp"
+#include "reaadr_reaper/record_arm_adapter.hpp"
+#include "reaadr_reaper/recording_setup_adapter.hpp"
+#include "reaadr_reaper/recording_application_service.hpp"
+#include "reaadr_reaper/recording_transport_executor.hpp"
 #include "reaadr_reaper/render_artifact_adapter.hpp"
 #include "reaadr_reaper/session_render_service.hpp"
 #include "reaadr_reaper/track_region_adapter.hpp"
@@ -81,6 +101,34 @@ int fake_set_project_state(ReaProject*, const char*, const char*, const char* va
   return static_cast<int>(project_state_written.size());
 }
 
+int navigation_play_state = 0;
+double navigation_play_position = 0.0;
+double navigation_cursor_position = 0.0;
+int navigation_cursor_moves = 0;
+bool navigation_move_view = false;
+bool navigation_seek_play = false;
+
+int fake_get_play_state() { return navigation_play_state; }
+double fake_get_play_position() { return navigation_play_position; }
+double fake_get_cursor_position() { return navigation_cursor_position; }
+void fake_set_edit_cursor_position(double position, bool move_view, bool seek_play)
+{
+  navigation_cursor_position = position;
+  navigation_move_view = move_view;
+  navigation_seek_play = seek_play;
+  ++navigation_cursor_moves;
+}
+
+reaadr::reaper::CueNavigationApi fake_navigation_api()
+{
+  return {
+    fake_get_play_state,
+    fake_get_play_position,
+    fake_get_cursor_position,
+    fake_set_edit_cursor_position,
+  };
+}
+
 struct TransactionProbe {
   int begins = 0;
   int ends = 0;
@@ -127,11 +175,19 @@ struct FakeItem {
   FakeTake take;
 };
 
+struct FakeFx {
+  std::string renamed_name;
+  std::string video_code;
+  bool enabled = false;
+};
+
 struct FakeTrack {
   std::map<std::string, std::string> strings;
   int color = 0;
   std::vector<std::unique_ptr<FakeItem>> items;
   bool muted = false;
+  double record_armed = 0.0;
+  std::vector<FakeFx> effects;
 };
 
 struct FakeRegion {
@@ -158,8 +214,15 @@ struct RenderAdapterProbe {
   std::set<FakeSource*> live_sources;
   bool fail_region_update = false;
   bool fail_track_mute = false;
+  FakeTrack* fail_record_arm_track = nullptr;
+  std::set<FakeTrack*> invalid_record_arm_tracks;
   bool fail_region_hidden = false;
   bool fail_item_value = false;
+  bool fail_overlay_add = false;
+  bool fail_overlay_delete = false;
+  std::string fail_overlay_set_parameter;
+  int fail_overlay_set_remaining = 0;
+  int last_overlay_instantiate = 0;
   int next_region_id = 100;
   int window_adjustments = 0;
   int arrange_updates = 0;
@@ -217,6 +280,7 @@ double fake_get_track_value(MediaTrack* track, const char* parameter)
   const std::string name = parameter ? parameter : "";
   if (name == "I_CUSTOMCOLOR") return fake_track(track)->color;
   if (name == "B_MUTE") return fake_track(track)->muted ? 1.0 : 0.0;
+  if (name == "I_RECARM") return fake_track(track)->record_armed;
   return 0.0;
 }
 
@@ -232,7 +296,240 @@ bool fake_set_track_value(MediaTrack* track, const char* parameter, double value
     fake_track(track)->muted = value != 0.0;
     return true;
   }
+  if (name == "I_RECARM" && fake_track(track) != render_adapter_probe.fail_record_arm_track) {
+    fake_track(track)->record_armed = value;
+    return true;
+  }
   return false;
+}
+
+bool fake_validate_record_arm_track(ReaProject*, MediaTrack* track)
+{
+  return track && render_adapter_probe.invalid_record_arm_tracks.count(fake_track(track)) == 0;
+}
+
+reaadr::reaper::RecordArmApi fake_record_arm_api()
+{
+  return {
+    fake_count_tracks,
+    fake_get_track,
+    fake_validate_record_arm_track,
+    fake_get_track_value,
+    fake_set_track_value,
+  };
+}
+
+int stale_recording_track_index = -1;
+int stale_recording_track_reads = 0;
+
+MediaTrack* fake_get_recording_track(ReaProject* project, int index)
+{
+  MediaTrack* track = fake_get_track(project, index);
+  if (track && index == stale_recording_track_index && ++stale_recording_track_reads == 2) {
+    fake_track(track)->strings["P_EXT:ReaADR.role"] = "user_audio";
+  }
+  return track;
+}
+
+reaadr::reaper::RecordingSetupApi fake_recording_setup_api()
+{
+  return {
+    fake_count_tracks,
+    fake_get_recording_track,
+    fake_validate_record_arm_track,
+    fake_get_set_track_string,
+  };
+}
+
+int fake_track_fx_get_count(MediaTrack* track)
+{
+  return track ? static_cast<int>(fake_track(track)->effects.size()) : -1;
+}
+
+bool fake_track_fx_get_named_config(MediaTrack* track, int fx_index,
+                                    const char* parameter, char* value, int value_size)
+{
+  if (!track || fx_index < 0 || !parameter || !value || value_size <= 0 ||
+      static_cast<std::size_t>(fx_index) >= fake_track(track)->effects.size()) {
+    return false;
+  }
+  const FakeFx& effect = fake_track(track)->effects[static_cast<std::size_t>(fx_index)];
+  const std::string name = parameter;
+  const std::string* source = nullptr;
+  if (name == "renamed_name") source = &effect.renamed_name;
+  else if (name == "VIDEO_CODE") source = &effect.video_code;
+  else return false;
+  std::snprintf(value, static_cast<std::size_t>(value_size), "%s", source->c_str());
+  return true;
+}
+
+bool fake_track_fx_get_enabled(MediaTrack* track, int fx_index)
+{
+  return track && fx_index >= 0 &&
+    static_cast<std::size_t>(fx_index) < fake_track(track)->effects.size() &&
+    fake_track(track)->effects[static_cast<std::size_t>(fx_index)].enabled;
+}
+
+int fake_track_fx_add_by_name(MediaTrack* track, const char*, bool, int instantiate)
+{
+  if (!track || render_adapter_probe.fail_overlay_add) return -1;
+  render_adapter_probe.last_overlay_instantiate = instantiate;
+  fake_track(track)->effects.push_back({});
+  return static_cast<int>(fake_track(track)->effects.size() - 1);
+}
+
+bool fake_track_fx_delete(MediaTrack* track, int fx_index)
+{
+  if (!track || render_adapter_probe.fail_overlay_delete || fx_index < 0 ||
+      static_cast<std::size_t>(fx_index) >= fake_track(track)->effects.size()) {
+    return false;
+  }
+  fake_track(track)->effects.erase(fake_track(track)->effects.begin() + fx_index);
+  return true;
+}
+
+bool fake_track_fx_set_named_config(MediaTrack* track, int fx_index,
+                                    const char* parameter, const char* value)
+{
+  if (!track || fx_index < 0 || !parameter ||
+      static_cast<std::size_t>(fx_index) >= fake_track(track)->effects.size()) {
+    return false;
+  }
+  const std::string name = parameter;
+  if (render_adapter_probe.fail_overlay_set_parameter == name &&
+      render_adapter_probe.fail_overlay_set_remaining != 0) {
+    if (render_adapter_probe.fail_overlay_set_remaining > 0) {
+      --render_adapter_probe.fail_overlay_set_remaining;
+    }
+    return false;
+  }
+  FakeFx& effect = fake_track(track)->effects[static_cast<std::size_t>(fx_index)];
+  if (name == "renamed_name") effect.renamed_name = value ? value : "";
+  else if (name == "VIDEO_CODE") effect.video_code = value ? value : "";
+  else if (name != "DONE") return false;
+  return true;
+}
+
+void fake_track_fx_set_enabled(MediaTrack* track, int fx_index, bool enabled)
+{
+  if (!track || fx_index < 0 ||
+      static_cast<std::size_t>(fx_index) >= fake_track(track)->effects.size()) {
+    return;
+  }
+  fake_track(track)->effects[static_cast<std::size_t>(fx_index)].enabled = enabled;
+}
+
+void fake_adjust_track_windows(bool);
+void fake_update_arrange();
+
+reaadr::reaper::OverlayRefreshApi fake_overlay_refresh_api()
+{
+  return {
+    fake_count_tracks,
+    fake_get_track,
+    fake_validate_record_arm_track,
+    fake_get_set_track_string,
+    fake_track_fx_get_count,
+    fake_track_fx_get_named_config,
+    fake_track_fx_get_enabled,
+    fake_track_fx_add_by_name,
+    fake_track_fx_delete,
+    fake_track_fx_set_named_config,
+    fake_track_fx_set_enabled,
+    fake_adjust_track_windows,
+    fake_update_arrange,
+  };
+}
+
+struct RecordingTransportProbe {
+  double loop_start = 0.0;
+  double loop_end = 0.0;
+  double cursor_position = 0.0;
+  bool cursor_move_view = false;
+  bool cursor_seek_play = false;
+  bool fail_get_loop = false;
+  bool fail_set_loop = false;
+  bool fail_cursor = false;
+  int fail_command = 0;
+  std::vector<int> commands;
+};
+
+RecordingTransportProbe recording_transport_probe;
+
+bool fake_get_loop_time_range(double* start, double* end)
+{
+  if (recording_transport_probe.fail_get_loop || !start || !end) return false;
+  *start = recording_transport_probe.loop_start;
+  *end = recording_transport_probe.loop_end;
+  return true;
+}
+
+bool fake_set_loop_time_range(double start, double end)
+{
+  if (recording_transport_probe.fail_set_loop) return false;
+  recording_transport_probe.loop_start = start;
+  recording_transport_probe.loop_end = end;
+  return true;
+}
+
+bool fake_set_recording_cursor(double position, bool move_view, bool seek_play)
+{
+  if (recording_transport_probe.fail_cursor) return false;
+  recording_transport_probe.cursor_position = position;
+  recording_transport_probe.cursor_move_view = move_view;
+  recording_transport_probe.cursor_seek_play = seek_play;
+  return true;
+}
+
+bool fake_run_recording_command(int command)
+{
+  recording_transport_probe.commands.push_back(command);
+  return recording_transport_probe.fail_command != command;
+}
+
+reaadr::reaper::RecordingTransportApi fake_recording_transport_api()
+{
+  return {
+    fake_get_loop_time_range,
+    fake_set_loop_time_range,
+    fake_set_recording_cursor,
+    fake_run_recording_command,
+  };
+}
+
+bool recording_overlay_refresh_succeeds = true;
+int recording_overlay_refreshes = 0;
+
+bool fake_refresh_recording_overlay()
+{
+  ++recording_overlay_refreshes;
+  return recording_overlay_refresh_succeeds;
+}
+
+struct OverlayApplicationProbe {
+  reaadr::core::OverlayRefreshOptions refresh;
+  bool succeeds = true;
+  std::string error;
+};
+
+OverlayApplicationProbe overlay_application_probe;
+
+double fake_overlay_frame_rate()
+{
+  return 29.97;
+}
+
+reaadr::reaper::OverlaySelectionInput fake_overlay_selection()
+{
+  return {"C", "B"};
+}
+
+bool fake_apply_overlay_refresh(const reaadr::core::OverlayRefreshOptions& options,
+                               std::string* error)
+{
+  overlay_application_probe.refresh = options;
+  if (!overlay_application_probe.succeeds && error) *error = overlay_application_probe.error;
+  return overlay_application_probe.succeeds;
 }
 
 int fake_count_project_markers(ReaProject*, int* markers, int* regions)
@@ -466,6 +763,36 @@ bool fake_delete_track_item(MediaTrack* track, MediaItem* item)
   destroy_fake_source((*found)->take.source);
   items.erase(found);
   return true;
+}
+
+bool fake_delete_cleanup_track(ReaProject*, MediaTrack* track)
+{
+  if (!track) return false;
+  auto& tracks = render_adapter_probe.tracks;
+  const auto found = std::find_if(tracks.begin(), tracks.end(),
+    [&](const FakeTrack& candidate) { return &candidate == fake_track(track); });
+  if (found == tracks.end()) return false;
+  tracks.erase(found);
+  return true;
+}
+
+reaadr::reaper::CueCleanupApi fake_cue_cleanup_api()
+{
+  return {
+    fake_count_tracks,
+    fake_get_track,
+    fake_get_set_track_string,
+    fake_count_track_items,
+    fake_get_track_item,
+    fake_get_set_item_string,
+    fake_delete_track_item,
+    fake_delete_cleanup_track,
+    fake_count_project_markers,
+    fake_enum_project_markers,
+    fake_delete_project_marker,
+    fake_adjust_track_windows,
+    fake_update_arrange,
+  };
 }
 
 bool fake_move_item_to_track(MediaItem* item, MediaTrack* destination)
@@ -1359,6 +1686,1134 @@ void test_region_timing_sync()
   check(!invalid, "region timing sync rejects an invalid timing tolerance");
 }
 
+void test_cue_navigation()
+{
+  reaadr::core::SessionModel model;
+  model.session = {{"session_id", "navigation-session"}};
+  model.cues = {
+    {{"id", "B"}, {"character", "Actor"}, {"start_time", "20"}, {"end_time", "22"}},
+    {{"id", "A2"}, {"character", "Actor"}, {"start_time", "10"}, {"end_time", "12"}},
+    {{"id", "C"}, {"character", "Actor"}, {"start_time", "30"}, {"end_time", "32"}},
+    {{"id", "A1"}, {"character", "Actor"}, {"start_time", "10"}, {"end_time", "11"}},
+  };
+  const auto catalog = reaadr::core::build_cue_navigation_catalog(model);
+  check(catalog && catalog.cues.size() == 4 && catalog.cues[0].cue_id == "A1" &&
+          catalog.cues[1].cue_id == "A2" && catalog.cues[2].cue_id == "B" &&
+          catalog.cues[3].cue_id == "C",
+        "native cue navigation sorts by timeline position and cue ID like Lua");
+  check(reaadr::core::find_next_cue(catalog.cues, 10.0)->cue_id == "B" &&
+          reaadr::core::find_previous_cue(catalog.cues, 20.0)->cue_id == "A2" &&
+          reaadr::core::find_next_cue(catalog.cues, 30.0)->cue_id == "A1" &&
+          reaadr::core::find_previous_cue(catalog.cues, 10.0)->cue_id == "C",
+        "native next and previous navigation retain epsilon and wraparound behavior");
+  check(reaadr::core::find_cue_by_id(catalog.cues, " A2 ")->cue_id == "A2" &&
+          reaadr::core::find_cue_by_id(catalog.cues, "a")->cue_id == "A1" &&
+          reaadr::core::find_cue_at_position(catalog.cues, 10.5)->cue_id == "A1",
+        "native cue lookup preserves exact, partial case-insensitive, and inclusive position matching");
+
+  reaadr::core::SessionModel duplicate_model = model;
+  duplicate_model.cues.push_back({
+    {"id", "B!"}, {"character", "Actor"}, {"start_time", "40"}, {"end_time", "42"},
+  });
+  check(!reaadr::core::build_cue_navigation_catalog(duplicate_model),
+        "native cue navigation rejects ambiguous persisted selection keys");
+  reaadr::core::SessionModel invalid_model = model;
+  invalid_model.cues[0]["start_time"] = "not-a-time";
+  check(!reaadr::core::build_cue_navigation_catalog(invalid_model),
+        "native cue navigation rejects invalid canonical timing");
+
+  FakeProjectStateStore selection_store;
+  selection_store.values["ReaADRTools:manager_selected_cue_key"] = "A1";
+  selection_store.values["ReaADRTools:active_overlay_cue_key"] = "A1";
+  reaadr::core::CueSelectionRepository selection_repository(selection_store);
+  selection_store.failed_write_key = "ReaADRTools:active_overlay_cue_key";
+  selection_store.failed_writes_remaining = 1;
+  const auto selection_failed = selection_repository.save_selected_cue("B");
+  check(!selection_failed && selection_failed.rolled_back &&
+          selection_store.values.at("ReaADRTools:manager_selected_cue_key") == "A1" &&
+          selection_store.values.at("ReaADRTools:active_overlay_cue_key") == "A1",
+        "paired native cue selection rolls back if the overlay key cannot be persisted");
+
+  FakeProjectStateStore service_store;
+  reaadr::core::SessionModelRepository model_repository(service_store);
+  check(model_repository.save(model), "cue-navigation fixture saves a canonical session model");
+  reaadr::core::CueSelectionRepository service_selection(service_store);
+  reaadr::reaper::CueNavigationService service(
+    model_repository, service_selection, fake_navigation_api());
+
+  navigation_play_state = 0;
+  navigation_cursor_position = 10.0;
+  navigation_cursor_moves = 0;
+  const auto next = service.navigate_next();
+  check(next && next.cue.cue_id == "B" && navigation_cursor_position == 20.0 &&
+          navigation_cursor_moves == 1 && navigation_move_view && !navigation_seek_play &&
+          service_store.values.at("ReaADRTools:manager_selected_cue_key") == "B" &&
+          service_store.values.at("ReaADRTools:active_overlay_cue_key") == "B",
+        "native next-cue navigation synchronizes selection before moving the edit cursor");
+
+  navigation_play_state = 1;
+  navigation_play_position = 20.0;
+  navigation_cursor_position = 99.0;
+  const auto playing_next = service.navigate_next();
+  check(playing_next && playing_next.cue.cue_id == "C" && navigation_cursor_position == 30.0,
+        "native navigation uses play position while REAPER is playing");
+  const auto jumped = service.navigate_to_id("a2");
+  check(jumped && jumped.cue.cue_id == "A2" && navigation_cursor_position == 10.0 &&
+          model_repository.revision().revision == 0,
+        "native ID navigation moves to canonical timing without creating a model revision");
+
+  service_store.failed_write_key = "ReaADRTools:active_overlay_cue_key";
+  service_store.failed_writes_remaining = 1;
+  const double cursor_before_failure = navigation_cursor_position;
+  const auto failed_jump = service.navigate_to_id("B");
+  check(!failed_jump && failed_jump.selection.rolled_back &&
+          navigation_cursor_position == cursor_before_failure &&
+          service_store.values.at("ReaADRTools:manager_selected_cue_key") == "A2" &&
+          service_store.values.at("ReaADRTools:active_overlay_cue_key") == "A2",
+        "native navigation leaves the cursor and prior selection intact after persistence failure");
+}
+
+void test_record_arm_manager()
+{
+  const auto domain_plan = reaadr::core::build_record_arm_isolation_plan(
+    {{0, 1.0}, {1, 0.0}, {2, 1.0}}, 1);
+  check(domain_plan && domain_plan.mutations.size() == 3 &&
+          domain_plan.mutations[0].armed == 0.0 &&
+          domain_plan.mutations[1].armed == 1.0 &&
+          domain_plan.mutations[2].armed == 0.0,
+        "native record-arm planning isolates exactly one captured target");
+  check(!reaadr::core::build_record_arm_isolation_plan({{0, 1.0}, {0, 0.0}}, 0) &&
+          !reaadr::core::build_record_arm_isolation_plan({{0, 1.0}}, 2),
+        "native record-arm planning rejects duplicate entries and an unknown target");
+
+  render_adapter_probe = {};
+  render_adapter_probe.tracks.resize(3);
+  render_adapter_probe.tracks[0].record_armed = 1.0;
+  render_adapter_probe.tracks[1].record_armed = 0.0;
+  render_adapter_probe.tracks[2].record_armed = 1.0;
+  MediaTrack* first = fake_get_track(nullptr, 0);
+  MediaTrack* second = fake_get_track(nullptr, 1);
+  MediaTrack* third = fake_get_track(nullptr, 2);
+  reaadr::reaper::RecordArmManager manager(
+    nullptr, fake_record_arm_api(), fake_transaction_api());
+
+  transaction_probe = {};
+  const auto isolated = manager.capture_and_isolate(second);
+  check(isolated && manager.has_snapshot() &&
+          render_adapter_probe.tracks[0].record_armed == 0.0 &&
+          render_adapter_probe.tracks[1].record_armed == 1.0 &&
+          render_adapter_probe.tracks[2].record_armed == 0.0 &&
+          transaction_probe.begins == 1 && transaction_probe.ends == 1 &&
+          transaction_probe.refresh_balance == 0,
+        "native record-arm capture isolates a target in one balanced transaction");
+
+  transaction_probe = {};
+  const auto reisolated = manager.capture_and_isolate(third);
+  check(reisolated && manager.has_snapshot() &&
+          render_adapter_probe.tracks[0].record_armed == 0.0 &&
+          render_adapter_probe.tracks[1].record_armed == 0.0 &&
+          render_adapter_probe.tracks[2].record_armed == 1.0,
+        "native record-arm isolation can change loop targets without replacing the original snapshot");
+
+  transaction_probe = {};
+  const auto restored = manager.restore();
+  const auto restored_again = manager.restore();
+  check(restored && restored_again && !manager.has_snapshot() &&
+          render_adapter_probe.tracks[0].record_armed == 1.0 &&
+          render_adapter_probe.tracks[1].record_armed == 0.0 &&
+          render_adapter_probe.tracks[2].record_armed == 1.0 &&
+          transaction_probe.begins == 1 && transaction_probe.ends == 1,
+        "native record-arm restoration is complete and idempotent");
+
+  render_adapter_probe = {};
+  render_adapter_probe.tracks.resize(3);
+  render_adapter_probe.tracks[0].record_armed = 1.0;
+  render_adapter_probe.tracks[2].record_armed = 1.0;
+  first = fake_get_track(nullptr, 0);
+  second = fake_get_track(nullptr, 1);
+  third = fake_get_track(nullptr, 2);
+  reaadr::reaper::RecordArmManager failing_manager(
+    nullptr, fake_record_arm_api(), fake_transaction_api());
+  render_adapter_probe.fail_record_arm_track = fake_track(third);
+  transaction_probe = {};
+  const auto isolation_failed = failing_manager.capture_and_isolate(second);
+  check(!isolation_failed && isolation_failed.restored_after_failure &&
+          !failing_manager.has_snapshot() &&
+          render_adapter_probe.tracks[0].record_armed == 1.0 &&
+          render_adapter_probe.tracks[1].record_armed == 0.0 &&
+          render_adapter_probe.tracks[2].record_armed == 1.0 &&
+          transaction_probe.end_description == "ReaADR: isolate recording track (failed)" &&
+          transaction_probe.refresh_balance == 0,
+        "failed native isolation compensates earlier mutations and releases a new snapshot");
+
+  render_adapter_probe.fail_record_arm_track = nullptr;
+  check(static_cast<bool>(failing_manager.capture_and_isolate(second)),
+        "record-arm restore-failure fixture isolates its target");
+  render_adapter_probe.fail_record_arm_track = fake_track(first);
+  transaction_probe = {};
+  const auto restore_failed = failing_manager.restore();
+  check(!restore_failed && failing_manager.has_snapshot() &&
+          render_adapter_probe.tracks[1].record_armed == 0.0 &&
+          render_adapter_probe.tracks[2].record_armed == 1.0,
+        "native record-arm restore retains only tracks that need a retry");
+  render_adapter_probe.fail_record_arm_track = nullptr;
+  check(failing_manager.restore() && !failing_manager.has_snapshot() &&
+          render_adapter_probe.tracks[0].record_armed == 1.0,
+        "native record-arm restoration completes after a transient host failure");
+
+  render_adapter_probe = {};
+  render_adapter_probe.tracks.resize(2);
+  render_adapter_probe.tracks[0].record_armed = 1.0;
+  first = fake_get_track(nullptr, 0);
+  second = fake_get_track(nullptr, 1);
+  reaadr::reaper::RecordArmManager deleted_track_manager(
+    nullptr, fake_record_arm_api(), fake_transaction_api());
+  check(static_cast<bool>(deleted_track_manager.capture_and_isolate(second)),
+        "deleted-track restore fixture captures record-arm state");
+  render_adapter_probe.invalid_record_arm_tracks.insert(fake_track(first));
+  const auto deleted_restored = deleted_track_manager.restore();
+  check(deleted_restored && deleted_restored.tracks_skipped == 1 &&
+          !deleted_track_manager.has_snapshot(),
+        "native record-arm restoration safely skips tracks deleted during deferred recording");
+}
+
+void test_recording_setup()
+{
+  reaadr::core::SessionModel model;
+  model.session = {{"session_id", "recording-setup-session"}};
+  model.cues = {
+    {{"id", "A1"}, {"character", "Actor"}, {"start_time", "10"}, {"end_time", "12"}},
+    {{"id", "A2"}, {"character", "Actor"}, {"start_time", "11"}, {"end_time", "13"}},
+    {{"id", "B1"}, {"character", "Beta"}, {"start_time", "20"}, {"end_time", "22"}},
+  };
+  const std::vector<reaadr::core::ExistingTrack> tracks = {
+    {0, "user_audio", "Actor.lane2", "User", {}},
+    {1, "character", "Actor.lane1", "Actor", {}},
+    {2, "character", "Actor.lane2", "Actor 2", {}},
+    {3, "character", "Beta.lane1", "Beta", {}},
+  };
+  reaadr::core::RecordingSetupOptions options;
+  options.cue_key = "A2";
+  options.preroll_seconds = 3.0;
+  const auto planned = reaadr::core::build_recording_setup_plan(model, tracks, options);
+  check(planned && planned.plan.cue_model_index == 1 && planned.plan.lane == 2 &&
+          planned.plan.track_project_index == 2 && !planned.plan.used_lane_fallback &&
+          planned.plan.cue_start == 11.0 && planned.plan.cue_end == 13.0 &&
+          planned.plan.record_start == 8.0,
+        "native recording setup resolves canonical timing, overlap lane, preroll, and exact owned track");
+
+  const std::vector<reaadr::core::ExistingTrack> fallback_tracks = {
+    {1, "character", "Actor.lane1", "Actor", {}},
+    {2, "user_audio", "Actor.lane2", "User", {}},
+  };
+  const auto fallback =
+    reaadr::core::build_recording_setup_plan(model, fallback_tracks, options);
+  check(fallback && fallback.plan.track_project_index == 1 && fallback.plan.used_lane_fallback,
+        "native recording setup retains the Lua lane-one compatibility fallback without adopting user tracks");
+
+  std::vector<reaadr::core::ExistingTrack> ambiguous_tracks = tracks;
+  ambiguous_tracks.push_back({4, "character", "actor.lane2", "Duplicate", {}});
+  check(!reaadr::core::build_recording_setup_plan(model, ambiguous_tracks, options),
+        "native recording setup rejects duplicate exact ownership matches");
+  reaadr::core::RecordingSetupOptions invalid_options = options;
+  invalid_options.preroll_seconds = std::nan("");
+  check(!reaadr::core::build_recording_setup_plan(model, tracks, invalid_options),
+        "native recording setup rejects invalid preroll");
+
+  FakeProjectStateStore store;
+  reaadr::core::SessionModelRepository repository(store);
+  check(repository.save(model), "recording-setup fixture saves its canonical session");
+  render_adapter_probe = {};
+  render_adapter_probe.tracks.resize(3);
+  render_adapter_probe.tracks[0].strings = {
+    {"P_EXT:ReaADR.role", "character"}, {"P_EXT:ReaADR.key", "Actor.lane1"},
+    {"P_NAME", "Actor"},
+  };
+  render_adapter_probe.tracks[1].strings = {
+    {"P_EXT:ReaADR.role", "character"}, {"P_EXT:ReaADR.key", "Actor.lane2"},
+    {"P_NAME", "Actor 2"},
+  };
+  render_adapter_probe.tracks[2].strings = {
+    {"P_EXT:ReaADR.role", "character"}, {"P_EXT:ReaADR.key", "Beta.lane1"},
+    {"P_NAME", "Beta"},
+  };
+  stale_recording_track_index = -1;
+  stale_recording_track_reads = 0;
+  reaadr::reaper::RecordingSetupService service(
+    repository, nullptr, fake_recording_setup_api());
+  const auto prepared = service.prepare(options);
+  check(prepared && prepared.target_track == fake_get_track(nullptr, 1) &&
+          prepared.plan.expected_track_key == "Actor.lane2",
+        "native recording setup adapter returns a revalidated non-owning target handle");
+
+  stale_recording_track_index = 1;
+  stale_recording_track_reads = 0;
+  const auto stale = service.prepare(options);
+  check(!stale && !stale.target_track && stale.error.find("changed") != std::string::npos,
+        "native recording setup fails closed when target ownership changes after inspection");
+  stale_recording_track_index = -1;
+  stale_recording_track_reads = 0;
+}
+
+void test_recording_transport()
+{
+  const reaadr::core::RecordingTransportContext context{7.0, 10.0, 12.0};
+  reaadr::core::RecordingTransportState state;
+  auto transition = reaadr::core::advance_recording_transport(
+    state, context, {reaadr::core::RecordingTransportEvent::start, 0, 0.0});
+  check(transition && transition.state.mode == reaadr::core::RecordingTransportMode::preroll &&
+          !transition.state.operation_finalized && transition.actions.move_cursor &&
+          transition.actions.cursor_position == 7.0 && transition.actions.isolate_recording_track &&
+          transition.actions.play && !transition.actions.record &&
+          transition.actions.refresh_active_cue,
+        "native recording transport starts a first take in preroll with explicit host intents");
+
+  transition = reaadr::core::advance_recording_transport(
+    transition.state, context, {reaadr::core::RecordingTransportEvent::tick, 1, 10.0});
+  check(transition && transition.state.mode == reaadr::core::RecordingTransportMode::recording &&
+          transition.state.take_count == 1 && transition.actions.record,
+        "native recording transport punches in at the canonical cue start");
+
+  transition = reaadr::core::advance_recording_transport(
+    transition.state, context, {reaadr::core::RecordingTransportEvent::tick, 5, 12.0});
+  check(transition && transition.state.mode == reaadr::core::RecordingTransportMode::idle &&
+          transition.state.operation_finalized && transition.actions.stop &&
+          transition.actions.restore_record_arm && transition.actions.finalize_recorded_takes,
+        "native recording transport stops and finalizes a completed non-loop take");
+
+  reaadr::core::RecordingTransportState externally_stopped;
+  externally_stopped.mode = reaadr::core::RecordingTransportMode::preroll;
+  externally_stopped.operation_finalized = false;
+  const auto preroll_stopped = reaadr::core::advance_recording_transport(
+    externally_stopped, context, {reaadr::core::RecordingTransportEvent::tick, 0, 8.0});
+  check(preroll_stopped && preroll_stopped.state.mode == reaadr::core::RecordingTransportMode::idle &&
+          preroll_stopped.actions.restore_record_arm &&
+          !preroll_stopped.actions.stop && !preroll_stopped.actions.finalize_recorded_takes,
+        "external stop during preroll cleans up without counting or finalizing a take");
+
+  reaadr::core::RecordingTransportState loop_state;
+  loop_state.loop_enabled = true;
+  auto loop = reaadr::core::advance_recording_transport(
+    loop_state, context, {reaadr::core::RecordingTransportEvent::start, 0, 0.0});
+  check(loop && loop.actions.configure_loop_range && loop.state.loop_range_active,
+        "loop recording configures its range before the first preroll");
+  loop = reaadr::core::advance_recording_transport(
+    loop.state, context, {reaadr::core::RecordingTransportEvent::tick, 1, 10.0});
+  loop = reaadr::core::advance_recording_transport(
+    loop.state, context, {reaadr::core::RecordingTransportEvent::tick, 5, 12.0});
+  check(loop && loop.state.mode == reaadr::core::RecordingTransportMode::loop_wait &&
+          loop.state.take_count == 1 && loop.actions.stop &&
+          !loop.actions.restore_record_arm && !loop.actions.finalize_recorded_takes,
+        "completed loop take waits for transport settlement without releasing recording state");
+  loop = reaadr::core::advance_recording_transport(
+    loop.state, context, {reaadr::core::RecordingTransportEvent::tick, 0, 12.0});
+  check(loop && loop.state.mode == reaadr::core::RecordingTransportMode::preroll &&
+          loop.actions.move_cursor && loop.actions.cursor_position == 7.0 &&
+          loop.actions.isolate_recording_track && loop.actions.play,
+        "settled loop transport starts the next take through the shared preroll path");
+
+  reaadr::core::RecordingTransportState toggled;
+  auto toggle = reaadr::core::advance_recording_transport(
+    toggled, context, {reaadr::core::RecordingTransportEvent::toggle_loop, 0, 0.0});
+  check(toggle && toggle.state.loop_enabled && toggle.state.loop_range_active &&
+          toggle.actions.configure_loop_range,
+        "enabling loop recording configures the bounded preroll-to-cue-end range");
+  toggle = reaadr::core::advance_recording_transport(
+    toggle.state, context,
+    {reaadr::core::RecordingTransportEvent::toggle_preroll_each_loop, 0, 0.0});
+  check(toggle && !toggle.state.include_preroll_each_loop && !toggle.state.loop_range_active &&
+          toggle.actions.restore_loop_range && toggle.actions.persist_preroll_preference,
+        "disabling per-loop preroll restores the user's loop range and persists the choice");
+  toggle = reaadr::core::advance_recording_transport(
+    toggle.state, context,
+    {reaadr::core::RecordingTransportEvent::toggle_preroll_each_loop, 0, 0.0});
+  check(toggle && toggle.state.include_preroll_each_loop && toggle.state.loop_range_active &&
+          toggle.actions.configure_loop_range && toggle.actions.persist_preroll_preference,
+        "re-enabling per-loop preroll configures the loop range and persists the choice");
+
+  reaadr::core::RecordingTransportState immediate_loop;
+  immediate_loop.mode = reaadr::core::RecordingTransportMode::loop_wait;
+  immediate_loop.loop_enabled = true;
+  immediate_loop.include_preroll_each_loop = false;
+  immediate_loop.operation_finalized = false;
+  immediate_loop.take_count = 1;
+  const auto immediate = reaadr::core::advance_recording_transport(
+    immediate_loop, context, {reaadr::core::RecordingTransportEvent::tick, 0, 12.0});
+  check(immediate && immediate.state.mode == reaadr::core::RecordingTransportMode::recording &&
+          immediate.state.take_count == 2 && immediate.actions.cursor_position == 10.0 &&
+          immediate.actions.record && !immediate.actions.play,
+        "loop recording can start subsequent takes immediately when per-loop preroll is disabled");
+
+  reaadr::core::RecordingTransportState abort_state;
+  abort_state.mode = reaadr::core::RecordingTransportMode::recording;
+  abort_state.operation_finalized = false;
+  abort_state.loop_range_active = true;
+  abort_state.take_count = 2;
+  const auto aborted = reaadr::core::advance_recording_transport(
+    abort_state, context, {reaadr::core::RecordingTransportEvent::abort, 5, 11.0});
+  check(aborted && aborted.state.mode == reaadr::core::RecordingTransportMode::idle &&
+          aborted.actions.stop && aborted.actions.restore_loop_range &&
+          aborted.actions.restore_record_arm && aborted.actions.finalize_recorded_takes,
+        "recording abort converges transport, loop, arm, and take cleanup into one transition");
+
+  const auto invalid = reaadr::core::advance_recording_transport(
+    {}, {11.0, 10.0, 12.0}, {reaadr::core::RecordingTransportEvent::start, 0, 0.0});
+  check(!invalid, "native recording transport rejects an invalid preroll window");
+}
+
+void test_recording_transport_executor()
+{
+  render_adapter_probe = {};
+  render_adapter_probe.tracks.resize(2);
+  render_adapter_probe.tracks[0].record_armed = 1.0;
+  render_adapter_probe.tracks[1].record_armed = 0.0;
+  transaction_probe = {};
+  recording_transport_probe = {};
+  recording_transport_probe.loop_start = 20.0;
+  recording_transport_probe.loop_end = 25.0;
+
+  const reaadr::core::RecordingTransportContext context{7.0, 10.0, 12.0};
+  reaadr::core::RecordingTransportState state;
+  state.loop_enabled = true;
+  auto transition = reaadr::core::advance_recording_transport(
+    state, context, {reaadr::core::RecordingTransportEvent::start, 0, 0.0});
+  reaadr::reaper::RecordArmManager arm_manager(
+    nullptr, fake_record_arm_api(), fake_transaction_api());
+  reaadr::reaper::RecordingTransportExecutor executor(
+    arm_manager, fake_recording_transport_api());
+  MediaTrack* target = fake_get_track(nullptr, 1);
+  auto applied = executor.apply(transition, context, target);
+  check(applied && applied.state_accepted && executor.has_active_loop_range() &&
+          recording_transport_probe.loop_start == 7.0 &&
+          recording_transport_probe.loop_end == 12.0 &&
+          recording_transport_probe.cursor_position == 7.0 &&
+          recording_transport_probe.cursor_move_view &&
+          !recording_transport_probe.cursor_seek_play &&
+          recording_transport_probe.commands == std::vector<int>{1007} &&
+          render_adapter_probe.tracks[0].record_armed == 0.0 &&
+          render_adapter_probe.tracks[1].record_armed == 1.0 &&
+          applied.pending.refresh_active_cue,
+        "recording executor configures the loop, isolates the track, and starts preroll in order");
+
+  transition = reaadr::core::advance_recording_transport(
+    transition.state, context, {reaadr::core::RecordingTransportEvent::tick, 1, 10.0});
+  applied = executor.apply(transition, context, target);
+  check(applied && applied.state_accepted &&
+          recording_transport_probe.commands == std::vector<int>({1007, 1013}),
+        "recording executor punches in through the REAPER record command");
+
+  transition = reaadr::core::advance_recording_transport(
+    transition.state, context, {reaadr::core::RecordingTransportEvent::tick, 5, 12.0});
+  applied = executor.apply(transition, context, target);
+  check(applied && applied.state_accepted &&
+          recording_transport_probe.commands == std::vector<int>({1007, 1013, 1016}) &&
+          executor.has_active_loop_range() && arm_manager.has_snapshot(),
+        "recording executor stops a loop pass without prematurely restoring operation state");
+
+  transition = reaadr::core::advance_recording_transport(
+    transition.state, context,
+    {reaadr::core::RecordingTransportEvent::stop_requested, 0, 12.0});
+  recording_transport_probe.fail_set_loop = true;
+  applied = executor.apply(transition, context, target);
+  check(!applied && !applied.state_accepted && executor.has_active_loop_range() &&
+          arm_manager.has_snapshot() &&
+          render_adapter_probe.tracks[1].record_armed == 1.0,
+        "recording executor retains cleanup state when the user's loop range cannot be restored");
+  recording_transport_probe.fail_set_loop = false;
+  applied = executor.apply(transition, context, target);
+  check(applied && applied.state_accepted && !executor.has_active_loop_range() &&
+          recording_transport_probe.loop_start == 20.0 &&
+          recording_transport_probe.loop_end == 25.0 &&
+          render_adapter_probe.tracks[0].record_armed == 1.0 &&
+          render_adapter_probe.tracks[1].record_armed == 0.0 &&
+          !arm_manager.has_snapshot() && applied.pending.finalize_recorded_takes,
+        "recording executor restores the user's loop and arm state before deferring take finalization");
+
+  const auto preference = reaadr::core::advance_recording_transport(
+    {}, context,
+    {reaadr::core::RecordingTransportEvent::toggle_preroll_each_loop, 0, 0.0});
+  applied = executor.apply(preference, context, target);
+  check(applied && applied.state_accepted && applied.pending.persist_preroll_preference,
+        "recording executor leaves preference persistence to the application coordinator");
+
+  render_adapter_probe.tracks[0].record_armed = 1.0;
+  render_adapter_probe.tracks[1].record_armed = 0.0;
+  recording_transport_probe = {};
+  recording_transport_probe.loop_start = 30.0;
+  recording_transport_probe.loop_end = 35.0;
+  recording_transport_probe.fail_cursor = true;
+  reaadr::reaper::RecordArmManager failure_arm_manager(
+    nullptr, fake_record_arm_api(), fake_transaction_api());
+  reaadr::reaper::RecordingTransportExecutor failure_executor(
+    failure_arm_manager, fake_recording_transport_api());
+  const auto failed_start = failure_executor.apply(
+    reaadr::core::advance_recording_transport(
+      state, context, {reaadr::core::RecordingTransportEvent::start, 0, 0.0}),
+    context, target);
+  check(!failed_start && !failed_start.state_accepted &&
+          !failure_executor.has_active_loop_range() &&
+          recording_transport_probe.loop_start == 30.0 &&
+          recording_transport_probe.loop_end == 35.0 &&
+          !failure_arm_manager.has_snapshot(),
+        "recording executor restores a configured loop range when cursor setup fails");
+
+  recording_transport_probe.fail_cursor = false;
+  recording_transport_probe.fail_command = 1007;
+  const auto failed_play = failure_executor.apply(
+    reaadr::core::advance_recording_transport(
+      state, context, {reaadr::core::RecordingTransportEvent::start, 0, 0.0}),
+    context, target);
+  check(!failed_play && !failed_play.state_accepted &&
+          !failure_executor.has_active_loop_range() &&
+          recording_transport_probe.loop_start == 30.0 &&
+          recording_transport_probe.loop_end == 35.0 &&
+          render_adapter_probe.tracks[0].record_armed == 1.0 &&
+          render_adapter_probe.tracks[1].record_armed == 0.0 &&
+          !failure_arm_manager.has_snapshot(),
+        "recording executor compensates loop and arm state when preroll cannot start");
+}
+
+void test_recording_application_service()
+{
+  reaadr::core::SessionBuildOptions build_options;
+  build_options.session_id = "recording-application-session";
+  const auto built = reaadr::core::build_session_model({{
+    {"id", "A1"}, {"character", "Actor"}, {"start_time", "10"},
+    {"end_time", "12"}, {"line", "Line"}, {"status", "Not Recorded"},
+    {"script_id", "script-1"}, {"metadata", ""},
+  }}, build_options);
+  check(static_cast<bool>(built),
+        "recording application fixture builds a canonical session");
+
+  const auto updated = reaadr::core::update_cue_status(built.model, {
+    "A1", " recorded ", "record_cue",
+  });
+  check(updated && updated.changed && updated.normalized_status == "Recorded" &&
+          updated.cue.at("status") == "Recorded" &&
+          updated.model.regions == built.model.regions &&
+          updated.model.tracks == built.model.tracks &&
+          updated.model.state.at("last_operation") == "record_cue",
+        "cue status mutation updates only canonical workflow state and preserves derived records");
+
+  reaadr::core::SessionModel duplicate = built.model;
+  duplicate.cues.push_back(duplicate.cues.front());
+  check(!reaadr::core::update_cue_status(duplicate, {"A1", "Recorded", "record_cue"}),
+        "cue status mutation fails closed when a cue key is ambiguous");
+
+  FakeProjectStateStore commit_store;
+  reaadr::core::SessionModelRepository commit_repository(commit_store);
+  check(commit_repository.save(built.model), "cue status commit fixture saves its session");
+  commit_store.values["ReaADRTools:session_revision"] = "4";
+  reaadr::core::CueStatusCommitOptions commit_options;
+  commit_options.update = {"A1", "Recorded", "record_cue"};
+  commit_options.snapshot_label = "Finalize Recording Takes";
+  commit_options.utc_timestamp = "2026-08-31T15:00:00Z";
+  auto committed = reaadr::core::commit_cue_status(commit_repository, commit_options);
+  check(committed && committed.update.changed && committed.revision == 5 &&
+          commit_repository.load().model.cues[0].at("status") == "Recorded",
+        "cue status commit snapshots, persists, and revises canonical recording state");
+  committed = reaadr::core::commit_cue_status(commit_repository, commit_options);
+  check(committed && !committed.update.changed && committed.revision == 5,
+        "repeating an applied cue status commit is revision-free");
+
+  commit_options.update.status = "Approved";
+  commit_store.failed_write_key = "ReaADRTools:session_revision";
+  commit_store.failed_writes_remaining = 1;
+  const auto failed_commit =
+    reaadr::core::commit_cue_status(commit_repository, commit_options);
+  check(!failed_commit && failed_commit.rolled_back &&
+          commit_repository.load().model.cues[0].at("status") == "Recorded" &&
+          commit_repository.revision().revision == 6,
+        "cue status revision failure restores the prior canonical model with a fresh revision");
+
+  FakeProjectStateStore preference_store;
+  reaadr::core::RecordingPreferenceRepository preference_repository(preference_store);
+  check(preference_repository.load().include_preroll_each_loop,
+        "missing native recording preference uses the Lua-compatible true default");
+  auto preference = preference_repository.save_include_preroll_each_loop(false);
+  check(preference && preference.changed &&
+          preference_store.values.at(
+            "ReaADRTools:overlay.include_preroll_each_loop") == "0" &&
+          !preference_repository.load().include_preroll_each_loop,
+        "native recording preference writes the transitional Lua project key");
+  preference = preference_repository.save_include_preroll_each_loop(false);
+  check(preference && !preference.changed,
+        "unchanged recording preference persistence is a no-op");
+
+  FakeProjectStateStore app_store;
+  reaadr::core::SessionModelRepository app_repository(app_store);
+  check(app_repository.save(built.model), "recording coordinator fixture saves its session");
+  app_store.values["ReaADRTools:session_revision"] = "2";
+  reaadr::core::CueSelectionRepository selection_repository(app_store);
+  reaadr::core::RecordingPreferenceRepository app_preferences(app_store);
+  reaadr::core::EventLogRepository events(app_store);
+  recording_overlay_refresh_succeeds = true;
+  recording_overlay_refreshes = 0;
+  transaction_probe = {};
+  reaadr::reaper::RecordingApplicationService service(
+    app_repository, selection_repository, app_preferences, events, nullptr,
+    fake_transaction_api(), {fake_refresh_recording_overlay});
+  reaadr::reaper::RecordingApplicationOptions options;
+  options.cue_key = "A1";
+  options.include_preroll_each_loop = false;
+  options.status_commit.snapshot_label = "Finalize Native Recording";
+  options.status_commit.utc_timestamp = "2026-08-31T15:05:00Z";
+  options.event.utc_timestamp = "2026-08-31T15:05:00Z";
+
+  reaadr::reaper::PendingRecordingApplicationActions pending;
+  pending.refresh_active_cue = true;
+  auto applied = service.apply(pending, options);
+  check(applied && !applied.remaining.refresh_active_cue &&
+          app_store.values.at("ReaADRTools:manager_selected_cue_key") == "A1" &&
+          app_store.values.at("ReaADRTools:active_overlay_cue_key") == "A1" &&
+          applied.overlay_refreshes == 1,
+        "recording coordinator synchronizes canonical selection before refreshing the overlay");
+
+  pending = {};
+  pending.persist_preroll_preference = true;
+  applied = service.apply(pending, options);
+  check(applied && !applied.remaining.persist_preroll_preference &&
+          applied.preference.changed &&
+          app_store.values.at("ReaADRTools:overlay.include_preroll_each_loop") == "0",
+        "recording coordinator consumes preference work through the compatibility repository");
+
+  pending = {};
+  pending.finalize_recorded_takes = true;
+  applied = service.apply(pending, options);
+  check(applied && !applied.remaining.finalize_recorded_takes &&
+          applied.status.update.changed && app_repository.revision().revision == 3 &&
+          app_repository.load().model.cues[0].at("status") == "Recorded" &&
+          applied.event && events.load().lines.size() == 1,
+        "recording coordinator commits Recorded status, refreshes overlay, and publishes CueUpdated");
+  applied = service.apply(pending, options);
+  check(applied && !applied.status.update.changed &&
+          app_repository.revision().revision == 3 && events.load().lines.size() == 1,
+        "recording finalization retry refreshes the overlay without duplicate revision or event");
+
+  app_store.values["ReaADRTools:manager_selected_cue_key"] = "previous-manager";
+  app_store.values["ReaADRTools:active_overlay_cue_key"] = "previous-overlay";
+  recording_overlay_refresh_succeeds = false;
+  pending = {};
+  pending.refresh_active_cue = true;
+  applied = service.apply(pending, options);
+  check(!applied && applied.remaining.refresh_active_cue &&
+          applied.selection_rolled_back &&
+          app_store.values.at("ReaADRTools:manager_selected_cue_key") == "previous-manager" &&
+          app_store.values.at("ReaADRTools:active_overlay_cue_key") == "previous-overlay",
+        "failed recording overlay refresh restores the exact prior paired selection");
+
+  check(app_repository.save(built.model),
+        "recording coordinator rollback fixture restores Not Recorded status");
+  const std::size_t events_before_failure = events.load().lines.size();
+  pending = {};
+  pending.finalize_recorded_takes = true;
+  applied = service.apply(pending, options);
+  check(!applied && applied.remaining.finalize_recorded_takes &&
+          applied.model_rolled_back &&
+          app_repository.load().model.cues[0].at("status") == "Not Recorded" &&
+          events.load().lines.size() == events_before_failure,
+        "failed post-recording overlay refresh restores canonical status and retains retry work");
+
+  recording_overlay_refresh_succeeds = true;
+  applied = service.apply(applied.remaining, options);
+  check(applied && !applied.remaining.finalize_recorded_takes &&
+          app_repository.load().model.cues[0].at("status") == "Recorded" &&
+          events.load().lines.size() == events_before_failure + 1,
+        "retained recording finalization succeeds once overlay refresh recovers");
+
+  check(app_repository.save(built.model),
+        "recording event-warning fixture restores Not Recorded status");
+  const std::size_t events_before_warning = events.load().lines.size();
+  app_store.failed_write_key = "ReaADRTools:event_log_v1";
+  app_store.failed_writes_remaining = 1;
+  applied = service.apply(pending, options);
+  check(applied && !applied.remaining.finalize_recorded_takes &&
+          !applied.event_warning.empty() &&
+          app_repository.load().model.cues[0].at("status") == "Recorded" &&
+          events.load().lines.size() == events_before_warning,
+        "recording event publication warning does not retry an applied model/view commit");
+}
+
+void test_overlay_refresh_adapter()
+{
+  const std::string old_code =
+    std::string(reaadr::core::kOverlayCodeMarker) + "\nold_overlay();";
+  const std::string new_code =
+    std::string(reaadr::core::kOverlayCodeMarker) + "\nnew_overlay();";
+  const reaadr::core::OverlayRefreshOptions enabled{true, new_code};
+
+  check(!reaadr::core::build_overlay_refresh_plan({}, enabled),
+        "overlay planner requires the exact owned source-video track");
+  std::vector<reaadr::core::ExistingOverlayTrack> domain_tracks = {
+    {0, "source_video", "source_video", {
+      {0, "User Video Processor", "user_code();", true},
+    }},
+  };
+  auto planned = reaadr::core::build_overlay_refresh_plan(domain_tracks, enabled);
+  check(planned && planned.plan.mutation == reaadr::core::OverlayMutationKind::create,
+        "overlay planner ignores unowned user effects when creating its generated effect");
+
+  domain_tracks[0].effects.push_back({1, "", old_code, false});
+  planned = reaadr::core::build_overlay_refresh_plan(domain_tracks, enabled);
+  check(planned && planned.plan.mutation == reaadr::core::OverlayMutationKind::update &&
+          planned.plan.existing.fx_index == 1,
+        "overlay planner recognizes the Lua-compatible generated-code ownership marker");
+  domain_tracks[0].effects[1] = {
+    1, reaadr::core::kOverlayFxName, new_code, true,
+  };
+  planned = reaadr::core::build_overlay_refresh_plan(domain_tracks, enabled);
+  check(planned && planned.plan.mutation == reaadr::core::OverlayMutationKind::none,
+        "overlay planner treats an exact enabled overlay as a no-op");
+
+  auto duplicates = domain_tracks;
+  duplicates.push_back({1, "source_video", "source_video", {}});
+  check(!reaadr::core::build_overlay_refresh_plan(duplicates, enabled),
+        "overlay planner fails closed for duplicate owned source-video tracks");
+  domain_tracks[0].effects.push_back({2, reaadr::core::kOverlayFxName, old_code, true});
+  check(!reaadr::core::build_overlay_refresh_plan(domain_tracks, enabled),
+        "overlay planner refuses ambiguous generated overlay ownership");
+
+  render_adapter_probe = {};
+  render_adapter_probe.tracks.resize(1);
+  FakeTrack& source_track = render_adapter_probe.tracks[0];
+  source_track.strings = {
+    {"P_EXT:ReaADR.role", "source_video"},
+    {"P_EXT:ReaADR.key", "source_video"},
+  };
+  source_track.effects.push_back({"User Video Processor", "user_code();", true});
+  transaction_probe = {};
+  auto applied = reaadr::reaper::refresh_generated_overlay_transactionally(
+    nullptr, fake_overlay_refresh_api(), fake_transaction_api(), enabled,
+    "ReaADR: refresh video overlay");
+  check(applied && applied.effects_created == 1 && source_track.effects.size() == 2 &&
+          source_track.effects[0].renamed_name == "User Video Processor" &&
+          source_track.effects[1].renamed_name == reaadr::core::kOverlayFxName &&
+          source_track.effects[1].video_code == new_code &&
+          source_track.effects[1].enabled &&
+          render_adapter_probe.last_overlay_instantiate == -1 &&
+          transaction_probe.refresh_balance == 0,
+        "overlay adapter creates a distinct owned Video processor without adopting user FX");
+
+  const int adjustments = render_adapter_probe.window_adjustments;
+  applied = reaadr::reaper::refresh_generated_overlay_transactionally(
+    nullptr, fake_overlay_refresh_api(), fake_transaction_api(), enabled,
+    "ReaADR: refresh video overlay");
+  check(applied && applied.effects_created == 0 && applied.effects_updated == 0 &&
+          render_adapter_probe.window_adjustments == adjustments,
+        "unchanged overlay refresh avoids FX and window mutations");
+
+  const reaadr::core::OverlayRefreshOptions update_options{true, old_code};
+  applied = reaadr::reaper::refresh_generated_overlay_transactionally(
+    nullptr, fake_overlay_refresh_api(), fake_transaction_api(), update_options,
+    "ReaADR: refresh video overlay");
+  check(applied && applied.effects_updated == 1 && source_track.effects.size() == 2 &&
+          source_track.effects[1].video_code == old_code,
+        "overlay adapter updates its existing effect in place and preserves chain order");
+
+  const auto inspected = reaadr::reaper::inspect_overlay_project(
+    nullptr, fake_overlay_refresh_api());
+  planned = reaadr::core::build_overlay_refresh_plan(inspected.tracks, enabled);
+  source_track.strings["P_EXT:ReaADR.role"] = "user_video";
+  applied = reaadr::reaper::apply_overlay_refresh_plan_transactionally(
+    nullptr, fake_overlay_refresh_api(), fake_transaction_api(), planned.plan,
+    "ReaADR: refresh video overlay");
+  check(!applied && source_track.effects[1].video_code == old_code,
+        "overlay adapter rejects stale source-track ownership before FX mutation");
+  source_track.strings["P_EXT:ReaADR.role"] = "source_video";
+
+  source_track.effects.resize(1);
+  render_adapter_probe.fail_overlay_set_parameter = "VIDEO_CODE";
+  render_adapter_probe.fail_overlay_set_remaining = 1;
+  applied = reaadr::reaper::refresh_generated_overlay_transactionally(
+    nullptr, fake_overlay_refresh_api(), fake_transaction_api(), enabled,
+    "ReaADR: refresh video overlay");
+  check(!applied && applied.restored_after_failure && source_track.effects.size() == 1 &&
+          source_track.effects[0].renamed_name == "User Video Processor",
+        "failed overlay creation removes only the incomplete generated effect");
+
+  render_adapter_probe.fail_overlay_set_parameter.clear();
+  applied = reaadr::reaper::refresh_generated_overlay_transactionally(
+    nullptr, fake_overlay_refresh_api(), fake_transaction_api(), update_options,
+    "ReaADR: refresh video overlay");
+  check(applied && source_track.effects.size() == 2 &&
+          source_track.effects[1].video_code == old_code,
+        "overlay failure fixture recreates a valid owned effect");
+  render_adapter_probe.fail_overlay_set_parameter = "VIDEO_CODE";
+  render_adapter_probe.fail_overlay_set_remaining = 1;
+  applied = reaadr::reaper::refresh_generated_overlay_transactionally(
+    nullptr, fake_overlay_refresh_api(), fake_transaction_api(), enabled,
+    "ReaADR: refresh video overlay");
+  check(!applied && applied.restored_after_failure && source_track.effects.size() == 2 &&
+          source_track.effects[1].video_code == old_code,
+        "failed overlay update restores the prior generated configuration");
+
+  render_adapter_probe.fail_overlay_set_parameter.clear();
+  source_track.effects.push_back({reaadr::core::kOverlayFxName, new_code, true});
+  const std::size_t ambiguous_count = source_track.effects.size();
+  applied = reaadr::reaper::refresh_generated_overlay_transactionally(
+    nullptr, fake_overlay_refresh_api(), fake_transaction_api(), enabled,
+    "ReaADR: refresh video overlay");
+  check(!applied && source_track.effects.size() == ambiguous_count,
+        "overlay adapter leaves ambiguous generated effects untouched");
+
+  source_track.effects.pop_back();
+  const reaadr::core::OverlayRefreshOptions disabled{false, {}};
+  applied = reaadr::reaper::refresh_generated_overlay_transactionally(
+    nullptr, fake_overlay_refresh_api(), fake_transaction_api(), disabled,
+    "ReaADR: disable video overlay");
+  check(applied && applied.effects_removed == 1 && source_track.effects.size() == 1 &&
+          source_track.effects[0].renamed_name == "User Video Processor",
+        "disabling overlays removes only the exactly owned generated effect");
+}
+
+void test_overlay_settings_and_eel()
+{
+  FakeProjectStateStore store;
+  store.values["ReaADRTools:overlay.enabled"] = "no";
+  store.values["ReaADRTools:overlay.show_metadata"] = "yes";
+  store.values["ReaADRTools:overlay.show_flash"] = "TRUE";
+  store.values["ReaADRTools:overlay.text_color"] = "yellow";
+  store.values["ReaADRTools:overlay.metadata_fields"] = "Media Time, Project Name";
+  store.values["ReaADRTools:overlay.preroll_seconds"] = " 2.5 ";
+  reaadr::core::OverlaySettingsRepository repository(store);
+  auto loaded = repository.load();
+  check(loaded && !loaded.settings.enabled && loaded.settings.show_metadata &&
+          !loaded.settings.show_flash && loaded.settings.text_color == "yellow" &&
+          loaded.settings.metadata_fields == "Media Time, Project Name" &&
+          std::abs(loaded.settings.preroll_seconds - 2.5) < 0.000001 &&
+          loaded.settings.include_preroll_each_loop,
+        "native overlay settings load the exact Lua keys, defaults, and boolean grammar");
+
+  loaded.settings.show_character = false;
+  loaded.settings.include_preroll_each_loop = false;
+  loaded.settings.preroll_seconds = 4.25;
+  auto saved = repository.save(loaded.settings);
+  check(saved && saved.changed &&
+          store.values.at("ReaADRTools:overlay.show_character") == "0" &&
+          store.values.at("ReaADRTools:overlay.include_preroll_each_loop") == "0" &&
+          store.values.at("ReaADRTools:overlay.preroll_seconds") == "4.25" &&
+          repository.load().settings == loaded.settings,
+        "native overlay settings save all Lua-compatible project preferences");
+  saved = repository.save(loaded.settings);
+  check(saved && !saved.changed, "unchanged native overlay settings are a persistence no-op");
+
+  FakeProjectStateStore failing_store;
+  reaadr::core::OverlaySettingsRepository failing_repository(failing_store);
+  reaadr::core::OverlaySettings changed_defaults;
+  changed_defaults.show_character = false;
+  failing_store.failed_write_key = "ReaADRTools:overlay.show_character";
+  failing_store.failed_writes_remaining = 1;
+  const auto failed_save = failing_repository.save(changed_defaults);
+  check(!failed_save && failing_store.values.empty() &&
+          failing_repository.load().settings == reaadr::core::OverlaySettings{},
+        "failed batch overlay preference persistence restores prior project extstate");
+
+  reaadr::core::SessionModel model;
+  model.cues = {
+    {{"id", "B"}, {"character", "Beta"}, {"start_time", "10"}, {"end_time", "12"},
+     {"line", "Earlier line"}, {"notes", ""}, {"direction", ""},
+     {"cue_type", "ADR"}, {"status", "Not Recorded"}, {"source_line", "2"},
+     {"metadata", ""}},
+    {{"id", "C"}, {"character", "Actor"}, {"start_time", "20"}, {"end_time", "21"},
+     {"line", "Say \"quoted\" text\\path\nnow"}, {"notes", "whisper"},
+     {"direction", "ignored"}, {"cue_type", "Walla"}, {"status", "recorded"},
+     {"source_line", "3"},
+     {"metadata", reaadr::core::serialize_metadata({
+       {"media_time", "01:02:03:04"}, {"Project Name", "Example"}})}},
+  };
+  reaadr::core::OverlayEelOptions options;
+  options.frame_rate = 23.976;
+  options.selected_region_cue_key = "C";
+  options.selected_item_cue_key = "B";
+  options.active_overlay_cue_key = "B";
+  options.settings.text_color = " YELLOW ";
+  options.settings.show_project_timer = false;
+  options.settings.show_flash = false;
+  options.settings.show_metadata = true;
+  options.settings.metadata_fields = "Media Time,Project Name";
+  auto generated = reaadr::core::build_overlay_eel(model, options);
+  const std::size_t selected_position = generated.video_code.find("#cue_number = \"Cue #C\"");
+  const std::size_t other_position = generated.video_code.find("#cue_number = \"Cue #B\"");
+  check(generated && generated.displayed_cue_count == 2 &&
+          generated.selected_cue_key == "C" &&
+          generated.video_code.rfind(reaadr::core::kOverlayCodeMarker, 0) == 0 &&
+          generated.video_code.find("display_fps = 24;") != std::string::npos &&
+          selected_position < other_position,
+        "native EEL generation is ownership-marked and prioritizes region selection deterministically");
+  check(generated.video_code.find("#cue_tc = \"00:00:20:00\"") != std::string::npos &&
+          generated.video_code.find("#direction = \"(whisper)\"") != std::string::npos &&
+          generated.video_code.find("#media_time = \"01:02:03:04\"") != std::string::npos &&
+          generated.video_code.find("#metadata_2 = \"Project Name: Example\"") != std::string::npos &&
+          generated.video_code.find("#dialogue_1 = \"Say \\\"quoted\\\" text\\\\path now\"") != std::string::npos &&
+          generated.video_code.find("gfx_set(0.000, 0.682, 0.937, 1)") != std::string::npos &&
+          generated.video_code.find("gfx_set(1, 0.93, 0.48, 1)") != std::string::npos,
+        "native EEL generation preserves overlay text, metadata, status, escaping, and color behavior");
+  check(generated.video_code.find("Timeline SMPTE") == std::string::npos &&
+          generated.video_code.find("flash =") == std::string::npos &&
+          generated.video_code.find(
+            "overlay_drawn == 0 && now >= 17.000000 && now <= 21.000000 ? (") != std::string::npos &&
+          generated.video_code.find(
+            "overlay_drawn == 0 && now >= 7.000000 && now <= 12.000000 && (now >= 10.000000 || active_region_count == 0)") != std::string::npos,
+        "native EEL toggles and selected-cue preroll overlap rules match the transitional overlay");
+
+  reaadr::core::SessionModel filtered_model;
+  filtered_model.cues = {
+    {{"id", "A1"}, {"character", "Actor"}, {"start_time", "10"}, {"end_time", "12"}},
+    {{"id", "A2"}, {"character", "Actor"}, {"start_time", "11"}, {"end_time", "13"}},
+    {{"id", "B1"}, {"character", "Beta"}, {"start_time", "20"}, {"end_time", "22"}},
+  };
+  reaadr::core::OverlayEelOptions filtered_options;
+  filtered_options.settings.preroll_seconds = 3.0;
+  filtered_options.character_filter =
+    reaadr::core::parse_character_filter_state("actor.lane2", true);
+  generated = reaadr::core::build_overlay_eel(filtered_model, filtered_options);
+  check(generated && generated.displayed_cue_count == 1 &&
+          generated.video_code.find("Cue #A2") != std::string::npos &&
+          generated.video_code.find("Cue #A1") == std::string::npos &&
+          generated.video_code.find("Cue #B1") == std::string::npos,
+        "native EEL generation filters canonical cues by the shared overlap-lane assignment");
+  filtered_options.character_filter.hide_inactive_regions = false;
+  generated = reaadr::core::build_overlay_eel(filtered_model, filtered_options);
+  check(generated && generated.displayed_cue_count == 3,
+        "active character selection does not hide overlay cues unless region hiding is enabled");
+
+  filtered_model.cues[0]["start_time"] = "invalid";
+  check(!reaadr::core::build_overlay_eel(filtered_model, {}),
+        "native EEL generation rejects malformed canonical cue timing");
+}
+
+void test_overlay_application_service()
+{
+  FakeProjectStateStore store;
+  reaadr::core::SessionModel model;
+  model.session["session_id"] = "overlay-app";
+  model.cues = {
+    {{"id", "B"}, {"character", "Beta"}, {"start_time", "10"}, {"end_time", "12"}},
+    {{"id", "C"}, {"character", "Actor"}, {"start_time", "20"}, {"end_time", "21"}},
+  };
+  reaadr::core::SessionModelRepository sessions(store);
+  reaadr::core::OverlaySettingsRepository settings(store);
+  reaadr::core::CueSelectionRepository selections(store);
+  reaadr::core::CharacterFilterRepository filters(store);
+  check(sessions.save(model), "overlay application fixture saves the canonical session");
+  overlay_application_probe = {};
+  const reaadr::reaper::OverlayApplicationApi api = {
+    fake_overlay_frame_rate, fake_overlay_selection, fake_apply_overlay_refresh,
+  };
+  reaadr::reaper::OverlayApplicationService service(
+    sessions, settings, selections, filters, api);
+  auto applied = service.refresh();
+  check(applied && applied.displayed_cue_count == 2 &&
+          applied.refresh.enabled &&
+          applied.refresh.video_code.rfind(reaadr::core::kOverlayCodeMarker, 0) == 0 &&
+          applied.refresh.video_code.find("display_fps = 30;") != std::string::npos &&
+          applied.refresh.video_code.find("Cue #C") < applied.refresh.video_code.find("Cue #B") &&
+          overlay_application_probe.refresh.video_code == applied.refresh.video_code,
+        "native overlay application service composes model, settings, selection, frame rate, and FX refresh");
+
+  reaadr::core::OverlaySettings disabled;
+  disabled.enabled = false;
+  check(static_cast<bool>(settings.save(disabled)),
+        "overlay application fixture disables persisted overlays");
+  applied = service.refresh();
+  check(applied && !applied.refresh.enabled && applied.refresh.video_code.empty(),
+        "native overlay application service forwards a disabled setting without generating code");
+
+  overlay_application_probe.succeeds = false;
+  overlay_application_probe.error = "simulated FX failure";
+  applied = service.refresh();
+  check(!applied && applied.error == "simulated FX failure",
+        "native overlay application service preserves adapter failure details for retry/UI handling");
+}
+
+void test_cue_cleanup_plan()
+{
+  reaadr::core::SessionModel model;
+  model.session["session_id"] = "cleanup";
+  model.cues = {
+    {{"id", "A1"}, {"character", "Actor"}, {"start_time", "1"}, {"end_time", "2"}},
+    {{"id", "B1"}, {"character", "Beta"}, {"start_time", "3"}, {"end_time", "4"}},
+  };
+  reaadr::core::ProjectRenderState existing;
+  existing.regions = {
+    {10, reaadr::core::render_region_name(model.cues[0]), 1.0, 2.0, {}},
+    {11, reaadr::core::render_region_name(model.cues[1]), 3.0, 4.0, {}},
+  };
+  existing.tracks = {
+    {2, "cue_character", "actor.lane1", "Cue - Actor", {}},
+    {3, "character", "actor.lane1", "Actor", {}},
+    {4, "cue_character", "beta.lane1", "Cue - Beta", {}},
+  };
+  existing.cue_audio_items = {
+    {2, 0, "cue_character", "actor.lane1", "cue_audio", "A1", {}, {}, 0.0, 1.0, false, true},
+    {4, 0, "cue_character", "beta.lane1", "cue_audio", "B1", {}, {}, 0.0, 1.0, false, true},
+    {2, 1, "cue_character", "actor.lane1", "user_audio", "A1", {}, {}, 0.0, 1.0, false, true},
+  };
+  auto planned = reaadr::core::build_cue_cleanup_plan(model, existing, {"Actor"});
+  check(planned && planned.remaining_cues.size() == 1 &&
+          planned.remaining_cues[0].at("id") == "B1" &&
+          planned.plan.cue_keys == std::vector<std::string>{"A1"} &&
+          planned.plan.regions.size() == 1 && planned.plan.regions[0].id == 10 &&
+          planned.plan.cue_audio_items.size() == 1 &&
+          planned.plan.cue_audio_items[0].track_index == 2 &&
+          planned.plan.cue_audio_items[0].item_index == 0 &&
+          planned.plan.cue_character_tracks.size() == 1 &&
+          planned.plan.cue_character_tracks[0].project_index == 2,
+        "cue cleanup plans only exact selected-character regions, cue audio, and cue tracks");
+  check(!reaadr::core::build_cue_cleanup_plan(model, existing, {}).error.empty(),
+        "cue cleanup rejects an empty destructive selection");
+  auto duplicate_regions = existing;
+  duplicate_regions.regions.push_back(existing.regions[0]);
+  check(!reaadr::core::build_cue_cleanup_plan(model, duplicate_regions, {"Actor"}),
+        "cue cleanup fails closed on duplicate generated regions");
+}
+
+void test_cue_cleanup_adapter()
+{
+  render_adapter_probe = {};
+  const std::string generated_name = "[ReaADR]:id=A1 ADR Cue A1 - Actor";
+  render_adapter_probe.regions = {
+    {10, generated_name, 1.0, 2.0, 0},
+    {11, "User region", 4.0, 5.0, 0},
+  };
+  FakeTrack cue_track{{
+    {"P_EXT:ReaADR.role", "cue_character"},
+    {"P_EXT:ReaADR.key", "actor.lane1"},
+  }};
+  auto generated_item = std::make_unique<FakeItem>();
+  generated_item->strings["P_EXT:ReaADR.role"] = "cue_audio";
+  generated_item->strings["P_EXT:ReaADR.cue_key"] = "A1";
+  auto user_item = std::make_unique<FakeItem>();
+  user_item->strings["P_EXT:ReaADR.role"] = "user_audio";
+  user_item->strings["P_EXT:ReaADR.cue_key"] = "A1";
+  cue_track.items.push_back(std::move(generated_item));
+  cue_track.items.push_back(std::move(user_item));
+  render_adapter_probe.tracks.push_back(std::move(cue_track));
+  render_adapter_probe.tracks.push_back({{
+    {"P_EXT:ReaADR.role", "character"}, {"P_EXT:ReaADR.key", "actor.lane1"}
+  }});
+  render_adapter_probe.tracks.push_back({{
+    {"P_EXT:ReaADR.role", "cue_character"}, {"P_EXT:ReaADR.key", "beta.lane1"}
+  }});
+
+  reaadr::core::CueCleanupPlan plan;
+  plan.cue_keys = {"A1"};
+  plan.regions.push_back({10, generated_name});
+  plan.cue_audio_items.push_back({0, 0, "A1"});
+  plan.cue_character_tracks.push_back({0, "actor.lane1"});
+  transaction_probe = {};
+  const auto applied = reaadr::reaper::apply_cue_cleanup_plan_transactionally(
+    nullptr, fake_cue_cleanup_api(), fake_transaction_api(), plan, "ReaADR: clear cues");
+  check(applied && applied.cues_removed == 1 && applied.regions_removed == 1 &&
+          applied.cue_audio_removed == 1 && applied.tracks_removed == 1,
+        "cue cleanup adapter deletes only owned artifacts in one transaction");
+
+  reaadr::core::CueCleanupPlan stale;
+  stale.regions.push_back({99, "missing"});
+  transaction_probe = {};
+  transaction_probe.available_undo = "ReaADR: clear cues (failed)";
+  const auto rejected = reaadr::reaper::apply_cue_cleanup_plan_transactionally(
+    nullptr, fake_cue_cleanup_api(), fake_transaction_api(), stale, "ReaADR: clear cues");
+  check(!rejected && transaction_probe.undos == 1,
+        "cue cleanup adapter rolls back when a planned artifact becomes stale");
+}
+
+reaadr::core::ProjectRenderState cleanup_application_state;
+reaadr::core::CueCleanupPlan cleanup_application_plan;
+bool cleanup_application_apply_ok = true;
+
+reaadr::core::ProjectRenderState fake_cleanup_application_inspect(std::string* error)
+{
+  if (error) error->clear();
+  return cleanup_application_state;
+}
+
+reaadr::reaper::CueCleanupApplyResult fake_cleanup_application_apply(
+  const reaadr::core::CueCleanupPlan& plan, std::string* error)
+{
+  if (error) error->clear();
+  cleanup_application_plan = plan;
+  reaadr::reaper::CueCleanupApplyResult result;
+  if (!cleanup_application_apply_ok) {
+    result.error = "simulated cleanup failure";
+    if (error) *error = result.error;
+    return result;
+  }
+  result.cues_removed = static_cast<int>(plan.cue_keys.size());
+  result.regions_removed = static_cast<int>(plan.regions.size());
+  result.cue_audio_removed = static_cast<int>(plan.cue_audio_items.size());
+  result.tracks_removed = static_cast<int>(plan.cue_character_tracks.size());
+  return result;
+}
+
+void test_cue_cleanup_application_service()
+{
+  FakeProjectStateStore store;
+  reaadr::core::SessionModel model;
+  model.session["session_id"] = "cleanup-service";
+  model.cues = {
+    {{"id", "A1"}, {"character", "Actor"}, {"start_time", "1"}, {"end_time", "2"}},
+    {{"id", "B1"}, {"character", "Beta"}, {"start_time", "3"}, {"end_time", "4"}},
+  };
+  reaadr::core::SessionModelRepository sessions(store);
+  check(sessions.save(model), "cleanup application fixture saves its canonical model");
+  cleanup_application_state = {};
+  cleanup_application_state.regions.push_back({10, reaadr::core::render_region_name(model.cues[0]), 1.0, 2.0, {}});
+  cleanup_application_state.cue_audio_items.push_back({0, 0, "cue_character", "actor.lane1", "cue_audio", "A1", {}, {}, 0.0, 1.0, false, true});
+  cleanup_application_state.tracks.push_back({0, "cue_character", "actor.lane1", "Cue - Actor", {}});
+  cleanup_application_plan = {};
+  cleanup_application_apply_ok = true;
+  reaadr::reaper::CueCleanupApplicationService service(
+    sessions, fake_transaction_api(), {fake_cleanup_application_inspect,
+      fake_cleanup_application_apply, "2026-09-01T00:00:00Z"});
+  const auto result = service.clear_characters({"Actor"});
+  const auto loaded = sessions.load();
+  check(result && result.cues_removed == 1 && loaded && loaded.model.cues.size() == 1 &&
+          loaded.model.cues[0].at("id") == "B1" && cleanup_application_plan.cue_keys ==
+          std::vector<std::string>{"A1"},
+        "cleanup application service persists remaining canonical cues after project cleanup");
+}
+
+reaadr::core::CharacterFilterProjectState filter_application_state;
+reaadr::core::CharacterFilterPlan filter_application_plan;
+reaadr::reaper::CharacterFilterInspectionResult fake_filter_application_inspect(std::string* error)
+{
+  if (error) error->clear();
+  return {filter_application_state, {}};
+}
+reaadr::reaper::CharacterFilterApplyResult fake_filter_application_apply(
+  const reaadr::core::CharacterFilterPlan& plan, std::string* error)
+{
+  if (error) error->clear();
+  filter_application_plan = plan;
+  return {0, static_cast<int>(plan.track_mutations.size()), 0,
+          static_cast<int>(plan.region_mutations.size()), {}};
+}
+
+void test_character_filter_application_service()
+{
+  FakeProjectStateStore store;
+  reaadr::core::SessionModel model;
+  model.session["session_id"] = "filter-service";
+  model.cues = {{{"id", "A1"}, {"character", "Actor"}, {"start_time", "1"}, {"end_time", "2"}}};
+  reaadr::core::SessionModelRepository sessions(store);
+  reaadr::core::CharacterFilterRepository filters(store);
+  check(sessions.save(model), "filter application fixture saves its canonical model");
+  filter_application_state = {};
+  filter_application_state.tracks.push_back({0, "character", "actor.lane1", true});
+  filter_application_state.regions.push_back({10, reaadr::core::render_region_name(model.cues[0]), true});
+  const auto before = filters.load();
+  reaadr::reaper::CharacterFilterApplicationService service(
+    sessions, filters, fake_transaction_api(),
+    {fake_filter_application_inspect, fake_filter_application_apply});
+  const auto result = service.apply({"Actor"}, true);
+  const auto after = filters.load();
+  check(result && result.applied.tracks_unmuted == 1 && result.applied.regions_shown == 1 &&
+          after && after.state.encoded_selection == "actor" && after.state.hide_inactive_regions &&
+          filter_application_plan.track_mutations.size() == 1 && before,
+        "character-filter application service persists state after transactional native updates");
+}
+
 void test_track_region_adapter()
 {
   constexpr int custom_color_flag = 0x1000000;
@@ -1367,7 +2822,7 @@ void test_track_region_adapter()
     {"P_NAME", "Old Name"},
     {"P_EXT:ReaADR.role", "character"},
     {"P_EXT:ReaADR.key", "Actor.lane1"},
-  }, fake_color_to_native(1, 2, 3) | custom_color_flag, {}});
+  }, fake_color_to_native(1, 2, 3) | custom_color_flag, {}, false, 0.0, {}});
   render_adapter_probe.regions.push_back({7, "Existing", 1.0, 2.0,
     fake_color_to_native(1, 2, 3) | custom_color_flag});
 
@@ -1818,6 +3273,19 @@ int main()
   test_render_planner();
   test_character_filter();
   test_region_timing_sync();
+  test_cue_navigation();
+  test_record_arm_manager();
+  test_recording_setup();
+  test_recording_transport();
+  test_recording_transport_executor();
+  test_recording_application_service();
+  test_overlay_settings_and_eel();
+  test_overlay_application_service();
+  test_cue_cleanup_plan();
+  test_cue_cleanup_adapter();
+  test_cue_cleanup_application_service();
+  test_character_filter_application_service();
+  test_overlay_refresh_adapter();
   test_track_region_adapter();
   test_extended_render_planner();
   test_complete_render_adapter();

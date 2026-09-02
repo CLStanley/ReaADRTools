@@ -8,15 +8,11 @@ permissions:
   contents: read
 
 jobs:
-  lua-and-shell:
+  native-and-shell:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
-      - name: Install checks
-        run: sudo apt-get update && sudo apt-get install -y lua5.4 shellcheck
-      - name: Lua syntax
-        run: find scripts tests -type f -name '*.lua' -print0 | xargs -0 -n1 luac -p
-      - name: Lua tests
+      - name: Native tests
         run: tests/run.sh
       - name: Shellcheck
         run: shellcheck packaging/*.sh packaging/*.command extension/*.sh tests/*.sh

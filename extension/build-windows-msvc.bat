@@ -49,13 +49,33 @@ cl /nologo /EHsc /O2 /LD /std:c++17 ^
   reaadr_core\cue_wav.cpp ^
   reaadr_core\event_log.cpp ^
   reaadr_core\character_filter.cpp ^
+  reaadr_core\cue_cleanup.cpp ^
   reaadr_core\region_timing_sync.cpp ^
+  reaadr_core\cue_navigation.cpp ^
+  reaadr_core\record_arm.cpp ^
+  reaadr_core\recording_setup.cpp ^
+  reaadr_core\recording_transport.cpp ^
+  reaadr_core\cue_status.cpp ^
+  reaadr_core\recording_preferences.cpp ^
+  reaadr_core\overlay_settings.cpp ^
+  reaadr_core\overlay_eel.cpp ^
+  reaadr_core\overlay_refresh.cpp ^
   reaadr_reaper\project_state.cpp ^
   reaadr_reaper\project_transaction.cpp ^
   reaadr_reaper\track_region_adapter.cpp ^
   reaadr_reaper\render_artifact_adapter.cpp ^
   reaadr_reaper\session_render_service.cpp ^
   reaadr_reaper\character_filter_adapter.cpp ^
+  reaadr_reaper\cue_navigation_service.cpp ^
+  reaadr_reaper\record_arm_adapter.cpp ^
+  reaadr_reaper\recording_setup_adapter.cpp ^
+  reaadr_reaper\recording_transport_executor.cpp ^
+  reaadr_reaper\recording_application_service.cpp ^
+  reaadr_reaper\overlay_refresh_adapter.cpp ^
+  reaadr_reaper\overlay_application_service.cpp ^
+  reaadr_reaper\cue_cleanup_adapter.cpp ^
+  reaadr_reaper\cue_cleanup_application_service.cpp ^
+  reaadr_reaper\character_filter_application_service.cpp ^
   /Fe"%BUILD_DIR%\%TARGET%" ^
   /link user32.lib /DEF:reaper_reaadr.def
 
@@ -65,7 +85,6 @@ if errorlevel 1 (
 )
 
 copy /Y "%BUILD_DIR%\%TARGET%" "%DIST_USERPLUGINS_DIR%\%TARGET%" >nul
-xcopy "%ROOT%\scripts\*.lua" "%DIST_REAADR_DIR%\scripts\" /Y >nul
 xcopy "%ROOT%\assets\*" "%DIST_REAADR_DIR%\assets\" /Y >nul
 popd
 

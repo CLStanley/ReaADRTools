@@ -116,9 +116,77 @@ operation accepts only exact model-derived region names, rejects ambiguous
 ownership, preserves missing cues, and feeds changed timing back through the
 complete model/render transaction. This rebuilds derived region records and
 cue audio together while unchanged projects remain revision- and Undo-free.
-The adapters and coordinator are test-covered but are not yet public writers;
-the region-sync and character-filter UI cutovers, navigation, recording,
-generated-cue cleanup, overlays, and in-REAPER smoke tests remain.
+Native cue navigation now derives one validated timeline catalog from the
+canonical model, preserving Lua-compatible ordering, lookup, epsilon, and
+wraparound rules. Its application service chooses play or edit-cursor position,
+atomically synchronizes the manager/overlay selection keys, and moves the
+cursor without changing the session revision or creating an Undo point.
+Native record-arm planning and its stateful REAPER manager now preserve the
+complete pre-recording arm snapshot across repeated loop-target isolation.
+Every track handle is revalidated before use; deleted tracks are skipped during
+restore, isolation failures compensate earlier writes, and transient restore
+failures retain only the entries that still need retrying. Each batch joins the
+native transaction and UI-refresh scopes.
+Native recording setup now resolves a selected canonical cue through the shared
+overlap-lane algorithm, computes its bounded preroll window, and selects only an
+owned `character` track. Exact lane ownership is preferred, the established
+lane fallback remains compatibility-only, duplicate matches fail closed, and
+the REAPER adapter revalidates role/key metadata immediately before returning
+the target handle to the transport executor.
+The native recording transport state machine now owns the deterministic
+preroll, punch-in, cue-end stop, loop restart, user-stop/abort cleanup, and loop
+preference transitions. It emits ordered host intents rather than calling
+REAPER, so the executor can apply actions only after revalidating the setup and
+can retain the last committed state if an action fails.
+The native recording transport executor now applies the immediate stop,
+loop-range, cursor, record-arm, and play/record intents according to their
+declared ordering. It preserves the user's original loop range across passes
+and compensates loop/arm changes when a take cannot start. Model-first
+cue/status updates and preference writes are returned as explicit pending work
+rather than being performed at the asynchronous REAPER boundary.
+The native recording application coordinator now consumes that pending work.
+It persists the Lua-compatible preroll preference, synchronizes the paired cue
+selection, commits `Recorded` status through a focused snapshot/revision
+operation, and publishes `CueUpdated`. Overlay failure restores exact selection
+state or the canonical model snapshot and retains the failed action for an
+idempotent retry without duplicate revisions or events.
+Native overlay refresh planning and its REAPER adapter now locate only the
+exact owned `source_video` track and recognize the established renamed-FX or
+generated-code marker. They refuse duplicate ownership, preserve unrelated
+user FX, update owned effects in place, remove only exact generated effects,
+revalidate plans immediately before mutation, and compensate failed create or
+update attempts inside the native transaction boundary.
+Native overlay settings now read and write every Lua-compatible project key,
+with typed defaults and compensation for partial writes. Native EEL generation
+uses canonical model cues, shared overlap-lane filtering, deterministic
+region/item/active selection precedence, and the existing generated-code
+ownership marker while preserving the current text, timing, metadata, and
+visual-cue behavior.
+The native overlay application coordinator now composes those inputs and
+forwards one immutable refresh request to the transactional FX adapter,
+including explicit disabled and retryable failure outcomes.
+The extension now exposes a native refresh action that binds current REAPER
+selection, frame rate, project state, and FX APIs to that coordinator. The
+legacy Lua action remains registered for compatibility while broader command
+and UI cutover proceeds.
+Native Next Cue, Previous Cue, and prompt-backed Jump To Cue actions now bind
+the existing navigation service to REAPER transport/cursor APIs and paired
+selection persistence.
+Native generated-cue cleanup now has a proof-of-ownership domain plan and
+transactional REAPER adapter. It removes only exact selected-character cue
+regions, cue-audio items, and `cue_character` tracks; stale plans fail closed
+and user/dialogue media remains untouched. The public cleanup command and
+model-persistence coordinator now coordinates inspection, project mutation,
+snapshot recovery, and canonical cue persistence in one native transaction;
+public command wiring remains part of the native UI cutover.
+Native character-filter application now also coordinates canonical filter
+state, lane-aware planning, transactional REAPER mutation, and persistence;
+the existing Lua filter window remains a compatibility UI.
+These domain operations and adapters are test-covered but are not yet all
+public writers; the region-sync, character-filter, and navigation command/UI
+cutovers, deferred recording frame/UI wiring, other overlay UI, and in-REAPER
+smoke tests remain. Lua source and packaging payloads have now been removed;
+the native extension is the only installed runtime.
 
 ### Stage 4: native UI and Lua removal
 
@@ -172,6 +240,28 @@ The initial target-architecture modules now include:
   character/lane selection rules, and ownership-scoped mutation planning.
 - `extension/reaadr_core/region_timing_sync.*`: exact-ownership import of
   deliberate generated-region timing edits into canonical cue records.
+- `extension/reaadr_core/cue_navigation.*`: canonical cue ordering, lookup,
+  wraparound selection, and paired manager/overlay selection persistence.
+- `extension/reaadr_core/record_arm.*`: complete single-target arm-isolation
+  planning over a preserved original snapshot.
+- `extension/reaadr_core/recording_setup.*`: selected-cue timing, overlap-lane,
+  preroll-window, and owned recording-track resolution.
+- `extension/reaadr_core/recording_transport.*`: deterministic preroll,
+  punch-in, looping, stop, cleanup, and preference transitions expressed as
+  ordered host intents.
+- `extension/reaadr_core/cue_status.*`: focused canonical status mutation and
+  idempotent snapshot/revision commit with rollback.
+- `extension/reaadr_core/recording_preferences.*`: compatibility persistence
+  for the per-project Lua recording-preroll setting.
+- `extension/reaadr_core/overlay_settings.*`: typed persistence for the complete
+  Lua-compatible per-project overlay preference set.
+- `extension/reaadr_core/overlay_eel.*`: deterministic Video Processor source
+  generation from canonical cues, native selection state, and shared
+  character/lane filtering.
+- `extension/reaadr_core/overlay_refresh.*`: exact source-track/FX ownership and
+  create/update/remove planning for generated video overlays.
+- `extension/reaadr_core/cue_cleanup.*`: exact selected-character ownership
+  planning for generated regions, cue audio, and cue-character tracks.
 - `extension/reaadr_reaper/project_state.*`: dynamically sized REAPER project
   extstate access.
 - `extension/reaadr_reaper/project_transaction.*`: nested-safe undo and UI
@@ -187,6 +277,30 @@ The initial target-architecture modules now include:
   publication, including the explicit region-timing update workflow.
 - `extension/reaadr_reaper/character_filter_adapter.*`: verified track mute and
   generated-region visibility inspection/application under native Undo.
+- `extension/reaadr_reaper/cue_navigation_service.*`: play/edit-position-aware
+  cursor navigation backed only by the canonical session model.
+- `extension/reaadr_reaper/record_arm_adapter.*`: revalidated track-arm capture,
+  isolation, compensation, idempotent restoration, and targeted retry.
+- `extension/reaadr_reaper/recording_setup_adapter.*`: narrow track inspection
+  and final ownership revalidation before recording handoff.
+- `extension/reaadr_reaper/recording_transport_executor.*`: ordered REAPER loop,
+  cursor, record-arm, and transport execution with failed-start compensation
+  and deferred model/status application actions.
+- `extension/reaadr_reaper/recording_application_service.*`: retryable
+  selection, preference, canonical Recorded-status, overlay-refresh, and
+  CueUpdated-event coordination with model/view rollback.
+- `extension/reaadr_reaper/overlay_refresh_adapter.*`: revalidated generated-FX
+  inspection and transactional create/update/remove application with user-FX
+  preservation and failed-mutation compensation.
+- `extension/reaadr_reaper/overlay_application_service.*`: native composition
+  of persisted settings, canonical model, selection/filter state, and EEL
+  generation before the transactional refresh callback.
+- `extension/reaadr_reaper/cue_cleanup_adapter.*`: transactional, stale-plan-
+  checked deletion of generated cue artifacts while preserving user objects.
+- `extension/reaadr_reaper/cue_cleanup_application_service.*`: native
+  inspection, snapshot, project mutation, and canonical-model cleanup boundary.
+- `extension/reaadr_reaper/character_filter_application_service.*`: native
+  filter-state persistence and transactional planner/adapter coordination.
 
 `make -C extension test` runs these modules without the REAPER SDK; normal
 extension builds compile the same sources into the plugin.

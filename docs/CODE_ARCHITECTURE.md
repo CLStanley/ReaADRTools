@@ -69,10 +69,39 @@ outer render transaction completes. `region_timing_sync.*` is the explicit
 reverse-sync exception to the model-first render direction: it accepts timing
 only from uniquely matched generated region names, then
 `session_render_service.*` rebuilds canonical derived records and visible cue
-audio in the existing rollback-aware transaction. These services are not
-invoked directly by the UI yet; Lua remains the single import/render writer
-until the relevant native UI and in-REAPER smoke tests are ready for coordinated
-cutover.
+audio in the existing rollback-aware transaction. `cue_navigation.*` builds a
+validated, Lua-compatible timeline catalog directly from the canonical model
+and owns the paired manager/overlay selection keys. Its
+`cue_navigation_service.*` application boundary resolves play/edit position and
+moves the edit cursor without a model revision or Undo point. `record_arm.*`
+defines complete single-target isolation intent, while
+`record_arm_adapter.*` owns the transient REAPER track handles, revalidation,
+compensating failure recovery, and idempotent restore/retry behavior needed by
+the future native recording coordinator. `recording_setup.*` shares canonical
+lane assignment with rendering, resolves cue/preroll timing and exact owned
+recording-track intent, and `recording_setup_adapter.*` revalidates the chosen
+track immediately before handing its non-owning handle to record-arm/transport
+code. `recording_transport.*` centralizes the Lua-compatible preroll, punch-in,
+cue-end, repeat, and cleanup state transitions as ordered host intents. The
+`recording_transport_executor.*` boundary applies immediate REAPER loop, cursor,
+record-arm, and transport intents, compensating failed take starts before it
+accepts the new state. `cue_status.*` and `recording_preferences.*` own focused
+canonical status and compatibility preference persistence. The
+`recording_application_service.*` coordinator consumes the executor's pending
+actions, refreshes the overlay through a narrow adapter port, rolls model/view
+state back together on failure, and retains idempotent retry work.
+`overlay_refresh.*` and `overlay_refresh_adapter.*` implement the exact
+source-track/generated-FX ownership, stale-plan revalidation, in-place update,
+and compensation boundary behind that port. `overlay_settings.*` owns the full
+Lua-compatible project preference contract, while `overlay_eel.*` generates
+the owned Video Processor source from canonical cues with deterministic
+selection and shared character/lane filtering. These services are not invoked
+directly by the UI yet; Lua remains the public workflow layer until native
+command/UI wiring and in-REAPER smoke tests are ready for coordinated cutover.
+The extension's native refresh action now supplies the REAPER selection,
+frame-rate, project-state, and FX callback bindings for this path.
+Native Next Cue, Previous Cue, and prompt-backed Jump To Cue actions likewise
+bind the canonical navigation service to REAPER cursor/transport callbacks.
 
 ## Lua Application Layer
 
@@ -126,7 +155,9 @@ the public `ReaADR` table:
 - `ReaADR_Core_Persistence.lua` serializes and mutates the Session Model.
 - `ReaADR_Core_Transactions.lua` owns nested-safe Undo and UI-refresh scopes.
 - `ReaADR_Core_Ownership.lua` contains deletion-boundary predicates.
-- `ReaADR_Record_Arm.lua` captures, isolates, and restores record-arm state.
+- `ReaADR_Record_Arm.lua` captures, isolates, and restores record-arm state for
+  the transitional Lua recording UI; `record_arm.*` and
+  `record_arm_adapter.*` provide its test-covered native replacement boundary.
 
 ## ADR Session Model
 
@@ -263,6 +294,12 @@ placeholders to the Session Model before sync renders the cues into REAPER.
 
 The overlay is generated as source code for REAPER's Video Processor FX on the
 ADR Source Video track.
+
+The native `overlay_settings.*` and `overlay_eel.*` domain modules now mirror
+the transitional settings and source-generation contract without REAPER SDK
+dependencies. Lua remains the public caller until the native project callbacks
+bind selection, frame rate, settings, generation, and transactional FX refresh
+into one application service.
 
 Overlay code is regenerated when settings change, cue status changes, character
 filtering hides regions, or the user refreshes the overlay.
@@ -410,6 +447,10 @@ Import update mode builds the replacement session before removing stale
 generated artifacts. Stale cleanup only targets old selected-character cues
 that no longer exist in the replacement import, which avoids deleting newly
 rebuilt cue items with matching cue IDs.
+
+The native cue-cleanup plan revalidates exact generated region names, cue keys,
+and cue-character track keys immediately before deletion, so an outdated plan
+fails closed instead of broadening its scope.
 
 On a failed full sync, the outer transaction closes its undo block, invokes
 REAPER Undo to restore project objects, restores the model snapshot, balances

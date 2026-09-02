@@ -21,7 +21,29 @@ code change, a user-visible workflow, or a documented constraint.
   logging, undo, and manager return data stay consistent.
 - Keep destructive character clearing protected by a session snapshot before
   model mutation and generated-artifact removal.
-- Preserve and isolate complete record-arm state for Record Current Cue. (Done.)
+- Preserve and isolate complete record-arm state for Record Current Cue. (Done
+  in Lua and implemented behind the test-covered native record-arm boundary;
+  recording UI/transport cutover remains.)
+- Resolve selected cue timing, overlap lane, preroll window, and owned recording
+  track in the native domain/adapter boundary. (Implemented and test-covered;
+  REAPER action execution and recording UI cutover remain.)
+- Keep recording transport sequencing in a host-independent native transition
+  engine. (Implemented and test-covered for preroll, punch-in, loop restart,
+  loop preferences, stop/abort, arm restoration, and take finalization; the
+  ordered REAPER executor and failed-start compensation are also implemented;
+  canonical Recorded-status commit, CueUpdated publication, preference writes,
+  overlay rollback, and retry coordination are implemented. Native overlay-FX
+  ownership/mutation adaptation is implemented with failed-update compensation;
+  complete overlay settings persistence, EEL generation, and native input
+  composition and the native refresh-action REAPER callback binding are also
+  implemented. Deferred recording UI wiring remains.)
+- Port generated-cue cleanup ownership predicates to the native boundary.
+  (The exact selected-character cleanup plan and transactional REAPER adapter
+  are implemented and test-covered; the application coordinator now includes
+  canonical model persistence and snapshot recovery, while public command
+  wiring remains.)
+- Coordinate native character-filter state, planning, and REAPER mutation.
+  (Application service is implemented; native manager/filter UI wiring remains.)
 - Keep model save and generated-project rendering in one Undo-owned operation.
   (Done for import, generation, region timing, Cue Manager add/remove, refresh,
   setup, filtering, and character clearing. The native full-render coordinator
@@ -63,6 +85,9 @@ Initial migration targets:
 - Port explicit region timing adoption to the native domain and render
   coordinator. (Implemented and test-covered; native UI cutover and in-REAPER
   smoke testing remain.)
+- Port canonical cue navigation and paired manager/overlay selection state to
+  native services. (Implemented and test-covered; native Next/Previous/Jump
+  actions are now bound, while in-REAPER smoke testing remains.)
 - Return one consistent summary shape:
   - `sync_type`
   - `session_id`
