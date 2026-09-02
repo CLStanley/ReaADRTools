@@ -22,6 +22,8 @@ struct ManagerUiContract {
   ManagerUiRect quick_actions;
   ManagerUiRect content;
   ManagerUiRect footer;
+  std::vector<ManagerUiRect> quick_action_slots;
+  std::vector<ManagerUiSection> preference_controls;
   std::vector<ManagerUiSection> sections;
 };
 

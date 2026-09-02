@@ -11,6 +11,14 @@ const ManagerUiContract& manager_ui_contract()
     {24, 162, 420, 402},
     {464, 162, 552, 632},
     {24, 810, 992, 42},
+    {{24, 192, 420, 30}, {24, 228, 420, 30}, {24, 264, 420, 30}, {24, 300, 420, 30}},
+    {
+      {"remember_window_layout", "Remember ReaADR window layout per project", {24, 450, 420, 26}},
+      {"cue_hover_preview", "Show cue text preview on hover", {24, 486, 420, 26}},
+      {"tooltips_enabled", "Show delayed tooltips on hover", {24, 522, 420, 26}},
+      {"navigation_wrap_enabled", "Wrap cue navigation at ends", {24, 558, 420, 26}},
+      {"cue_manager_auto_dock", "Open Cue Manager docked", {24, 594, 420, 26}},
+    },
     {
       {"import", "Import", {24, 162, 420, 120}},
       {"cues", "Cue Management", {24, 162, 420, 120}},

@@ -2759,6 +2759,7 @@ void test_manager_navigation()
   const auto& ui = reaadr::core::manager_ui_contract();
   check(ui.header.width == 992 && ui.header.height == 78 && ui.tab_bar.y == 108 &&
           ui.quick_actions.width == 420 && ui.content.x == 464 && ui.footer.y == 810 &&
+          ui.quick_action_slots.size() == 4 && ui.preference_controls.size() == 5 &&
           ui.sections.size() == 7 && ui.sections[4].key == "overlay",
         "native Manager UI contract mirrors the Lua window structure");
 
