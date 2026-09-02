@@ -192,10 +192,18 @@ the native extension is the only installed runtime.
 
 - Replace manager, cue editor, preferences, filter, overlay, and report windows
   with one native manager UI.
+- Reach feature parity for every existing UI control, persisted preference,
+  keyboard/menu action, refresh path, and error/retry dialog before removing
+  its compatibility implementation. A read-only summary or reduced input
+  dialog is a preview and does not satisfy this exit condition.
 - Convert the five public actions and configurable quick actions to native
   commands.
 - Stop packaging `scripts/*.lua`, unregister legacy ReaScripts, and remove the
   temporary native APIs that existed only for Lua interoperability.
+
+Compatibility rule: Lua UI remains installed and registered for any feature
+whose native replacement has not passed parity tests and an in-REAPER smoke
+test. Removing compatibility code before that point is a breaking change.
 
 Exit condition: the installed payload contains the native extension and assets,
 with no runtime Lua dependency.
