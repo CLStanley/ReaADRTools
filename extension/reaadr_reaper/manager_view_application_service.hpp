@@ -3,11 +3,13 @@
 #include "reaadr_core/manager_view_model.hpp"
 #include "reaadr_core/model_repository.hpp"
 #include "reaadr_core/manager_preferences.hpp"
+#include "reaadr_core/manager_navigation.hpp"
 
 namespace reaadr::reaper {
 
 struct ManagerViewLoadResult {
   core::ManagerViewModel view;
+  core::ManagerWindowLayout layout;
   std::string error;
   explicit operator bool() const { return error.empty() && static_cast<bool>(view); }
 };
