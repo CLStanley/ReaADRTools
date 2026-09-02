@@ -7,7 +7,6 @@ UserPlugins/
   reaper_reaadr-... platform extension
 Scripts/
   ReaADRTools/
-    scripts/
     assets/
 ```
 
@@ -17,8 +16,8 @@ Install targets:
 - macOS: `~/Library/Application Support/REAPER/UserPlugins` and `~/Library/Application Support/REAPER/Scripts`
 - Linux: `~/.config/REAPER/UserPlugins` and `~/.config/REAPER/Scripts`
 
-The installer scripts copy the native extension into `UserPlugins`, copy Lua
-scripts/assets into `Scripts/ReaADRTools`, remove the old bundled
+The installer scripts copy the native extension and assets into the REAPER
+resource folder, remove the old bundled
 `UserPlugins/ReaADRTools` folder, and then instruct the user to restart REAPER.
 
 ## Build Packages
@@ -73,7 +72,7 @@ Expected output:
 
 ```text
 dist\UserPlugins\reaper_reaadr.dll
-dist\Scripts\ReaADRTools\scripts\*.lua
+dist\Scripts\ReaADRTools\assets\*
 ```
 
 Verify the DLL exports REAPER's entrypoint:
@@ -106,7 +105,7 @@ The Windows zip should then contain:
 
 ```text
 ReaADRTools-windows/UserPlugins/reaper_reaadr.dll
-ReaADRTools-windows/Scripts/ReaADRTools/scripts/*.lua
+ReaADRTools-windows/Scripts/ReaADRTools/assets/*
 ```
 
 That DLL is what makes the top-level `ReaADR Tools` menu appear in Windows

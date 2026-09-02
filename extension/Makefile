@@ -80,9 +80,8 @@ test: $(TEST_TARGET)
 
 dist: all
 	rm -rf "$(DIST_DIR)"
-	@mkdir -p "$(DIST_USERPLUGINS_DIR)" "$(DIST_REAADR_DIR)/scripts" "$(DIST_REAADR_DIR)/assets"
+	@mkdir -p "$(DIST_USERPLUGINS_DIR)" "$(DIST_REAADR_DIR)/assets"
 	cp "$(BUILD_DIR)/$(TARGET)" "$(DIST_USERPLUGINS_DIR)/$(TARGET)"
-	cp ../scripts/*.lua "$(DIST_REAADR_DIR)/scripts/"
 	cp ../assets/* "$(DIST_REAADR_DIR)/assets/"
 
 clean:

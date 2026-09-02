@@ -76,7 +76,6 @@ dist/UserPlugins/
 dist/Scripts/
   ReaADRTools/
     assets/
-    scripts/*.lua
 ```
 
 ### Windows (x64)
@@ -101,11 +100,10 @@ dist/UserPlugins/
 dist/Scripts/
   ReaADRTools/
     assets/
-    scripts/*.lua
 ```
 
-After building, the distributable Lua scripts are copied from the repository's
-`scripts/` folder into `dist/Scripts/ReaADRTools/scripts/`.
+The distributable contains native assets only; Lua scripts are no longer
+packaged.
 
 ## Install
 

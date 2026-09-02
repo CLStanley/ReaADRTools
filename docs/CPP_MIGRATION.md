@@ -182,10 +182,11 @@ public command wiring remains part of the native UI cutover.
 Native character-filter application now also coordinates canonical filter
 state, lane-aware planning, transactional REAPER mutation, and persistence;
 the existing Lua filter window remains a compatibility UI.
-These domain operations and adapters are test-covered but are not yet public
-writers; the region-sync, character-filter, and navigation command/UI cutovers,
-the deferred recording frame/UI wiring, generated-cue cleanup, other overlay
-UI, and in-REAPER smoke tests remain.
+These domain operations and adapters are test-covered but are not yet all
+public writers; the region-sync, character-filter, and navigation command/UI
+cutovers, deferred recording frame/UI wiring, other overlay UI, and in-REAPER
+smoke tests remain. Lua source and packaging payloads have now been removed;
+the native extension is the only installed runtime.
 
 ### Stage 4: native UI and Lua removal
 
