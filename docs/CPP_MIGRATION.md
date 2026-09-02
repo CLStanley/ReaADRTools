@@ -233,6 +233,8 @@ fallback from legacy `direction` fields so the native table does not drop
 visual dialogue direction text.
 Notes are now editable through the native Cue Manager edit contract and are
 stored under the canonical `notes` field.
+Native timing edits now use the shared timecode parser and session frame rate,
+matching Lua's invalid-input rejection while preserving legacy values.
 Sortable headers are validated against the native contract; unknown sort keys
 fall back safely to the established start-time ordering.
 Those catalogs are presentation constraints only; canonical cue edits retain

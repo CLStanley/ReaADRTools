@@ -1,5 +1,6 @@
 #include "cue_manager_model.hpp"
 #include "cue_manager_ui_contract.hpp"
+#include "domain_utils.hpp"
 #include <utility>
 #include <algorithm>
 #include <cstdlib>
@@ -102,6 +103,20 @@ CueManagerEditResult edit_cue_manager_row(const SessionModel& model,
   if (matches == 0) { result.error = "The cue ID is not present in the canonical session."; return result; }
   if (matches > 1) { result.error = "Multiple cues match the cue ID."; return result; }
   Fields& cue = result.model.cues[selected];
+  double frame_rate = 24.0;
+  const auto frame_rate_field = result.model.timecode.find("frame_rate");
+  if (frame_rate_field != result.model.timecode.end()) {
+    char* end = nullptr;
+    const double parsed = std::strtod(frame_rate_field->second.c_str(), &end);
+    if (end && end != frame_rate_field->second.c_str() && *end == '\0' && parsed > 0.0) frame_rate = parsed;
+  }
+  for (const auto* timing : {&options.start_time, &options.end_time}) {
+    if (timing->empty()) continue;
+    if (!parse_timecode(*timing, frame_rate)) {
+      result.error = "Cue timing is invalid.";
+      return result;
+    }
+  }
   const std::pair<const char*, const std::string*> updates[] = {
     {"dialogue", &options.dialogue}, {"notes", &options.notes}, {"cue_type", &options.cue_type},
     {"status", &options.status}, {"start_time", &options.start_time},

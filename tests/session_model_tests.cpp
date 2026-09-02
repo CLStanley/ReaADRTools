@@ -2895,6 +2895,9 @@ void test_cue_manager_model()
         "native cue manager edit contract updates canonical row fields");
   check(!reaadr::core::edit_cue_manager_row(model, {"missing", "x", "", "", "", "", ""}),
         "native cue manager edit contract rejects unknown cue IDs");
+  check(!reaadr::core::edit_cue_manager_row(model,
+    {"A1", "", "", "D", "Recorded", "not-a-time", ""}),
+        "native cue manager rejects invalid timing edits");
   FakeProjectStateStore store;
   reaadr::core::SessionModelRepository repository(store);
   check(repository.save(model), "native cue manager commit fixture saves its model");
