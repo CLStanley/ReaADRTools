@@ -2878,6 +2878,12 @@ void test_cue_manager_model()
   check(canonical_edit && canonical_edit.model.cues[0].at("cue_type") == "Walla",
         "native cue manager writes canonical cue_type edits");
   model.cues[0].erase("cue_type");
+  auto line_model = model;
+  line_model.cues[0].erase("dialogue");
+  line_model.cues[0]["line"] = "Imported line";
+  const auto line_view = reaadr::core::build_cue_manager_model(line_model, "A1");
+  check(line_view && line_view.rows[0].dialogue == "Imported line",
+        "native cue manager reads imported line fields as dialogue");
   const auto filtered = reaadr::core::build_cue_manager_view(model, {"hello", "Actor", "", "A1"});
   check(filtered && filtered.rows.size() == 1 && filtered.rows[0].cue_key == "A1" &&
           filtered.rows[0].selected,

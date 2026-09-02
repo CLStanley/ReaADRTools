@@ -233,6 +233,9 @@ for the Lua table's headers, including numeric timing comparisons.
 Cue Manager rows now carry the Notes column explicitly, with a compatibility
 fallback from legacy `direction` fields so the native table does not drop
 visual dialogue direction text.
+Dialogue rows now prefer the canonical imported `line` field, falling back to
+legacy `dialogue` values, and native edits update whichever canonical field is
+present.
 Notes are now editable through the native Cue Manager edit contract and are
 stored under the canonical `notes` field.
 An explicit `notes_set` flag allows intentional clearing of Notes without

@@ -22,6 +22,11 @@ namespace { std::string notes_field(const Fields& cue) {
   if (notes != cue.end()) return notes->second;
   return field(cue, "direction");
 } }
+namespace { std::string dialogue_field(const Fields& cue) {
+  const auto line = cue.find("line");
+  if (line != cue.end()) return line->second;
+  return field(cue, "dialogue");
+} }
 namespace { bool contains_case_insensitive(const std::string& value, const std::string& query) {
   if (query.empty()) return true;
   auto lower = [](std::string text) { for (char& c : text) if (c >= 'A' && c <= 'Z') c = static_cast<char>(c - 'A' + 'a'); return text; };
@@ -37,7 +42,7 @@ CueManagerModel build_cue_manager_model(const SessionModel& model,
   for (std::size_t index = 0; index < model.cues.size(); ++index) {
     const Fields& cue = model.cues[index];
     const std::string key = field(cue, "id");
-      result.rows.push_back({index, key, field(cue, "character"), field(cue, "dialogue"),
+      result.rows.push_back({index, key, field(cue, "character"), dialogue_field(cue),
       cue_type_field(cue), field(cue, "status"), field(cue, "start_time"),
       field(cue, "end_time"), !selected_cue_key.empty() && key == selected_cue_key, notes_field(cue)});
   }
@@ -61,7 +66,7 @@ CueManagerModel build_cue_manager_view(const SessionModel& model,
     if (!contains_case_insensitive(key, options.query) &&
         !contains_case_insensitive(character, options.query) &&
         !contains_case_insensitive(field(cue, "dialogue"), options.query)) continue;
-    result.rows.push_back({index, key, character, field(cue, "dialogue"), cue_type_field(cue),
+    result.rows.push_back({index, key, character, dialogue_field(cue), cue_type_field(cue),
       status, field(cue, "start_time"), field(cue, "end_time"), key == options.selected_cue_key, notes_field(cue)});
   }
   const auto value_for = [](const CueManagerRow& row, const std::string& key) {
@@ -171,6 +176,7 @@ CueManagerEditResult edit_cue_manager_row(const SessionModel& model,
   };
   for (const auto& update : updates) {
     const char* key = update.first;
+    if (std::string(update.first) == "dialogue" && cue.find("dialogue") == cue.end() && cue.find("line") != cue.end()) key = "line";
     if (std::string(update.first) == "cue_type" && cue.find("cue_type") == cue.end() && cue.find("type") != cue.end()) key = "type";
     const std::string* value = update.second;
     if (std::string(update.first) == "start_time") value = &start_value;
