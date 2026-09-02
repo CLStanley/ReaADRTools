@@ -1,9 +1,15 @@
 #include "cue_manager_model.hpp"
 #include <utility>
+#include <algorithm>
 namespace reaadr::core {
 namespace { const std::string& field(const Fields& cue, const char* key) {
   const auto found = cue.find(key); static const std::string empty;
   return found == cue.end() ? empty : found->second;
+} }
+namespace { bool contains_case_insensitive(const std::string& value, const std::string& query) {
+  if (query.empty()) return true;
+  auto lower = [](std::string text) { for (char& c : text) if (c >= 'A' && c <= 'Z') c = static_cast<char>(c - 'A' + 'a'); return text; };
+  return lower(value).find(lower(query)) != std::string::npos;
 } }
 CueManagerModel build_cue_manager_model(const SessionModel& model,
                                         const std::string& selected_cue_key)
@@ -18,6 +24,29 @@ CueManagerModel build_cue_manager_model(const SessionModel& model,
     result.rows.push_back({index, key, field(cue, "character"), field(cue, "dialogue"),
       field(cue, "type"), field(cue, "status"), field(cue, "start_time"),
       field(cue, "end_time"), !selected_cue_key.empty() && key == selected_cue_key});
+  }
+  return result;
+}
+
+CueManagerModel build_cue_manager_view(const SessionModel& model,
+                                       const CueManagerViewOptions& options)
+{
+  CueManagerModel result;
+  result.session_id = model.session_id();
+  if (result.session_id.empty()) { result.error = "A canonical session ID is required."; return result; }
+  result.selected_cue_key = options.selected_cue_key;
+  for (std::size_t index = 0; index < model.cues.size(); ++index) {
+    const Fields& cue = model.cues[index];
+    const std::string key = field(cue, "id");
+    const std::string character = field(cue, "character");
+    const std::string status = field(cue, "status");
+    if (!options.character.empty() && character != options.character) continue;
+    if (!options.status.empty() && status != options.status) continue;
+    if (!contains_case_insensitive(key, options.query) &&
+        !contains_case_insensitive(character, options.query) &&
+        !contains_case_insensitive(field(cue, "dialogue"), options.query)) continue;
+    result.rows.push_back({index, key, character, field(cue, "dialogue"), field(cue, "type"),
+      status, field(cue, "start_time"), field(cue, "end_time"), key == options.selected_cue_key});
   }
   return result;
 }

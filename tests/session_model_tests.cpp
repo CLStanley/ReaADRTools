@@ -2681,6 +2681,10 @@ void test_cue_manager_model()
   check(view && view.rows.size() == 2 && view.rows[0].dialogue == "Hello" &&
           view.rows[1].selected && !view.rows[0].selected && view.rows[1].cue_type == "A",
         "native cue manager model preserves ordered display fields and selection");
+  const auto filtered = reaadr::core::build_cue_manager_view(model, {"hello", "Actor", "", "A1"});
+  check(filtered && filtered.rows.size() == 1 && filtered.rows[0].cue_key == "A1" &&
+          filtered.rows[0].selected,
+        "native cue manager view model supports case-insensitive query and character filtering");
   const auto edited = reaadr::core::edit_cue_manager_row(model,
     {"A1", "Updated", "D", "Recorded", "1.5", "2.5"});
   check(edited && edited.changed && edited.model.cues[0].find("dialogue")->second == "Updated" &&
