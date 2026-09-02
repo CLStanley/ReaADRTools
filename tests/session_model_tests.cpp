@@ -2639,7 +2639,7 @@ void test_manager_preferences()
 {
   const auto& fields = reaadr::core::manager_preference_fields();
   const auto& choices = reaadr::core::manager_quick_action_choices();
-  check(fields.size() == 21 && fields.front().tab == "overlay" &&
+  check(fields.size() == 30 && fields.front().tab == "overlay" &&
           fields.back().key == "cue_manager_auto_dock" &&
           fields.back().type == reaadr::core::ManagerPreferenceFieldType::checkbox &&
           choices.size() == 8 && choices[2] == "record_cue",

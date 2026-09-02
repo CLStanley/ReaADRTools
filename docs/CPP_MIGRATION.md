@@ -190,7 +190,7 @@ safe launch-tab normalization for invalid or stale requests.
 The same navigation contract publishes all 16 tab actions and their
 user-facing hints, allowing native controls to route through existing C++
 services while the compatibility scripts remain available.
-The Preferences contract also publishes the 21 established overlay and UI
+The Preferences contract also publishes the 30 established overlay and UI
 controls with stable keys, labels, tab ownership, and control types for the
 native renderer.
 Overlay settings also expose deterministic preset detection so the native
