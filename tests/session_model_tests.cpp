@@ -2749,6 +2749,10 @@ void test_manager_navigation()
           reaadr::core::manager_action_is_native("refresh_overlay") &&
           !reaadr::core::manager_action_is_native("import_cue_sheet"),
         "native Manager action catalog distinguishes cut-over commands from Lua routes");
+  const auto layout = reaadr::core::default_manager_window_layout();
+  check(layout.width == 1040 && layout.height == 880 && layout.min_width == 1040 &&
+          layout.min_height == 880 && layout.dock == 0,
+        "native Manager layout contract matches the established window defaults");
 }
 
 void test_cue_manager_ui_contract()

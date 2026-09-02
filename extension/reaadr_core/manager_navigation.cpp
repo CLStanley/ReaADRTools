@@ -56,4 +56,9 @@ bool manager_action_is_native(const std::string& key)
     key == "next_cue" || key == "previous_cue" || key == "jump_to_cue";
 }
 
+ManagerWindowLayout default_manager_window_layout()
+{
+  return {};
+}
+
 } // namespace reaadr::core
