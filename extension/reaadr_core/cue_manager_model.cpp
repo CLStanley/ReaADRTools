@@ -53,4 +53,33 @@ CueManagerEditResult edit_cue_manager_row(const SessionModel& model,
   }
   return result;
 }
+
+CueManagerCommitResult commit_cue_manager_edit(SessionModelRepository& repository,
+                                                const CueManagerCommitOptions& options)
+{
+  CueManagerCommitResult result;
+  const auto loaded = repository.load();
+  if (!loaded) { result.error = session_load_error_message(loaded); return result; }
+  result.edit = edit_cue_manager_row(loaded.model, options.edit);
+  if (!result.edit) { result.error = result.edit.error; return result; }
+  if (!result.edit.changed) {
+    const auto revision = repository.revision();
+    if (!revision) result.error = revision.error; else result.revision = revision.revision;
+    return result;
+  }
+  const auto snapshot = repository.create_snapshot(options.snapshot_label, options.utc_timestamp);
+  if (!snapshot) { result.error = snapshot.error; return result; }
+  result.snapshot = snapshot.snapshot;
+  if (!repository.save(result.edit.model)) {
+    result.error = "Could not persist the Cue Manager edit.";
+    repository.restore_snapshot(result.snapshot); result.rolled_back = true; return result;
+  }
+  const auto revision = options.bump_revision ? repository.bump_revision() : repository.revision();
+  if (!revision) {
+    result.error = revision.error;
+    repository.restore_snapshot(result.snapshot); result.rolled_back = true; return result;
+  }
+  result.revision = revision.revision;
+  return result;
+}
 }

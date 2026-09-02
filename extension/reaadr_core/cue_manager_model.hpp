@@ -1,6 +1,8 @@
 #pragma once
 #include "session_model.hpp"
+#include "model_repository.hpp"
 #include <cstddef>
+#include <cstdint>
 #include <string>
 #include <vector>
 namespace reaadr::core {
@@ -40,4 +42,20 @@ CueManagerModel build_cue_manager_model(const SessionModel& model,
                                         const std::string& selected_cue_key = {});
 CueManagerEditResult edit_cue_manager_row(const SessionModel& model,
                                            const CueManagerEditOptions& options);
+struct CueManagerCommitOptions {
+  CueManagerEditOptions edit;
+  std::string snapshot_label = "Edit Cue";
+  std::string utc_timestamp;
+  bool bump_revision = true;
+};
+struct CueManagerCommitResult {
+  CueManagerEditResult edit;
+  SessionSnapshot snapshot;
+  std::uint64_t revision = 0;
+  bool rolled_back = false;
+  std::string error;
+  explicit operator bool() const { return error.empty(); }
+};
+CueManagerCommitResult commit_cue_manager_edit(SessionModelRepository& repository,
+                                                const CueManagerCommitOptions& options);
 }

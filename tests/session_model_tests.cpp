@@ -2683,12 +2683,21 @@ void test_cue_manager_model()
         "native cue manager model preserves ordered display fields and selection");
   const auto edited = reaadr::core::edit_cue_manager_row(model,
     {"A1", "Updated", "D", "Recorded", "1.5", "2.5"});
-  check(edited && edited.changed && edited.model.cues[0].at("dialogue") == "Updated" &&
-          edited.model.cues[0].at("start_time") == "1.5" &&
-          edited.model.state.at("last_operation") == "edit_cue",
+  check(edited && edited.changed && edited.model.cues[0].find("dialogue")->second == "Updated" &&
+          edited.model.cues[0].find("start_time")->second == "1.5" &&
+          edited.model.state.find("last_operation")->second == "edit_cue",
         "native cue manager edit contract updates canonical row fields");
   check(!reaadr::core::edit_cue_manager_row(model, {"missing", "x", "", "", "", ""}),
         "native cue manager edit contract rejects unknown cue IDs");
+  FakeProjectStateStore store;
+  reaadr::core::SessionModelRepository repository(store);
+  check(repository.save(model), "native cue manager commit fixture saves its model");
+  const auto committed = reaadr::core::commit_cue_manager_edit(repository,
+    {{"A1", "Committed", "D", "Recorded", "1.25", "2.25"}, "Edit Cue", "2026-09-01T00:00:00Z", true});
+  const auto reloaded = repository.load();
+  check(committed && committed.revision == 1 && reloaded && !reloaded.model.cues.empty() &&
+          committed.edit.model.cues[0].find("dialogue")->second == "Committed",
+        "native cue manager edits persist through snapshot and revision commit");
   model.session.clear();
   check(!reaadr::core::build_cue_manager_model(model),
         "native cue manager model rejects sessions without a canonical ID");
