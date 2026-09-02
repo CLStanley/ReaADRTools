@@ -15,6 +15,7 @@ DIST_REAADR_DIR := $(DIST_DIR)/Scripts/ReaADRTools
 CXX ?= g++
 CXXFLAGS ?= -std=c++17 -fPIC -O2 -Wall -Wextra
 CPPFLAGS += -I. -isystem $(REAPER_SDK)/sdk -isystem $(WDL)
+CPPFLAGS += -DSWELL_PROVIDED_BY_APP
 LDFLAGS += -shared -ldl
 CORE_SOURCES := reaadr_core/session_model.cpp reaadr_core/model_repository.cpp reaadr_core/domain_utils.cpp \
 	reaadr_core/cue_import.cpp reaadr_core/session_builder.cpp reaadr_core/session_mutation.cpp \
@@ -32,6 +33,13 @@ CORE_SOURCES := reaadr_core/session_model.cpp reaadr_core/model_repository.cpp r
 	reaadr_core/recording_preferences.cpp reaadr_core/overlay_settings.cpp \
 	reaadr_core/overlay_eel.cpp reaadr_core/overlay_refresh.cpp
 UI_SOURCES := reaadr_ui.cpp
+UI_SOURCES += reaadr_ui/cue_manager_window.cpp
+UNAME_S := $(shell uname -s)
+ifeq ($(UNAME_S),Darwin)
+UI_SOURCES += $(WDL)/swell/swell-modstub.mm
+else
+UI_SOURCES += $(WDL)/swell/swell-modstub-generic.cpp
+endif
 CORE_HEADERS := reaadr_core/session_model.hpp reaadr_core/model_repository.hpp reaadr_core/domain_utils.hpp \
 	reaadr_core/cue_import.hpp reaadr_core/session_builder.hpp reaadr_core/session_mutation.hpp \
 	reaadr_core/session_commit.hpp reaadr_core/lane_assignment.hpp reaadr_core/render_plan.hpp \

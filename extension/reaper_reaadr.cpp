@@ -81,9 +81,11 @@
 #include "reaadr_reaper/project_state.hpp"
 #include "reaadr_reaper/project_transaction.hpp"
 #include "reaadr_ui.hpp"
+#include "reaadr_ui/cue_manager_window.hpp"
 
 #ifndef _WIN32
 #include <dlfcn.h>
+#include <swell/swell.h>
 #endif
 
 namespace {
@@ -420,6 +422,7 @@ void run_native_cue_manager_action()
   reaadr::reaper::ManagerViewApplicationService service(project_state, &global_state);
   const auto loaded = service.load(view_options, "cues");
   if (!loaded) { ShowMessageBox(loaded.error.c_str(), "ReaADR Cue Manager", 0); return; }
+  if (reaadr::ui::show_cue_manager(loaded.view)) return;
   const auto& view = loaded.view.cues;
   std::ostringstream summary;
   summary << "Session: " << view.session_id << "\n"
@@ -1337,6 +1340,13 @@ void load_menu_functions()
     return SetMenuItemInfoA(menu, item, by_position, info);
   };
 #endif
+#ifndef _WIN32
+  g_create_popup_menu = []() -> HMENU { return CreatePopupMenu(); };
+  g_get_menu_item_count = [](HMENU menu) -> int { return GetMenuItemCount(menu); };
+  g_insert_menu_item = [](HMENU menu, int position, BOOL by_position, MENUITEMINFO* item) {
+    InsertMenuItem(menu, position, by_position, item);
+  };
+#endif
   log_line(std::string("CreatePopupMenu available: ") + (g_create_popup_menu ? "yes" : "no"));
   log_line(std::string("GetMenuItemCount available: ") + (g_get_menu_item_count ? "yes" : "no"));
   log_line(std::string("InsertMenuItem available: ") + (g_insert_menu_item ? "yes" : "no"));
@@ -1417,19 +1427,5 @@ BOOL WINAPI DllMain(HINSTANCE instance, DWORD reason, LPVOID)
     log_windows_dll_load(instance);
   }
   return TRUE;
-}
-#endif
-
-#ifndef _WIN32
-extern "C" REAPER_PLUGIN_DLL_EXPORT int SWELL_dllMain(HINSTANCE, DWORD call_mode, LPVOID get_func)
-{
-  constexpr DWORD kProcessAttach = 1;
-  if (call_mode != kProcessAttach || !get_func) return 1;
-
-  auto api_get_func = reinterpret_cast<void* (*)(const char*)>(get_func);
-  g_create_popup_menu = reinterpret_cast<CreatePopupMenuFn>(api_get_func("CreatePopupMenu"));
-  g_get_menu_item_count = reinterpret_cast<GetMenuItemCountFn>(api_get_func("GetMenuItemCount"));
-  g_insert_menu_item = reinterpret_cast<InsertMenuItemFn>(api_get_func("InsertMenuItem"));
-  return 1;
 }
 #endif
