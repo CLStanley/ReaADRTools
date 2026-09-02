@@ -2864,8 +2864,10 @@ void test_cue_manager_model()
     {{"id", "B1"}, {"character", "Beta"}, {"dialogue", "Bye"}, {"type", "A"}, {"status", "Recorded"}, {"start_time", "3"}, {"end_time", "4"}},
   };
   const auto view = reaadr::core::build_cue_manager_model(model, "B1");
+  const auto characters = reaadr::core::cue_manager_character_choices(model);
   check(view && view.rows.size() == 2 && view.rows[0].dialogue == "Hello" && view.rows[0].notes == "Whisper" &&
-          view.rows[1].selected && !view.rows[0].selected && view.rows[1].cue_type == "A",
+          view.rows[1].selected && !view.rows[0].selected && view.rows[1].cue_type == "A" &&
+          characters == std::vector<std::string>{"Actor", "Beta"},
         "native cue manager model preserves ordered display fields and selection");
   model.cues[0]["cue_type"] = "ADR";
   const auto canonical_type_view = reaadr::core::build_cue_manager_model(model, "A1");

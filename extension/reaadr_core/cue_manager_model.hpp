@@ -55,6 +55,7 @@ CueManagerModel build_cue_manager_model(const SessionModel& model,
                                         const std::string& selected_cue_key = {});
 CueManagerModel build_cue_manager_view(const SessionModel& model,
                                        const CueManagerViewOptions& options);
+std::vector<std::string> cue_manager_character_choices(const SessionModel& model);
 CueManagerEditResult edit_cue_manager_row(const SessionModel& model,
                                            const CueManagerEditOptions& options);
 struct CueManagerCommitOptions {

@@ -224,6 +224,8 @@ and reject unsupported values before they reach global extstate.
 The Cue Manager UI contract now likewise publishes its eight table columns
 and nine action-bar commands, including editability and the Lua help/tool-tip
 copy used by the visual workflow.
+Character filter choices are now derived natively from unique canonical cue
+characters in deterministic order for the graphical dropdown.
 The native contract also publishes the exact five status and eight cue-type
 choices used by Lua's inline dropdown editors.
 Cue Manager view filtering now also supports stable ascending/descending sorts

@@ -6,6 +6,7 @@
 #include <cstdlib>
 #include <iomanip>
 #include <sstream>
+#include <set>
 namespace reaadr::core {
 namespace { const std::string& field(const Fields& cue, const char* key) {
   const auto found = cue.find(key); static const std::string empty;
@@ -88,6 +89,16 @@ CueManagerModel build_cue_manager_view(const SessionModel& model,
     });
   }
   return result;
+}
+
+std::vector<std::string> cue_manager_character_choices(const SessionModel& model)
+{
+  std::set<std::string> unique;
+  for (const auto& cue : model.cues) {
+    const std::string character = field(cue, "character");
+    if (!character.empty()) unique.insert(character);
+  }
+  return {unique.begin(), unique.end()};
 }
 
 CueManagerEditResult edit_cue_manager_row(const SessionModel& model,
