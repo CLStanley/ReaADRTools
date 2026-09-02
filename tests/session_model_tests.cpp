@@ -2634,6 +2634,11 @@ void test_overlay_settings_and_eel()
 
 void test_manager_preferences()
 {
+  const auto& fields = reaadr::core::manager_preference_fields();
+  check(fields.size() == 21 && fields.front().tab == "overlay" &&
+          fields.back().key == "cue_manager_auto_dock" &&
+          fields.back().type == reaadr::core::ManagerPreferenceFieldType::checkbox,
+        "native Manager Preferences exposes the established control catalog");
   reaadr::core::ManagerPreferences preferences;
   check(preferences.quick_actions[0] == "import" && preferences.tooltips &&
           preferences.navigation_wrap && !preferences.remember_layout &&

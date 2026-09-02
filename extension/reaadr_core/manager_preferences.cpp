@@ -17,6 +17,34 @@ bool truthy(const std::string& value)
 }
 }
 
+const std::vector<ManagerPreferenceField>& manager_preference_fields()
+{
+  static const std::vector<ManagerPreferenceField> fields = {
+    {"enabled", "Enable video overlays", "overlay", ManagerPreferenceFieldType::checkbox},
+    {"show_cue_id", "Cue ID", "overlay", ManagerPreferenceFieldType::checkbox},
+    {"show_character", "Character name", "overlay", ManagerPreferenceFieldType::checkbox},
+    {"show_dialogue", "Dialogue line", "overlay", ManagerPreferenceFieldType::checkbox},
+    {"show_cue_timecode", "Cue timecode", "overlay", ManagerPreferenceFieldType::checkbox},
+    {"show_project_timer", "Live project timer", "overlay", ManagerPreferenceFieldType::checkbox},
+    {"show_visual_cue", "Visual cue indicator", "overlay", ManagerPreferenceFieldType::checkbox},
+    {"show_direction", "Notes", "overlay", ManagerPreferenceFieldType::checkbox},
+    {"show_cue_type", "Cue type", "overlay", ManagerPreferenceFieldType::checkbox},
+    {"show_streamer", "Streamer bar", "overlay", ManagerPreferenceFieldType::checkbox},
+    {"show_flash", "Flash at cue start", "overlay", ManagerPreferenceFieldType::checkbox},
+    {"show_status", "Standby / take / clear status", "overlay", ManagerPreferenceFieldType::checkbox},
+    {"show_metadata", "Studio metadata", "overlay", ManagerPreferenceFieldType::checkbox},
+    {"text_color", "Overlay text color", "overlay", ManagerPreferenceFieldType::choice},
+    {"metadata_fields", "Studio metadata fields", "overlay", ManagerPreferenceFieldType::text},
+    {"preroll_seconds", "Overlay preroll seconds", "overlay", ManagerPreferenceFieldType::number},
+    {"remember_layout", "Remember window layout", "preferences", ManagerPreferenceFieldType::checkbox},
+    {"hover_preview", "Cue hover preview", "preferences", ManagerPreferenceFieldType::checkbox},
+    {"tooltips", "Show tooltips", "preferences", ManagerPreferenceFieldType::checkbox},
+    {"navigation_wrap", "Wrap cue navigation", "preferences", ManagerPreferenceFieldType::checkbox},
+    {"cue_manager_auto_dock", "Auto-dock Cue Manager", "preferences", ManagerPreferenceFieldType::checkbox},
+  };
+  return fields;
+}
+
 ManagerPreferencesLoadResult ManagerPreferencesRepository::load() const
 {
   ManagerPreferencesLoadResult result;

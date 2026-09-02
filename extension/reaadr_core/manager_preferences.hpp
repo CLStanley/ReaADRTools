@@ -2,7 +2,18 @@
 #include "overlay_settings.hpp"
 #include <array>
 #include <string>
+#include <vector>
 namespace reaadr::core {
+
+enum class ManagerPreferenceFieldType { checkbox, text, number, choice };
+struct ManagerPreferenceField {
+  std::string key;
+  std::string label;
+  std::string tab;
+  ManagerPreferenceFieldType type;
+};
+
+const std::vector<ManagerPreferenceField>& manager_preference_fields();
 // Serializable state shared by the native Manager Preferences view and its
 // compatibility bridge; overlay values remain owned by OverlaySettings.
 struct ManagerPreferences {
