@@ -195,6 +195,9 @@ load, providing a single consistency boundary for native window rendering.
 The native Cue Manager preview is now routed through that service as well, so
 its text fallback exercises the same consolidated read path as the graphical
 replacement.
+The native Cue Manager command now opens the SWELL-based C++ Manager shell,
+which exposes the seven established Manager tabs and a native content surface;
+the remaining tab-specific controls are being cut over incrementally.
 Cue Manager view loading now restores Lua-compatible `manager_selected_cue_key`
 from project extstate when no explicit selection is supplied, keeping native
 and compatibility windows focused on the same cue.

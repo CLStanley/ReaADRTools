@@ -76,6 +76,7 @@
 #include "reaadr_core/cue_manager_model.hpp"
 #include "reaadr_reaper/overlay_application_service.hpp"
 #include "reaadr_reaper/manager_view_application_service.hpp"
+#include "reaadr_reaper/native_manager_window.hpp"
 #include "reaadr_reaper/overlay_refresh_adapter.hpp"
 #include "reaadr_reaper/cue_navigation_service.hpp"
 #include "reaadr_reaper/project_state.hpp"
@@ -171,7 +172,7 @@ ScriptAction g_refresh_overlay_action = {
 ScriptAction g_next_cue_action = {"Next Cue (Native)", nullptr, 0};
 ScriptAction g_previous_cue_action = {"Previous Cue (Native)", nullptr, 0};
 ScriptAction g_jump_to_cue_action = {"Jump To Cue (Native)", nullptr, 0};
-ScriptAction g_cue_manager_action = {"Cue Summary (Native Preview)", nullptr, 0};
+ScriptAction g_cue_manager_action = {"Cue Manager (Native UI)", nullptr, 0};
 
 std::vector<ScriptAction> g_legacy_actions = {
   {"Import Script", "Scripts/ReaADRTools/scripts/ReaADR_Import_Script.lua", 0},
@@ -392,6 +393,9 @@ void run_validate_session_action()
 
 void run_native_cue_manager_action()
 {
+  reaadr::reaper::show_native_manager_window();
+  return;
+
   reaadr::reaper::ProjectStateStore project_state(nullptr, {GetProjExtState, SetProjExtState});
   reaadr::core::SessionModelRepository repository(project_state);
   reaadr::core::CueManagerViewOptions view_options;

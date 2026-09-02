@@ -53,7 +53,8 @@ REAPER_SOURCES := reaadr_reaper/project_state.cpp reaadr_reaper/project_transact
 	reaadr_reaper/overlay_application_service.cpp reaadr_reaper/cue_cleanup_adapter.cpp \
 	reaadr_reaper/cue_cleanup_application_service.cpp \
 	reaadr_reaper/character_filter_application_service.cpp \
-	reaadr_reaper/manager_view_application_service.cpp
+	reaadr_reaper/manager_view_application_service.cpp \
+	reaadr_reaper/native_manager_window.cpp
 REAPER_HEADERS := reaadr_reaper/project_state.hpp reaadr_reaper/project_transaction.hpp \
 	reaadr_reaper/track_region_adapter.hpp reaadr_reaper/render_artifact_adapter.hpp \
 	reaadr_reaper/session_render_service.hpp reaadr_reaper/character_filter_adapter.hpp \
@@ -63,7 +64,8 @@ REAPER_HEADERS := reaadr_reaper/project_state.hpp reaadr_reaper/project_transact
 	reaadr_reaper/overlay_application_service.hpp reaadr_reaper/cue_cleanup_adapter.hpp \
 	reaadr_reaper/cue_cleanup_application_service.hpp \
 	reaadr_reaper/character_filter_application_service.hpp \
-	reaadr_reaper/manager_view_application_service.hpp
+	reaadr_reaper/manager_view_application_service.hpp \
+	reaadr_reaper/native_manager_window.hpp
 NATIVE_SOURCES := $(CORE_SOURCES) $(REAPER_SOURCES)
 NATIVE_HEADERS := $(CORE_HEADERS) $(REAPER_HEADERS)
 EXTENSION_SOURCES := reaper_reaadr.cpp $(NATIVE_SOURCES)
