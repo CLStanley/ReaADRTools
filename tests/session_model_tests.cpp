@@ -2901,6 +2901,9 @@ void test_cue_manager_model()
   check(!reaadr::core::edit_cue_manager_row(model,
     {"A1", "", "", "D", "Recorded", "2.0", "1.0"}),
         "native cue manager rejects non-positive cue durations");
+  check(!reaadr::core::edit_cue_manager_row(model,
+    {"A1", "", "", "D", "Recorded", "00:00:02:00", "00:00:01:00"}),
+        "native cue manager enforces duration for SMPTE edits");
   FakeProjectStateStore store;
   reaadr::core::SessionModelRepository repository(store);
   check(repository.save(model), "native cue manager commit fixture saves its model");

@@ -236,6 +236,8 @@ stored under the canonical `notes` field.
 Native timing edits now use the shared timecode parser and session frame rate,
 matching Lua's invalid-input rejection while preserving legacy values.
 They also enforce a strictly positive cue duration before any model mutation.
+That invariant is evaluated on parsed numeric, MM:SS, and SMPTE timecode
+values rather than relying on string comparison.
 Sortable headers are validated against the native contract; unknown sort keys
 fall back safely to the established start-time ordering.
 Those catalogs are presentation constraints only; canonical cue edits retain
