@@ -16,6 +16,7 @@ struct CueManagerRow {
   std::string start_time;
   std::string end_time;
   bool selected = false;
+  std::string notes;
 };
 struct CueManagerModel {
   std::string session_id;

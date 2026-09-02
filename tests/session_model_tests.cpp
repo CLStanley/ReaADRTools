@@ -2860,11 +2860,11 @@ void test_cue_manager_model()
   reaadr::core::SessionModel model;
   model.session["session_id"] = "manager";
   model.cues = {
-    {{"id", "A1"}, {"character", "Actor"}, {"dialogue", "Hello"}, {"type", "D"}, {"status", "Pending"}, {"start_time", "1"}, {"end_time", "2"}},
+    {{"id", "A1"}, {"character", "Actor"}, {"dialogue", "Hello"}, {"direction", "Whisper"}, {"type", "D"}, {"status", "Pending"}, {"start_time", "1"}, {"end_time", "2"}},
     {{"id", "B1"}, {"character", "Beta"}, {"dialogue", "Bye"}, {"type", "A"}, {"status", "Recorded"}, {"start_time", "3"}, {"end_time", "4"}},
   };
   const auto view = reaadr::core::build_cue_manager_model(model, "B1");
-  check(view && view.rows.size() == 2 && view.rows[0].dialogue == "Hello" &&
+  check(view && view.rows.size() == 2 && view.rows[0].dialogue == "Hello" && view.rows[0].notes == "Whisper" &&
           view.rows[1].selected && !view.rows[0].selected && view.rows[1].cue_type == "A",
         "native cue manager model preserves ordered display fields and selection");
   model.cues[0]["cue_type"] = "ADR";
