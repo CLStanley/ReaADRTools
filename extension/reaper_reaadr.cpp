@@ -718,10 +718,6 @@ bool hook_native_command(int command, int)
     run_native_cue_manager_action();
     return true;
   }
-  if (command == g_preferences_command_id && command != 0) {
-    run_native_preferences_action();
-    return true;
-  }
   return false;
 }
 
@@ -797,8 +793,6 @@ bool register_native_actions()
     g_jump_to_cue_command_id, g_jump_to_cue_accel, g_jump_to_cue_action);
   register_secondary_action(kCueManagerCommandName, "ReaADR: Cue Manager (Native)",
     g_cue_manager_command_id, g_cue_manager_accel, g_cue_manager_action);
-  register_secondary_action(kPreferencesCommandName, "ReaADR: Preferences (Native)",
-    g_preferences_command_id, g_preferences_accel, g_preferences_action);
   log_line("Registered native action: " + std::string(kValidateSessionActionLabel));
   return true;
 }
@@ -845,12 +839,6 @@ void unregister_native_actions()
     g_cue_manager_command_id = 0;
     g_cue_manager_action.command_id = 0;
     g_cue_manager_accel = {};
-  }
-  if (g_preferences_command_id) {
-    g_plugin->Register("-gaccel", reinterpret_cast<void*>(&g_preferences_accel));
-    g_preferences_command_id = 0;
-    g_preferences_action.command_id = 0;
-    g_preferences_accel = {};
   }
 }
 
@@ -1344,7 +1332,6 @@ void hook_custom_menu(const char* menu_id, void* menu, int flag)
     add_menu_item(hmenu, position + 3, g_previous_cue_action);
     add_menu_item(hmenu, position + 4, g_jump_to_cue_action);
     add_menu_item(hmenu, position + 5, g_cue_manager_action);
-    add_menu_item(hmenu, position + 6, g_preferences_action);
     log_line("Added top-level ReaADR Tools menu.");
     return;
   }
@@ -1396,12 +1383,6 @@ void hook_custom_menu(const char* menu_id, void* menu, int flag)
     update_menu_item_label(hmenu, manager_position, g_cue_manager_action, g_cue_manager_action.label);
   } else {
     add_menu_item(hmenu, position + 5, g_cue_manager_action);
-  }
-  const int preferences_position = validation_position + 6;
-  if (preferences_position < existing_items) {
-    update_menu_item_label(hmenu, preferences_position, g_preferences_action, g_preferences_action.label);
-  } else {
-    add_menu_item(hmenu, position + 6, g_preferences_action);
   }
   log_line("Updated top-level ReaADR quick-action labels.");
 }
