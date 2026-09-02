@@ -331,8 +331,8 @@ std::string quick_action_label(int slot)
   if (!GetExtState) return "Quick Action " + std::to_string(slot);
 
   const std::string key = "quick_action_" + std::to_string(slot);
-  const char* value = GetExtState("ReaADRTools", key.c_str());
-  const std::string action_key = value ? value : "";
+  reaadr::reaper::GlobalStateStore global_state({GetExtState, SetExtState});
+  const std::string action_key = global_state.read("ReaADRTools", key.c_str());
 
   if (action_key == "import" || (action_key.empty() && slot == 1)) return "Quick Action " + std::to_string(slot) + ": Import Cue Sheet";
   if (action_key == "cue_manager" || (action_key.empty() && slot == 2)) return "Quick Action " + std::to_string(slot) + ": Open Cue Manager";
