@@ -22,16 +22,28 @@ constexpr int kTabHelp = 47016;
 constexpr int kClose = 47020;
 constexpr int kBody = 47021;
 constexpr int kCueList = 47022;
+constexpr int kRememberLayout = 47023;
+constexpr int kHoverPreview = 47024;
+constexpr int kTooltips = 47025;
+constexpr int kNavigationWrap = 47026;
 const core::ManagerViewModel* g_view = nullptr;
 
 #ifndef _WIN32
 INT_PTR manager_dialog_proc(HWND hwnd, UINT message, WPARAM wparam, LPARAM)
 {
   if (message == WM_INITDIALOG) {
+    ShowWindow(GetDlgItem(hwnd, kRememberLayout), SW_HIDE);
+    ShowWindow(GetDlgItem(hwnd, kHoverPreview), SW_HIDE);
+    ShowWindow(GetDlgItem(hwnd, kTooltips), SW_HIDE);
+    ShowWindow(GetDlgItem(hwnd, kNavigationWrap), SW_HIDE);
     SetDlgItemText(hwnd, kBody,
       "Select a Manager tab to configure ReaADR Tools.\r\n\r\n"
       "This native shell is driven by the C++ session and preference model.");
     if (g_view) {
+      CheckDlgButton(hwnd, kRememberLayout, g_view->preferences.remember_layout ? BST_CHECKED : BST_UNCHECKED);
+      CheckDlgButton(hwnd, kHoverPreview, g_view->preferences.hover_preview ? BST_CHECKED : BST_UNCHECKED);
+      CheckDlgButton(hwnd, kTooltips, g_view->preferences.tooltips ? BST_CHECKED : BST_UNCHECKED);
+      CheckDlgButton(hwnd, kNavigationWrap, g_view->preferences.navigation_wrap ? BST_CHECKED : BST_UNCHECKED);
       for (const auto& row : g_view->cues.rows) {
         const std::string line = (row.selected ? "> " : "  ") + row.cue_key + "  " +
           row.character + "  [" + row.status + "]  " + row.dialogue;
@@ -56,6 +68,11 @@ INT_PTR manager_dialog_proc(HWND hwnd, UINT message, WPARAM wparam, LPARAM)
       default: break;
     }
     if (title) {
+      ShowWindow(GetDlgItem(hwnd, kCueList), command == kTabCues ? SW_SHOW : SW_HIDE);
+      ShowWindow(GetDlgItem(hwnd, kRememberLayout), command == kTabPreferences ? SW_SHOW : SW_HIDE);
+      ShowWindow(GetDlgItem(hwnd, kHoverPreview), command == kTabPreferences ? SW_SHOW : SW_HIDE);
+      ShowWindow(GetDlgItem(hwnd, kTooltips), command == kTabPreferences ? SW_SHOW : SW_HIDE);
+      ShowWindow(GetDlgItem(hwnd, kNavigationWrap), command == kTabPreferences ? SW_SHOW : SW_HIDE);
       const std::string body = std::string(title) +
         "\r\n\r\nNative Manager view selected. Controls are backed by the C++ model.";
       SetDlgItemText(hwnd, kBody, body.c_str());
@@ -78,6 +95,10 @@ BEGIN
   PUSHBUTTON "Help", kTabHelp, 444, 34, 64, 24
   LISTBOX kCueList, 12, 70, 496, 170, LBS_NOINTEGRALHEIGHT | WS_VSCROLL | WS_BORDER
   EDITTEXT kBody, 12, 245, 400, 42, ES_MULTILINE | ES_READONLY
+  CHECKBOX "Remember Manager window layout per project", kRememberLayout, 12, 72, 300, 16
+  CHECKBOX "Enable hover previews", kHoverPreview, 12, 94, 220, 16
+  CHECKBOX "Show tooltips", kTooltips, 12, 116, 220, 16
+  CHECKBOX "Wrap keyboard navigation", kNavigationWrap, 12, 138, 240, 16
   DEFPUSHBUTTON "Close", kClose, 430, 262, 78, 24
 END
 SWELL_DEFINE_DIALOG_RESOURCE_END2(kManagerDialog)
