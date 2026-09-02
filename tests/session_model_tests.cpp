@@ -84,6 +84,22 @@ public:
   int failed_writes_remaining = 0;
 };
 
+class FakeGlobalStateStore final : public reaadr::core::GlobalStateStore {
+public:
+  std::string read(const char* name_space, const char* key) const override
+  {
+    const auto found = values.find(std::string(name_space) + ":" + key);
+    return found == values.end() ? std::string() : found->second;
+  }
+  bool write(const char* name_space, const char* key, const std::string& value) override
+  {
+    values[std::string(name_space) + ":" + key] = value;
+    return writes_succeed;
+  }
+  std::map<std::string, std::string> values;
+  bool writes_succeed = true;
+};
+
 std::string project_state_value;
 bool project_state_exists = true;
 std::string project_state_written;
@@ -2631,6 +2647,17 @@ void test_manager_preferences()
   const auto loaded = repository.load();
   check(loaded && loaded.preferences == preferences,
         "native Manager Preferences restores persisted project UI state");
+
+  FakeGlobalStateStore global;
+  global.values["ReaADRTools:quick_action_1"] = "record_cue";
+  reaadr::core::ManagerPreferencesRepository global_repository(store, &global);
+  auto global_loaded = global_repository.load();
+  check(global_loaded && global_loaded.preferences.quick_actions[0] == "record_cue",
+        "native Manager Preferences reads global quick-action slots");
+  global_loaded.preferences.quick_actions[0] = "refresh_overlay";
+  saved = global_repository.save(global_loaded.preferences);
+  check(saved && saved.changed && global.values.at("ReaADRTools:quick_action_1") == "refresh_overlay",
+        "native Manager Preferences persists global quick-action slots");
 }
 
 void test_overlay_application_service()

@@ -30,6 +30,13 @@ ManagerPreferencesLoadResult ManagerPreferencesRepository::load() const
     if (!stored) { result.error = "REAPER project extstate is unavailable while loading Manager preferences."; return result; }
     result.preferences.*(flag.member) = truthy(stored.value);
   }
+  if (global_) {
+    for (std::size_t i = 0; i < result.preferences.quick_actions.size(); ++i) {
+      const std::string key = "quick_action_" + std::to_string(i + 1);
+      const std::string value = global_->read(SessionModelRepository::kNamespace, key.c_str());
+      if (!value.empty()) result.preferences.quick_actions[i] = value;
+    }
+  }
   return result;
 }
 
@@ -63,10 +70,30 @@ ManagerPreferencesSaveResult ManagerPreferencesRepository::save(const ManagerPre
     }
     return result;
   }
-  // Persist overlay keys last. The overlay repository has its own rollback;
-  // keeping it last means a failure here leaves the UI flags already restored.
+  std::vector<std::pair<std::string, std::string>> global_written;
+  if (global_) {
+    for (std::size_t i = 0; i < preferences.quick_actions.size(); ++i) {
+      const std::string key = "quick_action_" + std::to_string(i + 1);
+      const std::string previous = global_->read(SessionModelRepository::kNamespace, key.c_str());
+      if (previous == preferences.quick_actions[i]) continue;
+      if (!global_->write(SessionModelRepository::kNamespace, key.c_str(), preferences.quick_actions[i])) {
+        result.error = "Could not persist all Manager quick actions.";
+        for (auto it = global_written.rbegin(); it != global_written.rend(); ++it)
+          global_->write(SessionModelRepository::kNamespace, it->first.c_str(), it->second);
+        for (std::size_t i = written_count; i > 0; --i) {
+          const auto& entry = written[i - 1];
+          store_.write(SessionModelRepository::kNamespace, entry.first.c_str(), entry.second);
+        }
+        return result;
+      }
+      global_written.emplace_back(key, previous);
+    }
+  }
+  // Persist overlay keys last; its repository has its own rollback.
   const auto overlay_saved = overlays.save(preferences.overlay);
   if (!overlay_saved) {
+    for (auto it = global_written.rbegin(); it != global_written.rend(); ++it)
+      global_->write(SessionModelRepository::kNamespace, it->first.c_str(), it->second);
     for (std::size_t i = written_count; i > 0; --i) {
       const auto& entry = written[i - 1];
       store_.write(SessionModelRepository::kNamespace, entry.first.c_str(), entry.second);
@@ -74,7 +101,7 @@ ManagerPreferencesSaveResult ManagerPreferencesRepository::save(const ManagerPre
     result.error = overlay_saved.error;
     return result;
   }
-  result.changed = overlay_saved.changed || written_count != 0;
+  result.changed = overlay_saved.changed || written_count != 0 || !global_written.empty();
   return result;
 }
 

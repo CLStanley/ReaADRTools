@@ -41,16 +41,25 @@ struct ManagerPreferencesSaveResult {
   explicit operator bool() const { return error.empty(); }
 };
 
+class GlobalStateStore {
+public:
+  virtual ~GlobalStateStore() = default;
+  virtual std::string read(const char* name_space, const char* key) const = 0;
+  virtual bool write(const char* name_space, const char* key, const std::string& value) = 0;
+};
+
 // Persists project-scoped Manager UI flags alongside the existing overlay
 // repository. Quick-action slots remain global REAPER extstate by design.
 class ManagerPreferencesRepository {
 public:
-  explicit ManagerPreferencesRepository(ProjectStateStore& store) : store_(store) {}
+  explicit ManagerPreferencesRepository(ProjectStateStore& store, GlobalStateStore* global = nullptr)
+    : store_(store), global_(global) {}
   ManagerPreferencesLoadResult load() const;
   ManagerPreferencesSaveResult save(const ManagerPreferences& preferences);
 
 private:
   ProjectStateStore& store_;
+  GlobalStateStore* global_ = nullptr;
 };
 
 // Apply one validated Manager preference update without mutating the input.
