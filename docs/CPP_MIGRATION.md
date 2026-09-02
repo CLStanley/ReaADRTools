@@ -190,6 +190,9 @@ safe launch-tab normalization for invalid or stale requests.
 The Preferences contract also publishes the 21 established overlay and UI
 controls with stable keys, labels, tab ownership, and control types for the
 native renderer.
+The Cue Manager UI contract now likewise publishes its eight table columns
+and nine action-bar commands, including editability and the Lua help/tool-tip
+copy used by the visual workflow.
 The extension now exposes a native refresh action that binds current REAPER
 selection, frame rate, project state, and FX APIs to that coordinator. The
 legacy Lua action remains registered for compatibility while broader command

@@ -1,0 +1,24 @@
+#pragma once
+
+#include <string>
+#include <vector>
+
+namespace reaadr::core {
+
+struct CueManagerColumn {
+  std::string key;
+  std::string label;
+  int width = 0;
+  bool editable = false;
+};
+
+struct CueManagerAction {
+  std::string key;
+  std::string label;
+  std::string hint;
+};
+
+const std::vector<CueManagerColumn>& cue_manager_columns();
+const std::vector<CueManagerAction>& cue_manager_actions();
+
+} // namespace reaadr::core

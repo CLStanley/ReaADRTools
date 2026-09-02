@@ -13,6 +13,7 @@
 #include "reaadr_core/manager_preferences.hpp"
 #include "reaadr_core/manager_view_model.hpp"
 #include "reaadr_core/manager_navigation.hpp"
+#include "reaadr_core/cue_manager_ui_contract.hpp"
 #include "reaadr_core/region_timing_sync.hpp"
 #include "reaadr_core/record_arm.hpp"
 #include "reaadr_core/recording_setup.hpp"
@@ -2712,6 +2713,17 @@ void test_manager_navigation()
         "native Manager navigation mirrors Lua module order and safe launch tabs");
 }
 
+void test_cue_manager_ui_contract()
+{
+  const auto& columns = reaadr::core::cue_manager_columns();
+  const auto& actions = reaadr::core::cue_manager_actions();
+  check(columns.size() == 8 && columns[0].label == "Cue" && columns[4].key == "status" &&
+          columns[4].editable && columns[7].label == "Notes" && actions.size() == 9 &&
+          actions[0].key == "jump" && actions[3].label == "Record Current Cue" &&
+          actions.back().key == "info",
+        "native Cue Manager contract mirrors the Lua table columns and action bar");
+}
+
 void test_overlay_application_service()
 {
   FakeProjectStateStore store;
@@ -3451,6 +3463,7 @@ int main()
   test_manager_preferences();
   test_manager_view_model();
   test_manager_navigation();
+  test_cue_manager_ui_contract();
   test_overlay_application_service();
   test_cue_cleanup_plan();
   test_cue_manager_model();
