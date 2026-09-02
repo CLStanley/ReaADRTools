@@ -1344,13 +1344,6 @@ bool load(reaper_plugin_info_t* plugin)
     return false;
   }
 
-  if (AddCustomizableMenu) {
-    // NULL selects REAPER's main actions keyboard section, which is required
-    // for this custom menu to be inserted into the top-level menu bar.
-    AddCustomizableMenu(kReaADRMenuId, kReaADRMenuId, nullptr, true);
-  } else {
-    log_line("AddCustomizableMenu API unavailable; actions will register without the top-level menu.");
-  }
   plugin->Register("API_ReaADR_DetectDialogueSegments", reinterpret_cast<void*>(detect_dialogue_segments));
   plugin->Register("APIdef_ReaADR_DetectDialogueSegments", reinterpret_cast<void*>(const_cast<char*>(kDetectDialogueSegmentsDef)));
   plugin->Register("API_ReaADR_ReadXlsxAsTsv", reinterpret_cast<void*>(read_xlsx_as_tsv));
@@ -1361,7 +1354,13 @@ bool load(reaper_plugin_info_t* plugin)
   register_scripts();
   load_menu_functions();
   if (AddCustomizableMenu) {
+    // Register after script actions so REAPER does not rebuild the main menu
+    // and discard this custom top-level entry during action registration.
+    const bool added = AddCustomizableMenu(kReaADRMenuId, kReaADRMenuId, nullptr, true);
+    log_line(std::string("AddCustomizableMenu result: ") + (added ? "success" : "failure"));
     plugin->Register("hookcustommenu", reinterpret_cast<void*>(hook_custom_menu));
+  } else {
+    log_line("AddCustomizableMenu API unavailable; actions will register without the top-level menu.");
   }
   return true;
 }
