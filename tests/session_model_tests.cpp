@@ -2638,9 +2638,11 @@ void test_overlay_settings_and_eel()
 void test_manager_preferences()
 {
   const auto& fields = reaadr::core::manager_preference_fields();
+  const auto& choices = reaadr::core::manager_quick_action_choices();
   check(fields.size() == 21 && fields.front().tab == "overlay" &&
           fields.back().key == "cue_manager_auto_dock" &&
-          fields.back().type == reaadr::core::ManagerPreferenceFieldType::checkbox,
+          fields.back().type == reaadr::core::ManagerPreferenceFieldType::checkbox &&
+          choices.size() == 8 && choices[2] == "record_cue",
         "native Manager Preferences exposes the established control catalog");
   reaadr::core::ManagerPreferences preferences;
   check(preferences.quick_actions[0] == "import" && preferences.tooltips &&
@@ -2655,6 +2657,8 @@ void test_manager_preferences()
   updated = reaadr::core::update_manager_preferences(preferences, "quick_action_2", "refresh_overlay");
   check(updated && updated.changed && updated.preferences.quick_actions[1] == "refresh_overlay",
         "native Manager Preferences updates numbered quick-action slots");
+  check(!reaadr::core::update_manager_preferences(preferences, "quick_action_2", "unknown_action"),
+        "native Manager Preferences rejects unsupported quick actions");
   updated = reaadr::core::update_manager_preferences(preferences, "cue_manager_auto_dock", "1");
   check(updated && updated.changed && updated.preferences.cue_manager_auto_dock,
         "native Manager Preferences updates navigation and docking toggles");

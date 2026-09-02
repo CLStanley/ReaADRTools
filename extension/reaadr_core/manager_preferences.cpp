@@ -47,6 +47,15 @@ const std::vector<ManagerPreferenceField>& manager_preference_fields()
   return fields;
 }
 
+const std::vector<std::string>& manager_quick_action_choices()
+{
+  static const std::vector<std::string> choices = {
+    "import", "cue_manager", "record_cue", "export_reports",
+    "overlay_settings", "character_filter", "refresh_overlay", "validate",
+  };
+  return choices;
+}
+
 ManagerPreferencesLoadResult ManagerPreferencesRepository::load() const
 {
   ManagerPreferencesLoadResult result;
@@ -191,8 +200,12 @@ ManagerPreferencesResult update_manager_preferences(const ManagerPreferences& cu
     return result;
   }
   if (key.rfind("quick_action_", 0) == 0 && key.size() == 14 && key.back() >= '1' && key.back() <= '4') {
-    result.preferences.quick_actions[static_cast<std::size_t>(key.back() - '1')] = value;
-    result.changed = true;
+    bool known = false;
+    for (const auto& choice : manager_quick_action_choices()) if (choice == value) { known = true; break; }
+    if (!known) { result.error = "Unknown Manager quick action: " + value; return result; }
+    const std::size_t index = static_cast<std::size_t>(key.back() - '1');
+    result.changed = current.quick_actions[index] != value;
+    result.preferences.quick_actions[index] = value;
     return result;
   }
   bool* flag = nullptr;

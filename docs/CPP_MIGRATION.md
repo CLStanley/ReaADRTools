@@ -199,6 +199,8 @@ profile and distinguish custom combinations.
 The update API now edits every catalogued overlay field directly, normalizing
 colors and metadata lists and rejecting invalid or negative preroll values so
 native controls can commit changes without Lua-side validation.
+Quick-action updates now use the canonical eight-choice list from the Manager
+and reject unsupported values before they reach global extstate.
 The Cue Manager UI contract now likewise publishes its eight table columns
 and nine action-bar commands, including editability and the Lua help/tool-tip
 copy used by the visual workflow.

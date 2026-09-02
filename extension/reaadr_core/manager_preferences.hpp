@@ -14,6 +14,7 @@ struct ManagerPreferenceField {
 };
 
 const std::vector<ManagerPreferenceField>& manager_preference_fields();
+const std::vector<std::string>& manager_quick_action_choices();
 // Serializable state shared by the native Manager Preferences view and its
 // compatibility bridge; overlay values remain owned by OverlaySettings.
 struct ManagerPreferences {
