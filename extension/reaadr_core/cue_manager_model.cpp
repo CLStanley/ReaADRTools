@@ -4,6 +4,8 @@
 #include <utility>
 #include <algorithm>
 #include <cstdlib>
+#include <iomanip>
+#include <sstream>
 namespace reaadr::core {
 namespace { const std::string& field(const Fields& cue, const char* key) {
   const auto found = cue.find(key); static const std::string empty;
@@ -127,6 +129,16 @@ CueManagerEditResult edit_cue_manager_row(const SessionModel& model,
     result.error = "Cue end time must be after its start time.";
     return result;
   }
+  const auto canonical_time = [&](const std::string& value) {
+    if (value.empty()) return value;
+    const auto parsed = parse_timecode(value, frame_rate);
+    if (!parsed) return value;
+    std::ostringstream output;
+    output << std::setprecision(15) << *parsed.seconds;
+    return output.str();
+  };
+  const std::string start_value = canonical_time(options.start_time);
+  const std::string end_value = canonical_time(options.end_time);
   const std::pair<const char*, const std::string*> updates[] = {
     {"dialogue", &options.dialogue}, {"notes", &options.notes}, {"cue_type", &options.cue_type},
     {"status", &options.status}, {"start_time", &options.start_time},
@@ -135,8 +147,11 @@ CueManagerEditResult edit_cue_manager_row(const SessionModel& model,
   for (const auto& update : updates) {
     const char* key = update.first;
     if (std::string(update.first) == "cue_type" && cue.find("cue_type") == cue.end() && cue.find("type") != cue.end()) key = "type";
-    if (update.second->empty() || field(cue, key) == *update.second) continue;
-    cue[key] = *update.second;
+    const std::string* value = update.second;
+    if (std::string(update.first) == "start_time") value = &start_value;
+    else if (std::string(update.first) == "end_time") value = &end_value;
+    if (value->empty() || field(cue, key) == *value) continue;
+    cue[key] = *value;
     result.changed = true;
   }
   if (result.changed) {

@@ -238,6 +238,8 @@ matching Lua's invalid-input rejection while preserving legacy values.
 They also enforce a strictly positive cue duration before any model mutation.
 That invariant is evaluated on parsed numeric, MM:SS, and SMPTE timecode
 values rather than relying on string comparison.
+Accepted non-numeric timing edits are canonicalized to numeric seconds before
+being written, matching Lua's `update_cached_cue` representation.
 Sortable headers are validated against the native contract; unknown sort keys
 fall back safely to the established start-time ordering.
 Those catalogs are presentation constraints only; canonical cue edits retain

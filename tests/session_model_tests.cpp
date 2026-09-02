@@ -2904,6 +2904,11 @@ void test_cue_manager_model()
   check(!reaadr::core::edit_cue_manager_row(model,
     {"A1", "", "", "D", "Recorded", "00:00:02:00", "00:00:01:00"}),
         "native cue manager enforces duration for SMPTE edits");
+  const auto smpte_edit = reaadr::core::edit_cue_manager_row(model,
+    {"A1", "", "", "D", "Recorded", "00:00:03:00", "00:00:04:00"});
+  check(smpte_edit && smpte_edit.model.cues[0].at("start_time") == "3" &&
+          smpte_edit.model.cues[0].at("end_time") == "4",
+        "native cue manager canonicalizes accepted SMPTE edits to numeric seconds");
   FakeProjectStateStore store;
   reaadr::core::SessionModelRepository repository(store);
   check(repository.save(model), "native cue manager commit fixture saves its model");
