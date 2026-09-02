@@ -29,4 +29,18 @@ const std::vector<CueManagerAction>& cue_manager_actions()
   return actions;
 }
 
+const std::vector<std::string>& cue_manager_status_choices()
+{
+  static const std::vector<std::string> choices = {
+    "Not Recorded", "In Progress", "Recorded", "Needs Review", "Approved"};
+  return choices;
+}
+
+const std::vector<std::string>& cue_manager_type_choices()
+{
+  static const std::vector<std::string> choices = {
+    "Dialogue", "Reaction", "Effort", "Walla", "Crowd", "Announcement", "Narration", "Custom"};
+  return choices;
+}
+
 } // namespace reaadr::core

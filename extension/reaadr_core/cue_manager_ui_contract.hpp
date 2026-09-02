@@ -20,5 +20,7 @@ struct CueManagerAction {
 
 const std::vector<CueManagerColumn>& cue_manager_columns();
 const std::vector<CueManagerAction>& cue_manager_actions();
+const std::vector<std::string>& cue_manager_status_choices();
+const std::vector<std::string>& cue_manager_type_choices();
 
 } // namespace reaadr::core

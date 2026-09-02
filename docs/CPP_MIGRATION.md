@@ -221,6 +221,8 @@ and reject unsupported values before they reach global extstate.
 The Cue Manager UI contract now likewise publishes its eight table columns
 and nine action-bar commands, including editability and the Lua help/tool-tip
 copy used by the visual workflow.
+The native contract also publishes the exact five status and eight cue-type
+choices used by Lua's inline dropdown editors.
 The extension now exposes a native refresh action that binds current REAPER
 selection, frame rate, project state, and FX APIs to that coordinator. The
 legacy Lua action remains registered for compatibility while broader command

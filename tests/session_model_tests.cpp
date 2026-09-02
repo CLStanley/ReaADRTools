@@ -2753,10 +2753,13 @@ void test_cue_manager_ui_contract()
 {
   const auto& columns = reaadr::core::cue_manager_columns();
   const auto& actions = reaadr::core::cue_manager_actions();
+  const auto& statuses = reaadr::core::cue_manager_status_choices();
+  const auto& types = reaadr::core::cue_manager_type_choices();
   check(columns.size() == 8 && columns[0].label == "Cue" && columns[4].key == "status" &&
           columns[4].editable && columns[7].label == "Notes" && actions.size() == 9 &&
           actions[0].key == "jump" && actions[3].label == "Record Current Cue" &&
-          actions.back().key == "info",
+          actions.back().key == "info" && statuses.size() == 5 &&
+          statuses[2] == "Recorded" && types.size() == 8 && types[2] == "Effort",
         "native Cue Manager contract mirrors the Lua table columns and action bar");
 }
 
