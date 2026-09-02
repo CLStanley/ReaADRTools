@@ -2697,6 +2697,9 @@ void test_manager_preferences()
   saved = global_repository.save(global_loaded.preferences);
   check(saved && saved.changed && global.values.at("ReaADRTools:quick_action_1") == "refresh_overlay",
         "native Manager Preferences persists global quick-action slots");
+  preferences.quick_actions[0] = "record_cue";
+  check(!repository.save(preferences),
+        "native Manager Preferences refuses to drop quick actions without a global adapter");
 }
 
 void test_manager_view_model()

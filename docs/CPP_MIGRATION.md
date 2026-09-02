@@ -177,6 +177,9 @@ writes, preserving the single-project-settings transaction boundary.
 The repository also accepts a separate global-state adapter for the four
 `quick_action_*` slots, preserving Lua's global (rather than project-local)
 quick-action behavior.
+Saving non-default quick-action slots now fails explicitly when no global
+state adapter is provided, preventing native callers from silently losing
+those settings.
 The REAPER boundary now supplies that adapter from `GetExtState` and
 `SetExtState`, while project settings continue through `GetProjExtState` and
 `SetProjExtState`.

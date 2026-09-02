@@ -93,6 +93,10 @@ ManagerPreferencesSaveResult ManagerPreferencesRepository::save(const ManagerPre
   ManagerPreferencesSaveResult result;
   const auto loaded = load();
   if (!loaded) { result.error = loaded.error; return result; }
+  if (!global_ && loaded.preferences.quick_actions != preferences.quick_actions) {
+    result.error = "A global state adapter is required to save Manager quick actions.";
+    return result;
+  }
   if (loaded.preferences == preferences) return result;
   OverlaySettingsRepository overlays(store_);
   std::array<std::pair<std::string, std::string>, kUiFlags.size()> written{};
