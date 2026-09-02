@@ -2681,6 +2681,14 @@ void test_cue_manager_model()
   check(view && view.rows.size() == 2 && view.rows[0].dialogue == "Hello" &&
           view.rows[1].selected && !view.rows[0].selected && view.rows[1].cue_type == "A",
         "native cue manager model preserves ordered display fields and selection");
+  const auto edited = reaadr::core::edit_cue_manager_row(model,
+    {"A1", "Updated", "D", "Recorded", "1.5", "2.5"});
+  check(edited && edited.changed && edited.model.cues[0].at("dialogue") == "Updated" &&
+          edited.model.cues[0].at("start_time") == "1.5" &&
+          edited.model.state.at("last_operation") == "edit_cue",
+        "native cue manager edit contract updates canonical row fields");
+  check(!reaadr::core::edit_cue_manager_row(model, {"missing", "x", "", "", "", ""}),
+        "native cue manager edit contract rejects unknown cue IDs");
   model.session.clear();
   check(!reaadr::core::build_cue_manager_model(model),
         "native cue manager model rejects sessions without a canonical ID");

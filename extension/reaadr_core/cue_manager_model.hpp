@@ -22,6 +22,22 @@ struct CueManagerModel {
   std::string error;
   explicit operator bool() const { return error.empty(); }
 };
+struct CueManagerEditOptions {
+  std::string cue_key;
+  std::string dialogue;
+  std::string cue_type;
+  std::string status;
+  std::string start_time;
+  std::string end_time;
+};
+struct CueManagerEditResult {
+  SessionModel model;
+  bool changed = false;
+  std::string error;
+  explicit operator bool() const { return error.empty(); }
+};
 CueManagerModel build_cue_manager_model(const SessionModel& model,
                                         const std::string& selected_cue_key = {});
+CueManagerEditResult edit_cue_manager_row(const SessionModel& model,
+                                           const CueManagerEditOptions& options);
 }
