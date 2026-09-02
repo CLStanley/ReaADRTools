@@ -2732,6 +2732,10 @@ void test_manager_navigation()
           actions.size() == 16 && actions[0].module == "import" &&
           actions[4].key == "validate_session" && actions.back().module == "help",
         "native Manager navigation mirrors Lua module order and safe launch tabs");
+  check(reaadr::core::manager_action_is_native("validate_session") &&
+          reaadr::core::manager_action_is_native("refresh_overlay") &&
+          !reaadr::core::manager_action_is_native("import_cue_sheet"),
+        "native Manager action catalog distinguishes cut-over commands from Lua routes");
 }
 
 void test_cue_manager_ui_contract()

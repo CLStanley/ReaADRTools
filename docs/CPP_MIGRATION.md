@@ -193,6 +193,8 @@ safe launch-tab normalization for invalid or stale requests.
 The same navigation contract publishes all 16 tab actions and their
 user-facing hints, allowing native controls to route through existing C++
 services while the compatibility scripts remain available.
+The catalog also marks currently native command routes separately from
+actions still delegated to Lua, making incremental UI cutover explicit.
 The Preferences contract also publishes the 30 established overlay and UI
 controls with stable keys, labels, tab ownership, and control types for the
 native renderer.
