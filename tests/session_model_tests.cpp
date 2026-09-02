@@ -2469,6 +2469,15 @@ void test_overlay_refresh_adapter()
 
 void test_overlay_settings_and_eel()
 {
+  reaadr::core::OverlaySettings profile;
+  check(reaadr::core::apply_overlay_profile(profile, "actor") && profile.show_direction &&
+          !profile.show_cue_type && profile.bg_dialogue,
+        "native overlay profiles match the Manager Actor preset");
+  check(reaadr::core::apply_overlay_profile(profile, "minimal") && !profile.show_character &&
+          !profile.show_cue_timecode && !profile.show_status && profile.show_dialogue,
+        "native overlay profiles match the Manager Minimal preset");
+  check(!reaadr::core::apply_overlay_profile(profile, "unknown"),
+        "native overlay profiles reject unknown names");
   FakeProjectStateStore store;
   store.values["ReaADRTools:overlay.enabled"] = "no";
   store.values["ReaADRTools:overlay.show_metadata"] = "yes";

@@ -94,6 +94,25 @@ bool operator==(const OverlaySettings& left, const OverlaySettings& right)
     left.preroll_seconds == right.preroll_seconds;
 }
 
+bool apply_overlay_profile(OverlaySettings& settings, const std::string& profile)
+{
+  if (profile != "actor" && profile != "engineer" && profile != "studio" && profile != "minimal") return false;
+  settings.enabled = true;
+  settings.show_cue_id = true; settings.show_character = profile != "minimal";
+  settings.show_dialogue = true; settings.show_cue_timecode = profile != "minimal";
+  settings.show_project_timer = true; settings.show_visual_cue = true;
+  settings.show_direction = profile == "actor" || profile == "engineer";
+  settings.show_cue_type = profile == "engineer" || profile == "studio";
+  settings.show_streamer = true; settings.show_flash = profile != "minimal";
+  settings.show_status = profile != "minimal"; settings.show_metadata = profile == "engineer" || profile == "studio";
+  settings.bg_project_timer = profile == "engineer" || profile == "studio";
+  settings.bg_cue_id = false; settings.bg_character = false;
+  settings.bg_cue_timecode = profile == "engineer" || profile == "studio";
+  settings.bg_dialogue = true; settings.bg_direction = false; settings.bg_cue_type = false;
+  settings.bg_status = false; settings.bg_metadata = false;
+  return true;
+}
+
 OverlaySettingsLoadResult OverlaySettingsRepository::load() const
 {
   OverlaySettingsLoadResult result;

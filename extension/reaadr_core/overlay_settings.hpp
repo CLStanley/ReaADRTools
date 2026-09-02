@@ -45,6 +45,9 @@ inline bool operator!=(const OverlaySettings& left, const OverlaySettings& right
   return !(left == right);
 }
 
+// Applies the exact Manager profile presets to a settings value.
+bool apply_overlay_profile(OverlaySettings& settings, const std::string& profile);
+
 struct OverlaySettingsLoadResult {
   OverlaySettings settings;
   std::string error;
