@@ -31,6 +31,7 @@ CORE_SOURCES := reaadr_core/session_model.cpp reaadr_core/model_repository.cpp r
 	reaadr_core/recording_setup.cpp reaadr_core/recording_transport.cpp reaadr_core/cue_status.cpp \
 	reaadr_core/recording_preferences.cpp reaadr_core/overlay_settings.cpp \
 	reaadr_core/overlay_eel.cpp reaadr_core/overlay_refresh.cpp
+UI_SOURCES := reaadr_ui.cpp
 CORE_HEADERS := reaadr_core/session_model.hpp reaadr_core/model_repository.hpp reaadr_core/domain_utils.hpp \
 	reaadr_core/cue_import.hpp reaadr_core/session_builder.hpp reaadr_core/session_mutation.hpp \
 	reaadr_core/session_commit.hpp reaadr_core/lane_assignment.hpp reaadr_core/render_plan.hpp \
@@ -66,7 +67,7 @@ REAPER_HEADERS := reaadr_reaper/project_state.hpp reaadr_reaper/project_transact
 	reaadr_reaper/cue_cleanup_application_service.hpp \
 	reaadr_reaper/character_filter_application_service.hpp \
 	reaadr_reaper/manager_view_application_service.hpp
-NATIVE_SOURCES := $(CORE_SOURCES) $(REAPER_SOURCES)
+NATIVE_SOURCES := $(CORE_SOURCES) $(REAPER_SOURCES) $(UI_SOURCES)
 NATIVE_HEADERS := $(CORE_HEADERS) $(REAPER_HEADERS)
 EXTENSION_SOURCES := reaper_reaadr.cpp $(NATIVE_SOURCES)
 

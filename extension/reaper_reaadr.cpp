@@ -80,6 +80,7 @@
 #include "reaadr_reaper/cue_navigation_service.hpp"
 #include "reaadr_reaper/project_state.hpp"
 #include "reaadr_reaper/project_transaction.hpp"
+#include "reaadr_ui.hpp"
 
 #ifndef _WIN32
 #include <dlfcn.h>
@@ -98,6 +99,7 @@ constexpr const char* kPreviousCueCommandName = "ReaADRPreviousCueNative";
 constexpr const char* kJumpToCueCommandName = "ReaADRJumpToCueNative";
 constexpr const char* kCueManagerCommandName = "ReaADRShowCueManagerNative";
 constexpr const char* kPreferencesCommandName = "ReaADRShowPreferencesNative";
+constexpr const char* kUiTestCommandName = "ReaADRNativeUiTest";
 
 reaper_plugin_info_t* g_plugin = nullptr;
 REAPER_PLUGIN_HINSTANCE g_instance = nullptr;
@@ -124,6 +126,8 @@ int g_jump_to_cue_command_id = 0;
 gaccel_register_t g_jump_to_cue_accel = {};
 int g_cue_manager_command_id = 0;
 gaccel_register_t g_cue_manager_accel = {};
+int g_ui_test_command_id = 0;
+gaccel_register_t g_ui_test_accel = {};
 bool g_native_command_hook_registered = false;
 const char kDetectDialogueSegmentsDef[] =
   "bool\0"
@@ -174,6 +178,7 @@ ScriptAction g_jump_to_cue_action = {"Jump To Cue (Native)", nullptr, 0};
 // Kept as one command/action internally so existing keyboard mappings remain
 // stable, while the menu exposes the complete native Manager shell directly.
 ScriptAction g_cue_manager_action = {"Open Manager (Native Preview)", nullptr, 0};
+ScriptAction g_ui_test_action = {"Native UI Test Window", nullptr, 0};
 
 std::vector<ScriptAction> g_legacy_actions = {
   {"Import Script", "Scripts/ReaADRTools/scripts/ReaADR_Import_Script.lua", 0},
@@ -638,6 +643,10 @@ bool hook_native_command(int command, int)
     run_native_cue_manager_action();
     return true;
   }
+  if (command == g_ui_test_command_id && command != 0) {
+    reaadr::ui::show_test_window();
+    return true;
+  }
   return false;
 }
 
@@ -713,6 +722,8 @@ bool register_native_actions()
     g_jump_to_cue_command_id, g_jump_to_cue_accel, g_jump_to_cue_action);
   register_secondary_action(kCueManagerCommandName, "ReaADR: Cue Manager (Native)",
     g_cue_manager_command_id, g_cue_manager_accel, g_cue_manager_action);
+  register_secondary_action(kUiTestCommandName, "ReaADR: Native UI Test Window",
+    g_ui_test_command_id, g_ui_test_accel, g_ui_test_action);
   log_line("Registered native action: " + std::string(kValidateSessionActionLabel));
   return true;
 }
@@ -759,6 +770,12 @@ void unregister_native_actions()
     g_cue_manager_command_id = 0;
     g_cue_manager_action.command_id = 0;
     g_cue_manager_accel = {};
+  }
+  if (g_ui_test_command_id) {
+    g_plugin->Register("-gaccel", reinterpret_cast<void*>(&g_ui_test_accel));
+    g_ui_test_command_id = 0;
+    g_ui_test_action.command_id = 0;
+    g_ui_test_accel = {};
   }
 }
 
@@ -1334,6 +1351,7 @@ bool load(reaper_plugin_info_t* plugin)
     log_line("REAPERAPI_LoadAPI failed.");
     return false;
   }
+  reaadr::ui::initialize(ShowMessageBox);
   if (!AddRemoveReaScript) {
     log_line("AddRemoveReaScript API unavailable; cannot register ReaADR scripts.");
     return false;
