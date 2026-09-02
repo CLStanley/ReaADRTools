@@ -393,9 +393,6 @@ void run_validate_session_action()
 
 void run_native_cue_manager_action()
 {
-  reaadr::reaper::show_native_manager_window();
-  return;
-
   reaadr::reaper::ProjectStateStore project_state(nullptr, {GetProjExtState, SetProjExtState});
   reaadr::core::SessionModelRepository repository(project_state);
   reaadr::core::CueManagerViewOptions view_options;
@@ -417,6 +414,9 @@ void run_native_cue_manager_action()
   reaadr::reaper::ManagerViewApplicationService service(project_state, &global_state);
   const auto loaded = service.load(view_options, "cues");
   if (!loaded) { ShowMessageBox(loaded.error.c_str(), "ReaADR Cue Manager", 0); return; }
+  reaadr::reaper::show_native_manager_window(&loaded.view);
+  return;
+
   const auto& view = loaded.view.cues;
   std::ostringstream summary;
   summary << "Session: " << view.session_id << "\n"

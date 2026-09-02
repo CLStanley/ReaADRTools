@@ -1,6 +1,7 @@
 #include "native_manager_window.hpp"
 
 #include "reaadr_core/manager_navigation.hpp"
+#include "reaadr_core/manager_view_model.hpp"
 #include <reaper_plugin.h>
 #include <string>
 
@@ -20,6 +21,8 @@ constexpr int kTabPreferences = 47015;
 constexpr int kTabHelp = 47016;
 constexpr int kClose = 47020;
 constexpr int kBody = 47021;
+constexpr int kCueList = 47022;
+const core::ManagerViewModel* g_view = nullptr;
 
 #ifndef _WIN32
 INT_PTR manager_dialog_proc(HWND hwnd, UINT message, WPARAM wparam, LPARAM)
@@ -28,6 +31,14 @@ INT_PTR manager_dialog_proc(HWND hwnd, UINT message, WPARAM wparam, LPARAM)
     SetDlgItemText(hwnd, kBody,
       "Select a Manager tab to configure ReaADR Tools.\r\n\r\n"
       "This native shell is driven by the C++ session and preference model.");
+    if (g_view) {
+      for (const auto& row : g_view->cues.rows) {
+        const std::string line = (row.selected ? "> " : "  ") + row.cue_key + "  " +
+          row.character + "  [" + row.status + "]  " + row.dialogue;
+        SendDlgItemMessage(hwnd, kCueList, LB_ADDSTRING, 0,
+          reinterpret_cast<LPARAM>(line.c_str()));
+      }
+    }
     return 1;
   }
   if (message == WM_COMMAND) {
@@ -65,15 +76,17 @@ BEGIN
   PUSHBUTTON "Overlay", kTabOverlay, 300, 34, 68, 24
   PUSHBUTTON "Preferences", kTabPreferences, 372, 34, 68, 24
   PUSHBUTTON "Help", kTabHelp, 444, 34, 64, 24
-  EDITTEXT kBody, 12, 70, 496, 170, ES_MULTILINE | ES_READONLY | WS_VSCROLL
+  LISTBOX kCueList, 12, 70, 496, 170, LBS_NOINTEGRALHEIGHT | WS_VSCROLL | WS_BORDER
+  EDITTEXT kBody, 12, 245, 400, 42, ES_MULTILINE | ES_READONLY
   DEFPUSHBUTTON "Close", kClose, 430, 262, 78, 24
 END
 SWELL_DEFINE_DIALOG_RESOURCE_END2(kManagerDialog)
 #endif
 }
 
-void show_native_manager_window()
+void show_native_manager_window(const core::ManagerViewModel* view)
 {
+  g_view = view;
 #ifndef _WIN32
   DialogBoxParam(nullptr, MAKEINTRESOURCE(kManagerDialog), nullptr,
     manager_dialog_proc, 0);
@@ -83,6 +96,7 @@ void show_native_manager_window()
   ShowMessageBox("The native Manager UI resource is not available in this build.",
     "ReaADR Tools Manager", 0);
 #endif
+  g_view = nullptr;
 }
 
 } // namespace reaadr::reaper
