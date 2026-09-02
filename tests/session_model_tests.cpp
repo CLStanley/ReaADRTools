@@ -2514,6 +2514,8 @@ void test_overlay_settings_and_eel()
         "native overlay profiles match the Manager Minimal preset");
   check(!reaadr::core::apply_overlay_profile(profile, "unknown"),
         "native overlay profiles reject unknown names");
+  check(reaadr::core::detect_overlay_profile(profile).empty() == false,
+        "native overlay preferences detect the active preset");
   check(reaadr::core::normalize_overlay_text_color("YELLOW") == "yellow" &&
           reaadr::core::normalize_overlay_text_color("blue") == "white" &&
           reaadr::core::normalize_overlay_metadata_fields(" PGID, , Custom ") ==

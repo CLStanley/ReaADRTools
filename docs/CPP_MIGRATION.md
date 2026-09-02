@@ -193,6 +193,9 @@ services while the compatibility scripts remain available.
 The Preferences contract also publishes the 21 established overlay and UI
 controls with stable keys, labels, tab ownership, and control types for the
 native renderer.
+Overlay settings also expose deterministic preset detection so the native
+Preferences view can select the matching Actor, Engineer, Studio, or Minimal
+profile and distinguish custom combinations.
 The Cue Manager UI contract now likewise publishes its eight table columns
 and nine action-bar commands, including editability and the Lua help/tool-tip
 copy used by the visual workflow.

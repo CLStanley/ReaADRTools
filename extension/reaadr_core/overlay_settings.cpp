@@ -113,6 +113,22 @@ bool apply_overlay_profile(OverlaySettings& settings, const std::string& profile
   return true;
 }
 
+std::string detect_overlay_profile(const OverlaySettings& settings)
+{
+  for (const char* profile : {"actor", "engineer", "studio", "minimal"}) {
+    OverlaySettings candidate = settings;
+    apply_overlay_profile(candidate, profile);
+    // Profile application intentionally leaves style text/metadata/timing
+    // untouched, so compare only the visual element/background fields.
+    const OverlaySettings original = settings;
+    candidate.text_color = original.text_color;
+    candidate.metadata_fields = original.metadata_fields;
+    candidate.preroll_seconds = original.preroll_seconds;
+    if (candidate == original) return profile;
+  }
+  return {};
+}
+
 std::string normalize_overlay_metadata_fields(const std::string& value)
 {
   static const std::array<const char*, 6> defaults = {
