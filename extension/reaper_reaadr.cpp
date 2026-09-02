@@ -99,7 +99,7 @@ constexpr const char* kPreviousCueCommandName = "ReaADRPreviousCueNative";
 constexpr const char* kJumpToCueCommandName = "ReaADRJumpToCueNative";
 constexpr const char* kCueManagerCommandName = "ReaADRShowCueManagerNative";
 constexpr const char* kPreferencesCommandName = "ReaADRShowPreferencesNative";
-constexpr const char* kUiTestCommandName = "ReaADRNativeUiTest";
+constexpr const char* kUiTestCommandName = "ReaADRNativeUiTestWindowV2";
 
 reaper_plugin_info_t* g_plugin = nullptr;
 REAPER_PLUGIN_HINSTANCE g_instance = nullptr;
@@ -178,7 +178,7 @@ ScriptAction g_jump_to_cue_action = {"Jump To Cue (Native)", nullptr, 0};
 // Kept as one command/action internally so existing keyboard mappings remain
 // stable, while the menu exposes the complete native Manager shell directly.
 ScriptAction g_cue_manager_action = {"Open Manager (Native Preview)", nullptr, 0};
-ScriptAction g_ui_test_action = {"Native UI Test Window", nullptr, 0};
+ScriptAction g_ui_test_action = {"Native UI Test Window (C++)", nullptr, 0};
 
 std::vector<ScriptAction> g_legacy_actions = {
   {"Import Script", "Scripts/ReaADRTools/scripts/ReaADR_Import_Script.lua", 0},
@@ -724,6 +724,7 @@ bool register_native_actions()
     g_cue_manager_command_id, g_cue_manager_accel, g_cue_manager_action);
   register_secondary_action(kUiTestCommandName, "ReaADR: Native UI Test Window",
     g_ui_test_command_id, g_ui_test_accel, g_ui_test_action);
+  log_line("Registered native UI test command_id=" + std::to_string(g_ui_test_command_id));
   log_line("Registered native action: " + std::string(kValidateSessionActionLabel));
   return true;
 }
