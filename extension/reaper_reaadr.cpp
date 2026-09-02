@@ -72,6 +72,7 @@
 #include "reaadr_core/session_model.hpp"
 #include "reaadr_core/model_repository.hpp"
 #include "reaadr_core/cue_status.hpp"
+#include "reaadr_core/cue_manager_model.hpp"
 #include "reaadr_reaper/overlay_application_service.hpp"
 #include "reaadr_reaper/overlay_refresh_adapter.hpp"
 #include "reaadr_reaper/cue_navigation_service.hpp"
@@ -399,18 +400,29 @@ void run_native_cue_manager_action()
     ShowMessageBox(reaadr::core::session_load_error_message(loaded), "ReaADR Cue Manager", 0);
     return;
   }
+  reaadr::core::CueManagerViewOptions view_options;
+  if (GetUserInputs) {
+    std::array<char, 1024> filter_input = {};
+    if (GetUserInputs("ReaADR Cue Manager: Filter", 3, "Search,Character,Status",
+                      filter_input.data(), filter_input.size())) {
+      char* first = std::strchr(filter_input.data(), ',');
+      char* second = first ? std::strchr(first + 1, ',') : nullptr;
+      if (first && second) {
+        *first = '\0'; *second = '\0';
+        view_options.query = filter_input.data();
+        view_options.character = first + 1;
+        view_options.status = second + 1;
+      }
+    }
+  }
+  const auto view = reaadr::core::build_cue_manager_view(loaded.model, view_options);
+  if (!view) { ShowMessageBox(view.error.c_str(), "ReaADR Cue Manager", 0); return; }
   std::ostringstream summary;
-  summary << "Session: " << loaded.model.session_id() << "\n"
-          << "Characters: " << loaded.model.characters.size() << "\n"
-          << "Cues: " << loaded.model.cues.size() << "\n\n";
-  for (const auto& cue : loaded.model.cues) {
-    const auto id = cue.find("id");
-    const auto character = cue.find("character");
-    const auto status = cue.find("status");
-    summary << (id == cue.end() ? "?" : id->second) << "  "
-            << (character == cue.end() ? "" : character->second);
-    if (status != cue.end() && !status->second.empty()) summary << "  [" << status->second << "]";
-    summary << '\n';
+  summary << "Session: " << view.session_id << "\n"
+          << "Showing " << view.rows.size() << " of " << loaded.model.cues.size() << " cues\n\n";
+  for (const auto& row : view.rows) {
+    summary << (row.selected ? "> " : "  ") << row.cue_key << "  " << row.character
+            << "  [" << row.status << "]  " << row.dialogue << "\n";
   }
   ShowMessageBox(summary.str().c_str(), "ReaADR Cue Manager (Native)", 0);
   if (!GetUserInputs) return;
