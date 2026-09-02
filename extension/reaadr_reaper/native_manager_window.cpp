@@ -5,6 +5,7 @@
 #include "reaadr_core/manager_preferences.hpp"
 #include <reaper_plugin.h>
 #include <string>
+#include <vector>
 
 #ifndef _WIN32
 #include <swell/swell-dlggen.h>
@@ -29,6 +30,7 @@ constexpr int kTooltips = 47025;
 constexpr int kNavigationWrap = 47026;
 const core::ManagerViewModel* g_view = nullptr;
 NativeManagerWindowContext g_context;
+std::vector<std::string> g_cue_keys;
 
 #ifndef _WIN32
 INT_PTR manager_dialog_proc(HWND hwnd, UINT message, WPARAM wparam, LPARAM)
@@ -50,17 +52,32 @@ INT_PTR manager_dialog_proc(HWND hwnd, UINT message, WPARAM wparam, LPARAM)
       CheckDlgButton(hwnd, kTooltips, g_view->preferences.tooltips ? BST_CHECKED : BST_UNCHECKED);
       CheckDlgButton(hwnd, kNavigationWrap, g_view->preferences.navigation_wrap ? BST_CHECKED : BST_UNCHECKED);
       for (const auto& row : g_view->cues.rows) {
+        g_cue_keys.push_back(row.cue_key);
         const std::string line = (row.selected ? "> " : "  ") + row.cue_key + "  " +
           row.character + "  [" + row.status + "]  " + row.dialogue;
         SendDlgItemMessage(hwnd, kCueList, LB_ADDSTRING, 0,
           reinterpret_cast<LPARAM>(line.c_str()));
       }
+      std::size_t selected_index = g_cue_keys.size();
+      for (std::size_t i = 0; i < g_cue_keys.size(); ++i)
+        if (g_cue_keys[i] == g_view->cues.selected_cue_key) { selected_index = i; break; }
+      if (selected_index < g_cue_keys.size())
+        SendDlgItemMessage(hwnd, kCueList, LB_SETCURSEL,
+          static_cast<WPARAM>(selected_index), 0);
     }
     SetDlgItemText(hwnd, kBody, intro.c_str());
     return 1;
   }
   if (message == WM_COMMAND) {
     const int command = LOWORD(wparam);
+    if (command == kCueList && HIWORD(wparam) == LBN_SELCHANGE &&
+        g_context.project_state) {
+      const LRESULT selected = SendDlgItemMessage(hwnd, kCueList, LB_GETCURSEL, 0, 0);
+      if (selected >= 0 && static_cast<std::size_t>(selected) < g_cue_keys.size())
+        g_context.project_state->write(core::SessionModelRepository::kNamespace,
+          "manager_selected_cue_key", g_cue_keys[static_cast<std::size_t>(selected)]);
+      return 1;
+    }
     if (g_view && g_context.project_state &&
         (command == kRememberLayout || command == kHoverPreview ||
          command == kTooltips || command == kNavigationWrap)) {
@@ -129,6 +146,7 @@ void show_native_manager_window(const core::ManagerViewModel* view,
 {
   g_view = view;
   g_context = context;
+  g_cue_keys.clear();
 #ifndef _WIN32
   DialogBoxParam(nullptr, MAKEINTRESOURCE(kManagerDialog), nullptr,
     manager_dialog_proc, 0);
@@ -140,6 +158,7 @@ void show_native_manager_window(const core::ManagerViewModel* view,
 #endif
   g_view = nullptr;
   g_context = {};
+  g_cue_keys.clear();
 }
 
 } // namespace reaadr::reaper
