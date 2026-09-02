@@ -31,6 +31,7 @@ if not exist "%BUILD_DIR%" mkdir "%BUILD_DIR%"
 if not exist "%DIST_USERPLUGINS_DIR%" mkdir "%DIST_USERPLUGINS_DIR%"
 if not exist "%DIST_REAADR_DIR%\scripts" mkdir "%DIST_REAADR_DIR%\scripts"
 if not exist "%DIST_REAADR_DIR%\assets" mkdir "%DIST_REAADR_DIR%\assets"
+if not exist "%DIST_REAADR_DIR%\scripts" mkdir "%DIST_REAADR_DIR%\scripts"
 
 pushd "%~dp0"
 cl /nologo /EHsc /O2 /LD /std:c++17 ^
@@ -86,6 +87,7 @@ if errorlevel 1 (
 
 copy /Y "%BUILD_DIR%\%TARGET%" "%DIST_USERPLUGINS_DIR%\%TARGET%" >nul
 xcopy "%ROOT%\assets\*" "%DIST_REAADR_DIR%\assets\" /Y >nul
+xcopy "%ROOT%\scripts\*.lua" "%DIST_REAADR_DIR%\scripts\" /Y >nul
 popd
 
 echo Built "%DIST_USERPLUGINS_DIR%\%TARGET%"
