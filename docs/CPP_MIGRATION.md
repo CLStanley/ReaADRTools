@@ -223,6 +223,9 @@ and nine action-bar commands, including editability and the Lua help/tool-tip
 copy used by the visual workflow.
 The native contract also publishes the exact five status and eight cue-type
 choices used by Lua's inline dropdown editors.
+Those catalogs are presentation constraints only; canonical cue edits retain
+legacy custom status/type values so existing sessions remain writable during
+the transition.
 The extension now exposes a native refresh action that binds current REAPER
 selection, frame rate, project state, and FX APIs to that coordinator. The
 legacy Lua action remains registered for compatibility while broader command

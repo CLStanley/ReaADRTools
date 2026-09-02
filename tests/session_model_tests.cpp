@@ -2869,6 +2869,7 @@ void test_cue_manager_model()
     {"A1", "", "Walla", "", "", ""});
   check(canonical_edit && canonical_edit.model.cues[0].at("cue_type") == "Walla",
         "native cue manager writes canonical cue_type edits");
+  model.cues[0].erase("cue_type");
   const auto filtered = reaadr::core::build_cue_manager_view(model, {"hello", "Actor", "", "A1"});
   check(filtered && filtered.rows.size() == 1 && filtered.rows[0].cue_key == "A1" &&
           filtered.rows[0].selected,
