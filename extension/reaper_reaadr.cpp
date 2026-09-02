@@ -71,6 +71,7 @@
 
 #include "reaadr_core/session_model.hpp"
 #include "reaadr_core/model_repository.hpp"
+#include "reaadr_core/cue_status.hpp"
 #include "reaadr_reaper/overlay_application_service.hpp"
 #include "reaadr_reaper/overlay_refresh_adapter.hpp"
 #include "reaadr_reaper/cue_navigation_service.hpp"
@@ -412,6 +413,21 @@ void run_native_cue_manager_action()
     summary << '\n';
   }
   ShowMessageBox(summary.str().c_str(), "ReaADR Cue Manager (Native)", 0);
+  if (!GetUserInputs) return;
+  std::array<char, 1024> input = {};
+  if (!GetUserInputs("ReaADR Cue Manager: Set Status", 2, "Cue ID,Status", input.data(), input.size())) return;
+  char* comma = std::strchr(input.data(), ',');
+  if (!comma || comma == input.data() || *(comma + 1) == '\0') {
+    ShowMessageBox("Enter a cue ID and status separated by a comma.", "ReaADR Cue Manager", 0);
+    return;
+  }
+  *comma = '\0';
+  reaadr::core::CueStatusCommitOptions options;
+  options.update.cue_key = input.data();
+  options.update.status = comma + 1;
+  options.utc_timestamp = "";
+  const auto updated = reaadr::core::commit_cue_status(repository, options);
+  if (!updated) ShowMessageBox(updated.error.c_str(), "ReaADR Cue Manager", 0);
 }
 
 void run_native_preferences_action()
