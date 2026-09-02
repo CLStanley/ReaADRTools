@@ -28,6 +28,7 @@ constexpr int kRememberLayout = 47023;
 constexpr int kHoverPreview = 47024;
 constexpr int kTooltips = 47025;
 constexpr int kNavigationWrap = 47026;
+constexpr int kCueHeader = 47027;
 const core::ManagerViewModel* g_view = nullptr;
 NativeManagerWindowContext g_context;
 std::vector<std::string> g_cue_keys;
@@ -40,6 +41,7 @@ INT_PTR manager_dialog_proc(HWND hwnd, UINT message, WPARAM wparam, LPARAM)
     ShowWindow(GetDlgItem(hwnd, kHoverPreview), SW_HIDE);
     ShowWindow(GetDlgItem(hwnd, kTooltips), SW_HIDE);
     ShowWindow(GetDlgItem(hwnd, kNavigationWrap), SW_HIDE);
+    ShowWindow(GetDlgItem(hwnd, kCueHeader), SW_HIDE);
     std::string intro = "Select a Manager tab to configure ReaADR Tools.\r\n\r\n"
       "This native shell is driven by the C++ session and preference model.";
     if (g_view) {
@@ -105,12 +107,16 @@ INT_PTR manager_dialog_proc(HWND hwnd, UINT message, WPARAM wparam, LPARAM)
     }
     if (title) {
       ShowWindow(GetDlgItem(hwnd, kCueList), command == kTabCues ? SW_SHOW : SW_HIDE);
+      ShowWindow(GetDlgItem(hwnd, kCueHeader), command == kTabCues ? SW_SHOW : SW_HIDE);
       ShowWindow(GetDlgItem(hwnd, kRememberLayout), command == kTabPreferences ? SW_SHOW : SW_HIDE);
       ShowWindow(GetDlgItem(hwnd, kHoverPreview), command == kTabPreferences ? SW_SHOW : SW_HIDE);
       ShowWindow(GetDlgItem(hwnd, kTooltips), command == kTabPreferences ? SW_SHOW : SW_HIDE);
       ShowWindow(GetDlgItem(hwnd, kNavigationWrap), command == kTabPreferences ? SW_SHOW : SW_HIDE);
-      const std::string body = std::string(title) +
+      std::string body = std::string(title) +
         "\r\n\r\nNative Manager view selected. Controls are backed by the C++ model.";
+      if (command == kTabCues && g_view)
+        body = "Cue Manager\r\nShowing " + std::to_string(g_view->cues.rows.size()) +
+          " of " + std::to_string(g_view->total_cues) + " cues.";
       SetDlgItemText(hwnd, kBody, body.c_str());
       return 1;
     }
@@ -130,6 +136,7 @@ BEGIN
   PUSHBUTTON "Preferences", kTabPreferences, 372, 34, 68, 24
   PUSHBUTTON "Help", kTabHelp, 444, 34, 64, 24
   LISTBOX kCueList, 12, 70, 496, 170, LBS_NOINTEGRALHEIGHT | WS_VSCROLL | WS_BORDER
+  LTEXT "Cue        Character                 Status        Dialogue", kCueHeader, 14, 58, 480, 10
   EDITTEXT kBody, 12, 245, 400, 42, ES_MULTILINE | ES_READONLY
   CHECKBOX "Remember Manager window layout per project", kRememberLayout, 12, 72, 300, 16
   CHECKBOX "Enable hover previews", kHoverPreview, 12, 94, 220, 16
