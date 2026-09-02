@@ -2698,8 +2698,9 @@ void test_manager_view_model()
 void test_manager_navigation()
 {
   const auto& modules = reaadr::core::manager_modules();
-  check(modules.size() == 6 && modules[0].key == "import" &&
-          modules[1].key == "cues" && modules[3].title == "Preferences" &&
+  check(modules.size() == 7 && modules[0].key == "import" &&
+          modules[1].key == "cues" && modules[2].key == "session" &&
+          modules[3].key == "reports" && modules[5].title == "Preferences" &&
           reaadr::core::is_manager_tab("help") &&
           reaadr::core::normalize_manager_tab("overlay") == "overlay" &&
           reaadr::core::normalize_manager_tab("missing") == "import",

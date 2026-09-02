@@ -6,8 +6,9 @@ const std::vector<ManagerModule>& manager_modules()
 {
   static const std::vector<ManagerModule> modules = {
     {"import", "Import"}, {"cues", "Cue Management"},
+    {"session", "Session Tools"}, {"reports", "Reports"},
     {"overlay", "Video Overlays"}, {"preferences", "Preferences"},
-    {"help", "Help"}, {"quick_actions", "Quick Actions"},
+    {"help", "Help"},
   };
   return modules;
 }

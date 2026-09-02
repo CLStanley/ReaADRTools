@@ -184,7 +184,8 @@ The native `ManagerViewModel` now composes this preference state with the
 canonical session name, revision, and filtered Cue Manager rows in one render
 payload, giving a future graphical view a consistent snapshot per frame.
 Native Manager navigation now exposes the established module order—Import,
-Cue Management, Video Overlays, Preferences, Help, and Quick Actions—with
+Cue Management, Session Tools, Reports, Video Overlays, Preferences, and
+Help—with
 safe launch-tab normalization for invalid or stale requests.
 The extension now exposes a native refresh action that binds current REAPER
 selection, frame rate, project state, and FX APIs to that coordinator. The
