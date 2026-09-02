@@ -207,6 +207,9 @@ Help—with
 safe launch-tab normalization for invalid or stale requests.
 The native layout contract now captures the established 1040x880 Manager
 window size, minimum bounds, and floating default as the SWELL shell baseline.
+Native Manager geometry persistence now uses the same project keys as Lua
+(`ui.window.manager.width`, `height`, `dock`, `x`, and `y`), with minimum-size
+clamping and restoration gated by the remember-layout preference.
 The same navigation contract publishes all 16 tab actions and their
 user-facing hints, allowing native controls to route through existing C++
 services while the compatibility scripts remain available.

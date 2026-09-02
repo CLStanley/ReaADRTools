@@ -2753,6 +2753,25 @@ void test_manager_navigation()
   check(layout.width == 1040 && layout.height == 880 && layout.min_width == 1040 &&
           layout.min_height == 880 && layout.dock == 0,
         "native Manager layout contract matches the established window defaults");
+
+  FakeProjectStateStore store;
+  store.values["ReaADRTools:ui.window.manager.width"] = "900";
+  store.values["ReaADRTools:ui.window.manager.height"] = "960";
+  store.values["ReaADRTools:ui.window.manager.dock"] = "3";
+  store.values["ReaADRTools:ui.window.manager.x"] = "120";
+  store.values["ReaADRTools:ui.window.manager.y"] = "240";
+  reaadr::core::ManagerWindowLayoutRepository repository(store);
+  const auto restored = repository.load(true);
+  check(restored && restored.layout.width == 1040 && restored.layout.height == 960 &&
+          restored.layout.dock == 3 && restored.layout.x == 120 && restored.layout.y == 240,
+        "native Manager restores Lua-compatible project window geometry");
+  auto saved_layout = restored.layout;
+  saved_layout.width = 1200;
+  saved_layout.height = 900;
+  check(repository.save(saved_layout) &&
+          store.values.at("ReaADRTools:ui.window.manager.width") == "1200" &&
+          store.values.at("ReaADRTools:ui.window.manager.height") == "900",
+        "native Manager persists project window geometry");
 }
 
 void test_cue_manager_ui_contract()
