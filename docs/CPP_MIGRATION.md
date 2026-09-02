@@ -177,6 +177,9 @@ writes, preserving the single-project-settings transaction boundary.
 The repository also accepts a separate global-state adapter for the four
 `quick_action_*` slots, preserving Lua's global (rather than project-local)
 quick-action behavior.
+The REAPER boundary now supplies that adapter from `GetExtState` and
+`SetExtState`, while project settings continue through `GetProjExtState` and
+`SetProjExtState`.
 The extension now exposes a native refresh action that binds current REAPER
 selection, frame rate, project state, and FX APIs to that coordinator. The
 legacy Lua action remains registered for compatibility while broader command

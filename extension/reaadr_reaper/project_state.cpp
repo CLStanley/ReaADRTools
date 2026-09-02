@@ -40,4 +40,18 @@ bool ProjectStateStore::write(const char* name_space, const char* key, const std
   return api_.set(project_, name_space, key, value.c_str()) >= 0;
 }
 
+std::string GlobalStateStore::read(const char* name_space, const char* key) const
+{
+  if (!api_.get) return {};
+  const char* value = api_.get(name_space, key);
+  return value ? std::string(value) : std::string();
+}
+
+bool GlobalStateStore::write(const char* name_space, const char* key, const std::string& value)
+{
+  if (!api_.set) return false;
+  api_.set(name_space, key, value.c_str(), true);
+  return true;
+}
+
 } // namespace reaadr::reaper

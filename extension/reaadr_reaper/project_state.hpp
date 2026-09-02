@@ -1,6 +1,7 @@
 #pragma once
 
 #include "reaadr_core/model_repository.hpp"
+#include "reaadr_core/manager_preferences.hpp"
 
 #include <cstddef>
 
@@ -13,6 +14,11 @@ namespace reaadr::reaper {
 struct ProjectStateApi {
   int (*get)(ReaProject*, const char*, const char*, char*, int) = nullptr;
   int (*set)(ReaProject*, const char*, const char*, const char*) = nullptr;
+};
+
+struct GlobalStateApi {
+  const char* (*get)(const char*, const char*) = nullptr;
+  void (*set)(const char*, const char*, const char*, bool) = nullptr;
 };
 
 class ProjectStateStore final : public core::ProjectStateStore {
@@ -30,6 +36,16 @@ private:
 
   ReaProject* project_ = nullptr;
   ProjectStateApi api_;
+};
+
+class GlobalStateStore final : public core::GlobalStateStore {
+public:
+  explicit GlobalStateStore(GlobalStateApi api) : api_(api) {}
+  std::string read(const char* name_space, const char* key) const override;
+  bool write(const char* name_space, const char* key, const std::string& value) override;
+
+private:
+  GlobalStateApi api_;
 };
 
 } // namespace reaadr::reaper

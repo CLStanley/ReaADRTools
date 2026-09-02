@@ -103,6 +103,8 @@ public:
 std::string project_state_value;
 bool project_state_exists = true;
 std::string project_state_written;
+std::string global_state_value;
+std::string global_state_written;
 
 int fake_get_project_state(ReaProject*, const char*, const char*, char* output, int output_size)
 {
@@ -117,6 +119,12 @@ int fake_set_project_state(ReaProject*, const char*, const char*, const char* va
 {
   project_state_written = value ? value : "";
   return static_cast<int>(project_state_written.size());
+}
+
+const char* fake_get_global_state(const char*, const char*) { return global_state_value.c_str(); }
+void fake_set_global_state(const char*, const char*, const char* value, bool)
+{
+  global_state_written = value ? value : "";
 }
 
 int navigation_play_state = 0;
@@ -1173,6 +1181,14 @@ void test_reaper_project_state_adapter()
   project_state_exists = false;
   check(store.read("ReaADRTools", "missing").error == reaadr::core::StateReadError::not_found,
         "REAPER extstate adapter reports missing values");
+  global_state_value = "cue_manager";
+  global_state_written.clear();
+  reaadr::reaper::GlobalStateStore global_store({fake_get_global_state, fake_set_global_state});
+  check(global_store.read("ReaADRTools", "quick_action_1") == "cue_manager",
+        "REAPER global extstate adapter reads quick-action values");
+  check(global_store.write("ReaADRTools", "quick_action_1", "refresh_overlay") &&
+          global_state_written == "refresh_overlay",
+        "REAPER global extstate adapter persists quick-action values");
 }
 
 void test_transaction_scopes()

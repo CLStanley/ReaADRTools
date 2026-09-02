@@ -24,6 +24,7 @@
 #define REAPERAPI_WANT_EnumProjectMarkers3
 #define REAPERAPI_WANT_PreventUIRefresh
 #define REAPERAPI_WANT_SetProjExtState
+#define REAPERAPI_WANT_SetExtState
 #define REAPERAPI_WANT_ShowMessageBox
 #define REAPERAPI_WANT_TimeMap_curFrameRate
 #define REAPERAPI_WANT_TrackFX_AddByName
