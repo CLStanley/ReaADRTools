@@ -26,6 +26,7 @@
 #include "reaadr_reaper/cue_cleanup_adapter.hpp"
 #include "reaadr_reaper/cue_cleanup_application_service.hpp"
 #include "reaadr_reaper/character_filter_application_service.hpp"
+#include "reaadr_core/cue_manager_model.hpp"
 #include "reaadr_reaper/cue_navigation_service.hpp"
 #include "reaadr_reaper/record_arm_adapter.hpp"
 #include "reaadr_reaper/recording_setup_adapter.hpp"
@@ -2668,6 +2669,23 @@ void test_cue_cleanup_plan()
         "cue cleanup fails closed on duplicate generated regions");
 }
 
+void test_cue_manager_model()
+{
+  reaadr::core::SessionModel model;
+  model.session["session_id"] = "manager";
+  model.cues = {
+    {{"id", "A1"}, {"character", "Actor"}, {"dialogue", "Hello"}, {"type", "D"}, {"status", "Pending"}, {"start_time", "1"}, {"end_time", "2"}},
+    {{"id", "B1"}, {"character", "Beta"}, {"dialogue", "Bye"}, {"type", "A"}, {"status", "Recorded"}, {"start_time", "3"}, {"end_time", "4"}},
+  };
+  const auto view = reaadr::core::build_cue_manager_model(model, "B1");
+  check(view && view.rows.size() == 2 && view.rows[0].dialogue == "Hello" &&
+          view.rows[1].selected && !view.rows[0].selected && view.rows[1].cue_type == "A",
+        "native cue manager model preserves ordered display fields and selection");
+  model.session.clear();
+  check(!reaadr::core::build_cue_manager_model(model),
+        "native cue manager model rejects sessions without a canonical ID");
+}
+
 void test_cue_cleanup_adapter()
 {
   render_adapter_probe = {};
@@ -3282,6 +3300,7 @@ int main()
   test_overlay_settings_and_eel();
   test_overlay_application_service();
   test_cue_cleanup_plan();
+  test_cue_manager_model();
   test_cue_cleanup_adapter();
   test_cue_cleanup_application_service();
   test_character_filter_application_service();

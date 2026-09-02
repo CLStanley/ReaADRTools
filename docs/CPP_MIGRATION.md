@@ -277,6 +277,8 @@ The initial target-architecture modules now include:
   create/update/remove planning for generated video overlays.
 - `extension/reaadr_core/cue_cleanup.*`: exact selected-character ownership
   planning for generated regions, cue audio, and cue-character tracks.
+- `extension/reaadr_core/cue_manager_model.*`: deterministic native UI row
+  projection of canonical cues, including display fields and selection state.
 - `extension/reaadr_reaper/project_state.*`: dynamically sized REAPER project
   extstate access.
 - `extension/reaadr_reaper/project_transaction.*`: nested-safe undo and UI
