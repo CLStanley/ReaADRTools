@@ -452,24 +452,70 @@ void run_native_preferences_action()
     ShowMessageBox(loaded.error.c_str(), "ReaADR Preferences", 0);
     return;
   }
-  std::array<char, 1024> input = {};
-  std::snprintf(input.data(), input.size(), "%d,%.3f", loaded.settings.enabled ? 1 : 0,
-                loaded.settings.preroll_seconds);
-  if (!GetUserInputs("ReaADR Preferences", 2, "Overlay enabled (0/1),Preroll seconds", input.data(), input.size())) return;
-  char* comma = std::strchr(input.data(), ',');
-  if (!comma) {
-    ShowMessageBox("Enter values as 0/1,seconds.", "ReaADR Preferences", 0);
-    return;
-  }
-  *comma = '\0';
+  using BoolField = std::pair<const char*, bool reaadr::core::OverlaySettings::*>;
+  const auto edit_booleans = [&](const char* title, const std::vector<BoolField>& fields) {
+    std::string labels;
+    std::string values;
+    for (std::size_t i = 0; i < fields.size(); ++i) {
+      if (i) { labels += ','; values += ','; }
+      labels += fields[i].first;
+      values += loaded.settings.*(fields[i].second) ? "1" : "0";
+    }
+    std::array<char, 4096> input = {};
+    std::snprintf(input.data(), input.size(), "%s", values.c_str());
+    if (!GetUserInputs(title, static_cast<int>(fields.size()), labels.c_str(), input.data(), input.size())) return false;
+    std::stringstream parser(input.data());
+    std::string value;
+    for (const BoolField& field : fields) {
+      if (!std::getline(parser, value, ',')) return false;
+      if (value != "0" && value != "1") return false;
+      loaded.settings.*(field.second) = value == "1";
+    }
+    return true;
+  };
+  if (!edit_booleans("ReaADR Preferences: Overlay Elements", {
+        {"Enabled", &reaadr::core::OverlaySettings::enabled},
+        {"Cue ID", &reaadr::core::OverlaySettings::show_cue_id},
+        {"Character", &reaadr::core::OverlaySettings::show_character},
+        {"Dialogue", &reaadr::core::OverlaySettings::show_dialogue},
+        {"Cue Timecode", &reaadr::core::OverlaySettings::show_cue_timecode},
+        {"Project Timer", &reaadr::core::OverlaySettings::show_project_timer},
+        {"Visual Cue", &reaadr::core::OverlaySettings::show_visual_cue},
+        {"Direction", &reaadr::core::OverlaySettings::show_direction},
+        {"Cue Type", &reaadr::core::OverlaySettings::show_cue_type},
+        {"Streamer", &reaadr::core::OverlaySettings::show_streamer},
+        {"Flash", &reaadr::core::OverlaySettings::show_flash},
+        {"Status", &reaadr::core::OverlaySettings::show_status},
+        {"Metadata", &reaadr::core::OverlaySettings::show_metadata},
+      })) return;
+  if (!edit_booleans("ReaADR Preferences: Overlay Backgrounds", {
+        {"Cue ID BG", &reaadr::core::OverlaySettings::bg_cue_id},
+        {"Character BG", &reaadr::core::OverlaySettings::bg_character},
+        {"Timecode BG", &reaadr::core::OverlaySettings::bg_cue_timecode},
+        {"Timer BG", &reaadr::core::OverlaySettings::bg_project_timer},
+        {"Dialogue BG", &reaadr::core::OverlaySettings::bg_dialogue},
+        {"Direction BG", &reaadr::core::OverlaySettings::bg_direction},
+        {"Cue Type BG", &reaadr::core::OverlaySettings::bg_cue_type},
+        {"Status BG", &reaadr::core::OverlaySettings::bg_status},
+        {"Metadata BG", &reaadr::core::OverlaySettings::bg_metadata},
+        {"Preroll Each Loop", &reaadr::core::OverlaySettings::include_preroll_each_loop},
+      })) return;
+  std::array<char, 4096> input = {};
+  std::snprintf(input.data(), input.size(), "%s,%s,%.3f", loaded.settings.text_color.c_str(),
+                loaded.settings.metadata_fields.c_str(), loaded.settings.preroll_seconds);
+  if (!GetUserInputs("ReaADR Preferences: Style and Timing", 3,
+                    "Text color,Metadata fields,Preroll seconds", input.data(), input.size())) return;
+  char* first = std::strchr(input.data(), ',');
+  char* second = first ? std::strchr(first + 1, ',') : nullptr;
+  if (!first || !second) { ShowMessageBox("Enter color,metadata fields,seconds.", "ReaADR Preferences", 0); return; }
+  *first = '\0'; *second = '\0';
   char* end = nullptr;
-  const long enabled = std::strtol(input.data(), &end, 10);
-  const double preroll = std::strtod(comma + 1, &end);
-  if ((enabled != 0 && enabled != 1) || !std::isfinite(preroll) || preroll < 0.0 || preroll > 60.0) {
-    ShowMessageBox("Enter enabled as 0 or 1 and preroll between 0 and 60 seconds.", "ReaADR Preferences", 0);
-    return;
+  const double preroll = std::strtod(second + 1, &end);
+  if (*input.data() == '\0' || !std::isfinite(preroll) || preroll < 0.0 || preroll > 60.0) {
+    ShowMessageBox("Enter a color and preroll between 0 and 60 seconds.", "ReaADR Preferences", 0); return;
   }
-  loaded.settings.enabled = enabled != 0;
+  loaded.settings.text_color = input.data();
+  loaded.settings.metadata_fields = first + 1;
   loaded.settings.preroll_seconds = preroll;
   const auto saved = settings.save(loaded.settings);
   if (!saved) ShowMessageBox(saved.error.c_str(), "ReaADR Preferences", 0);
