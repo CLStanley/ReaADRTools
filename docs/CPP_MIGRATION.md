@@ -231,6 +231,8 @@ for the Lua table's headers, including numeric timing comparisons.
 Cue Manager rows now carry the Notes column explicitly, with a compatibility
 fallback from legacy `direction` fields so the native table does not drop
 visual dialogue direction text.
+Notes are now editable through the native Cue Manager edit contract and are
+stored under the canonical `notes` field.
 Sortable headers are validated against the native contract; unknown sort keys
 fall back safely to the established start-time ordering.
 Those catalogs are presentation constraints only; canonical cue edits retain

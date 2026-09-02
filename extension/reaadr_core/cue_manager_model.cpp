@@ -103,7 +103,7 @@ CueManagerEditResult edit_cue_manager_row(const SessionModel& model,
   if (matches > 1) { result.error = "Multiple cues match the cue ID."; return result; }
   Fields& cue = result.model.cues[selected];
   const std::pair<const char*, const std::string*> updates[] = {
-    {"dialogue", &options.dialogue}, {"cue_type", &options.cue_type},
+    {"dialogue", &options.dialogue}, {"notes", &options.notes}, {"cue_type", &options.cue_type},
     {"status", &options.status}, {"start_time", &options.start_time},
     {"end_time", &options.end_time},
   };

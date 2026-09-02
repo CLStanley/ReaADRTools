@@ -2872,7 +2872,7 @@ void test_cue_manager_model()
   check(canonical_type_view && canonical_type_view.rows[0].cue_type == "ADR",
         "native cue manager prefers the canonical cue_type field");
   const auto canonical_edit = reaadr::core::edit_cue_manager_row(model,
-    {"A1", "", "Walla", "", "", ""});
+    {"A1", "", "", "Walla", "", "", ""});
   check(canonical_edit && canonical_edit.model.cues[0].at("cue_type") == "Walla",
         "native cue manager writes canonical cue_type edits");
   model.cues[0].erase("cue_type");
@@ -2887,18 +2887,19 @@ void test_cue_manager_model()
   check(sorted && sorted.rows.size() == 2 && sorted.rows[0].cue_key == "B1",
         "native cue manager view model supports deterministic header sorting");
   const auto edited = reaadr::core::edit_cue_manager_row(model,
-    {"A1", "Updated", "D", "Recorded", "1.5", "2.5"});
+    {"A1", "Updated", "Updated note", "D", "Recorded", "1.5", "2.5"});
   check(edited && edited.changed && edited.model.cues[0].find("dialogue")->second == "Updated" &&
+          edited.model.cues[0].find("notes")->second == "Updated note" &&
           edited.model.cues[0].find("start_time")->second == "1.5" &&
           edited.model.state.find("last_operation")->second == "edit_cue",
         "native cue manager edit contract updates canonical row fields");
-  check(!reaadr::core::edit_cue_manager_row(model, {"missing", "x", "", "", "", ""}),
+  check(!reaadr::core::edit_cue_manager_row(model, {"missing", "x", "", "", "", "", ""}),
         "native cue manager edit contract rejects unknown cue IDs");
   FakeProjectStateStore store;
   reaadr::core::SessionModelRepository repository(store);
   check(repository.save(model), "native cue manager commit fixture saves its model");
   const auto committed = reaadr::core::commit_cue_manager_edit(repository,
-    {{"A1", "Committed", "D", "Recorded", "1.25", "2.25"}, "Edit Cue", "2026-09-01T00:00:00Z", true});
+    {{"A1", "Committed", "Committed note", "D", "Recorded", "1.25", "2.25"}, "Edit Cue", "2026-09-01T00:00:00Z", true});
   const auto reloaded = repository.load();
   check(committed && committed.revision == 1 && reloaded && !reloaded.model.cues.empty() &&
           committed.edit.model.cues[0].find("dialogue")->second == "Committed",

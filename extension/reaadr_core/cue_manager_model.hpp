@@ -36,6 +36,7 @@ struct CueManagerViewOptions {
 struct CueManagerEditOptions {
   std::string cue_key;
   std::string dialogue;
+  std::string notes;
   std::string cue_type;
   std::string status;
   std::string start_time;
