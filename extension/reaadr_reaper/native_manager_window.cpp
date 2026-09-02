@@ -2,6 +2,7 @@
 
 #include "reaadr_core/manager_navigation.hpp"
 #include "reaadr_core/manager_view_model.hpp"
+#include "reaadr_core/manager_preferences.hpp"
 #include <reaper_plugin.h>
 #include <string>
 
@@ -27,6 +28,7 @@ constexpr int kHoverPreview = 47024;
 constexpr int kTooltips = 47025;
 constexpr int kNavigationWrap = 47026;
 const core::ManagerViewModel* g_view = nullptr;
+NativeManagerWindowContext g_context;
 
 #ifndef _WIN32
 INT_PTR manager_dialog_proc(HWND hwnd, UINT message, WPARAM wparam, LPARAM)
@@ -59,6 +61,19 @@ INT_PTR manager_dialog_proc(HWND hwnd, UINT message, WPARAM wparam, LPARAM)
   }
   if (message == WM_COMMAND) {
     const int command = LOWORD(wparam);
+    if (g_view && g_context.project_state &&
+        (command == kRememberLayout || command == kHoverPreview ||
+         command == kTooltips || command == kNavigationWrap)) {
+      const char* key = command == kRememberLayout ? "remember_window_layout" :
+        command == kHoverPreview ? "cue_hover_preview" :
+        command == kTooltips ? "tooltips_enabled" : "navigation_wrap_enabled";
+      const bool enabled = IsDlgButtonChecked(hwnd, command) == BST_CHECKED;
+      core::ManagerPreferencesRepository repository(*g_context.project_state, g_context.global_state);
+      const auto update = core::update_manager_preferences(
+        g_view->preferences, key, enabled ? "1" : "0");
+      if (update) repository.save(update.preferences);
+      return 1;
+    }
     if (command == kClose || command == IDCANCEL) { EndDialog(hwnd, 0); return 1; }
     const char* title = nullptr;
     switch (command) {
@@ -109,9 +124,11 @@ SWELL_DEFINE_DIALOG_RESOURCE_END2(kManagerDialog)
 #endif
 }
 
-void show_native_manager_window(const core::ManagerViewModel* view)
+void show_native_manager_window(const core::ManagerViewModel* view,
+                                NativeManagerWindowContext context)
 {
   g_view = view;
+  g_context = context;
 #ifndef _WIN32
   DialogBoxParam(nullptr, MAKEINTRESOURCE(kManagerDialog), nullptr,
     manager_dialog_proc, 0);
@@ -122,6 +139,7 @@ void show_native_manager_window(const core::ManagerViewModel* view)
     "ReaADR Tools Manager", 0);
 #endif
   g_view = nullptr;
+  g_context = {};
 }
 
 } // namespace reaadr::reaper

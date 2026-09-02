@@ -414,7 +414,8 @@ void run_native_cue_manager_action()
   reaadr::reaper::ManagerViewApplicationService service(project_state, &global_state);
   const auto loaded = service.load(view_options, "cues");
   if (!loaded) { ShowMessageBox(loaded.error.c_str(), "ReaADR Cue Manager", 0); return; }
-  reaadr::reaper::show_native_manager_window(&loaded.view);
+  reaadr::reaper::show_native_manager_window(&loaded.view,
+    {&project_state, &global_state});
   return;
 
   const auto& view = loaded.view.cues;
