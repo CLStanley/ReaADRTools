@@ -43,6 +43,7 @@ struct CueManagerEditOptions {
   std::string end_time;
   std::string new_cue_key;
   std::string new_character;
+  bool notes_set = false;
 };
 struct CueManagerEditResult {
   SessionModel model;

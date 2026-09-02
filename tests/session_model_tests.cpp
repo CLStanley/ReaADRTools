@@ -2921,6 +2921,11 @@ void test_cue_manager_model()
   check(character_edit && character_edit.changed &&
           character_edit.model.cues[0].at("character") == "Lead Actor",
         "native cue manager supports character-name edits");
+  model.cues[0]["notes"] = "Existing note";
+  const auto clear_notes = reaadr::core::edit_cue_manager_row(model,
+    {"A1", "", "", "D", "", "", "", "", "", true});
+  check(clear_notes && clear_notes.changed && clear_notes.model.cues[0].at("notes").empty(),
+        "native cue manager can explicitly clear Notes");
   FakeProjectStateStore store;
   reaadr::core::SessionModelRepository repository(store);
   check(repository.save(model), "native cue manager commit fixture saves its model");

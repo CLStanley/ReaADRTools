@@ -233,6 +233,8 @@ fallback from legacy `direction` fields so the native table does not drop
 visual dialogue direction text.
 Notes are now editable through the native Cue Manager edit contract and are
 stored under the canonical `notes` field.
+An explicit `notes_set` flag allows intentional clearing of Notes without
+confusing an omitted field with an empty value.
 Native timing edits now use the shared timecode parser and session frame rate,
 matching Lua's invalid-input rejection while preserving legacy values.
 They also enforce a strictly positive cue duration before any model mutation.
