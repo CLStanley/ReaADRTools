@@ -195,6 +195,9 @@ load, providing a single consistency boundary for native window rendering.
 The native Cue Manager preview is now routed through that service as well, so
 its text fallback exercises the same consolidated read path as the graphical
 replacement.
+Cue Manager row reads and edits now prefer the canonical `cue_type` field,
+with compatibility fallback for older `type` fixtures, preventing native UI
+edits from diverging from Lua's persisted model schema.
 Native Manager navigation now exposes the established module order—Import,
 Cue Management, Session Tools, Reports, Video Overlays, Preferences, and
 Help—with

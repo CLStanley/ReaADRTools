@@ -2858,6 +2858,14 @@ void test_cue_manager_model()
   check(view && view.rows.size() == 2 && view.rows[0].dialogue == "Hello" &&
           view.rows[1].selected && !view.rows[0].selected && view.rows[1].cue_type == "A",
         "native cue manager model preserves ordered display fields and selection");
+  model.cues[0]["cue_type"] = "ADR";
+  const auto canonical_type_view = reaadr::core::build_cue_manager_model(model, "A1");
+  check(canonical_type_view && canonical_type_view.rows[0].cue_type == "ADR",
+        "native cue manager prefers the canonical cue_type field");
+  const auto canonical_edit = reaadr::core::edit_cue_manager_row(model,
+    {"A1", "", "Walla", "", "", ""});
+  check(canonical_edit && canonical_edit.model.cues[0].at("cue_type") == "Walla",
+        "native cue manager writes canonical cue_type edits");
   const auto filtered = reaadr::core::build_cue_manager_view(model, {"hello", "Actor", "", "A1"});
   check(filtered && filtered.rows.size() == 1 && filtered.rows[0].cue_key == "A1" &&
           filtered.rows[0].selected,

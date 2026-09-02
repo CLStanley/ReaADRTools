@@ -6,6 +6,11 @@ namespace { const std::string& field(const Fields& cue, const char* key) {
   const auto found = cue.find(key); static const std::string empty;
   return found == cue.end() ? empty : found->second;
 } }
+namespace { std::string cue_type_field(const Fields& cue) {
+  const auto canonical = cue.find("cue_type");
+  if (canonical != cue.end()) return canonical->second;
+  return field(cue, "type");
+} }
 namespace { bool contains_case_insensitive(const std::string& value, const std::string& query) {
   if (query.empty()) return true;
   auto lower = [](std::string text) { for (char& c : text) if (c >= 'A' && c <= 'Z') c = static_cast<char>(c - 'A' + 'a'); return text; };
@@ -21,8 +26,8 @@ CueManagerModel build_cue_manager_model(const SessionModel& model,
   for (std::size_t index = 0; index < model.cues.size(); ++index) {
     const Fields& cue = model.cues[index];
     const std::string key = field(cue, "id");
-    result.rows.push_back({index, key, field(cue, "character"), field(cue, "dialogue"),
-      field(cue, "type"), field(cue, "status"), field(cue, "start_time"),
+      result.rows.push_back({index, key, field(cue, "character"), field(cue, "dialogue"),
+      cue_type_field(cue), field(cue, "status"), field(cue, "start_time"),
       field(cue, "end_time"), !selected_cue_key.empty() && key == selected_cue_key});
   }
   return result;
@@ -45,7 +50,7 @@ CueManagerModel build_cue_manager_view(const SessionModel& model,
     if (!contains_case_insensitive(key, options.query) &&
         !contains_case_insensitive(character, options.query) &&
         !contains_case_insensitive(field(cue, "dialogue"), options.query)) continue;
-    result.rows.push_back({index, key, character, field(cue, "dialogue"), field(cue, "type"),
+    result.rows.push_back({index, key, character, field(cue, "dialogue"), cue_type_field(cue),
       status, field(cue, "start_time"), field(cue, "end_time"), key == options.selected_cue_key});
   }
   return result;
@@ -67,13 +72,15 @@ CueManagerEditResult edit_cue_manager_row(const SessionModel& model,
   if (matches > 1) { result.error = "Multiple cues match the cue ID."; return result; }
   Fields& cue = result.model.cues[selected];
   const std::pair<const char*, const std::string*> updates[] = {
-    {"dialogue", &options.dialogue}, {"type", &options.cue_type},
+    {"dialogue", &options.dialogue}, {"cue_type", &options.cue_type},
     {"status", &options.status}, {"start_time", &options.start_time},
     {"end_time", &options.end_time},
   };
   for (const auto& update : updates) {
-    if (update.second->empty() || field(cue, update.first) == *update.second) continue;
-    cue[update.first] = *update.second;
+    const char* key = update.first;
+    if (std::string(update.first) == "cue_type" && cue.find("cue_type") == cue.end() && cue.find("type") != cue.end()) key = "type";
+    if (update.second->empty() || field(cue, key) == *update.second) continue;
+    cue[key] = *update.second;
     result.changed = true;
   }
   if (result.changed) {
