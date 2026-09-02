@@ -192,6 +192,9 @@ layers out of sync.
 The REAPER-layer `ManagerViewApplicationService` now assembles that snapshot
 from one canonical session read, revision read, and Preferences repository
 load, providing a single consistency boundary for native window rendering.
+The native Cue Manager preview is now routed through that service as well, so
+its text fallback exercises the same consolidated read path as the graphical
+replacement.
 Native Manager navigation now exposes the established module order—Import,
 Cue Management, Session Tools, Reports, Video Overlays, Preferences, and
 Help—with

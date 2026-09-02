@@ -75,6 +75,7 @@
 #include "reaadr_core/cue_status.hpp"
 #include "reaadr_core/cue_manager_model.hpp"
 #include "reaadr_reaper/overlay_application_service.hpp"
+#include "reaadr_reaper/manager_view_application_service.hpp"
 #include "reaadr_reaper/overlay_refresh_adapter.hpp"
 #include "reaadr_reaper/cue_navigation_service.hpp"
 #include "reaadr_reaper/project_state.hpp"
@@ -393,11 +394,6 @@ void run_native_cue_manager_action()
 {
   reaadr::reaper::ProjectStateStore project_state(nullptr, {GetProjExtState, SetProjExtState});
   reaadr::core::SessionModelRepository repository(project_state);
-  const auto loaded = repository.load();
-  if (!loaded) {
-    ShowMessageBox(reaadr::core::session_load_error_message(loaded), "ReaADR Cue Manager", 0);
-    return;
-  }
   reaadr::core::CueManagerViewOptions view_options;
   if (GetUserInputs) {
     std::array<char, 1024> filter_input = {};
@@ -413,11 +409,14 @@ void run_native_cue_manager_action()
       }
     }
   }
-  const auto view = reaadr::core::build_cue_manager_view(loaded.model, view_options);
-  if (!view) { ShowMessageBox(view.error.c_str(), "ReaADR Cue Manager", 0); return; }
+  reaadr::reaper::GlobalStateStore global_state({GetExtState, SetExtState});
+  reaadr::reaper::ManagerViewApplicationService service(project_state, &global_state);
+  const auto loaded = service.load(view_options, "cues");
+  if (!loaded) { ShowMessageBox(loaded.error.c_str(), "ReaADR Cue Manager", 0); return; }
+  const auto& view = loaded.view.cues;
   std::ostringstream summary;
   summary << "Session: " << view.session_id << "\n"
-          << "Showing " << view.rows.size() << " of " << loaded.model.cues.size() << " cues\n\n";
+          << "Showing " << view.rows.size() << " of " << loaded.view.total_cues << " cues\n\n";
   for (const auto& row : view.rows) {
     summary << (row.selected ? "> " : "  ") << row.cue_key << "  " << row.character
             << "  [" << row.status << "]  " << row.dialogue << "\n";

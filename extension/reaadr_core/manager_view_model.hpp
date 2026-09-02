@@ -14,6 +14,7 @@ struct ManagerViewModel {
   std::string session_name;
   std::string revision;
   std::string active_tab;
+  std::size_t total_cues = 0;
   std::string error;
   explicit operator bool() const { return error.empty() && static_cast<bool>(cues); }
 };
