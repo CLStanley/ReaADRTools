@@ -2876,6 +2876,12 @@ void test_cue_manager_model()
   check(filtered && filtered.rows.size() == 1 && filtered.rows[0].cue_key == "A1" &&
           filtered.rows[0].selected,
         "native cue manager view model supports case-insensitive query and character filtering");
+  reaadr::core::CueManagerViewOptions sorted_options;
+  sorted_options.sort_key = "start_time";
+  sorted_options.sort_ascending = false;
+  const auto sorted = reaadr::core::build_cue_manager_view(model, sorted_options);
+  check(sorted && sorted.rows.size() == 2 && sorted.rows[0].cue_key == "B1",
+        "native cue manager view model supports deterministic header sorting");
   const auto edited = reaadr::core::edit_cue_manager_row(model,
     {"A1", "Updated", "D", "Recorded", "1.5", "2.5"});
   check(edited && edited.changed && edited.model.cues[0].find("dialogue")->second == "Updated" &&

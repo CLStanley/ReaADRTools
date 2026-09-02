@@ -1,6 +1,7 @@
 #include "cue_manager_model.hpp"
 #include <utility>
 #include <algorithm>
+#include <cstdlib>
 namespace reaadr::core {
 namespace { const std::string& field(const Fields& cue, const char* key) {
   const auto found = cue.find(key); static const std::string empty;
@@ -52,6 +53,28 @@ CueManagerModel build_cue_manager_view(const SessionModel& model,
         !contains_case_insensitive(field(cue, "dialogue"), options.query)) continue;
     result.rows.push_back({index, key, character, field(cue, "dialogue"), cue_type_field(cue),
       status, field(cue, "start_time"), field(cue, "end_time"), key == options.selected_cue_key});
+  }
+  const auto value_for = [](const CueManagerRow& row, const std::string& key) {
+    if (key == "id") return row.cue_key;
+    if (key == "character") return row.character;
+    if (key == "dialogue" || key == "line") return row.dialogue;
+    if (key == "cue_type" || key == "type") return row.cue_type;
+    if (key == "status") return row.status;
+    if (key == "end_time") return row.end_time;
+    return row.start_time;
+  };
+  if (!options.sort_key.empty()) {
+    std::stable_sort(result.rows.begin(), result.rows.end(), [&](const CueManagerRow& left, const CueManagerRow& right) {
+      const std::string a = value_for(left, options.sort_key);
+      const std::string b = value_for(right, options.sort_key);
+      char* end_a = nullptr; char* end_b = nullptr;
+      const double number_a = std::strtod(a.c_str(), &end_a);
+      const double number_b = std::strtod(b.c_str(), &end_b);
+      const bool numeric = end_a && end_b && *end_a == '\0' && *end_b == '\0';
+      const bool less = numeric ? number_a < number_b : a < b;
+      const bool greater = numeric ? number_a > number_b : a > b;
+      return options.sort_ascending ? less : greater;
+    });
   }
   return result;
 }

@@ -29,6 +29,8 @@ struct CueManagerViewOptions {
   std::string character;
   std::string status;
   std::string selected_cue_key;
+  std::string sort_key = "start_time";
+  bool sort_ascending = true;
 };
 struct CueManagerEditOptions {
   std::string cue_key;
