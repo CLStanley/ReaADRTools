@@ -1345,9 +1345,9 @@ bool load(reaper_plugin_info_t* plugin)
   }
 
   if (AddCustomizableMenu) {
-    // An explicit (possibly empty) keyboard section is required by some
-    // REAPER builds for the custom menu to be inserted into the main bar.
-    AddCustomizableMenu(kReaADRMenuId, kReaADRMenuId, "", true);
+    // NULL selects REAPER's main actions keyboard section, which is required
+    // for this custom menu to be inserted into the top-level menu bar.
+    AddCustomizableMenu(kReaADRMenuId, kReaADRMenuId, nullptr, true);
   } else {
     log_line("AddCustomizableMenu API unavailable; actions will register without the top-level menu.");
   }
