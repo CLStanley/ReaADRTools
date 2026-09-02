@@ -172,7 +172,9 @@ ScriptAction g_refresh_overlay_action = {
 ScriptAction g_next_cue_action = {"Next Cue (Native)", nullptr, 0};
 ScriptAction g_previous_cue_action = {"Previous Cue (Native)", nullptr, 0};
 ScriptAction g_jump_to_cue_action = {"Jump To Cue (Native)", nullptr, 0};
-ScriptAction g_cue_manager_action = {"Cue Manager (Native UI)", nullptr, 0};
+// Kept as one command/action internally so existing keyboard mappings remain
+// stable, while the menu exposes the complete native Manager shell directly.
+ScriptAction g_cue_manager_action = {"Open Manager (Native Preview)", nullptr, 0};
 
 std::vector<ScriptAction> g_legacy_actions = {
   {"Import Script", "Scripts/ReaADRTools/scripts/ReaADR_Import_Script.lua", 0},
