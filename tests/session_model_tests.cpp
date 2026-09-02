@@ -2898,6 +2898,9 @@ void test_cue_manager_model()
   check(!reaadr::core::edit_cue_manager_row(model,
     {"A1", "", "", "D", "Recorded", "not-a-time", ""}),
         "native cue manager rejects invalid timing edits");
+  check(!reaadr::core::edit_cue_manager_row(model,
+    {"A1", "", "", "D", "Recorded", "2.0", "1.0"}),
+        "native cue manager rejects non-positive cue durations");
   FakeProjectStateStore store;
   reaadr::core::SessionModelRepository repository(store);
   check(repository.save(model), "native cue manager commit fixture saves its model");

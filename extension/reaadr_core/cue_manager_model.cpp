@@ -117,6 +117,17 @@ CueManagerEditResult edit_cue_manager_row(const SessionModel& model,
       return result;
     }
   }
+  const auto numeric_time = [](const std::string& value) {
+    char* end = nullptr;
+    const double parsed = std::strtod(value.c_str(), &end);
+    return end && end != value.c_str() && *end == '\0' ? parsed : -1.0;
+  };
+  const double start = options.start_time.empty() ? numeric_time(field(cue, "start_time")) : numeric_time(options.start_time);
+  const double end = options.end_time.empty() ? numeric_time(field(cue, "end_time")) : numeric_time(options.end_time);
+  if (start >= 0.0 && end >= 0.0 && end <= start) {
+    result.error = "Cue end time must be after its start time.";
+    return result;
+  }
   const std::pair<const char*, const std::string*> updates[] = {
     {"dialogue", &options.dialogue}, {"notes", &options.notes}, {"cue_type", &options.cue_type},
     {"status", &options.status}, {"start_time", &options.start_time},
