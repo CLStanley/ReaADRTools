@@ -216,6 +216,9 @@ The extension now exposes a native refresh action that binds current REAPER
 selection, frame rate, project state, and FX APIs to that coordinator. The
 legacy Lua action remains registered for compatibility while broader command
 and UI cutover proceeds.
+The temporary reduced native Preferences prompt has been removed; until the
+full graphical Manager is cut over, Preferences continues to use the complete
+Lua compatibility window rather than exposing a misleading partial native UI.
 Native Next Cue, Previous Cue, and prompt-backed Jump To Cue actions now bind
 the existing navigation service to REAPER transport/cursor APIs and paired
 selection persistence.
