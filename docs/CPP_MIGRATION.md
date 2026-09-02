@@ -187,6 +187,9 @@ Native Manager navigation now exposes the established module order—Import,
 Cue Management, Session Tools, Reports, Video Overlays, Preferences, and
 Help—with
 safe launch-tab normalization for invalid or stale requests.
+The same navigation contract publishes all 16 tab actions and their
+user-facing hints, allowing native controls to route through existing C++
+services while the compatibility scripts remain available.
 The Preferences contract also publishes the 21 established overlay and UI
 controls with stable keys, labels, tab ownership, and control types for the
 native renderer.

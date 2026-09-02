@@ -2704,12 +2704,15 @@ void test_manager_view_model()
 void test_manager_navigation()
 {
   const auto& modules = reaadr::core::manager_modules();
+  const auto& actions = reaadr::core::manager_actions();
   check(modules.size() == 7 && modules[0].key == "import" &&
           modules[1].key == "cues" && modules[2].key == "session" &&
           modules[3].key == "reports" && modules[5].title == "Preferences" &&
           reaadr::core::is_manager_tab("help") &&
           reaadr::core::normalize_manager_tab("overlay") == "overlay" &&
-          reaadr::core::normalize_manager_tab("missing") == "import",
+          reaadr::core::normalize_manager_tab("missing") == "import" &&
+          actions.size() == 16 && actions[0].module == "import" &&
+          actions[4].key == "validate_session" && actions.back().module == "help",
         "native Manager navigation mirrors Lua module order and safe launch tabs");
 }
 
