@@ -2619,6 +2619,18 @@ void test_manager_preferences()
   check(!reaadr::core::update_manager_preferences(preferences, "tooltips", "maybe") &&
           !reaadr::core::update_manager_preferences(preferences, "unknown", "1"),
         "native Manager Preferences rejects invalid values and unknown keys");
+
+  FakeProjectStateStore store;
+  reaadr::core::ManagerPreferencesRepository repository(store);
+  preferences.cue_manager_auto_dock = true;
+  preferences.hover_preview = false;
+  auto saved = repository.save(preferences);
+  check(saved && saved.changed && store.values.at("ReaADRTools:ui.cue_manager_auto_dock") == "1" &&
+          store.values.at("ReaADRTools:ui.cue_hover_preview") == "0",
+        "native Manager Preferences persists Lua-compatible project UI keys");
+  const auto loaded = repository.load();
+  check(loaded && loaded.preferences == preferences,
+        "native Manager Preferences restores persisted project UI state");
 }
 
 void test_overlay_application_service()

@@ -170,6 +170,10 @@ Manager's overlay presets, quick-action slots, layout/tooltips/navigation
 toggles, and Cue Manager docking preference. Its validated updates are kept
 in the domain core so the eventual graphical Manager can bind to one
 deterministic state model while Lua compatibility remains available.
+That state now has a project-extstate repository using the exact `ui.*` keys
+for layout, hover preview, tooltips, navigation wrapping, and Cue Manager
+auto-docking. Saves stage UI flags before overlay values and roll back partial
+writes, preserving the single-project-settings transaction boundary.
 The extension now exposes a native refresh action that binds current REAPER
 selection, frame rate, project state, and FX APIs to that coordinator. The
 legacy Lua action remains registered for compatibility while broader command
