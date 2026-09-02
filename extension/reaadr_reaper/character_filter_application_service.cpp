@@ -1,4 +1,5 @@
 #include "character_filter_application_service.hpp"
+#include <utility>
 namespace reaadr::reaper {
 CharacterFilterApplicationResult CharacterFilterApplicationService::apply(
   const std::vector<std::string>& characters, bool hide_regions)
@@ -11,8 +12,14 @@ CharacterFilterApplicationResult CharacterFilterApplicationService::apply(
   if (!result.error.empty()) return result;
   core::CharacterFilterState next;
   next.active_tokens = {};
-  for (const auto& character : characters) next.active_tokens.insert(core::character_filter_key(character));
-  next.encoded_selection = core::encode_character_filter_tokens(characters);
+  std::vector<std::string> normalized_tokens;
+  normalized_tokens.reserve(characters.size());
+  for (const auto& character : characters) {
+    const std::string token = core::character_filter_key(character);
+    next.active_tokens.insert(token);
+    normalized_tokens.push_back(token);
+  }
+  next.encoded_selection = core::encode_character_filter_tokens(std::move(normalized_tokens));
   next.hide_inactive_regions = hide_regions;
   const auto planned = core::build_character_filter_plan(loaded.model, next, inspected.state);
   if (!planned) { result.error = planned.error; return result; }
