@@ -36,10 +36,13 @@ INT_PTR manager_dialog_proc(HWND hwnd, UINT message, WPARAM wparam, LPARAM)
     ShowWindow(GetDlgItem(hwnd, kHoverPreview), SW_HIDE);
     ShowWindow(GetDlgItem(hwnd, kTooltips), SW_HIDE);
     ShowWindow(GetDlgItem(hwnd, kNavigationWrap), SW_HIDE);
-    SetDlgItemText(hwnd, kBody,
-      "Select a Manager tab to configure ReaADR Tools.\r\n\r\n"
-      "This native shell is driven by the C++ session and preference model.");
+    std::string intro = "Select a Manager tab to configure ReaADR Tools.\r\n\r\n"
+      "This native shell is driven by the C++ session and preference model.";
     if (g_view) {
+      intro = "Session: " + g_view->session_name + "\r\n" +
+        "Cues: " + std::to_string(g_view->total_cues) +
+        "   Revision: " + g_view->revision + "\r\n\r\n" +
+        "Select a Manager tab to continue.";
       CheckDlgButton(hwnd, kRememberLayout, g_view->preferences.remember_layout ? BST_CHECKED : BST_UNCHECKED);
       CheckDlgButton(hwnd, kHoverPreview, g_view->preferences.hover_preview ? BST_CHECKED : BST_UNCHECKED);
       CheckDlgButton(hwnd, kTooltips, g_view->preferences.tooltips ? BST_CHECKED : BST_UNCHECKED);
@@ -51,6 +54,7 @@ INT_PTR manager_dialog_proc(HWND hwnd, UINT message, WPARAM wparam, LPARAM)
           reinterpret_cast<LPARAM>(line.c_str()));
       }
     }
+    SetDlgItemText(hwnd, kBody, intro.c_str());
     return 1;
   }
   if (message == WM_COMMAND) {
