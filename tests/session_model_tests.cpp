@@ -2723,10 +2723,12 @@ void test_manager_view_model()
   FakeProjectStateStore store;
   store.values["ReaADRTools:adr_session_model_v1"] = reaadr::core::serialize_session_model(model);
   store.values["ReaADRTools:session_revision"] = "7";
+  store.values["ReaADRTools:manager_selected_cue_key"] = "A";
   reaadr::reaper::ManagerViewApplicationService service(store);
   reaadr::core::CueManagerViewOptions persisted_options;
   const auto loaded = service.load(persisted_options, "preferences");
-  check(loaded && loaded.view.active_tab == "preferences" && loaded.view.cues.rows.size() == 1,
+  check(loaded && loaded.view.active_tab == "preferences" && loaded.view.cues.rows.size() == 1 &&
+          loaded.view.cues.rows.front().selected,
         "native Manager application service builds one persisted view snapshot");
 }
 
