@@ -718,12 +718,6 @@ bool register_native_actions()
     g_jump_to_cue_command_id, g_jump_to_cue_accel, g_jump_to_cue_action);
   register_secondary_action(kCueManagerCommandName, "ReaADR: Cue Manager (Native)",
     g_cue_manager_command_id, g_cue_manager_accel, g_cue_manager_action);
-  if (g_cue_manager_command_id && !g_actions.empty()) {
-    // REAPER's non-Windows menu path exposes registered actions directly;
-    // replace the legacy Manager launcher in that slot with the native shell.
-    g_actions[0].command_id = g_cue_manager_command_id;
-    g_actions[0].label = "Open Manager (Native Preview)";
-  }
   log_line("Registered native action: " + std::string(kValidateSessionActionLabel));
   return true;
 }
@@ -770,10 +764,6 @@ void unregister_native_actions()
     g_cue_manager_command_id = 0;
     g_cue_manager_action.command_id = 0;
     g_cue_manager_accel = {};
-  }
-  if (!g_actions.empty()) {
-    g_actions[0].command_id = 0;
-    g_actions[0].label = "Open Manager";
   }
 }
 
