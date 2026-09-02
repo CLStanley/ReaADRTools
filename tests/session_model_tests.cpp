@@ -12,6 +12,7 @@
 #include "reaadr_core/overlay_settings.hpp"
 #include "reaadr_core/manager_preferences.hpp"
 #include "reaadr_core/manager_view_model.hpp"
+#include "reaadr_core/manager_navigation.hpp"
 #include "reaadr_core/region_timing_sync.hpp"
 #include "reaadr_core/record_arm.hpp"
 #include "reaadr_core/recording_setup.hpp"
@@ -2694,6 +2695,17 @@ void test_manager_view_model()
         "native Manager view model combines session, preferences, and filtered cues");
 }
 
+void test_manager_navigation()
+{
+  const auto& modules = reaadr::core::manager_modules();
+  check(modules.size() == 6 && modules[0].key == "import" &&
+          modules[1].key == "cues" && modules[3].title == "Preferences" &&
+          reaadr::core::is_manager_tab("help") &&
+          reaadr::core::normalize_manager_tab("overlay") == "overlay" &&
+          reaadr::core::normalize_manager_tab("missing") == "import",
+        "native Manager navigation mirrors Lua module order and safe launch tabs");
+}
+
 void test_overlay_application_service()
 {
   FakeProjectStateStore store;
@@ -3432,6 +3444,7 @@ int main()
   test_overlay_settings_and_eel();
   test_manager_preferences();
   test_manager_view_model();
+  test_manager_navigation();
   test_overlay_application_service();
   test_cue_cleanup_plan();
   test_cue_manager_model();
