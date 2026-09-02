@@ -189,6 +189,9 @@ payload, giving a future graphical view a consistent snapshot per frame.
 That snapshot now carries the normalized active tab, so invalid launch-tab
 state safely falls back to Import without leaving the view and persistence
 layers out of sync.
+The REAPER-layer `ManagerViewApplicationService` now assembles that snapshot
+from one canonical session read, revision read, and Preferences repository
+load, providing a single consistency boundary for native window rendering.
 Native Manager navigation now exposes the established module order—Import,
 Cue Management, Session Tools, Reports, Video Overlays, Preferences, and
 Help—with

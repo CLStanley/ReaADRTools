@@ -39,6 +39,7 @@
 #include "reaadr_reaper/render_artifact_adapter.hpp"
 #include "reaadr_reaper/session_render_service.hpp"
 #include "reaadr_reaper/track_region_adapter.hpp"
+#include "reaadr_reaper/manager_view_application_service.hpp"
 
 #include <algorithm>
 #include <cmath>
@@ -2718,6 +2719,15 @@ void test_manager_view_model()
           view.active_tab == "preferences" &&
           view.cues.rows.size() == 1 && view.cues.rows.front().cue_key == "A",
         "native Manager view model combines session, preferences, and filtered cues");
+
+  FakeProjectStateStore store;
+  store.values["ReaADRTools:adr_session_model_v1"] = reaadr::core::serialize_session_model(model);
+  store.values["ReaADRTools:session_revision"] = "7";
+  reaadr::reaper::ManagerViewApplicationService service(store);
+  reaadr::core::CueManagerViewOptions persisted_options;
+  const auto loaded = service.load(persisted_options, "preferences");
+  check(loaded && loaded.view.active_tab == "preferences" && loaded.view.cues.rows.size() == 1,
+        "native Manager application service builds one persisted view snapshot");
 }
 
 void test_manager_navigation()
