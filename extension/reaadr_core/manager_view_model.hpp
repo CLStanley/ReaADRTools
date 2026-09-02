@@ -2,6 +2,7 @@
 
 #include "cue_manager_model.hpp"
 #include "manager_preferences.hpp"
+#include "manager_navigation.hpp"
 
 namespace reaadr::core {
 
@@ -12,6 +13,7 @@ struct ManagerViewModel {
   CueManagerModel cues;
   std::string session_name;
   std::string revision;
+  std::string active_tab;
   std::string error;
   explicit operator bool() const { return error.empty() && static_cast<bool>(cues); }
 };
@@ -19,6 +21,7 @@ struct ManagerViewModel {
 ManagerViewModel build_manager_view_model(const SessionModel& model,
                                           const ManagerPreferences& preferences,
                                           const CueManagerViewOptions& options,
-                                          const std::string& revision = {});
+                                          const std::string& revision = {},
+                                          const std::string& requested_tab = {});
 
 } // namespace reaadr::core

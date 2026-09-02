@@ -2713,8 +2713,9 @@ void test_manager_view_model()
   reaadr::core::ManagerPreferences preferences;
   reaadr::core::CueManagerViewOptions options;
   options.query = "hello";
-  const auto view = reaadr::core::build_manager_view_model(model, preferences, options, "7");
+  const auto view = reaadr::core::build_manager_view_model(model, preferences, options, "7", "preferences");
   check(view && view.session_name == "Manager Preview" && view.revision == "7" &&
+          view.active_tab == "preferences" &&
           view.cues.rows.size() == 1 && view.cues.rows.front().cue_key == "A",
         "native Manager view model combines session, preferences, and filtered cues");
 }

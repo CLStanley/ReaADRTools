@@ -186,6 +186,9 @@ The REAPER boundary now supplies that adapter from `GetExtState` and
 The native `ManagerViewModel` now composes this preference state with the
 canonical session name, revision, and filtered Cue Manager rows in one render
 payload, giving a future graphical view a consistent snapshot per frame.
+That snapshot now carries the normalized active tab, so invalid launch-tab
+state safely falls back to Import without leaving the view and persistence
+layers out of sync.
 Native Manager navigation now exposes the established module order—Import,
 Cue Management, Session Tools, Reports, Video Overlays, Preferences, and
 Help—with
