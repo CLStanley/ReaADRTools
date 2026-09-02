@@ -2916,6 +2916,11 @@ void test_cue_manager_model()
   check(!reaadr::core::edit_cue_manager_row(model,
     {"A1", "", "", "D", "", "", "", "B1"}),
         "native cue manager rejects duplicate cue ID edits");
+  const auto character_edit = reaadr::core::edit_cue_manager_row(model,
+    {"A1", "", "", "D", "", "", "", "", "Lead Actor"});
+  check(character_edit && character_edit.changed &&
+          character_edit.model.cues[0].at("character") == "Lead Actor",
+        "native cue manager supports character-name edits");
   FakeProjectStateStore store;
   reaadr::core::SessionModelRepository repository(store);
   check(repository.save(model), "native cue manager commit fixture saves its model");

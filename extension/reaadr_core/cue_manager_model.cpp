@@ -115,6 +115,10 @@ CueManagerEditResult edit_cue_manager_row(const SessionModel& model,
     cue["id"] = options.new_cue_key;
     result.changed = true;
   }
+  if (!options.new_character.empty() && field(cue, "character") != options.new_character) {
+    cue["character"] = options.new_character;
+    result.changed = true;
+  }
   double frame_rate = 24.0;
   const auto frame_rate_field = result.model.timecode.find("frame_rate");
   if (frame_rate_field != result.model.timecode.end()) {
