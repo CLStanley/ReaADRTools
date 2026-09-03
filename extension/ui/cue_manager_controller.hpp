@@ -1,6 +1,6 @@
 #pragma once
 
-#include "reaadr_core/manager_view_model.hpp"
+#include "manager_view_model.hpp"
 #include "reaadr_reaper/manager_view_application_service.hpp"
 #include "reaadr_reaper/cue_navigation_service.hpp"
 #include "reaadr_core/cue_status.hpp"

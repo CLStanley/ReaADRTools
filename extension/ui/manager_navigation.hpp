@@ -1,6 +1,6 @@
 #pragma once
 
-#include "model_repository.hpp"
+#include "reaadr_core/model_repository.hpp"
 
 #include <string>
 #include <vector>

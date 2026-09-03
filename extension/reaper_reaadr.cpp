@@ -80,10 +80,9 @@
 #include "reaadr_reaper/cue_navigation_service.hpp"
 #include "reaadr_reaper/project_state.hpp"
 #include "reaadr_reaper/project_transaction.hpp"
-#include "reaadr_ui.hpp"
-#include "reaadr_ui/cue_manager_controller.hpp"
-#include "reaadr_ui/cue_manager_window.hpp"
-#include "reaadr_ui/cue_manager_window.hpp"
+#include "ui/reaadr_ui.hpp"
+#include "ui/cue_manager_controller.hpp"
+#include "ui/cue_manager_window.hpp"
 
 #ifndef _WIN32
 #include <dlfcn.h>

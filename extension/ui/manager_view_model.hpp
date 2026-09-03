@@ -1,7 +1,7 @@
 #pragma once
 
-#include "cue_manager_model.hpp"
-#include "manager_preferences.hpp"
+#include "reaadr_core/cue_manager_model.hpp"
+#include "reaadr_core/manager_preferences.hpp"
 #include "manager_navigation.hpp"
 
 namespace reaadr::core {

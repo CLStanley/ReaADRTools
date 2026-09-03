@@ -24,16 +24,13 @@ CORE_SOURCES := reaadr_core/session_model.cpp reaadr_core/model_repository.cpp r
 	reaadr_core/cue_cleanup.cpp \
 	reaadr_core/cue_manager_model.cpp \
 	reaadr_core/manager_preferences.cpp \
-	reaadr_core/manager_view_model.cpp \
-	reaadr_core/manager_navigation.cpp \
-	reaadr_core/manager_ui_contract.cpp \
-	reaadr_core/cue_manager_ui_contract.cpp \
 	reaadr_core/region_timing_sync.cpp reaadr_core/cue_navigation.cpp reaadr_core/record_arm.cpp \
 	reaadr_core/recording_setup.cpp reaadr_core/recording_transport.cpp reaadr_core/cue_status.cpp \
 	reaadr_core/recording_preferences.cpp reaadr_core/overlay_settings.cpp \
 	reaadr_core/overlay_eel.cpp reaadr_core/overlay_refresh.cpp
-UI_SOURCES := reaadr_ui.cpp
-UI_SOURCES += reaadr_ui/cue_manager_controller.cpp reaadr_ui/cue_manager_window.cpp
+UI_SOURCES := ui/reaadr_ui.cpp ui/cue_manager_controller.cpp ui/cue_manager_window.cpp \
+	ui/manager_view_model.cpp ui/manager_navigation.cpp ui/manager_ui_contract.cpp \
+	ui/cue_manager_ui_contract.cpp
 UNAME_S := $(shell uname -s)
 ifeq ($(UNAME_S),Darwin)
 UI_SOURCES += $(WDL)/swell/swell-modstub.mm
@@ -47,10 +44,6 @@ CORE_HEADERS := reaadr_core/session_model.hpp reaadr_core/model_repository.hpp r
 	reaadr_core/cue_cleanup.hpp \
 	reaadr_core/cue_manager_model.hpp \
 	reaadr_core/manager_preferences.hpp \
-	reaadr_core/manager_view_model.hpp \
-	reaadr_core/manager_navigation.hpp \
-	reaadr_core/manager_ui_contract.hpp \
-	reaadr_core/cue_manager_ui_contract.hpp \
 	reaadr_core/region_timing_sync.hpp reaadr_core/cue_navigation.hpp reaadr_core/record_arm.hpp \
 	reaadr_core/recording_setup.hpp reaadr_core/recording_transport.hpp reaadr_core/cue_status.hpp \
 	reaadr_core/recording_preferences.hpp reaadr_core/overlay_settings.hpp \
@@ -96,7 +89,7 @@ $(BUILD_DIR)/$(TARGET): $(EXTENSION_SOURCES) $(NATIVE_HEADERS) | prepare-sdk
 
 $(TEST_TARGET): ../tests/session_model_tests.cpp $(NATIVE_SOURCES) $(NATIVE_HEADERS)
 	@mkdir -p "$(BUILD_DIR)"
-	$(CXX) -I. $(CXXFLAGS) ../tests/session_model_tests.cpp $(NATIVE_SOURCES) -o $@
+	$(CXX) $(CPPFLAGS) $(CXXFLAGS) ../tests/session_model_tests.cpp $(NATIVE_SOURCES) -o $@
 
 test: $(TEST_TARGET)
 	$(TEST_TARGET)
