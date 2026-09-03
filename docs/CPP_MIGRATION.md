@@ -195,6 +195,12 @@ load, providing a single consistency boundary for native window rendering.
 The native Cue Manager preview is now routed through that service as well, so
 its text fallback exercises the same consolidated read path as the graphical
 replacement.
+The Lua Cue Manager visual reference is organized into a header/dock region,
+an action bar, a sortable cue table, selected-cue detail state, navigation
+controls, and a footer/status line. The first native shell maps the header,
+filter area, table, detail area, and close/footer controls; native selection
+and navigation are being added without routing unsupported edits back through
+Lua.
 The native Cue Manager command now opens the SWELL-based C++ Manager shell,
 which exposes the seven established Manager tabs and a native content surface;
 the remaining tab-specific controls are being cut over incrementally.
