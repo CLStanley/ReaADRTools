@@ -265,6 +265,11 @@ The edit contract also supports unique Cue ID renames and rejects collisions,
 matching the Lua inline ID editor without creating duplicate canonical keys.
 It also supports inline character-name edits while preserving the existing cue
 ID and generated-artifact ownership relationships.
+The graphical editor now hydrates all fields from the selected canonical row,
+exposes Cue ID and character editing, and commits status with the other fields
+as one snapshot/revision update. Renamed cues remain selected through their new
+canonical key, and an explicit edit flag distinguishes clearing dialogue from
+an omitted compatibility field.
 Sortable headers are validated against the native contract; unknown sort keys
 fall back safely to the established start-time ordering.
 Those catalogs are presentation constraints only; canonical cue edits retain

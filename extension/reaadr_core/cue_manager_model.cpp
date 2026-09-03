@@ -181,7 +181,10 @@ CueManagerEditResult edit_cue_manager_row(const SessionModel& model,
     const std::string* value = update.second;
     if (std::string(update.first) == "start_time") value = &start_value;
     else if (std::string(update.first) == "end_time") value = &end_value;
-    if (value->empty() && !(std::string(update.first) == "notes" && options.notes_set)) continue;
+    const bool explicitly_empty =
+      (std::string(update.first) == "notes" && options.notes_set) ||
+      (std::string(update.first) == "dialogue" && options.dialogue_set);
+    if (value->empty() && !explicitly_empty) continue;
     if (field(cue, key) == *value) continue;
     cue[key] = *value;
     result.changed = true;

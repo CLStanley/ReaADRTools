@@ -35,6 +35,8 @@ void CueManagerController::select_index(int index)
   selected_key_ = view_.cues.rows[static_cast<std::size_t>(index)].cue_key;
   view_.cues.selected_cue_key = selected_key_;
   for (std::size_t i = 0; i < view_.cues.rows.size(); ++i) view_.cues.rows[i].selected = static_cast<int>(i) == index;
+  project_state_.write(core::SessionModelRepository::kNamespace,
+                       "manager_selected_cue_key", selected_key_);
 }
 
 void CueManagerController::select_relative(int delta)
@@ -81,6 +83,9 @@ bool CueManagerController::edit_selected(const core::CueManagerEditOptions& edit
   options.edit.cue_key = selected_key_;
   const auto result = core::commit_cue_manager_edit(repository, options);
   if (!result) { error = result.error; return false; }
+  if (!options.edit.new_cue_key.empty()) selected_key_ = options.edit.new_cue_key;
+  project_state_.write(core::SessionModelRepository::kNamespace,
+                       "manager_selected_cue_key", selected_key_);
   return reload();
 }
 
@@ -93,6 +98,13 @@ bool CueManagerController::set_selected_status(const std::string& status, std::s
   const auto result = core::commit_cue_status(repository, options);
   if (!result) { error = result.error; return false; }
   return reload();
+}
+
+const core::CueManagerRow* CueManagerController::selected_row() const
+{
+  for (const auto& row : view_.cues.rows)
+    if (row.selected) return &row;
+  return nullptr;
 }
 
 } // namespace reaadr::ui

@@ -20,6 +20,7 @@ public:
   bool navigate_previous();
   bool edit_selected(const core::CueManagerEditOptions& edit, std::string& error);
   bool set_selected_status(const std::string& status, std::string& error);
+  const core::CueManagerRow* selected_row() const;
   const core::ManagerViewModel& view() const { return view_; }
 
 private:

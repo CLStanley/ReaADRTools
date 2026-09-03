@@ -327,6 +327,14 @@ The shared cue-management behaviors remain in `ReaADR_Core.lua`:
 This keeps the migration to a richer UI layer from duplicating core workflow
 logic.
 
+The native SWELL Cue Manager now reads the same consolidated Manager view
+snapshot and hydrates its editor from the selected canonical row. Cue ID,
+character, line, notes, type, timing, and status are submitted as one domain
+edit and one snapshot/revision commit; a cue rename also updates the persisted
+Manager selection to the new key. Compatibility callers can still omit empty
+fields, while explicit flags let the graphical editor intentionally clear line
+or notes text.
+
 ## Performance Guidance
 
 Prefer cached cue data over project-wide scans. Scan REAPER tracks/items only

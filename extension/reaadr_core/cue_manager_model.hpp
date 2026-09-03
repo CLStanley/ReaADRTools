@@ -44,6 +44,9 @@ struct CueManagerEditOptions {
   std::string new_cue_key;
   std::string new_character;
   bool notes_set = false;
+  // Empty dialogue normally means "not supplied" for compatibility callers.
+  // The native editor sets this flag so users can intentionally clear a line.
+  bool dialogue_set = false;
 };
 struct CueManagerEditResult {
   SessionModel model;

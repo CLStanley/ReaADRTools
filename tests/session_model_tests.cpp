@@ -41,6 +41,7 @@
 #include "reaadr_reaper/session_render_service.hpp"
 #include "reaadr_reaper/track_region_adapter.hpp"
 #include "app/manager_view_application_service.hpp"
+#include "ui/cue_manager_controller.hpp"
 
 #include <algorithm>
 #include <cmath>
@@ -2733,6 +2734,18 @@ void test_manager_view_model()
   check(loaded && loaded.view.active_tab == "preferences" && loaded.view.cues.rows.size() == 1 &&
           loaded.view.cues.rows.front().selected && loaded.layout.width == 1100,
         "native Manager application service builds one persisted view snapshot");
+
+  reaadr::ui::CueManagerController controller(service, store, {});
+  check(controller.reload() && controller.selected_row() &&
+          controller.selected_row()->cue_key == "A",
+        "native Cue Manager controller restores the persisted row selection");
+  reaadr::core::CueManagerEditOptions rename;
+  rename.new_cue_key = "A2";
+  std::string rename_error;
+  check(controller.edit_selected(rename, rename_error) && controller.selected_row() &&
+          controller.selected_row()->cue_key == "A2" &&
+          store.values.at("ReaADRTools:manager_selected_cue_key") == "A2",
+        "native Cue Manager keeps a renamed cue selected and persists its new key");
 }
 
 void test_manager_navigation()
@@ -2966,6 +2979,10 @@ void test_cue_manager_model()
     {"A1", "", "", "D", "", "", "", "", "", true});
   check(clear_notes && clear_notes.changed && clear_notes.model.cues[0].at("notes").empty(),
         "native cue manager can explicitly clear Notes");
+  const auto clear_dialogue = reaadr::core::edit_cue_manager_row(model,
+    {"A1", "", "", "D", "", "", "", "", "", false, true});
+  check(clear_dialogue && clear_dialogue.changed && clear_dialogue.model.cues[0].at("dialogue").empty(),
+        "native cue manager can explicitly clear dialogue");
   FakeProjectStateStore store;
   reaadr::core::SessionModelRepository repository(store);
   check(repository.save(model), "native cue manager commit fixture saves its model");
