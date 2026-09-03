@@ -81,15 +81,9 @@ INT_PTR cue_manager_proc(HWND hwnd, UINT message, WPARAM wparam, LPARAM)
     return 1;
   }
   if (message == WM_COMMAND && (LOWORD(wparam) == kPrevious || LOWORD(wparam) == kNext)) {
-    const LRESULT current = SendDlgItemMessage(hwnd, kRows, LB_GETCURSEL, 0, 0);
-    const int count = g_controller ? static_cast<int>(g_controller->view().cues.rows.size()) : 0;
-    if (count > 0) {
-      int next = static_cast<int>(current);
-      if (next < 0) next = 0;
-      else next = LOWORD(wparam) == kNext ? (next + 1) % count : (next + count - 1) % count;
-      SendDlgItemMessage(hwnd, kRows, LB_SETCURSEL, next, 0);
-      if (g_controller) g_controller->select_index(next);
-      update_details(hwnd, next);
+    if (g_controller) {
+      const bool moved = LOWORD(wparam) == kNext ? g_controller->navigate_next() : g_controller->navigate_previous();
+      if (moved) refresh_rows(hwnd);
     }
     return 1;
   }

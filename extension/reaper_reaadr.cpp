@@ -422,7 +422,10 @@ void run_native_cue_manager_action()
   }
   reaadr::reaper::GlobalStateStore global_state({GetExtState, SetExtState});
   reaadr::reaper::ManagerViewApplicationService service(project_state, &global_state);
-  reaadr::ui::CueManagerController controller(service);
+  const reaadr::reaper::CueNavigationApi navigation_api = {
+    GetPlayState, GetPlayPosition, GetCursorPosition, SetEditCurPos,
+  };
+  reaadr::ui::CueManagerController controller(service, project_state, navigation_api);
   if (!view_options.character.empty()) controller.set_character_filter(view_options.character);
   if (!controller.reload()) { ShowMessageBox(controller.view().error.c_str(), "ReaADR Cue Manager", 0); return; }
   if (reaadr::ui::show_cue_manager(controller)) return;

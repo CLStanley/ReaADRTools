@@ -2,20 +2,27 @@
 
 #include "reaadr_core/manager_view_model.hpp"
 #include "reaadr_reaper/manager_view_application_service.hpp"
+#include "reaadr_reaper/cue_navigation_service.hpp"
 
 namespace reaadr::ui {
 
 class CueManagerController {
 public:
-  explicit CueManagerController(reaper::ManagerViewApplicationService& service);
+  CueManagerController(reaper::ManagerViewApplicationService& service,
+                       core::ProjectStateStore& project_state,
+                       reaper::CueNavigationApi navigation_api);
   bool reload();
   bool set_character_filter(const std::string& character);
   void select_index(int index);
   void select_relative(int delta);
+  bool navigate_next();
+  bool navigate_previous();
   const core::ManagerViewModel& view() const { return view_; }
 
 private:
   reaper::ManagerViewApplicationService& service_;
+  core::ProjectStateStore& project_state_;
+  reaper::CueNavigationApi navigation_api_;
   core::CueManagerViewOptions options_;
   core::ManagerViewModel view_;
   std::string selected_key_;
