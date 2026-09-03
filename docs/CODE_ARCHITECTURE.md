@@ -329,11 +329,14 @@ logic.
 
 The native SWELL Cue Manager now reads the same consolidated Manager view
 snapshot and hydrates its editor from the selected canonical row. Cue ID,
-character, line, notes, type, timing, and status are submitted as one domain
-edit and one snapshot/revision commit; a cue rename also updates the persisted
-Manager selection to the new key. Compatibility callers can still omit empty
-fields, while explicit flags let the graphical editor intentionally clear line
-or notes text.
+character, line, notes, type, timing, and status are submitted to a dedicated
+application service. It validates the proposed edit without REAPER dependencies
+and forwards the resulting cue set to `SessionRenderService`, which owns the
+model snapshot, derived model rebuild, project artifacts, character-filter
+reapplication, overlay refresh, revision, events, and project Undo. A cue rename also updates
+the persisted Manager selection to the new key. Compatibility callers can
+still omit empty fields, while explicit flags let the graphical editor
+intentionally clear line or notes text.
 The same window applies search, character, and status through one controller
 reload and routes Jump through the canonical navigation service. A successful
 explicit jump clears filters that could hide its target; builds without a

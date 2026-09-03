@@ -51,6 +51,8 @@ cl /nologo /EHsc /O2 /LD /std:c++17 ^
   reaadr_core\event_log.cpp ^
   reaadr_core\character_filter.cpp ^
   reaadr_core\cue_cleanup.cpp ^
+  reaadr_core\cue_manager_model.cpp ^
+  reaadr_core\manager_preferences.cpp ^
   reaadr_core\region_timing_sync.cpp ^
   reaadr_core\cue_navigation.cpp ^
   reaadr_core\record_arm.cpp ^
@@ -71,12 +73,21 @@ cl /nologo /EHsc /O2 /LD /std:c++17 ^
   reaadr_reaper\record_arm_adapter.cpp ^
   reaadr_reaper\recording_setup_adapter.cpp ^
   reaadr_reaper\recording_transport_executor.cpp ^
-  reaadr_reaper\recording_application_service.cpp ^
   reaadr_reaper\overlay_refresh_adapter.cpp ^
-  reaadr_reaper\overlay_application_service.cpp ^
   reaadr_reaper\cue_cleanup_adapter.cpp ^
-  reaadr_reaper\cue_cleanup_application_service.cpp ^
-  reaadr_reaper\character_filter_application_service.cpp ^
+  app\recording_application_service.cpp ^
+  app\overlay_application_service.cpp ^
+  app\cue_cleanup_application_service.cpp ^
+  app\character_filter_application_service.cpp ^
+  app\manager_view_application_service.cpp ^
+  app\cue_manager_application_service.cpp ^
+  ui\reaadr_ui.cpp ^
+  ui\cue_manager_controller.cpp ^
+  ui\cue_manager_window.cpp ^
+  ui\manager_view_model.cpp ^
+  ui\manager_navigation.cpp ^
+  ui\manager_ui_contract.cpp ^
+  ui\cue_manager_ui_contract.cpp ^
   /Fe"%BUILD_DIR%\%TARGET%" ^
   /link user32.lib /DEF:reaper_reaadr.def
 

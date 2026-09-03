@@ -1,15 +1,16 @@
 #pragma once
 
 #include "manager_view_model.hpp"
+#include "app/cue_manager_application_service.hpp"
 #include "app/manager_view_application_service.hpp"
 #include "reaadr_reaper/cue_navigation_service.hpp"
-#include "reaadr_core/cue_status.hpp"
 
 namespace reaadr::ui {
 
 class CueManagerController {
 public:
   CueManagerController(reaper::ManagerViewApplicationService& service,
+                       reaper::CueManagerMutationService& mutations,
                        core::ProjectStateStore& project_state,
                        reaper::CueNavigationApi navigation_api);
   bool reload();
@@ -22,12 +23,12 @@ public:
   bool navigate_previous();
   bool navigate_to_id(const std::string& cue_id, std::string& error);
   bool edit_selected(const core::CueManagerEditOptions& edit, std::string& error);
-  bool set_selected_status(const std::string& status, std::string& error);
   const core::CueManagerRow* selected_row() const;
   const core::ManagerViewModel& view() const { return view_; }
 
 private:
   reaper::ManagerViewApplicationService& service_;
+  reaper::CueManagerMutationService& mutations_;
   core::ProjectStateStore& project_state_;
   reaper::CueNavigationApi navigation_api_;
   core::CueManagerViewOptions options_;

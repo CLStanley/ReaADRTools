@@ -1,10 +1,19 @@
 #define REAPERAPI_IMPLEMENT
 #define REAPERAPI_MINIMAL
 #define REAPERAPI_WANT_AddCustomizableMenu
+#define REAPERAPI_WANT_AddMediaItemToTrack
+#define REAPERAPI_WANT_AddProjectMarker2
 #define REAPERAPI_WANT_AddRemoveReaScript
+#define REAPERAPI_WANT_AddTakeToMediaItem
+#define REAPERAPI_WANT_ColorFromNative
+#define REAPERAPI_WANT_ColorToNative
+#define REAPERAPI_WANT_CountProjectMarkers
 #define REAPERAPI_WANT_CountSelectedMediaItems
+#define REAPERAPI_WANT_CountTrackMediaItems
 #define REAPERAPI_WANT_CountTracks
 #define REAPERAPI_WANT_CreateTakeAudioAccessor
+#define REAPERAPI_WANT_DeleteProjectMarker
+#define REAPERAPI_WANT_DeleteTrackMediaItem
 #define REAPERAPI_WANT_DestroyAudioAccessor
 #define REAPERAPI_WANT_GetActiveTake
 #define REAPERAPI_WANT_GetAudioAccessorEndTime
@@ -12,7 +21,10 @@
 #define REAPERAPI_WANT_GetAudioAccessorStartTime
 #define REAPERAPI_WANT_GetExtState
 #define REAPERAPI_WANT_GetMediaItemInfo_Value
+#define REAPERAPI_WANT_GetMediaSourceLength
+#define REAPERAPI_WANT_GetMediaTrackInfo_Value
 #define REAPERAPI_WANT_GetProjExtState
+#define REAPERAPI_WANT_GetProjectPathEx
 #define REAPERAPI_WANT_GetRegionOrMarker
 #define REAPERAPI_WANT_GetRegionOrMarkerInfo_Value
 #define REAPERAPI_WANT_GetResourcePath
@@ -20,10 +32,23 @@
 #define REAPERAPI_WANT_GetTrack
 #define REAPERAPI_WANT_GetUserInputs
 #define REAPERAPI_WANT_GetSetMediaItemInfo_String
+#define REAPERAPI_WANT_GetSetMediaItemTakeInfo
+#define REAPERAPI_WANT_GetSetMediaItemTakeInfo_String
 #define REAPERAPI_WANT_GetSetMediaTrackInfo_String
+#define REAPERAPI_WANT_GetSetProjectInfo
+#define REAPERAPI_WANT_GetSetProjectInfo_String
+#define REAPERAPI_WANT_GetTrackMediaItem
 #define REAPERAPI_WANT_EnumProjectMarkers3
+#define REAPERAPI_WANT_InsertTrackAtIndex
+#define REAPERAPI_WANT_MoveMediaItemToTrack
+#define REAPERAPI_WANT_PCM_Source_CreateFromFile
+#define REAPERAPI_WANT_PCM_Source_Destroy
 #define REAPERAPI_WANT_PreventUIRefresh
+#define REAPERAPI_WANT_SetMediaItemInfo_Value
+#define REAPERAPI_WANT_SetMediaTrackInfo_Value
+#define REAPERAPI_WANT_SetProjectMarker4
 #define REAPERAPI_WANT_SetProjExtState
+#define REAPERAPI_WANT_SetRegionOrMarkerInfo_Value
 #define REAPERAPI_WANT_SetExtState
 #define REAPERAPI_WANT_ShowMessageBox
 #define REAPERAPI_WANT_TimeMap_curFrameRate
@@ -61,6 +86,7 @@
 #include <cstring>
 #include <ctime>
 #include <fstream>
+#include <functional>
 #include <map>
 #include <regex>
 #include <sstream>
@@ -72,12 +98,13 @@
 
 #include "reaadr_core/session_model.hpp"
 #include "reaadr_core/model_repository.hpp"
-#include "reaadr_core/cue_status.hpp"
 #include "reaadr_core/cue_manager_model.hpp"
 #include "app/overlay_application_service.hpp"
 #include "app/manager_view_application_service.hpp"
+#include "app/cue_manager_application_service.hpp"
 #include "reaadr_reaper/overlay_refresh_adapter.hpp"
 #include "reaadr_reaper/cue_navigation_service.hpp"
+#include "reaadr_reaper/session_render_service.hpp"
 #include "reaadr_reaper/project_state.hpp"
 #include "reaadr_reaper/project_transaction.hpp"
 #include "ui/reaadr_ui.hpp"
@@ -400,6 +427,80 @@ void run_validate_session_action()
   ShowMessageBox(message.c_str(), "ReaADR Session Model", 0);
 }
 
+std::string native_utc_timestamp()
+{
+  const std::time_t now = std::time(nullptr);
+  std::tm utc = {};
+#ifdef _WIN32
+  if (gmtime_s(&utc, &now) != 0) return {};
+#else
+  if (!gmtime_r(&now, &utc)) return {};
+#endif
+  std::array<char, 32> buffer = {};
+  return std::strftime(buffer.data(), buffer.size(), "%Y-%m-%dT%H:%M:%SZ", &utc)
+    ? std::string(buffer.data()) : std::string();
+}
+
+std::string native_cue_audio_path()
+{
+  std::array<char, 4096> path = {};
+  if (GetProjectPathEx) GetProjectPathEx(nullptr, path.data(), static_cast<int>(path.size()));
+  std::string directory = path.data();
+  if (directory.empty() && GetResourcePath) {
+    const char* resource_path = GetResourcePath();
+    if (resource_path) directory = resource_path;
+  }
+  if (directory.empty()) directory = ".";
+  const char last = directory.back();
+  if (last != '/' && last != '\\') directory.push_back('/');
+  return directory + "reaadr_cue.wav";
+}
+
+reaadr::reaper::TrackRegionApi native_track_region_api()
+{
+  return {
+    CountTracks, GetTrack, InsertTrackAtIndex, GetSetMediaTrackInfo_String,
+    GetMediaTrackInfo_Value, SetMediaTrackInfo_Value, CountProjectMarkers,
+    EnumProjectMarkers3, SetProjectMarker4, AddProjectMarker2,
+    DeleteProjectMarker, ColorToNative, ColorFromNative,
+    TrackList_AdjustWindows, UpdateArrange,
+  };
+}
+
+reaadr::reaper::RulerLaneApi native_ruler_lane_api()
+{
+  return {
+    GetSetProjectInfo, GetSetProjectInfo_String, CountProjectMarkers,
+    EnumProjectMarkers3, GetRegionOrMarker, GetRegionOrMarkerInfo_Value,
+    SetRegionOrMarkerInfo_Value, ColorToNative, ColorFromNative,
+  };
+}
+
+reaadr::reaper::CueAudioApi native_cue_audio_api()
+{
+  return {
+    CountTracks, GetTrack, GetSetMediaTrackInfo_String, CountTrackMediaItems,
+    GetTrackMediaItem, GetSetMediaItemInfo_String, GetMediaItemInfo_Value,
+    SetMediaItemInfo_Value, AddMediaItemToTrack, DeleteTrackMediaItem,
+    MoveMediaItemToTrack, GetActiveTake, AddTakeToMediaItem,
+    GetSetMediaItemTakeInfo_String, GetSetMediaItemTakeInfo,
+    PCM_Source_CreateFromFile, GetMediaSourceLength, PCM_Source_Destroy,
+  };
+}
+
+reaadr::reaper::TransactionApi native_session_transaction_api()
+{
+  return {
+    Undo_BeginBlock2, Undo_EndBlock2, Undo_CanUndo2, Undo_DoUndo2,
+    PreventUIRefresh,
+  };
+}
+
+reaadr::reaper::OverlaySelectionInput native_overlay_selection();
+double native_overlay_frame_rate();
+bool native_overlay_refresh_callback(
+  const reaadr::core::OverlayRefreshOptions& options, std::string* error);
+
 void run_native_cue_manager_action()
 {
   reaadr::reaper::ProjectStateStore project_state(nullptr, {GetProjExtState, SetProjExtState});
@@ -407,10 +508,34 @@ void run_native_cue_manager_action()
   reaadr::core::CueManagerViewOptions view_options;
   reaadr::reaper::GlobalStateStore global_state({GetExtState, SetExtState});
   reaadr::reaper::ManagerViewApplicationService service(project_state, &global_state);
+  reaadr::core::EventLogRepository event_log(project_state);
+  reaadr::core::CharacterFilterRepository character_filter(project_state);
+  reaadr::core::OverlaySettingsRepository overlay_settings(project_state);
+  reaadr::core::CueSelectionRepository cue_selection(project_state);
+  const reaadr::reaper::OverlayApplicationApi overlay_api = {
+    native_overlay_frame_rate, native_overlay_selection,
+    native_overlay_refresh_callback,
+  };
+  reaadr::reaper::OverlayApplicationService overlay_application(
+    repository, overlay_settings, cue_selection, character_filter, overlay_api);
+  reaadr::reaper::SessionRenderService renderer(
+    repository, event_log, character_filter, nullptr, native_track_region_api(),
+    native_ruler_lane_api(), native_cue_audio_api(), native_session_transaction_api());
+  reaadr::reaper::SessionRenderOptions render_options;
+  render_options.cue_audio_path = native_cue_audio_path();
+  render_options.event.source = "native_cue_manager";
+  render_options.refresh_overlay = [&overlay_application](std::string* error) {
+    const auto refreshed = overlay_application.refresh();
+    if (!refreshed && error) *error = refreshed.error;
+    return static_cast<bool>(refreshed);
+  };
+  reaadr::reaper::CueManagerApplicationService mutations(
+    repository, overlay_settings, renderer, render_options, {native_utc_timestamp});
   const reaadr::reaper::CueNavigationApi navigation_api = {
     GetPlayState, GetPlayPosition, GetCursorPosition, SetEditCurPos,
   };
-  reaadr::ui::CueManagerController controller(service, project_state, navigation_api);
+  reaadr::ui::CueManagerController controller(
+    service, mutations, project_state, navigation_api);
   if (!controller.reload()) { ShowMessageBox(controller.view().error.c_str(), "ReaADR Cue Manager", 0); return; }
   if (reaadr::ui::show_cue_manager(controller)) return;
 
@@ -450,11 +575,10 @@ void run_native_cue_manager_action()
     return;
   }
   *comma = '\0';
-  reaadr::core::CueStatusCommitOptions options;
-  options.update.cue_key = input.data();
-  options.update.status = comma + 1;
-  options.utc_timestamp = "";
-  const auto updated = reaadr::core::commit_cue_status(repository, options);
+  reaadr::core::CueManagerEditOptions options;
+  options.cue_key = input.data();
+  options.status = comma + 1;
+  const auto updated = mutations.edit(options);
   if (!updated) ShowMessageBox(updated.error.c_str(), "ReaADR Cue Manager", 0);
 }
 

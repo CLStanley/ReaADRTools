@@ -41,6 +41,7 @@
 #include "reaadr_reaper/session_render_service.hpp"
 #include "reaadr_reaper/track_region_adapter.hpp"
 #include "app/manager_view_application_service.hpp"
+#include "app/cue_manager_application_service.hpp"
 #include "ui/cue_manager_controller.hpp"
 
 #include <algorithm>
@@ -104,6 +105,31 @@ public:
   }
   std::map<std::string, std::string> values;
   bool writes_succeed = true;
+};
+
+class FakeCueManagerMutationService final
+  : public reaadr::reaper::CueManagerMutationService {
+public:
+  explicit FakeCueManagerMutationService(FakeProjectStateStore& store) : store_(store) {}
+
+  reaadr::reaper::CueManagerApplicationResult edit(
+    const reaadr::core::CueManagerEditOptions& options) override
+  {
+    reaadr::reaper::CueManagerApplicationResult result;
+    reaadr::core::SessionModelRepository repository(store_);
+    reaadr::core::CueManagerCommitOptions commit;
+    commit.edit = options;
+    const auto committed = reaadr::core::commit_cue_manager_edit(repository, commit);
+    if (!committed) result.error = committed.error;
+    else {
+      result.edit = committed.edit;
+      result.revision = committed.revision;
+    }
+    return result;
+  }
+
+private:
+  FakeProjectStateStore& store_;
 };
 
 std::string project_state_value;
@@ -2740,7 +2766,9 @@ void test_manager_view_model()
           loaded.view.cues.rows.front().selected && loaded.layout.width == 1100,
         "native Manager application service builds one persisted view snapshot");
 
-  reaadr::ui::CueManagerController controller(service, store, fake_navigation_api());
+  FakeCueManagerMutationService mutations(store);
+  reaadr::ui::CueManagerController controller(
+    service, mutations, store, fake_navigation_api());
   check(controller.reload() && controller.selected_row() &&
           controller.selected_row()->cue_key == "A",
         "native Cue Manager controller restores the persisted row selection");
@@ -3518,6 +3546,102 @@ void test_session_render_service()
   std::remove((cue_path + ".reaadr.tmp").c_str());
 }
 
+void test_cue_manager_application_service()
+{
+  const std::string cue_path = "/tmp/reaadr-cue-manager-application-cue.wav";
+  FakeProjectStateStore store;
+  reaadr::core::SessionModelRepository repository(store);
+  reaadr::core::EventLogRepository events(store);
+  reaadr::core::CharacterFilterRepository character_filter(store);
+  reaadr::core::OverlaySettingsRepository overlay_settings(store);
+  render_adapter_probe = {};
+  render_adapter_probe.source_lengths[cue_path] = 3.0;
+
+  reaadr::reaper::SessionRenderOptions render_options;
+  render_options.commit.replacement.build.session_id = "cue-manager-application";
+  render_options.commit.replacement.build.preroll_seconds = 3.0;
+  render_options.commit.utc_timestamp = "2026-09-03T12:00:00Z";
+  render_options.event.utc_timestamp = render_options.commit.utc_timestamp;
+  render_options.render.create_dialogue_tracks = false;
+  render_options.cue_audio_path = cue_path;
+  bool overlay_succeeds = true;
+  int overlay_refreshes = 0;
+  render_options.refresh_overlay = [&](std::string* error) {
+    ++overlay_refreshes;
+    if (!overlay_succeeds && error) *error = "Injected overlay refresh failure.";
+    return overlay_succeeds;
+  };
+  reaadr::reaper::SessionRenderService renderer(
+    repository, events, character_filter, nullptr, fake_render_api(), fake_ruler_lane_api(),
+    fake_cue_audio_api(), fake_transaction_api());
+  const std::vector<reaadr::core::Fields> cues = {{
+    {"id", "A1"}, {"character", "Actor"}, {"start_time", "10"}, {"end_time", "12"},
+    {"line", "Original line"}, {"status", "Not Recorded"},
+  }};
+  transaction_probe = {};
+  const auto initial = renderer.commit_and_render(cues, render_options);
+  check(static_cast<bool>(initial),
+        "Cue Manager application fixture creates an initially synchronized session");
+
+  reaadr::reaper::CueManagerApplicationService service(
+    repository, overlay_settings, renderer, render_options,
+    {[]() { return std::string("2026-09-03T12:01:00Z"); }});
+  reaadr::core::CueManagerEditOptions edit;
+  edit.cue_key = "A1";
+  edit.dialogue = "Revised line";
+  edit.dialogue_set = true;
+  edit.start_time = "14";
+  edit.end_time = "16";
+  transaction_probe = {};
+  const auto updated = service.edit(edit);
+  const auto loaded = repository.load();
+  check(updated && loaded && updated.revision == 2 &&
+          loaded.model.cues[0].at("line") == "Revised line" &&
+          loaded.model.cues[0].at("start_time") == "14" &&
+          loaded.model.regions[0].at("start_time") == "14",
+        "Cue Manager application edits the canonical cue and rebuilds derived model records");
+  check(transaction_probe.begins == 1 && transaction_probe.ends == 1 &&
+          transaction_probe.undos == 0 && render_adapter_probe.regions.size() == 1 &&
+          std::abs(render_adapter_probe.regions[0].start_time - 14.0) < 0.000001 &&
+          std::abs(render_adapter_probe.tracks[0].items[0]->values.at("D_POSITION") - 11.0) < 0.000001 &&
+          overlay_refreshes == 2,
+        "Cue Manager application synchronizes regions, cue audio, and overlay in one Undo block");
+  const auto event_log = events.load();
+  check(event_log && event_log.lines.size() == 4 &&
+          event_log.lines[2].find("|CueUpdated|") != std::string::npos &&
+          event_log.lines[3].find("|SyncFull|") != std::string::npos,
+        "Cue Manager application publishes one cue update and one full-sync event");
+
+  transaction_probe = {};
+  const auto unchanged = service.edit(edit);
+  check(unchanged && unchanged.revision == 2 && transaction_probe.begins == 0 &&
+          overlay_refreshes == 2 && events.load().lines.size() == 4,
+        "an unchanged Cue Manager edit creates no Undo point, overlay refresh, revision, or event");
+
+  edit.dialogue = "Must roll back";
+  edit.start_time = "18";
+  edit.end_time = "20";
+  overlay_succeeds = false;
+  transaction_probe = {};
+  transaction_probe.available_undo = "ReaADR: edit cue (failed)";
+  const auto failed = service.edit(edit);
+  const auto restored = repository.load();
+  check(!failed && failed.synchronization.model_rolled_back &&
+          transaction_probe.undos == 1 && overlay_refreshes == 3 && restored &&
+          restored.model.cues[0].at("line") == "Revised line" &&
+          restored.model.cues[0].at("start_time") == "14" &&
+          events.load().lines.size() == 4,
+        "Cue Manager overlay failure rolls back the canonical edit and success events");
+
+  for (FakeTrack& track : render_adapter_probe.tracks) {
+    for (const auto& item : track.items) destroy_fake_source(item->take.source);
+  }
+  check(render_adapter_probe.live_sources.empty(),
+        "Cue Manager application test releases transferred fake media sources");
+  std::remove(cue_path.c_str());
+  std::remove((cue_path + ".reaadr.tmp").c_str());
+}
+
 void test_region_timing_render_service()
 {
   const std::string cue_path = "/tmp/reaadr-region-timing-render-service-cue.wav";
@@ -3647,6 +3771,7 @@ int main()
   test_extended_render_planner();
   test_complete_render_adapter();
   test_session_render_service();
+  test_cue_manager_application_service();
   test_region_timing_render_service();
   if (failures != 0) {
     std::cerr << failures << " native core test(s) failed\n";

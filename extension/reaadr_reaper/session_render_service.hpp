@@ -7,6 +7,7 @@
 #include "character_filter_adapter.hpp"
 #include "render_artifact_adapter.hpp"
 
+#include <functional>
 #include <string>
 #include <vector>
 
@@ -24,6 +25,10 @@ struct SessionRenderOptions {
   std::string commit_event_type = "SessionSaved";
   bool apply_character_filter = true;
   bool publish_events = true;
+  // Optional application-layer hook for derived surfaces such as the video
+  // overlay. It runs inside the outer model/render transaction, so a failure
+  // rolls back both extstate and all previously applied project artifacts.
+  std::function<bool(std::string* error)> refresh_overlay;
 };
 
 struct SessionRenderResult {

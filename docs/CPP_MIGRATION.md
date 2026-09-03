@@ -266,10 +266,14 @@ matching the Lua inline ID editor without creating duplicate canonical keys.
 It also supports inline character-name edits while preserving the existing cue
 ID and generated-artifact ownership relationships.
 The graphical editor now hydrates all fields from the selected canonical row,
-exposes Cue ID and character editing, and commits status with the other fields
-as one snapshot/revision update. Renamed cues remain selected through their new
-canonical key, and an explicit edit flag distinguishes clearing dialogue from
-an omitted compatibility field.
+exposes Cue ID and character editing, and submits status with the other fields
+as one operation. The native Cue Manager application service now validates that
+operation in the domain core, then commits the edited cue set through the full
+session renderer. Model records, regions, ruler lanes, cue audio, active
+character filters, video overlays, revision, and events therefore share one
+Undo-backed boundary and roll back together on failure. Renamed cues remain selected
+through their new canonical key, and an explicit edit flag distinguishes
+clearing dialogue from an omitted compatibility field.
 Search, character, and status filters now live in the native Cue Manager action
 bar instead of a separate launch prompt. The native Jump control uses the
 shared navigation service and clears stale filters when needed so its target is

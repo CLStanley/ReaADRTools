@@ -124,13 +124,13 @@ SessionRenderResult SessionRenderService::commit_and_render(
           restore_model_after_project_rollback = true;
           transaction.mark_failed();
         } else {
-          bool filter_applied = true;
+          bool derived_surfaces_applied = true;
           if (options.apply_character_filter) {
             const CharacterFilterInspectionResult filter_inspection =
               inspect_character_filter_project(project_, track_region_api_, ruler_lane_api_);
             if (!filter_inspection) {
               result.error = filter_inspection.error;
-              filter_applied = false;
+              derived_surfaces_applied = false;
             } else {
               const core::CharacterFilterPlanResult filter_plan =
                 core::build_character_filter_plan(
@@ -138,7 +138,7 @@ SessionRenderResult SessionRenderService::commit_and_render(
                   options.commit.replacement.build.preroll_seconds);
               if (!filter_plan) {
                 result.error = filter_plan.error;
-                filter_applied = false;
+                derived_surfaces_applied = false;
               } else {
                 result.character_filter_plan = filter_plan.plan;
                 result.character_filter = apply_character_filter_plan_transactionally(
@@ -146,17 +146,29 @@ SessionRenderResult SessionRenderService::commit_and_render(
                   result.character_filter_plan, options.undo_description);
                 if (!result.character_filter) {
                   result.error = result.character_filter.error;
-                  filter_applied = false;
+                  derived_surfaces_applied = false;
                 }
               }
             }
-            if (!filter_applied) {
+            if (!derived_surfaces_applied) {
               restore_model_after_project_rollback = true;
               transaction.mark_failed();
             }
           }
 
-          if (filter_applied && options.publish_events) {
+          if (derived_surfaces_applied && options.refresh_overlay) {
+            std::string overlay_error;
+            if (!options.refresh_overlay(&overlay_error)) {
+              result.error = overlay_error.empty()
+                ? "The video overlay could not be synchronized."
+                : overlay_error;
+              derived_surfaces_applied = false;
+              restore_model_after_project_rollback = true;
+              transaction.mark_failed();
+            }
+          }
+
+          if (derived_surfaces_applied && options.publish_events) {
             core::EventPublishOptions event_options = options.event;
             if (event_options.utc_timestamp.empty()) {
               event_options.utc_timestamp = options.commit.utc_timestamp;

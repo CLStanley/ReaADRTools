@@ -3,9 +3,11 @@
 namespace reaadr::ui {
 
 CueManagerController::CueManagerController(reaper::ManagerViewApplicationService& service,
+                                           reaper::CueManagerMutationService& mutations,
                                            core::ProjectStateStore& project_state,
                                            reaper::CueNavigationApi navigation_api)
-  : service_(service), project_state_(project_state), navigation_api_(navigation_api) {}
+  : service_(service), mutations_(mutations), project_state_(project_state),
+    navigation_api_(navigation_api) {}
 
 bool CueManagerController::reload()
 {
@@ -97,26 +99,13 @@ bool CueManagerController::navigate_to_id(const std::string& cue_id, std::string
 
 bool CueManagerController::edit_selected(const core::CueManagerEditOptions& edit, std::string& error)
 {
-  core::SessionModelRepository repository(project_state_);
-  core::CueManagerCommitOptions options;
-  options.edit = edit;
-  options.edit.cue_key = selected_key_;
-  const auto result = core::commit_cue_manager_edit(repository, options);
+  core::CueManagerEditOptions options = edit;
+  options.cue_key = selected_key_;
+  const auto result = mutations_.edit(options);
   if (!result) { error = result.error; return false; }
-  if (!options.edit.new_cue_key.empty()) selected_key_ = options.edit.new_cue_key;
+  if (!options.new_cue_key.empty()) selected_key_ = options.new_cue_key;
   project_state_.write(core::SessionModelRepository::kNamespace,
                        "manager_selected_cue_key", selected_key_);
-  return reload();
-}
-
-bool CueManagerController::set_selected_status(const std::string& status, std::string& error)
-{
-  core::SessionModelRepository repository(project_state_);
-  core::CueStatusCommitOptions options;
-  options.update.cue_key = selected_key_;
-  options.update.status = status;
-  const auto result = core::commit_cue_status(repository, options);
-  if (!result) { error = result.error; return false; }
   return reload();
 }
 
