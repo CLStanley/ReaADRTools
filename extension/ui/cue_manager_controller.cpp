@@ -23,9 +23,13 @@ bool CueManagerController::reload()
   return true;
 }
 
-bool CueManagerController::set_character_filter(const std::string& character)
+bool CueManagerController::set_filters(const std::string& query,
+                                       const std::string& character,
+                                       const std::string& status)
 {
+  options_.query = query;
   options_.character = character;
+  options_.status = status;
   return reload();
 }
 
@@ -72,6 +76,22 @@ bool CueManagerController::navigate_previous()
   const auto result = navigation.navigate_previous();
   if (!result) return false;
   selected_key_ = result.cue.cue_key;
+  return reload();
+}
+
+bool CueManagerController::navigate_to_id(const std::string& cue_id, std::string& error)
+{
+  core::SessionModelRepository sessions(project_state_);
+  core::CueSelectionRepository selections(project_state_);
+  reaper::CueNavigationService navigation(sessions, selections, navigation_api_);
+  const auto result = navigation.navigate_to_id(cue_id);
+  if (!result) { error = result.error; return false; }
+  selected_key_ = result.cue.cue_key;
+  // An explicit jump must reveal its target even if the previous filter would
+  // otherwise hide it from the list.
+  options_.query.clear();
+  options_.character.clear();
+  options_.status.clear();
   return reload();
 }
 

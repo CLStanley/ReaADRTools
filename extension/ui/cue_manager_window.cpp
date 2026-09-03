@@ -16,11 +16,13 @@ constexpr int kRows = 48002;
 constexpr int kDetails = 48003;
 constexpr int kPrevious = 48004;
 constexpr int kNext = 48005;
-constexpr int kFilter = 48006;
+constexpr int kCharacterFilter = 48006;
 constexpr int kApplyFilter = 48007;
 constexpr int kEditDialogue = 48008, kEditNotes = 48009, kEditType = 48010;
 constexpr int kEditStart = 48011, kEditEnd = 48012, kEditStatus = 48013, kApplyEdit = 48014;
 constexpr int kEditCueId = 48015, kEditCharacter = 48016;
+constexpr int kSearchFilter = 48017, kStatusFilter = 48018, kResetFilter = 48019;
+constexpr int kJumpCueId = 48020, kJump = 48021;
 CueManagerController* g_controller = nullptr;
 
 void update_editor(HWND hwnd)
@@ -92,9 +94,31 @@ INT_PTR cue_manager_proc(HWND hwnd, UINT message, WPARAM wparam, LPARAM)
     return 1;
   }
   if (message == WM_COMMAND && LOWORD(wparam) == kApplyFilter) {
-    char filter[256] = {};
-    GetDlgItemText(hwnd, kFilter, filter, sizeof(filter));
-    if (g_controller && g_controller->set_character_filter(filter)) refresh_rows(hwnd);
+    char query[256] = {}, character[256] = {}, status[128] = {};
+    GetDlgItemText(hwnd, kSearchFilter, query, sizeof(query));
+    GetDlgItemText(hwnd, kCharacterFilter, character, sizeof(character));
+    GetDlgItemText(hwnd, kStatusFilter, status, sizeof(status));
+    if (g_controller && g_controller->set_filters(query, character, status)) refresh_rows(hwnd);
+    return 1;
+  }
+  if (message == WM_COMMAND && LOWORD(wparam) == kResetFilter) {
+    SetDlgItemText(hwnd, kSearchFilter, "");
+    SetDlgItemText(hwnd, kCharacterFilter, "");
+    SetDlgItemText(hwnd, kStatusFilter, "");
+    if (g_controller && g_controller->set_filters({}, {}, {})) refresh_rows(hwnd);
+    return 1;
+  }
+  if (message == WM_COMMAND && LOWORD(wparam) == kJump) {
+    char cue_id[128] = {};
+    GetDlgItemText(hwnd, kJumpCueId, cue_id, sizeof(cue_id));
+    std::string error;
+    if (g_controller && g_controller->navigate_to_id(cue_id, error)) {
+      SetDlgItemText(hwnd, kSearchFilter, "");
+      SetDlgItemText(hwnd, kCharacterFilter, "");
+      SetDlgItemText(hwnd, kStatusFilter, "");
+      refresh_rows(hwnd);
+    }
+    else if (!error.empty()) MessageBox(nullptr, error.c_str(), "ReaADR Cue Manager", 0);
     return 1;
   }
   if (message == WM_COMMAND && LOWORD(wparam) == kApplyEdit) {
@@ -135,9 +159,17 @@ SWELL_DEFINE_DIALOG_RESOURCE_BEGIN2(kDialog, SWELL_DLG_WS_FLIPPED,
   "ReaADR Tools - Cue Manager", 1180, 820)
 BEGIN
   LTEXT "ReaADR Cue Manager", -1, 16, 12, 300, 16
-  LTEXT "Character / Filter", -1, 16, 42, 160, 14
-  EDITTEXT kFilter, 180, 40, 760, 20, ES_AUTOHSCROLL
-  PUSHBUTTON "Apply", kApplyFilter, 950, 40, 80, 20
+  LTEXT "Search", -1, 16, 42, 48, 14
+  EDITTEXT kSearchFilter, 66, 40, 220, 20, ES_AUTOHSCROLL
+  LTEXT "Character", -1, 294, 42, 68, 14
+  EDITTEXT kCharacterFilter, 364, 40, 170, 20, ES_AUTOHSCROLL
+  LTEXT "Status", -1, 542, 42, 48, 14
+  EDITTEXT kStatusFilter, 592, 40, 145, 20, ES_AUTOHSCROLL
+  PUSHBUTTON "Apply", kApplyFilter, 745, 40, 58, 20
+  PUSHBUTTON "Reset", kResetFilter, 807, 40, 58, 20
+  LTEXT "Jump", -1, 878, 42, 38, 14
+  EDITTEXT kJumpCueId, 918, 40, 130, 20, ES_AUTOHSCROLL
+  PUSHBUTTON "Go", kJump, 1054, 40, 50, 20
   EDITTEXT kDetails, 16, 696, 1010, 20, ES_AUTOHSCROLL | ES_READONLY
   LTEXT "Cue ID", -1, 16, 730, 50, 14
   EDITTEXT kEditCueId, 70, 728, 120, 20, ES_AUTOHSCROLL

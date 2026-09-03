@@ -270,6 +270,10 @@ exposes Cue ID and character editing, and commits status with the other fields
 as one snapshot/revision update. Renamed cues remain selected through their new
 canonical key, and an explicit edit flag distinguishes clearing dialogue from
 an omitted compatibility field.
+Search, character, and status filters now live in the native Cue Manager action
+bar instead of a separate launch prompt. The native Jump control uses the
+shared navigation service and clears stale filters when needed so its target is
+both visible and selected.
 Sortable headers are validated against the native contract; unknown sort keys
 fall back safely to the established start-time ordering.
 Those catalogs are presentation constraints only; canonical cue edits retain

@@ -405,6 +405,17 @@ void run_native_cue_manager_action()
   reaadr::reaper::ProjectStateStore project_state(nullptr, {GetProjExtState, SetProjExtState});
   reaadr::core::SessionModelRepository repository(project_state);
   reaadr::core::CueManagerViewOptions view_options;
+  reaadr::reaper::GlobalStateStore global_state({GetExtState, SetExtState});
+  reaadr::reaper::ManagerViewApplicationService service(project_state, &global_state);
+  const reaadr::reaper::CueNavigationApi navigation_api = {
+    GetPlayState, GetPlayPosition, GetCursorPosition, SetEditCurPos,
+  };
+  reaadr::ui::CueManagerController controller(service, project_state, navigation_api);
+  if (!controller.reload()) { ShowMessageBox(controller.view().error.c_str(), "ReaADR Cue Manager", 0); return; }
+  if (reaadr::ui::show_cue_manager(controller)) return;
+
+  // Builds without a native dialog resource retain a compact compatibility
+  // prompt, but supported native windows keep filtering inside the Manager.
   if (GetUserInputs) {
     std::array<char, 1024> filter_input = {};
     if (GetUserInputs("ReaADR Cue Manager: Filter", 3, "Search,Character,Status",
@@ -419,15 +430,6 @@ void run_native_cue_manager_action()
       }
     }
   }
-  reaadr::reaper::GlobalStateStore global_state({GetExtState, SetExtState});
-  reaadr::reaper::ManagerViewApplicationService service(project_state, &global_state);
-  const reaadr::reaper::CueNavigationApi navigation_api = {
-    GetPlayState, GetPlayPosition, GetCursorPosition, SetEditCurPos,
-  };
-  reaadr::ui::CueManagerController controller(service, project_state, navigation_api);
-  if (!view_options.character.empty()) controller.set_character_filter(view_options.character);
-  if (!controller.reload()) { ShowMessageBox(controller.view().error.c_str(), "ReaADR Cue Manager", 0); return; }
-  if (reaadr::ui::show_cue_manager(controller)) return;
   const auto loaded = service.load(view_options, "cues");
   if (!loaded) { ShowMessageBox(loaded.error.c_str(), "ReaADR Cue Manager", 0); return; }
   const auto& view = loaded.view.cues;

@@ -334,6 +334,10 @@ edit and one snapshot/revision commit; a cue rename also updates the persisted
 Manager selection to the new key. Compatibility callers can still omit empty
 fields, while explicit flags let the graphical editor intentionally clear line
 or notes text.
+The same window applies search, character, and status through one controller
+reload and routes Jump through the canonical navigation service. A successful
+explicit jump clears filters that could hide its target; builds without a
+native dialog resource retain the compact prompt as a compatibility fallback.
 
 ## Performance Guidance
 

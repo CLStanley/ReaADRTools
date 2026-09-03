@@ -13,11 +13,14 @@ public:
                        core::ProjectStateStore& project_state,
                        reaper::CueNavigationApi navigation_api);
   bool reload();
-  bool set_character_filter(const std::string& character);
+  bool set_filters(const std::string& query,
+                   const std::string& character,
+                   const std::string& status);
   void select_index(int index);
   void select_relative(int delta);
   bool navigate_next();
   bool navigate_previous();
+  bool navigate_to_id(const std::string& cue_id, std::string& error);
   bool edit_selected(const core::CueManagerEditOptions& edit, std::string& error);
   bool set_selected_status(const std::string& status, std::string& error);
   const core::CueManagerRow* selected_row() const;

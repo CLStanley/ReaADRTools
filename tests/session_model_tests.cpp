@@ -2710,9 +2710,14 @@ void test_manager_view_model()
   reaadr::core::SessionModel model;
   model.session["session_id"] = "manager-session";
   model.session["session_name"] = "Manager Preview";
-  model.cues = {{{"id", "A"}, {"character", "Actor"}, {"start_time", "1"},
-                 {"end_time", "2"}, {"dialogue", "Hello"}, {"type", "ADR"},
-                 {"status", "Not Recorded"}}};
+  model.cues = {
+    {{"id", "A"}, {"character", "Actor"}, {"start_time", "1"},
+     {"end_time", "2"}, {"line", "Hello"}, {"cue_type", "ADR"},
+     {"status", "Not Recorded"}},
+    {{"id", "B"}, {"character", "Beta"}, {"start_time", "3"},
+     {"end_time", "4"}, {"line", "Goodbye"}, {"cue_type", "ADR"},
+     {"status", "Recorded"}},
+  };
   reaadr::core::ManagerPreferences preferences;
   reaadr::core::CueManagerViewOptions options;
   options.query = "hello";
@@ -2731,14 +2736,27 @@ void test_manager_view_model()
   reaadr::reaper::ManagerViewApplicationService service(store);
   reaadr::core::CueManagerViewOptions persisted_options;
   const auto loaded = service.load(persisted_options, "preferences");
-  check(loaded && loaded.view.active_tab == "preferences" && loaded.view.cues.rows.size() == 1 &&
+  check(loaded && loaded.view.active_tab == "preferences" && loaded.view.cues.rows.size() == 2 &&
           loaded.view.cues.rows.front().selected && loaded.layout.width == 1100,
         "native Manager application service builds one persisted view snapshot");
 
-  reaadr::ui::CueManagerController controller(service, store, {});
+  reaadr::ui::CueManagerController controller(service, store, fake_navigation_api());
   check(controller.reload() && controller.selected_row() &&
           controller.selected_row()->cue_key == "A",
         "native Cue Manager controller restores the persisted row selection");
+  const bool controller_filtered = controller.set_filters("goodbye", "Beta", "Recorded");
+  check(controller_filtered &&
+          controller.view().cues.rows.size() == 1 &&
+          controller.selected_row() &&
+          controller.selected_row()->cue_key == "B",
+        "native Cue Manager controller applies search, character, and status filters together");
+  navigation_cursor_moves = 0;
+  std::string jump_error;
+  check(controller.navigate_to_id("A", jump_error) &&
+          controller.view().cues.rows.size() == 2 &&
+          controller.selected_row() &&
+          controller.selected_row()->cue_key == "A" && navigation_cursor_moves == 1,
+        "native Cue Manager jump reveals and selects a cue hidden by the previous filter");
   reaadr::core::CueManagerEditOptions rename;
   rename.new_cue_key = "A2";
   std::string rename_error;
@@ -2929,6 +2947,11 @@ void test_cue_manager_model()
   const auto line_view = reaadr::core::build_cue_manager_model(line_model, "A1");
   check(line_view && line_view.rows[0].dialogue == "Imported line",
         "native cue manager reads imported line fields as dialogue");
+  reaadr::core::CueManagerViewOptions line_search_options;
+  line_search_options.query = "imported";
+  const auto line_search = reaadr::core::build_cue_manager_view(line_model, line_search_options);
+  check(line_search && line_search.rows.size() == 1 && line_search.rows[0].cue_key == "A1",
+        "native cue manager search includes canonical imported line fields");
   const auto filtered = reaadr::core::build_cue_manager_view(model, {"hello", "Actor", "", "A1"});
   check(filtered && filtered.rows.size() == 1 && filtered.rows[0].cue_key == "A1" &&
           filtered.rows[0].selected,

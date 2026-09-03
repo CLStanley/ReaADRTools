@@ -65,7 +65,7 @@ CueManagerModel build_cue_manager_view(const SessionModel& model,
     if (!options.status.empty() && status != options.status) continue;
     if (!contains_case_insensitive(key, options.query) &&
         !contains_case_insensitive(character, options.query) &&
-        !contains_case_insensitive(field(cue, "dialogue"), options.query)) continue;
+        !contains_case_insensitive(dialogue_field(cue), options.query)) continue;
     result.rows.push_back({index, key, character, dialogue_field(cue), cue_type_field(cue),
       status, field(cue, "start_time"), field(cue, "end_time"), key == options.selected_cue_key, notes_field(cue)});
   }
