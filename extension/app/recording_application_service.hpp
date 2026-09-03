@@ -4,8 +4,8 @@
 #include "reaadr_core/cue_status.hpp"
 #include "reaadr_core/event_log.hpp"
 #include "reaadr_core/recording_preferences.hpp"
-#include "project_transaction.hpp"
-#include "recording_transport_executor.hpp"
+#include "../reaadr_reaper/project_transaction.hpp"
+#include "../reaadr_reaper/recording_transport_executor.hpp"
 
 #include <string>
 

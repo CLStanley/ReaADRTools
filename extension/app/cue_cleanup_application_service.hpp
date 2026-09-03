@@ -1,5 +1,5 @@
 #pragma once
-#include "cue_cleanup_adapter.hpp"
+#include "../reaadr_reaper/cue_cleanup_adapter.hpp"
 #include "../reaadr_core/model_repository.hpp"
 #include <string>
 #include <utility>

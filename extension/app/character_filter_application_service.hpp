@@ -1,5 +1,5 @@
 #pragma once
-#include "character_filter_adapter.hpp"
+#include "../reaadr_reaper/character_filter_adapter.hpp"
 #include "../reaadr_core/model_repository.hpp"
 #include <string>
 #include <vector>
