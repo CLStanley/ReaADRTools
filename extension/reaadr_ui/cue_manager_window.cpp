@@ -18,6 +18,8 @@ constexpr int kPrevious = 48004;
 constexpr int kNext = 48005;
 constexpr int kFilter = 48006;
 constexpr int kApplyFilter = 48007;
+constexpr int kEditDialogue = 48008, kEditNotes = 48009, kEditType = 48010;
+constexpr int kEditStart = 48011, kEditEnd = 48012, kEditStatus = 48013, kApplyEdit = 48014;
 CueManagerController* g_controller = nullptr;
 
 void update_details(HWND hwnd, int index)
@@ -80,6 +82,28 @@ INT_PTR cue_manager_proc(HWND hwnd, UINT message, WPARAM wparam, LPARAM)
     if (g_controller && g_controller->set_character_filter(filter)) refresh_rows(hwnd);
     return 1;
   }
+  if (message == WM_COMMAND && LOWORD(wparam) == kApplyEdit) {
+    if (g_controller) {
+      char dialogue[512] = {}, notes[512] = {}, type[128] = {}, start[64] = {}, end[64] = {}, status[128] = {};
+      GetDlgItemText(hwnd, kEditDialogue, dialogue, sizeof(dialogue));
+      GetDlgItemText(hwnd, kEditNotes, notes, sizeof(notes));
+      GetDlgItemText(hwnd, kEditType, type, sizeof(type));
+      GetDlgItemText(hwnd, kEditStart, start, sizeof(start));
+      GetDlgItemText(hwnd, kEditEnd, end, sizeof(end));
+      GetDlgItemText(hwnd, kEditStatus, status, sizeof(status));
+      core::CueManagerEditOptions edit;
+      edit.dialogue = dialogue; edit.notes = notes; edit.notes_set = true;
+      edit.cue_type = type; edit.start_time = start; edit.end_time = end;
+      std::string error;
+      if (g_controller->edit_selected(edit, error)) refresh_rows(hwnd);
+      else if (!error.empty()) MessageBox(nullptr, error.c_str(), "ReaADR Cue Manager", 0);
+      if (status[0] != '\0') {
+        if (g_controller->set_selected_status(status, error)) refresh_rows(hwnd);
+        else if (!error.empty()) MessageBox(nullptr, error.c_str(), "ReaADR Cue Manager", 0);
+      }
+    }
+    return 1;
+  }
   if (message == WM_COMMAND && (LOWORD(wparam) == kPrevious || LOWORD(wparam) == kNext)) {
     if (g_controller) {
       const bool moved = LOWORD(wparam) == kNext ? g_controller->navigate_next() : g_controller->navigate_previous();
@@ -91,17 +115,30 @@ INT_PTR cue_manager_proc(HWND hwnd, UINT message, WPARAM wparam, LPARAM)
 }
 
 SWELL_DEFINE_DIALOG_RESOURCE_BEGIN2(kDialog, SWELL_DLG_WS_FLIPPED,
-  "ReaADR Tools - Cue Manager", 1180, 760)
+  "ReaADR Tools - Cue Manager", 1180, 820)
 BEGIN
   LTEXT "ReaADR Cue Manager", -1, 16, 12, 300, 16
   LTEXT "Character / Filter", -1, 16, 42, 160, 14
   EDITTEXT kFilter, 180, 40, 760, 20, ES_AUTOHSCROLL
   PUSHBUTTON "Apply", kApplyFilter, 950, 40, 80, 20
   EDITTEXT kDetails, 16, 696, 1010, 20, ES_AUTOHSCROLL | ES_READONLY
+  LTEXT "Dialogue", -1, 16, 756, 70, 14
+  EDITTEXT kEditDialogue, 90, 754, 330, 20, ES_AUTOHSCROLL
+  LTEXT "Notes", -1, 430, 756, 50, 14
+  EDITTEXT kEditNotes, 480, 754, 330, 20, ES_AUTOHSCROLL
+  LTEXT "Type", -1, 820, 756, 40, 14
+  EDITTEXT kEditType, 860, 754, 100, 20, ES_AUTOHSCROLL
+  LTEXT "Start", -1, 16, 782, 50, 14
+  EDITTEXT kEditStart, 70, 780, 120, 20, ES_AUTOHSCROLL
+  LTEXT "End", -1, 200, 782, 40, 14
+  EDITTEXT kEditEnd, 245, 780, 120, 20, ES_AUTOHSCROLL
+  LTEXT "Status", -1, 380, 782, 50, 14
+  EDITTEXT kEditStatus, 435, 780, 180, 20, ES_AUTOHSCROLL
+  PUSHBUTTON "Apply Edit", kApplyEdit, 630, 778, 100, 24
   LISTBOX kRows, 16, 72, 1124, 620, LBS_NOTIFY | WS_VSCROLL | WS_BORDER
-  PUSHBUTTON "Previous", kPrevious, 16, 728, 90, 24
-  PUSHBUTTON "Next", kNext, 112, 728, 90, 24
-  DEFPUSHBUTTON "Close", IDCANCEL, 1050, 728, 90, 24
+  PUSHBUTTON "Previous", kPrevious, 740, 778, 90, 24
+  PUSHBUTTON "Next", kNext, 836, 778, 90, 24
+  DEFPUSHBUTTON "Close", IDCANCEL, 1050, 778, 90, 24
 END
 SWELL_DEFINE_DIALOG_RESOURCE_END2(kDialog)
 #endif

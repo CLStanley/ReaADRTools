@@ -73,4 +73,26 @@ bool CueManagerController::navigate_previous()
   return reload();
 }
 
+bool CueManagerController::edit_selected(const core::CueManagerEditOptions& edit, std::string& error)
+{
+  core::SessionModelRepository repository(project_state_);
+  core::CueManagerCommitOptions options;
+  options.edit = edit;
+  options.edit.cue_key = selected_key_;
+  const auto result = core::commit_cue_manager_edit(repository, options);
+  if (!result) { error = result.error; return false; }
+  return reload();
+}
+
+bool CueManagerController::set_selected_status(const std::string& status, std::string& error)
+{
+  core::SessionModelRepository repository(project_state_);
+  core::CueStatusCommitOptions options;
+  options.update.cue_key = selected_key_;
+  options.update.status = status;
+  const auto result = core::commit_cue_status(repository, options);
+  if (!result) { error = result.error; return false; }
+  return reload();
+}
+
 } // namespace reaadr::ui

@@ -3,6 +3,7 @@
 #include "reaadr_core/manager_view_model.hpp"
 #include "reaadr_reaper/manager_view_application_service.hpp"
 #include "reaadr_reaper/cue_navigation_service.hpp"
+#include "reaadr_core/cue_status.hpp"
 
 namespace reaadr::ui {
 
@@ -17,6 +18,8 @@ public:
   void select_relative(int delta);
   bool navigate_next();
   bool navigate_previous();
+  bool edit_selected(const core::CueManagerEditOptions& edit, std::string& error);
+  bool set_selected_status(const std::string& status, std::string& error);
   const core::ManagerViewModel& view() const { return view_; }
 
 private:
