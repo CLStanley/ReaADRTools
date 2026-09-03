@@ -1,5 +1,8 @@
 #include "cue_manager_controller.hpp"
 
+#include <iomanip>
+#include <sstream>
+
 namespace reaadr::ui {
 
 CueManagerController::CueManagerController(reaper::ManagerViewApplicationService& service,
@@ -106,6 +109,52 @@ bool CueManagerController::edit_selected(const core::CueManagerEditOptions& edit
   if (!options.new_cue_key.empty()) selected_key_ = options.new_cue_key;
   project_state_.write(core::SessionModelRepository::kNamespace,
                        "manager_selected_cue_key", selected_key_);
+  return reload();
+}
+
+core::CueManagerAddOptions CueManagerController::default_add_options() const
+{
+  core::CueManagerAddOptions options;
+  core::SessionModelRepository sessions(project_state_);
+  const core::SessionLoadResult loaded = sessions.load();
+  options.cue_key = loaded ? core::next_cue_manager_id(loaded.model)
+                           : std::to_string(view_.total_cues + 1);
+
+  double position = 0.0;
+  const int play_state = navigation_api_.get_play_state ? navigation_api_.get_play_state() : 0;
+  if ((play_state & 1) != 0 && navigation_api_.get_play_position)
+    position = navigation_api_.get_play_position();
+  else if (navigation_api_.get_cursor_position)
+    position = navigation_api_.get_cursor_position();
+  std::ostringstream start;
+  std::ostringstream end;
+  start << std::fixed << std::setprecision(3) << position;
+  end << std::fixed << std::setprecision(3) << position + 2.0;
+  options.start_time = start.str();
+  options.end_time = end.str();
+  return options;
+}
+
+bool CueManagerController::add_cue(const core::CueManagerAddOptions& cue, std::string& error)
+{
+  const auto result = mutations_.add(cue);
+  if (!result) { error = result.error; return false; }
+  selected_key_ = result.mutation.selected_cue_key;
+  options_.query.clear();
+  options_.character.clear();
+  options_.status.clear();
+  return reload();
+}
+
+bool CueManagerController::remove_selected(std::string& error)
+{
+  if (selected_key_.empty()) {
+    error = "Select a cue before removing it.";
+    return false;
+  }
+  const auto result = mutations_.remove(selected_key_);
+  if (!result) { error = result.error; return false; }
+  selected_key_ = result.mutation.selected_cue_key;
   return reload();
 }
 

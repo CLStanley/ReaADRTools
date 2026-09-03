@@ -530,7 +530,7 @@ void run_native_cue_manager_action()
     return static_cast<bool>(refreshed);
   };
   reaadr::reaper::CueManagerApplicationService mutations(
-    repository, overlay_settings, renderer, render_options, {native_utc_timestamp});
+    repository, overlay_settings, cue_selection, renderer, render_options, {native_utc_timestamp});
   const reaadr::reaper::CueNavigationApi navigation_api = {
     GetPlayState, GetPlayPosition, GetCursorPosition, SetEditCurPos,
   };

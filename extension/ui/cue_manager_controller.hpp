@@ -23,6 +23,9 @@ public:
   bool navigate_previous();
   bool navigate_to_id(const std::string& cue_id, std::string& error);
   bool edit_selected(const core::CueManagerEditOptions& edit, std::string& error);
+  core::CueManagerAddOptions default_add_options() const;
+  bool add_cue(const core::CueManagerAddOptions& cue, std::string& error);
+  bool remove_selected(std::string& error);
   const core::CueManagerRow* selected_row() const;
   const core::ManagerViewModel& view() const { return view_; }
 

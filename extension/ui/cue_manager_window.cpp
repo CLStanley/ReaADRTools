@@ -23,7 +23,23 @@ constexpr int kEditStart = 48011, kEditEnd = 48012, kEditStatus = 48013, kApplyE
 constexpr int kEditCueId = 48015, kEditCharacter = 48016;
 constexpr int kSearchFilter = 48017, kStatusFilter = 48018, kResetFilter = 48019;
 constexpr int kJumpCueId = 48020, kJump = 48021;
+constexpr int kNewCue = 48022, kAddCue = 48023, kRemoveCue = 48024;
 CueManagerController* g_controller = nullptr;
+
+void populate_add_editor(HWND hwnd)
+{
+  if (!g_controller) return;
+  const core::CueManagerAddOptions cue = g_controller->default_add_options();
+  SetDlgItemText(hwnd, kEditCueId, cue.cue_key.c_str());
+  SetDlgItemText(hwnd, kEditCharacter, cue.character.c_str());
+  SetDlgItemText(hwnd, kEditDialogue, cue.dialogue.c_str());
+  SetDlgItemText(hwnd, kEditNotes, cue.notes.c_str());
+  SetDlgItemText(hwnd, kEditType, cue.cue_type.c_str());
+  SetDlgItemText(hwnd, kEditStart, cue.start_time.c_str());
+  SetDlgItemText(hwnd, kEditEnd, cue.end_time.c_str());
+  SetDlgItemText(hwnd, kEditStatus, cue.status.c_str());
+  SetDlgItemText(hwnd, kDetails, "New cue: edit the fields below, then choose Add Cue");
+}
 
 void update_editor(HWND hwnd)
 {
@@ -121,6 +137,47 @@ INT_PTR cue_manager_proc(HWND hwnd, UINT message, WPARAM wparam, LPARAM)
     else if (!error.empty()) MessageBox(nullptr, error.c_str(), "ReaADR Cue Manager", 0);
     return 1;
   }
+  if (message == WM_COMMAND && LOWORD(wparam) == kNewCue) {
+    populate_add_editor(hwnd);
+    return 1;
+  }
+  if (message == WM_COMMAND && LOWORD(wparam) == kAddCue) {
+    if (g_controller) {
+      char cue_id[128] = {}, character[256] = {}, dialogue[512] = {}, notes[512] = {};
+      char type[128] = {}, start[64] = {}, end[64] = {}, status[128] = {};
+      GetDlgItemText(hwnd, kEditCueId, cue_id, sizeof(cue_id));
+      GetDlgItemText(hwnd, kEditCharacter, character, sizeof(character));
+      GetDlgItemText(hwnd, kEditDialogue, dialogue, sizeof(dialogue));
+      GetDlgItemText(hwnd, kEditNotes, notes, sizeof(notes));
+      GetDlgItemText(hwnd, kEditType, type, sizeof(type));
+      GetDlgItemText(hwnd, kEditStart, start, sizeof(start));
+      GetDlgItemText(hwnd, kEditEnd, end, sizeof(end));
+      GetDlgItemText(hwnd, kEditStatus, status, sizeof(status));
+      core::CueManagerAddOptions cue;
+      cue.cue_key = cue_id; cue.character = character; cue.dialogue = dialogue;
+      cue.notes = notes; cue.cue_type = type; cue.status = status;
+      cue.start_time = start; cue.end_time = end;
+      std::string error;
+      if (g_controller->add_cue(cue, error)) refresh_rows(hwnd);
+      else if (!error.empty()) MessageBox(nullptr, error.c_str(), "ReaADR Cue Manager", 0);
+    }
+    return 1;
+  }
+  if (message == WM_COMMAND && LOWORD(wparam) == kRemoveCue) {
+    const core::CueManagerRow* row = g_controller ? g_controller->selected_row() : nullptr;
+    if (!row) {
+      MessageBox(nullptr, "Select a cue before removing it.", "ReaADR Cue Manager", 0);
+      return 1;
+    }
+    const std::string prompt = "Remove cue " + row->cue_key + " (" + row->character +
+      ")? Remaining cues will be renumbered and cue regions/audio will be rebuilt.";
+    if (MessageBox(hwnd, prompt.c_str(), "ReaADR Cue Manager", MB_YESNO | MB_ICONWARNING) == IDYES) {
+      std::string error;
+      if (g_controller->remove_selected(error)) refresh_rows(hwnd);
+      else if (!error.empty()) MessageBox(nullptr, error.c_str(), "ReaADR Cue Manager", 0);
+    }
+    return 1;
+  }
   if (message == WM_COMMAND && LOWORD(wparam) == kApplyEdit) {
     if (g_controller) {
       char cue_id[128] = {}, character[256] = {}, dialogue[512] = {}, notes[512] = {};
@@ -170,6 +227,9 @@ BEGIN
   LTEXT "Jump", -1, 878, 42, 38, 14
   EDITTEXT kJumpCueId, 918, 40, 130, 20, ES_AUTOHSCROLL
   PUSHBUTTON "Go", kJump, 1054, 40, 50, 20
+  PUSHBUTTON "New Cue", kNewCue, 16, 70, 82, 20
+  PUSHBUTTON "Add Cue", kAddCue, 104, 70, 82, 20
+  PUSHBUTTON "Remove Cue", kRemoveCue, 192, 70, 96, 20
   EDITTEXT kDetails, 16, 696, 1010, 20, ES_AUTOHSCROLL | ES_READONLY
   LTEXT "Cue ID", -1, 16, 730, 50, 14
   EDITTEXT kEditCueId, 70, 728, 120, 20, ES_AUTOHSCROLL
@@ -188,7 +248,7 @@ BEGIN
   LTEXT "Status", -1, 380, 782, 50, 14
   EDITTEXT kEditStatus, 435, 780, 180, 20, ES_AUTOHSCROLL
   PUSHBUTTON "Apply Edit", kApplyEdit, 630, 778, 100, 24
-  LISTBOX kRows, 16, 72, 1124, 620, LBS_NOTIFY | WS_VSCROLL | WS_BORDER
+  LISTBOX kRows, 16, 98, 1124, 594, LBS_NOTIFY | WS_VSCROLL | WS_BORDER
   PUSHBUTTON "Previous", kPrevious, 740, 778, 90, 24
   PUSHBUTTON "Next", kNext, 836, 778, 90, 24
   DEFPUSHBUTTON "Close", IDCANCEL, 1050, 778, 90, 24

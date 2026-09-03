@@ -128,6 +128,31 @@ public:
     return result;
   }
 
+  reaadr::reaper::CueManagerApplicationResult add(
+    const reaadr::core::CueManagerAddOptions& options) override
+  {
+    reaadr::reaper::CueManagerApplicationResult result;
+    reaadr::core::SessionModelRepository repository(store_);
+    const auto loaded = repository.load();
+    if (!loaded) { result.error = reaadr::core::session_load_error_message(loaded); return result; }
+    result.mutation = reaadr::core::add_cue_manager_row(loaded.model, options);
+    if (!result.mutation) result.error = result.mutation.error;
+    else if (!repository.save(result.mutation.model)) result.error = "Could not save the added cue.";
+    return result;
+  }
+
+  reaadr::reaper::CueManagerApplicationResult remove(const std::string& cue_key) override
+  {
+    reaadr::reaper::CueManagerApplicationResult result;
+    reaadr::core::SessionModelRepository repository(store_);
+    const auto loaded = repository.load();
+    if (!loaded) { result.error = reaadr::core::session_load_error_message(loaded); return result; }
+    result.mutation = reaadr::core::remove_cue_manager_row(loaded.model, cue_key);
+    if (!result.mutation) result.error = result.mutation.error;
+    else if (!repository.save(result.mutation.model)) result.error = "Could not save the removed cue.";
+    return result;
+  }
+
 private:
   FakeProjectStateStore& store_;
 };
@@ -2792,6 +2817,19 @@ void test_manager_view_model()
           controller.selected_row()->cue_key == "A2" &&
           store.values.at("ReaADRTools:manager_selected_cue_key") == "A2",
         "native Cue Manager keeps a renamed cue selected and persists its new key");
+  auto new_cue = controller.default_add_options();
+  new_cue.cue_key = "C";
+  new_cue.start_time = "5";
+  new_cue.end_time = "7";
+  new_cue.dialogue = "Added inline";
+  std::string add_error;
+  check(controller.add_cue(new_cue, add_error) && controller.view().cues.rows.size() == 3 &&
+          controller.selected_row() && controller.selected_row()->cue_key == "C",
+        "native Cue Manager controller reveals and selects a newly added cue");
+  std::string remove_error;
+  check(controller.remove_selected(remove_error) && controller.view().cues.rows.size() == 2 &&
+          controller.selected_row() && controller.selected_row()->cue_key == "2",
+        "native Cue Manager controller follows the post-remove renumbered selection");
 }
 
 void test_manager_navigation()
@@ -3034,6 +3072,43 @@ void test_cue_manager_model()
     {"A1", "", "", "D", "", "", "", "", "", false, true});
   check(clear_dialogue && clear_dialogue.changed && clear_dialogue.model.cues[0].at("dialogue").empty(),
         "native cue manager can explicitly clear dialogue");
+
+  reaadr::core::CueManagerAddOptions add;
+  add.start_time = "0.5";
+  add.end_time = "0.25";
+  add.dialogue = "New line";
+  const auto added = reaadr::core::add_cue_manager_row(model, add);
+  check(added && added.changed && added.selected_cue_key == "3" && added.model_index == 0 &&
+          added.model.cues[0].at("id") == "3" && added.model.cues[0].at("character") == "ADR" &&
+          added.model.cues[0].at("line") == "New line" &&
+          added.model.cues[0].at("end_time") == "2.5" &&
+          added.model.state.at("last_operation") == "add_cached_cue",
+        "native Cue Manager add preserves Lua defaults, repairs duration, and sorts by timeline");
+  add.cue_key = "A1";
+  check(!reaadr::core::add_cue_manager_row(model, add),
+        "native Cue Manager add rejects duplicate canonical cue IDs");
+
+  reaadr::core::SessionModel padded = model;
+  padded.cues = {
+    {{"id", "001"}, {"start_time", "1"}, {"end_time", "2"}},
+    {{"id", "002"}, {"start_time", "3"}, {"end_time", "4"}},
+    {{"id", "003"}, {"start_time", "5"}, {"end_time", "6"}},
+  };
+  const auto removed = reaadr::core::remove_cue_manager_row(padded, "002");
+  check(removed && removed.changed && removed.affected_cue.at("id") == "002" &&
+          removed.model.cues.size() == 2 && removed.model.cues[0].at("id") == "001" &&
+          removed.model.cues[1].at("id") == "002" && removed.selected_cue_key == "002" &&
+          removed.model.cues[1].at("source_line") == "2" &&
+          removed.model.state.at("last_operation") == "remove_cached_cue",
+        "native Cue Manager remove preserves numeric padding, renumbers, and selects the next cue");
+  padded.cues[0]["id"] = "A";
+  const auto mixed_removed = reaadr::core::remove_cue_manager_row(padded, "002");
+  check(mixed_removed && mixed_removed.model.cues[0].at("id") == "1" &&
+          mixed_removed.model.cues[1].at("id") == "2",
+        "native Cue Manager remove matches Lua plain renumbering for mixed cue IDs");
+  check(!reaadr::core::remove_cue_manager_row(model, "missing"),
+        "native Cue Manager remove rejects unknown canonical cue IDs");
+
   FakeProjectStateStore store;
   reaadr::core::SessionModelRepository repository(store);
   check(repository.save(model), "native cue manager commit fixture saves its model");
@@ -3554,6 +3629,7 @@ void test_cue_manager_application_service()
   reaadr::core::EventLogRepository events(store);
   reaadr::core::CharacterFilterRepository character_filter(store);
   reaadr::core::OverlaySettingsRepository overlay_settings(store);
+  reaadr::core::CueSelectionRepository cue_selection(store);
   render_adapter_probe = {};
   render_adapter_probe.source_lengths[cue_path] = 3.0;
 
@@ -3584,7 +3660,7 @@ void test_cue_manager_application_service()
         "Cue Manager application fixture creates an initially synchronized session");
 
   reaadr::reaper::CueManagerApplicationService service(
-    repository, overlay_settings, renderer, render_options,
+    repository, overlay_settings, cue_selection, renderer, render_options,
     {[]() { return std::string("2026-09-03T12:01:00Z"); }});
   reaadr::core::CueManagerEditOptions edit;
   edit.cue_key = "A1";
@@ -3632,6 +3708,63 @@ void test_cue_manager_application_service()
           restored.model.cues[0].at("start_time") == "14" &&
           events.load().lines.size() == 4,
         "Cue Manager overlay failure rolls back the canonical edit and success events");
+
+  overlay_succeeds = true;
+  transaction_probe = {};
+  reaadr::core::CueManagerAddOptions add;
+  add.cue_key = "B1";
+  add.character = "Beta";
+  add.start_time = "18";
+  add.end_time = "20";
+  add.dialogue = "Added line";
+  const auto added = service.add(add);
+  const auto after_add = repository.load();
+  const auto selected_after_add = cue_selection.load();
+  check(added && added.revision == 5 && after_add && after_add.model.cues.size() == 2 &&
+          after_add.model.cues[1].at("id") == "B1" &&
+          selected_after_add && selected_after_add.state.manager_selected_cue_key == "B1" &&
+          selected_after_add.state.active_overlay_cue_key == "B1" &&
+          transaction_probe.begins == 1 && transaction_probe.ends == 1,
+        "Cue Manager application adds and selects a cue in one synchronized transaction");
+
+  overlay_succeeds = false;
+  transaction_probe = {};
+  transaction_probe.available_undo = "ReaADR: remove cue (failed)";
+  const auto remove_failed = service.remove("B1");
+  const auto after_remove_failure = repository.load();
+  const auto selection_after_failure = cue_selection.load();
+  check(!remove_failed && remove_failed.synchronization.model_rolled_back &&
+          transaction_probe.undos == 1 && after_remove_failure &&
+          after_remove_failure.model.cues.size() == 2 && selection_after_failure &&
+          selection_after_failure.state.manager_selected_cue_key == "B1" &&
+          selection_after_failure.state.active_overlay_cue_key == "B1",
+        "Cue Manager remove restores both the model and paired selection when overlay refresh fails");
+
+  overlay_succeeds = true;
+  transaction_probe = {};
+  const auto removed = service.remove("B1");
+  const auto after_remove = repository.load();
+  const auto selected_after_remove = cue_selection.load();
+  const auto mutation_events = events.load();
+  check(removed && removed.revision == 8 && after_remove && after_remove.model.cues.size() == 1 &&
+          after_remove.model.cues[0].at("id") == "1" && selected_after_remove &&
+          selected_after_remove.state.manager_selected_cue_key == "1" &&
+          selected_after_remove.state.active_overlay_cue_key == "1" &&
+          render_adapter_probe.regions.size() == 1 &&
+          mutation_events && mutation_events.lines.size() == 8 &&
+          mutation_events.lines[4].find("|CueCreated|") != std::string::npos &&
+          mutation_events.lines[6].find("|CueDeleted|") != std::string::npos,
+        "Cue Manager application removes and renumbers cues while rebuilding derived artifacts");
+
+  transaction_probe = {};
+  const auto removed_last = service.remove("1");
+  const auto empty_session = repository.load();
+  const auto empty_selection = cue_selection.load();
+  check(removed_last && removed_last.revision == 9 && empty_session && empty_session.model.cues.empty() &&
+          empty_selection && empty_selection.state.manager_selected_cue_key.empty() &&
+          empty_selection.state.active_overlay_cue_key.empty() &&
+          render_adapter_probe.regions.empty() && events.load().lines.size() == 10,
+        "Cue Manager application can remove the final cue and clear derived selection/artifacts");
 
   for (FakeTrack& track : render_adapter_probe.tracks) {
     for (const auto& item : track.items) destroy_fake_source(item->take.source);

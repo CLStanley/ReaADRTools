@@ -337,6 +337,12 @@ reapplication, overlay refresh, revision, events, and project Undo. A cue rename
 the persisted Manager selection to the new key. Compatibility callers can
 still omit empty fields, while explicit flags let the graphical editor
 intentionally clear line or notes text.
+Add and Remove now follow this native path as well. The core creates defaulted,
+timeline-sorted cues and performs deterministic Lua-compatible renumbering;
+the application layer renders the complete replacement cue set and publishes
+`CueCreated` or `CueDeleted` inside one Undo-owned operation. Paired Manager and
+overlay selection is updated before overlay refresh and restored with the model
+if a derived-surface update fails.
 The same window applies search, character, and status through one controller
 reload and routes Jump through the canonical navigation service. A successful
 explicit jump clears filters that could hide its target; builds without a

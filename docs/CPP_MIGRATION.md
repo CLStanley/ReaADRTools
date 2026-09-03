@@ -274,6 +274,14 @@ character filters, video overlays, revision, and events therefore share one
 Undo-backed boundary and roll back together on failure. Renamed cues remain selected
 through their new canonical key, and an explicit edit flag distinguishes
 clearing dialogue from an omitted compatibility field.
+Native New/Add/Remove controls now use the same boundary. Add defaults mirror
+the transitional Cue Manager (current transport position, two-second duration,
+`ADR`, `Dialogue`, and `Not Recorded`); removal preserves zero-padding when all
+remaining IDs are numeric and otherwise applies Lua-compatible plain numeric
+renumbering. The post-mutation Manager/overlay selection is written inside the
+render transaction before overlay generation and is compensated if rendering
+fails. Full rendering removes stale owned regions and cue audio after a delete
+without treating user recording tracks as disposable.
 Search, character, and status filters now live in the native Cue Manager action
 bar instead of a separate launch prompt. The native Jump control uses the
 shared navigation service and clears stale filters when needed so its target is

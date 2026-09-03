@@ -54,6 +54,25 @@ struct CueManagerEditResult {
   std::string error;
   explicit operator bool() const { return error.empty(); }
 };
+struct CueManagerAddOptions {
+  std::string cue_key;
+  std::string character = "ADR";
+  std::string start_time;
+  std::string end_time;
+  std::string dialogue;
+  std::string cue_type = "Dialogue";
+  std::string status = "Not Recorded";
+  std::string notes;
+};
+struct CueManagerMutationResult {
+  SessionModel model;
+  Fields affected_cue;
+  std::string selected_cue_key;
+  std::size_t model_index = 0;
+  bool changed = false;
+  std::string error;
+  explicit operator bool() const { return error.empty(); }
+};
 CueManagerModel build_cue_manager_model(const SessionModel& model,
                                         const std::string& selected_cue_key = {});
 CueManagerModel build_cue_manager_view(const SessionModel& model,
@@ -61,6 +80,13 @@ CueManagerModel build_cue_manager_view(const SessionModel& model,
 std::vector<std::string> cue_manager_character_choices(const SessionModel& model);
 CueManagerEditResult edit_cue_manager_row(const SessionModel& model,
                                            const CueManagerEditOptions& options);
+// Returns the first count-based numeric ID that is not already owned by a cue.
+std::string next_cue_manager_id(const SessionModel& model);
+CueManagerMutationResult add_cue_manager_row(const SessionModel& model,
+                                              const CueManagerAddOptions& options);
+CueManagerMutationResult remove_cue_manager_row(const SessionModel& model,
+                                                 const std::string& cue_key,
+                                                 bool renumber = true);
 struct CueManagerCommitOptions {
   CueManagerEditOptions edit;
   std::string snapshot_label = "Edit Cue";
