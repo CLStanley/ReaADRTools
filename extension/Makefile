@@ -33,7 +33,7 @@ CORE_SOURCES := reaadr_core/session_model.cpp reaadr_core/model_repository.cpp r
 	reaadr_core/recording_preferences.cpp reaadr_core/overlay_settings.cpp \
 	reaadr_core/overlay_eel.cpp reaadr_core/overlay_refresh.cpp
 UI_SOURCES := reaadr_ui.cpp
-UI_SOURCES += reaadr_ui/cue_manager_window.cpp
+UI_SOURCES += reaadr_ui/cue_manager_controller.cpp reaadr_ui/cue_manager_window.cpp
 UNAME_S := $(shell uname -s)
 ifeq ($(UNAME_S),Darwin)
 UI_SOURCES += $(WDL)/swell/swell-modstub.mm

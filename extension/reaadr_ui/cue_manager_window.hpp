@@ -1,3 +1,3 @@
 #pragma once
-#include "reaadr_core/manager_view_model.hpp"
-namespace reaadr::ui { bool show_cue_manager(const core::ManagerViewModel& view); }
+#include "cue_manager_controller.hpp"
+namespace reaadr::ui { bool show_cue_manager(CueManagerController& controller); }

@@ -81,6 +81,8 @@
 #include "reaadr_reaper/project_state.hpp"
 #include "reaadr_reaper/project_transaction.hpp"
 #include "reaadr_ui.hpp"
+#include "reaadr_ui/cue_manager_controller.hpp"
+#include "reaadr_ui/cue_manager_window.hpp"
 #include "reaadr_ui/cue_manager_window.hpp"
 
 #ifndef _WIN32
@@ -420,9 +422,12 @@ void run_native_cue_manager_action()
   }
   reaadr::reaper::GlobalStateStore global_state({GetExtState, SetExtState});
   reaadr::reaper::ManagerViewApplicationService service(project_state, &global_state);
+  reaadr::ui::CueManagerController controller(service);
+  if (!view_options.character.empty()) controller.set_character_filter(view_options.character);
+  if (!controller.reload()) { ShowMessageBox(controller.view().error.c_str(), "ReaADR Cue Manager", 0); return; }
+  if (reaadr::ui::show_cue_manager(controller)) return;
   const auto loaded = service.load(view_options, "cues");
   if (!loaded) { ShowMessageBox(loaded.error.c_str(), "ReaADR Cue Manager", 0); return; }
-  if (reaadr::ui::show_cue_manager(loaded.view)) return;
   const auto& view = loaded.view.cues;
   std::ostringstream summary;
   summary << "Session: " << view.session_id << "\n"
