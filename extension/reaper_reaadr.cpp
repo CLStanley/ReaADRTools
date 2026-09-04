@@ -629,15 +629,62 @@ void run_native_preferences_action()
     ShowMessageBox(loaded.error.c_str(), "ReaADR Preferences", 0);
     return;
   }
-  const auto& preferences = loaded.view.preferences;
+  const auto& view_preferences = loaded.view.preferences;
   std::ostringstream summary;
   summary << "Active tab: " << loaded.view.active_tab << "\n"
-          << "Overlay preset: " << reaadr::core::detect_overlay_profile(preferences.overlay) << "\n"
-          << "Remember layout: " << (preferences.remember_layout ? "yes" : "no") << "\n"
-          << "Hover preview: " << (preferences.hover_preview ? "yes" : "no") << "\n"
-          << "Tooltips: " << (preferences.tooltips ? "yes" : "no") << "\n"
-          << "Navigation wrap: " << (preferences.navigation_wrap ? "yes" : "no");
+          << "Overlay preset: " << reaadr::core::detect_overlay_profile(view_preferences.overlay) << "\n"
+          << "Remember layout: " << (view_preferences.remember_layout ? "yes" : "no") << "\n"
+          << "Hover preview: " << (view_preferences.hover_preview ? "yes" : "no") << "\n"
+          << "Tooltips: " << (view_preferences.tooltips ? "yes" : "no") << "\n"
+          << "Navigation wrap: " << (view_preferences.navigation_wrap ? "yes" : "no");
   ShowMessageBox(summary.str().c_str(), "ReaADR Preferences (Native)", 0);
+  if (!GetUserInputs) return;
+  std::array<char, 1024> input = {};
+  if (!GetUserInputs("ReaADR Preferences: Update", 4,
+                    "Remember layout (0/1),Hover preview (0/1),Tooltips (0/1),Navigation wrap (0/1)",
+                    input.data(), input.size())) return;
+  std::array<std::string, 4> values;
+  std::stringstream fields(input.data());
+  for (std::size_t index = 0; index < values.size(); ++index) {
+    if (!std::getline(fields, values[index], ',')) {
+      ShowMessageBox("Enter four comma-separated 0/1 values.", "ReaADR Preferences", 0);
+      return;
+    }
+    const auto first = values[index].find_first_not_of(" \t\r\n");
+    const auto last = values[index].find_last_not_of(" \t\r\n");
+    values[index] = first == std::string::npos ? std::string() : values[index].substr(first, last - first + 1);
+    if (values[index] != "0" && values[index] != "1") {
+      ShowMessageBox("Preference values must be 0 or 1.", "ReaADR Preferences", 0);
+      return;
+    }
+  }
+  reaadr::core::ManagerPreferencesRepository preference_repository(project_state, &global_state);
+  auto current = preference_repository.load();
+  if (!current) {
+    ShowMessageBox(current.error.c_str(), "ReaADR Preferences", 0);
+    return;
+  }
+  reaadr::core::ManagerPreferences updated = current.preferences;
+  const std::array<const char*, 4> keys = {
+    "remember_layout", "hover_preview", "tooltips", "navigation_wrap",
+  };
+  for (std::size_t index = 0; index < keys.size(); ++index) {
+    const auto result = reaadr::core::update_manager_preferences(updated, keys[index], values[index]);
+    if (!result) {
+      ShowMessageBox(result.error.c_str(), "ReaADR Preferences", 0);
+      return;
+    }
+    updated = result.preferences;
+  }
+  reaadr::reaper::ProjectTransaction transaction(
+    nullptr, native_session_transaction_api(), "ReaADR: update preferences", -1, true);
+  const auto saved = preference_repository.save(updated);
+  if (!saved) {
+    transaction.mark_failed();
+    ShowMessageBox(saved.error.c_str(), "ReaADR Preferences", 0);
+    return;
+  }
+  ShowMessageBox("Native Manager preferences updated.", "ReaADR Preferences", 0);
 }
 
 MediaTrack* native_overlay_get_track(ReaProject* project, int index)
