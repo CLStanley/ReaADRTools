@@ -669,6 +669,10 @@ void run_native_preferences_action()
     }
     updated = result.preferences;
   }
+  if (updated == loaded.preferences) {
+    ShowMessageBox("Native Manager preferences are unchanged.", "ReaADR Preferences", 0);
+    return;
+  }
   reaadr::reaper::ProjectTransaction transaction(
     nullptr, native_session_transaction_api(), "ReaADR: update preferences", -1, true);
   const auto saved = preference_repository.save(updated);
