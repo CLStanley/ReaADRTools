@@ -82,6 +82,7 @@ cl /nologo /EHsc /O2 /LD /std:c++17 ^
   app\manager_view_application_service.cpp ^
   app\cue_manager_application_service.cpp ^
   app\session_refresh_application_service.cpp ^
+  app\region_timing_application_service.cpp ^
   ui\reaadr_ui.cpp ^
   ui\cue_manager_controller.cpp ^
   ui\cue_manager_window.cpp ^

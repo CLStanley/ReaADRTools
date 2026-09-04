@@ -55,7 +55,8 @@ bool manager_action_is_native(const std::string& key)
   // These commands already bind to native application services. All other
   // Manager actions remain explicit compatibility routes until their UI and
   // host wiring are cut over.
-  return key == "validate_session" || key == "refresh_session" || key == "refresh_overlay" ||
+  return key == "validate_session" || key == "refresh_session" || key == "sync_regions" ||
+    key == "refresh_overlay" ||
     key == "next_cue" || key == "previous_cue" || key == "jump_to_cue";
 }
 

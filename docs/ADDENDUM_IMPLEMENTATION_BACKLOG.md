@@ -11,7 +11,7 @@ code change, a user-visible workflow, or a documented constraint.
 | E - Recording loop and transcription | Partial | Pre-roll repeat behavior is mostly implemented. Transcription remains future work; selected-media detection is currently threshold-based speech detection. |
 | F - Reliability and integrity | Mostly implemented | Model-first import/update, ownership-scoped deletion, model snapshots, centralized Undo rollback, and QA logging exist. Durable logs need expansion. |
 | G - Session state model | Mostly implemented | `adr_session_model_v1` is the source of truth for imported/generated ADR data. Some compatibility paths still read REAPER state directly. |
-| H - Sync engine | Partial | Initial sync APIs exist and are used by refresh, cue edits, import, detection, and cue generation. Native Refresh Session and Cue Manager add/edit/remove now use the transactional full-render coordinator, including paired selection, overlay refresh, and rollback. Exact-ownership region timing sync is implemented in the C++ domain/application layers but not cut over in the UI. Remaining work is drift resolution UI, merge handling, and broader incremental sync coverage. |
+| H - Sync engine | Partial | Initial sync APIs exist and are used by refresh, cue edits, import, detection, and cue generation. Native Refresh Session, Update Cues From Regions, and Cue Manager add/edit/remove now use the transactional full-render coordinator, including paired selection, overlay refresh, and rollback. Remaining work is drift resolution UI, merge handling, and broader incremental sync coverage. |
 | I - Event system | Partial | Lua provides the synchronous queue/subscriptions, and both Lua and C++ now publish to one bounded project-local event log. UI windows still use `session_revision` polling. |
 | J - Recovery and snapshots | Partial | Last-operation model snapshots and Undo-backed render rollback exist. Full snapshot history, restore UI, diffing, autosave, and crash recovery are not implemented. |
 
@@ -86,8 +86,8 @@ Initial migration targets:
   `sync_full()`. (Done for cue sheet import, dialogue detection, marker/region
   cue generation, region timing updates, and Cue Manager add/remove.)
 - Port explicit region timing adoption to the native domain and render
-  coordinator. (Implemented and test-covered; native UI cutover and in-REAPER
-  smoke testing remain.)
+  coordinator. (Implemented, application-wrapped, and test-covered; in-REAPER
+  smoke testing remains.)
 - Port canonical cue navigation and paired manager/overlay selection state to
   native services. (Implemented and test-covered; native Next/Previous/Jump
   actions are now bound, while in-REAPER smoke testing remains.)

@@ -347,6 +347,9 @@ Refresh Session is also exposed through a native application service. It treats
 the persisted cue set as intent and delegates the complete repair to
 `SessionRenderService`, keeping rebuilds and edits on the same model-first,
 Undo-backed path.
+The Update Cues From Regions action uses a matching application service around
+the existing timing-sync core and renderer. User regions remain non-authoritative:
+only uniquely owned generated regions can write timing back to the session model.
 The same window applies search, character, and status through one controller
 reload and routes Jump through the canonical navigation service. A successful
 explicit jump clears filters that could hide its target; builds without a

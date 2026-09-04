@@ -286,6 +286,10 @@ The Manager's Refresh Session action is now native as well. It reloads the
 canonical cue model and invokes the same full renderer used by edits, so a
 repair rebuilds generated tracks, regions, cue audio, filters, overlays,
 revision, and events atomically.
+Update Cues From Regions is now native too. Its ownership-scoped timing matcher
+adopts only exact ReaADR-generated regions, reports missing regions, and sends
+changed timing through the same full renderer with snapshot, Undo, overlay, and
+event handling.
 Search, character, and status filters now live in the native Cue Manager action
 bar instead of a separate launch prompt. The native Jump control uses the
 shared navigation service and clears stale filters when needed so its target is

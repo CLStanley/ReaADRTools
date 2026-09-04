@@ -57,7 +57,7 @@ REAPER_SOURCES := reaadr_reaper/project_state.cpp reaadr_reaper/project_transact
 	app/recording_application_service.cpp app/overlay_application_service.cpp \
 	app/cue_cleanup_application_service.cpp app/character_filter_application_service.cpp \
 	app/manager_view_application_service.cpp app/cue_manager_application_service.cpp \
-	app/session_refresh_application_service.cpp
+	app/session_refresh_application_service.cpp app/region_timing_application_service.cpp
 REAPER_HEADERS := reaadr_reaper/project_state.hpp reaadr_reaper/project_transaction.hpp \
 	reaadr_reaper/track_region_adapter.hpp reaadr_reaper/render_artifact_adapter.hpp \
 	reaadr_reaper/session_render_service.hpp reaadr_reaper/character_filter_adapter.hpp \
@@ -67,7 +67,7 @@ REAPER_HEADERS := reaadr_reaper/project_state.hpp reaadr_reaper/project_transact
 	app/recording_application_service.hpp app/overlay_application_service.hpp \
 	app/cue_cleanup_application_service.hpp app/character_filter_application_service.hpp \
 	app/manager_view_application_service.hpp app/cue_manager_application_service.hpp \
-	app/session_refresh_application_service.hpp
+	app/session_refresh_application_service.hpp app/region_timing_application_service.hpp
 NATIVE_SOURCES := $(CORE_SOURCES) $(REAPER_SOURCES) $(UI_SOURCES)
 NATIVE_HEADERS := $(CORE_HEADERS) $(REAPER_HEADERS)
 EXTENSION_SOURCES := reaper_reaadr.cpp $(NATIVE_SOURCES)

@@ -43,6 +43,7 @@
 #include "app/manager_view_application_service.hpp"
 #include "app/cue_manager_application_service.hpp"
 #include "app/session_refresh_application_service.hpp"
+#include "app/region_timing_application_service.hpp"
 #include "ui/cue_manager_controller.hpp"
 
 #include <algorithm>
@@ -2849,6 +2850,7 @@ void test_manager_navigation()
   check(reaadr::core::manager_action_is_native("validate_session") &&
           reaadr::core::manager_action_is_native("refresh_overlay") &&
           reaadr::core::manager_action_is_native("refresh_session") &&
+          reaadr::core::manager_action_is_native("sync_regions") &&
           !reaadr::core::manager_action_is_native("import_cue_sheet"),
         "native Manager action catalog distinguishes cut-over commands from Lua routes");
   const auto layout = reaadr::core::default_manager_window_layout();
@@ -3822,7 +3824,8 @@ void test_region_timing_render_service()
   reaadr::reaper::RegionTimingRenderOptions sync_options;
   sync_options.session = render_options;
   transaction_probe = {};
-  const auto synchronized = service.sync_region_timings_and_render(sync_options);
+  reaadr::reaper::RegionTimingApplicationService application(service, sync_options);
+  const auto synchronized = application.update();
   const auto loaded = repository.load();
   check(synchronized && synchronized.timing.changed_cues == 1 && loaded &&
           loaded.model.cues[0].at("start_time") == "14" &&
