@@ -350,6 +350,9 @@ Undo-backed path.
 The Update Cues From Regions action uses a matching application service around
 the existing timing-sync core and renderer. User regions remain non-authoritative:
 only uniquely owned generated regions can write timing back to the session model.
+Clear Character Cues now uses the native cleanup planner and REAPER adapter from
+the Manager action. Its destructive boundary remains character-scoped and
+explicitly excludes recording tracks and takes.
 The same window applies search, character, and status through one controller
 reload and routes Jump through the canonical navigation service. A successful
 explicit jump clears filters that could hide its target; builds without a

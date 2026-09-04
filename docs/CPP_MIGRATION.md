@@ -290,6 +290,11 @@ Update Cues From Regions is now native too. Its ownership-scoped timing matcher
 adopts only exact ReaADR-generated regions, reports missing regions, and sends
 changed timing through the same full renderer with snapshot, Undo, overlay, and
 event handling.
+Clear Character Cues is now exposed through the native cleanup application
+service. It accepts the same comma-separated character selection, removes only
+owned generated cues, regions, cue audio, and cue tracks, preserves recording
+tracks and takes, and protects the operation with a project transaction and
+model snapshot.
 Search, character, and status filters now live in the native Cue Manager action
 bar instead of a separate launch prompt. The native Jump control uses the
 shared navigation service and clears stale filters when needed so its target is
@@ -315,7 +320,7 @@ regions, cue-audio items, and `cue_character` tracks; stale plans fail closed
 and user/dialogue media remains untouched. The public cleanup command and
 model-persistence coordinator now coordinates inspection, project mutation,
 snapshot recovery, and canonical cue persistence in one native transaction;
-public command wiring remains part of the native UI cutover.
+the native Manager command is now wired, with in-REAPER smoke testing remaining.
 Native character-filter application now also coordinates canonical filter
 state, lane-aware planning, transactional REAPER mutation, and persistence;
 the existing Lua filter window remains a compatibility UI.

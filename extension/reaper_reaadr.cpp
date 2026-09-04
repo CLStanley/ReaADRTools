@@ -13,6 +13,7 @@
 #define REAPERAPI_WANT_CountTracks
 #define REAPERAPI_WANT_CreateTakeAudioAccessor
 #define REAPERAPI_WANT_DeleteProjectMarker
+#define REAPERAPI_WANT_DeleteTrack
 #define REAPERAPI_WANT_DeleteTrackMediaItem
 #define REAPERAPI_WANT_DestroyAudioAccessor
 #define REAPERAPI_WANT_GetActiveTake
@@ -104,6 +105,7 @@
 #include "app/cue_manager_application_service.hpp"
 #include "app/session_refresh_application_service.hpp"
 #include "app/region_timing_application_service.hpp"
+#include "app/cue_cleanup_application_service.hpp"
 #include "reaadr_reaper/overlay_refresh_adapter.hpp"
 #include "reaadr_reaper/cue_navigation_service.hpp"
 #include "reaadr_reaper/session_render_service.hpp"
@@ -130,6 +132,8 @@ constexpr const char* kRefreshSessionCommandName = "ReaADRRefreshSessionNative";
 constexpr const char* kRefreshSessionActionLabel = "ReaADR: Refresh Session (Native)";
 constexpr const char* kUpdateCuesFromRegionsCommandName = "ReaADRUpdateCuesFromRegionsNative";
 constexpr const char* kUpdateCuesFromRegionsActionLabel = "ReaADR: Update Cues From Regions (Native)";
+constexpr const char* kClearCharacterCuesCommandName = "ReaADRClearCharacterCuesNative";
+constexpr const char* kClearCharacterCuesActionLabel = "ReaADR: Clear Character Cues (Native)";
 constexpr const char* kNextCueCommandName = "ReaADRNextCueNative";
 constexpr const char* kPreviousCueCommandName = "ReaADRPreviousCueNative";
 constexpr const char* kJumpToCueCommandName = "ReaADRJumpToCueNative";
@@ -158,6 +162,8 @@ int g_refresh_session_command_id = 0;
 gaccel_register_t g_refresh_session_accel = {};
 int g_update_cues_from_regions_command_id = 0;
 gaccel_register_t g_update_cues_from_regions_accel = {};
+int g_clear_character_cues_command_id = 0;
+gaccel_register_t g_clear_character_cues_accel = {};
 int g_next_cue_command_id = 0;
 gaccel_register_t g_next_cue_accel = {};
 int g_previous_cue_command_id = 0;
@@ -217,6 +223,9 @@ ScriptAction g_refresh_session_action = {
 };
 ScriptAction g_update_cues_from_regions_action = {
   "Update Cues From Regions (Native)", nullptr, 0,
+};
+ScriptAction g_clear_character_cues_action = {
+  "Clear Character Cues (Native)", nullptr, 0,
 };
 ScriptAction g_next_cue_action = {"Next Cue (Native)", nullptr, 0};
 ScriptAction g_previous_cue_action = {"Previous Cue (Native)", nullptr, 0};
@@ -801,6 +810,76 @@ void run_update_cues_from_regions_action()
   ShowMessageBox(summary.c_str(), "ReaADR Region Timing", 0);
 }
 
+reaadr::core::ProjectRenderState native_cleanup_inspect(std::string* error)
+{
+  const auto inspected = reaadr::reaper::inspect_complete_render_state(
+    nullptr, native_track_region_api(), native_ruler_lane_api(), native_cue_audio_api());
+  if (!inspected && error) *error = inspected.error;
+  return inspected.state;
+}
+
+bool native_delete_cleanup_track(ReaProject*, MediaTrack* track)
+{
+  if (!DeleteTrack || !track) return false;
+  DeleteTrack(track);
+  return true;
+}
+
+reaadr::reaper::CueCleanupApplyResult native_cleanup_apply(
+  const reaadr::core::CueCleanupPlan& plan, std::string* error)
+{
+  const auto applied = reaadr::reaper::apply_cue_cleanup_plan_transactionally(
+    nullptr, {
+      CountTracks, GetTrack, GetSetMediaTrackInfo_String, CountTrackMediaItems,
+      GetTrackMediaItem, GetSetMediaItemInfo_String, DeleteTrackMediaItem, native_delete_cleanup_track,
+      CountProjectMarkers, EnumProjectMarkers3, DeleteProjectMarker,
+      TrackList_AdjustWindows, UpdateArrange,
+    }, native_session_transaction_api(), plan, "ReaADR: clear character cues");
+  if (!applied && error) *error = applied.error;
+  return applied;
+}
+
+void run_clear_character_cues_action()
+{
+  if (!GetUserInputs) {
+    ShowMessageBox("The character input API is unavailable.", "ReaADR Cue Cleanup", 0);
+    return;
+  }
+  std::array<char, 1024> input = {};
+  if (!GetUserInputs("ReaADR: Clear Character Cues", 1,
+                    "Characters (comma-separated):", input.data(), input.size())) return;
+  std::vector<std::string> characters;
+  std::stringstream values(input.data());
+  std::string value;
+  while (std::getline(values, value, ',')) {
+    const auto first = value.find_first_not_of(" \t\r\n");
+    const auto last = value.find_last_not_of(" \t\r\n");
+    if (first != std::string::npos) characters.push_back(value.substr(first, last - first + 1));
+  }
+  if (characters.empty()) {
+    ShowMessageBox("Select at least one character.", "ReaADR Cue Cleanup", 0);
+    return;
+  }
+  const std::string prompt = "Remove generated cues, regions, cue audio, and cue tracks for " +
+    std::to_string(characters.size()) + " character(s)? Recording tracks and takes are preserved.";
+  if (ShowMessageBox(prompt.c_str(), "ReaADR Cue Cleanup", 4) != 6) return;
+
+  reaadr::reaper::ProjectStateStore project_state(nullptr, {GetProjExtState, SetProjExtState});
+  reaadr::core::SessionModelRepository repository(project_state);
+  reaadr::reaper::CueCleanupApplicationService service(
+    repository, native_session_transaction_api(), {native_cleanup_inspect, native_cleanup_apply, native_utc_timestamp()});
+  const auto result = service.clear_characters(characters);
+  if (!result) {
+    ShowMessageBox(result.error.c_str(), "ReaADR Cue Cleanup", 0);
+    return;
+  }
+  const std::string summary = "Removed " + std::to_string(result.cues_removed) +
+    " cue(s), " + std::to_string(result.regions_removed) + " region(s), and " +
+    std::to_string(result.cue_audio_removed) + " cue-audio item(s).\n\nCue tracks removed: " +
+    std::to_string(result.tracks_removed);
+  ShowMessageBox(summary.c_str(), "ReaADR Cue Cleanup", 0);
+}
+
 void run_cue_navigation_action(bool next)
 {
   reaadr::reaper::ProjectStateStore project_state(
@@ -860,6 +939,10 @@ bool hook_native_command(int command, int)
   }
   if (command == g_update_cues_from_regions_command_id && command != 0) {
     run_update_cues_from_regions_action();
+    return true;
+  }
+  if (command == g_clear_character_cues_command_id && command != 0) {
+    run_clear_character_cues_action();
     return true;
   }
   if (command == g_next_cue_command_id && command != 0) {
@@ -962,6 +1045,9 @@ bool register_native_actions()
   register_secondary_action(kUpdateCuesFromRegionsCommandName, kUpdateCuesFromRegionsActionLabel,
     g_update_cues_from_regions_command_id, g_update_cues_from_regions_accel,
     g_update_cues_from_regions_action);
+  register_secondary_action(kClearCharacterCuesCommandName, kClearCharacterCuesActionLabel,
+    g_clear_character_cues_command_id, g_clear_character_cues_accel,
+    g_clear_character_cues_action);
   register_secondary_action(kUiTestCommandName, "ReaADR: Native UI Test Window",
     g_ui_test_command_id, g_ui_test_accel, g_ui_test_action);
   log_line("Registered native UI test command_id=" + std::to_string(g_ui_test_command_id));
@@ -999,6 +1085,12 @@ void unregister_native_actions()
     g_update_cues_from_regions_command_id = 0;
     g_update_cues_from_regions_action.command_id = 0;
     g_update_cues_from_regions_accel = {};
+  }
+  if (g_clear_character_cues_command_id) {
+    g_plugin->Register("-gaccel", reinterpret_cast<void*>(&g_clear_character_cues_accel));
+    g_clear_character_cues_command_id = 0;
+    g_clear_character_cues_action.command_id = 0;
+    g_clear_character_cues_accel = {};
   }
   if (g_next_cue_command_id) {
     g_plugin->Register("-gaccel", reinterpret_cast<void*>(&g_next_cue_accel));
@@ -1520,10 +1612,11 @@ void hook_custom_menu(const char* menu_id, void* menu, int flag)
     add_menu_item(hmenu, position + 1, g_refresh_overlay_action);
     add_menu_item(hmenu, position + 2, g_refresh_session_action);
     add_menu_item(hmenu, position + 3, g_update_cues_from_regions_action);
-    add_menu_item(hmenu, position + 4, g_next_cue_action);
-    add_menu_item(hmenu, position + 5, g_previous_cue_action);
-    add_menu_item(hmenu, position + 6, g_jump_to_cue_action);
-    add_menu_item(hmenu, position + 7, g_cue_manager_action);
+    add_menu_item(hmenu, position + 4, g_clear_character_cues_action);
+    add_menu_item(hmenu, position + 5, g_next_cue_action);
+    add_menu_item(hmenu, position + 6, g_previous_cue_action);
+    add_menu_item(hmenu, position + 7, g_jump_to_cue_action);
+    add_menu_item(hmenu, position + 8, g_cue_manager_action);
     log_line("Added top-level ReaADR Tools menu.");
     return;
   }
@@ -1566,29 +1659,36 @@ void hook_custom_menu(const char* menu_id, void* menu, int flag)
   } else {
     add_menu_item(hmenu, position + 3, g_update_cues_from_regions_action);
   }
-  const int shifted_next_position = validation_position + 4;
-  if (shifted_next_position < existing_items) {
-    update_menu_item_label(hmenu, shifted_next_position, g_next_cue_action, g_next_cue_action.label);
+  const int clear_character_position = validation_position + 4;
+  if (clear_character_position < existing_items) {
+    update_menu_item_label(hmenu, clear_character_position, g_clear_character_cues_action,
+      g_clear_character_cues_action.label);
   } else {
-    add_menu_item(hmenu, position + 4, g_next_cue_action);
+    add_menu_item(hmenu, position + 4, g_clear_character_cues_action);
   }
-  const int previous_position = validation_position + 5;
+  const int next_position = validation_position + 5;
+  if (next_position < existing_items) {
+    update_menu_item_label(hmenu, next_position, g_next_cue_action, g_next_cue_action.label);
+  } else {
+    add_menu_item(hmenu, position + 5, g_next_cue_action);
+  }
+  const int previous_position = validation_position + 6;
   if (previous_position < existing_items) {
     update_menu_item_label(hmenu, previous_position, g_previous_cue_action, g_previous_cue_action.label);
   } else {
-    add_menu_item(hmenu, position + 5, g_previous_cue_action);
+    add_menu_item(hmenu, position + 6, g_previous_cue_action);
   }
-  const int jump_position = validation_position + 6;
+  const int jump_position = validation_position + 7;
   if (jump_position < existing_items) {
     update_menu_item_label(hmenu, jump_position, g_jump_to_cue_action, g_jump_to_cue_action.label);
   } else {
-    add_menu_item(hmenu, position + 6, g_jump_to_cue_action);
+    add_menu_item(hmenu, position + 7, g_jump_to_cue_action);
   }
-  const int manager_position = validation_position + 7;
+  const int manager_position = validation_position + 8;
   if (manager_position < existing_items) {
     update_menu_item_label(hmenu, manager_position, g_cue_manager_action, g_cue_manager_action.label);
   } else {
-    add_menu_item(hmenu, position + 7, g_cue_manager_action);
+    add_menu_item(hmenu, position + 8, g_cue_manager_action);
   }
   log_line("Updated top-level ReaADR quick-action labels.");
 }
