@@ -622,17 +622,15 @@ void run_native_preferences_action()
 {
   reaadr::reaper::ProjectStateStore project_state(nullptr, {GetProjExtState, SetProjExtState});
   reaadr::reaper::GlobalStateStore global_state({GetExtState, SetExtState});
-  reaadr::reaper::ManagerViewApplicationService service(project_state, &global_state);
-  reaadr::core::CueManagerViewOptions options;
-  const auto loaded = service.load(options, "preferences");
+  reaadr::core::ManagerPreferencesRepository preference_repository(project_state, &global_state);
+  const auto loaded = preference_repository.load();
   if (!loaded) {
     ShowMessageBox(loaded.error.c_str(), "ReaADR Preferences", 0);
     return;
   }
-  const auto& view_preferences = loaded.view.preferences;
+  const auto& view_preferences = loaded.preferences;
   std::ostringstream summary;
-  summary << "Active tab: " << loaded.view.active_tab << "\n"
-          << "Overlay preset: " << reaadr::core::detect_overlay_profile(view_preferences.overlay) << "\n"
+  summary << "Overlay preset: " << reaadr::core::detect_overlay_profile(view_preferences.overlay) << "\n"
           << "Remember layout: " << (view_preferences.remember_layout ? "yes" : "no") << "\n"
           << "Hover preview: " << (view_preferences.hover_preview ? "yes" : "no") << "\n"
           << "Tooltips: " << (view_preferences.tooltips ? "yes" : "no") << "\n"
@@ -658,13 +656,7 @@ void run_native_preferences_action()
       return;
     }
   }
-  reaadr::core::ManagerPreferencesRepository preference_repository(project_state, &global_state);
-  auto current = preference_repository.load();
-  if (!current) {
-    ShowMessageBox(current.error.c_str(), "ReaADR Preferences", 0);
-    return;
-  }
-  reaadr::core::ManagerPreferences updated = current.preferences;
+  reaadr::core::ManagerPreferences updated = loaded.preferences;
   const std::array<const char*, 4> keys = {
     "remember_layout", "hover_preview", "tooltips", "navigation_wrap",
   };
