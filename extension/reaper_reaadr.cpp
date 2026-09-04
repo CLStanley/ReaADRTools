@@ -106,6 +106,7 @@
 #include "app/session_refresh_application_service.hpp"
 #include "app/region_timing_application_service.hpp"
 #include "app/cue_cleanup_application_service.hpp"
+#include "app/character_filter_application_service.hpp"
 #include "reaadr_reaper/overlay_refresh_adapter.hpp"
 #include "reaadr_reaper/cue_navigation_service.hpp"
 #include "reaadr_reaper/session_render_service.hpp"
@@ -134,6 +135,8 @@ constexpr const char* kUpdateCuesFromRegionsCommandName = "ReaADRUpdateCuesFromR
 constexpr const char* kUpdateCuesFromRegionsActionLabel = "ReaADR: Update Cues From Regions (Native)";
 constexpr const char* kClearCharacterCuesCommandName = "ReaADRClearCharacterCuesNative";
 constexpr const char* kClearCharacterCuesActionLabel = "ReaADR: Clear Character Cues (Native)";
+constexpr const char* kCharacterFilterCommandName = "ReaADRApplyCharacterFilterNative";
+constexpr const char* kCharacterFilterActionLabel = "ReaADR: Character Filter (Native)";
 constexpr const char* kNextCueCommandName = "ReaADRNextCueNative";
 constexpr const char* kPreviousCueCommandName = "ReaADRPreviousCueNative";
 constexpr const char* kJumpToCueCommandName = "ReaADRJumpToCueNative";
@@ -164,6 +167,8 @@ int g_update_cues_from_regions_command_id = 0;
 gaccel_register_t g_update_cues_from_regions_accel = {};
 int g_clear_character_cues_command_id = 0;
 gaccel_register_t g_clear_character_cues_accel = {};
+int g_character_filter_command_id = 0;
+gaccel_register_t g_character_filter_accel = {};
 int g_next_cue_command_id = 0;
 gaccel_register_t g_next_cue_accel = {};
 int g_previous_cue_command_id = 0;
@@ -226,6 +231,9 @@ ScriptAction g_update_cues_from_regions_action = {
 };
 ScriptAction g_clear_character_cues_action = {
   "Clear Character Cues (Native)", nullptr, 0,
+};
+ScriptAction g_character_filter_action = {
+  "Character Filter (Native)", nullptr, 0,
 };
 ScriptAction g_next_cue_action = {"Next Cue (Native)", nullptr, 0};
 ScriptAction g_previous_cue_action = {"Previous Cue (Native)", nullptr, 0};
@@ -880,6 +888,70 @@ void run_clear_character_cues_action()
   ShowMessageBox(summary.c_str(), "ReaADR Cue Cleanup", 0);
 }
 
+reaadr::reaper::CharacterFilterInspectionResult native_character_filter_inspect(
+  std::string* error)
+{
+  const auto inspected = reaadr::reaper::inspect_character_filter_project(
+    nullptr, native_track_region_api(), native_ruler_lane_api());
+  if (!inspected && error) *error = inspected.error;
+  return inspected;
+}
+
+reaadr::reaper::CharacterFilterApplyResult native_character_filter_apply(
+  const reaadr::core::CharacterFilterPlan& plan, std::string* error)
+{
+  const auto applied = reaadr::reaper::apply_character_filter_plan_transactionally(
+    nullptr, native_track_region_api(), native_ruler_lane_api(),
+    native_session_transaction_api(), plan, "ReaADR: apply character filter");
+  if (!applied && error) *error = applied.error;
+  return applied;
+}
+
+void run_character_filter_action()
+{
+  if (!GetUserInputs) {
+    ShowMessageBox("The character input API is unavailable.", "ReaADR Character Filter", 0);
+    return;
+  }
+  std::array<char, 1024> input = {};
+  if (!GetUserInputs("ReaADR: Character Filter", 2,
+                    "Characters (; separated, blank=all),Hide inactive regions (0/1):",
+                    input.data(), input.size())) return;
+  char* separator = std::strchr(input.data(), ',');
+  if (!separator) {
+    ShowMessageBox("Enter characters and 0/1 separated by a comma.", "ReaADR Character Filter", 0);
+    return;
+  }
+  *separator = '\0';
+  std::vector<std::string> characters;
+  std::stringstream values(input.data());
+  std::string value;
+  while (std::getline(values, value, ';')) {
+    const auto first = value.find_first_not_of(" \t\r\n");
+    const auto last = value.find_last_not_of(" \t\r\n");
+    if (first != std::string::npos) characters.push_back(value.substr(first, last - first + 1));
+  }
+  const std::string hide_value = separator + 1;
+  const bool hide_regions = hide_value == "1" || hide_value == "true";
+
+  reaadr::reaper::ProjectStateStore project_state(nullptr, {GetProjExtState, SetProjExtState});
+  reaadr::core::SessionModelRepository repository(project_state);
+  reaadr::core::CharacterFilterRepository filters(project_state);
+  reaadr::reaper::CharacterFilterApplicationService service(
+    repository, filters, native_session_transaction_api(),
+    {native_character_filter_inspect, native_character_filter_apply});
+  const auto result = service.apply(characters, hide_regions);
+  if (!result) {
+    ShowMessageBox(result.error.c_str(), "ReaADR Character Filter", 0);
+    return;
+  }
+  const std::string summary = "Muted " + std::to_string(result.applied.tracks_muted) +
+    " track(s), unmuted " + std::to_string(result.applied.tracks_unmuted) +
+    ".\n\nHidden regions: " + std::to_string(result.applied.regions_hidden) +
+    "\nShown regions: " + std::to_string(result.applied.regions_shown);
+  ShowMessageBox(summary.c_str(), "ReaADR Character Filter", 0);
+}
+
 void run_cue_navigation_action(bool next)
 {
   reaadr::reaper::ProjectStateStore project_state(
@@ -943,6 +1015,10 @@ bool hook_native_command(int command, int)
   }
   if (command == g_clear_character_cues_command_id && command != 0) {
     run_clear_character_cues_action();
+    return true;
+  }
+  if (command == g_character_filter_command_id && command != 0) {
+    run_character_filter_action();
     return true;
   }
   if (command == g_next_cue_command_id && command != 0) {
@@ -1048,6 +1124,8 @@ bool register_native_actions()
   register_secondary_action(kClearCharacterCuesCommandName, kClearCharacterCuesActionLabel,
     g_clear_character_cues_command_id, g_clear_character_cues_accel,
     g_clear_character_cues_action);
+  register_secondary_action(kCharacterFilterCommandName, kCharacterFilterActionLabel,
+    g_character_filter_command_id, g_character_filter_accel, g_character_filter_action);
   register_secondary_action(kUiTestCommandName, "ReaADR: Native UI Test Window",
     g_ui_test_command_id, g_ui_test_accel, g_ui_test_action);
   log_line("Registered native UI test command_id=" + std::to_string(g_ui_test_command_id));
@@ -1091,6 +1169,12 @@ void unregister_native_actions()
     g_clear_character_cues_command_id = 0;
     g_clear_character_cues_action.command_id = 0;
     g_clear_character_cues_accel = {};
+  }
+  if (g_character_filter_command_id) {
+    g_plugin->Register("-gaccel", reinterpret_cast<void*>(&g_character_filter_accel));
+    g_character_filter_command_id = 0;
+    g_character_filter_action.command_id = 0;
+    g_character_filter_accel = {};
   }
   if (g_next_cue_command_id) {
     g_plugin->Register("-gaccel", reinterpret_cast<void*>(&g_next_cue_accel));
@@ -1613,10 +1697,11 @@ void hook_custom_menu(const char* menu_id, void* menu, int flag)
     add_menu_item(hmenu, position + 2, g_refresh_session_action);
     add_menu_item(hmenu, position + 3, g_update_cues_from_regions_action);
     add_menu_item(hmenu, position + 4, g_clear_character_cues_action);
-    add_menu_item(hmenu, position + 5, g_next_cue_action);
-    add_menu_item(hmenu, position + 6, g_previous_cue_action);
-    add_menu_item(hmenu, position + 7, g_jump_to_cue_action);
-    add_menu_item(hmenu, position + 8, g_cue_manager_action);
+    add_menu_item(hmenu, position + 5, g_character_filter_action);
+    add_menu_item(hmenu, position + 6, g_next_cue_action);
+    add_menu_item(hmenu, position + 7, g_previous_cue_action);
+    add_menu_item(hmenu, position + 8, g_jump_to_cue_action);
+    add_menu_item(hmenu, position + 9, g_cue_manager_action);
     log_line("Added top-level ReaADR Tools menu.");
     return;
   }
@@ -1666,29 +1751,36 @@ void hook_custom_menu(const char* menu_id, void* menu, int flag)
   } else {
     add_menu_item(hmenu, position + 4, g_clear_character_cues_action);
   }
-  const int next_position = validation_position + 5;
+  const int character_filter_position = validation_position + 5;
+  if (character_filter_position < existing_items) {
+    update_menu_item_label(hmenu, character_filter_position, g_character_filter_action,
+      g_character_filter_action.label);
+  } else {
+    add_menu_item(hmenu, position + 5, g_character_filter_action);
+  }
+  const int next_position = validation_position + 6;
   if (next_position < existing_items) {
     update_menu_item_label(hmenu, next_position, g_next_cue_action, g_next_cue_action.label);
   } else {
-    add_menu_item(hmenu, position + 5, g_next_cue_action);
+    add_menu_item(hmenu, position + 6, g_next_cue_action);
   }
-  const int previous_position = validation_position + 6;
+  const int previous_position = validation_position + 7;
   if (previous_position < existing_items) {
     update_menu_item_label(hmenu, previous_position, g_previous_cue_action, g_previous_cue_action.label);
   } else {
-    add_menu_item(hmenu, position + 6, g_previous_cue_action);
+    add_menu_item(hmenu, position + 7, g_previous_cue_action);
   }
-  const int jump_position = validation_position + 7;
+  const int jump_position = validation_position + 8;
   if (jump_position < existing_items) {
     update_menu_item_label(hmenu, jump_position, g_jump_to_cue_action, g_jump_to_cue_action.label);
   } else {
-    add_menu_item(hmenu, position + 7, g_jump_to_cue_action);
+    add_menu_item(hmenu, position + 8, g_jump_to_cue_action);
   }
-  const int manager_position = validation_position + 8;
+  const int manager_position = validation_position + 9;
   if (manager_position < existing_items) {
     update_menu_item_label(hmenu, manager_position, g_cue_manager_action, g_cue_manager_action.label);
   } else {
-    add_menu_item(hmenu, position + 8, g_cue_manager_action);
+    add_menu_item(hmenu, position + 9, g_cue_manager_action);
   }
   log_line("Updated top-level ReaADR quick-action labels.");
 }

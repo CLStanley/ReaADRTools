@@ -353,6 +353,11 @@ only uniquely owned generated regions can write timing back to the session model
 Clear Character Cues now uses the native cleanup planner and REAPER adapter from
 the Manager action. Its destructive boundary remains character-scoped and
 explicitly excludes recording tracks and takes.
+Character Filter now uses the native filter application service from the same
+action surface. It persists the selected character/lane tokens and visibility
+setting, then applies ownership-checked track mute and region visibility changes
+inside one project transaction; the Lua filter window remains a compatibility
+route until the full native Manager UI is complete.
 The same window applies search, character, and status through one controller
 reload and routes Jump through the canonical navigation service. A successful
 explicit jump clears filters that could hide its target; builds without a

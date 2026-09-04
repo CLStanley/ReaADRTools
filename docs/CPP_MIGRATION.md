@@ -323,11 +323,12 @@ snapshot recovery, and canonical cue persistence in one native transaction;
 the native Manager command is now wired, with in-REAPER smoke testing remaining.
 Native character-filter application now also coordinates canonical filter
 state, lane-aware planning, transactional REAPER mutation, and persistence;
-the existing Lua filter window remains a compatibility UI.
+the native Character Filter command is now wired to the REAPER action/menu
+surface, while the existing Lua filter window remains a compatibility UI.
 These domain operations and adapters are test-covered but are not yet all
-public writers; the region-sync, character-filter, and navigation command/UI
-cutovers, deferred recording frame/UI wiring, other overlay UI, and in-REAPER
-smoke tests remain. Lua source and packaging payloads have now been removed;
+public writers; the full native filter/manager UI, deferred recording frame/UI
+wiring, other overlay UI, and in-REAPER smoke tests remain. Lua source and
+packaging payloads have now been removed;
 the native extension is the only installed runtime.
 
 ### Stage 4: native UI and Lua removal

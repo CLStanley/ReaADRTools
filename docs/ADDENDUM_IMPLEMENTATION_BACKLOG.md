@@ -11,7 +11,7 @@ code change, a user-visible workflow, or a documented constraint.
 | E - Recording loop and transcription | Partial | Pre-roll repeat behavior is mostly implemented. Transcription remains future work; selected-media detection is currently threshold-based speech detection. |
 | F - Reliability and integrity | Mostly implemented | Model-first import/update, ownership-scoped deletion, model snapshots, centralized Undo rollback, and QA logging exist. Durable logs need expansion. |
 | G - Session state model | Mostly implemented | `adr_session_model_v1` is the source of truth for imported/generated ADR data. Some compatibility paths still read REAPER state directly. |
-| H - Sync engine | Partial | Initial sync APIs exist and are used by refresh, cue edits, import, detection, and cue generation. Native Refresh Session, Update Cues From Regions, Clear Character Cues, and Cue Manager add/edit/remove now use native transactional boundaries. Remaining work is drift resolution UI, merge handling, and broader incremental sync coverage. |
+| H - Sync engine | Partial | Initial sync APIs exist and are used by refresh, cue edits, import, detection, and cue generation. Native Refresh Session, Update Cues From Regions, Clear Character Cues, Character Filter, and Cue Manager add/edit/remove now use native transactional boundaries. Remaining work is drift resolution UI, merge handling, and broader incremental sync coverage. |
 | I - Event system | Partial | Lua provides the synchronous queue/subscriptions, and both Lua and C++ now publish to one bounded project-local event log. UI windows still use `session_revision` polling. |
 | J - Recovery and snapshots | Partial | Last-operation model snapshots and Undo-backed render rollback exist. Full snapshot history, restore UI, diffing, autosave, and crash recovery are not implemented. |
 
@@ -43,7 +43,8 @@ code change, a user-visible workflow, or a documented constraint.
   canonical model persistence and snapshot recovery, and the native Manager
   command is wired. In-REAPER smoke testing remains.)
 - Coordinate native character-filter state, planning, and REAPER mutation.
-  (Application service is implemented; native manager/filter UI wiring remains.)
+  (Application service and native command wiring are implemented; in-REAPER smoke
+  testing and the full native filter window remain.)
 - Keep model save and generated-project rendering in one Undo-owned operation.
   (Done for import, generation, region timing, Cue Manager add/remove, refresh,
   setup, filtering, and character clearing. The native full-render coordinator
