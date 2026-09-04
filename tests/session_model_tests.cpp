@@ -2721,6 +2721,15 @@ void test_manager_preferences()
   updated = reaadr::core::update_manager_preferences(preferences, "show_character", "0");
   check(updated && updated.changed && !updated.preferences.overlay.show_character,
         "native Manager Preferences edits individual overlay controls");
+  updated = reaadr::core::update_manager_preferences(preferences, "show_status", "0");
+  check(updated && updated.changed && !updated.preferences.overlay.show_status,
+        "native Manager Preferences edits overlay status visibility");
+  updated = reaadr::core::update_manager_preferences(preferences, "show_metadata", "1");
+  check(updated && updated.changed && updated.preferences.overlay.show_metadata,
+        "native Manager Preferences edits overlay metadata visibility");
+  updated = reaadr::core::update_manager_preferences(preferences, "include_preroll_each_loop", "0");
+  check(updated && updated.changed && !updated.preferences.overlay.include_preroll_each_loop,
+        "native Manager Preferences edits per-loop preroll behavior");
   updated = reaadr::core::update_manager_preferences(preferences, "metadata_fields", "PGID, Custom");
   check(updated && updated.preferences.overlay.metadata_fields ==
           "PGID,Custom,Media Time,Watermark Timestamp,Asset Date Code,Project Name",
