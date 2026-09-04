@@ -638,10 +638,10 @@ void run_native_preferences_action()
   ShowMessageBox(summary.str().c_str(), "ReaADR Preferences (Native)", 0);
   if (!GetUserInputs) return;
   std::array<char, 1024> input = {};
-  if (!GetUserInputs("ReaADR Preferences: Update", 4,
-                    "Remember layout (0/1),Hover preview (0/1),Tooltips (0/1),Navigation wrap (0/1)",
+  if (!GetUserInputs("ReaADR Preferences: Update", 6,
+                    "Overlay profile (actor/engineer/studio/minimal/custom),Preroll seconds,Remember layout (0/1),Hover preview (0/1),Tooltips (0/1),Navigation wrap (0/1)",
                     input.data(), input.size())) return;
-  std::array<std::string, 4> values;
+  std::array<std::string, 6> values;
   std::stringstream fields(input.data());
   for (std::size_t index = 0; index < values.size(); ++index) {
     if (!std::getline(fields, values[index], ',')) {
@@ -651,14 +651,14 @@ void run_native_preferences_action()
     const auto first = values[index].find_first_not_of(" \t\r\n");
     const auto last = values[index].find_last_not_of(" \t\r\n");
     values[index] = first == std::string::npos ? std::string() : values[index].substr(first, last - first + 1);
-    if (values[index] != "0" && values[index] != "1") {
+    if (index >= 2 && values[index] != "0" && values[index] != "1") {
       ShowMessageBox("Preference values must be 0 or 1.", "ReaADR Preferences", 0);
       return;
     }
   }
   reaadr::core::ManagerPreferences updated = loaded.preferences;
-  const std::array<const char*, 4> keys = {
-    "remember_layout", "hover_preview", "tooltips", "navigation_wrap",
+  const std::array<const char*, 6> keys = {
+    "overlay_profile", "preroll_seconds", "remember_layout", "hover_preview", "tooltips", "navigation_wrap",
   };
   for (std::size_t index = 0; index < keys.size(); ++index) {
     const auto result = reaadr::core::update_manager_preferences(updated, keys[index], values[index]);
