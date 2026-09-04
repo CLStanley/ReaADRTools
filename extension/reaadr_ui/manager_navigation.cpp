@@ -41,6 +41,7 @@ const std::vector<ManagerAction>& manager_actions()
     {"session", "character_filter", "Character Filter", "Mute inactive character lanes and optionally hide their regions."},
     {"reports", "export_cue_sheet", "Export Cue Sheet CSV", "Export regions and cues to a flexible CSV."},
     {"overlay", "refresh_overlay", "Refresh Video Overlay", "Rebuild video overlay effects from canonical cue data."},
+    {"preferences", "preferences", "Open Preferences", "Inspect and configure overlay and Manager preferences."},
     {"help", "search_help", "Search Help", "Search the built-in guide by action or workflow."},
     {"help", "help_import", "Import Help", "Show import, mapping, metadata, and session guidance."},
     {"help", "help_cues", "Cue Management Help", "Show navigation, status, filtering, and cue guidance."},
@@ -57,7 +58,7 @@ bool manager_action_is_native(const std::string& key)
   // Manager actions remain explicit compatibility routes until their UI and
   // host wiring are cut over.
   return key == "validate_session" || key == "refresh_session" || key == "sync_regions" ||
-    key == "clear_character_cues" || key == "character_filter" || key == "refresh_overlay" ||
+    key == "clear_character_cues" || key == "character_filter" || key == "preferences" || key == "refresh_overlay" ||
     key == "next_cue" || key == "previous_cue" || key == "jump_to_cue";
 }
 

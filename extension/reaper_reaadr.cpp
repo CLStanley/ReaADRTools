@@ -177,6 +177,8 @@ int g_jump_to_cue_command_id = 0;
 gaccel_register_t g_jump_to_cue_accel = {};
 int g_cue_manager_command_id = 0;
 gaccel_register_t g_cue_manager_accel = {};
+int g_preferences_command_id = 0;
+gaccel_register_t g_preferences_accel = {};
 int g_ui_test_command_id = 0;
 gaccel_register_t g_ui_test_accel = {};
 bool g_native_command_hook_registered = false;
@@ -241,6 +243,7 @@ ScriptAction g_jump_to_cue_action = {"Jump To Cue (Native)", nullptr, 0};
 // Kept as one command/action internally so existing keyboard mappings remain
 // stable, while the menu exposes the complete native Manager shell directly.
 ScriptAction g_cue_manager_action = {"Open Manager (Native Preview)", nullptr, 0};
+ScriptAction g_preferences_action = {"Preferences (Native Preview)", nullptr, 0};
 ScriptAction g_ui_test_action = {"Native UI Test Window (C++)", nullptr, 0};
 
 std::vector<ScriptAction> g_legacy_actions = {
@@ -613,6 +616,28 @@ void run_native_cue_manager_action()
   options.status = comma + 1;
   const auto updated = mutations.edit(options);
   if (!updated) ShowMessageBox(updated.error.c_str(), "ReaADR Cue Manager", 0);
+}
+
+void run_native_preferences_action()
+{
+  reaadr::reaper::ProjectStateStore project_state(nullptr, {GetProjExtState, SetProjExtState});
+  reaadr::reaper::GlobalStateStore global_state({GetExtState, SetExtState});
+  reaadr::reaper::ManagerViewApplicationService service(project_state, &global_state);
+  reaadr::core::CueManagerViewOptions options;
+  const auto loaded = service.load(options, "preferences");
+  if (!loaded) {
+    ShowMessageBox(loaded.error.c_str(), "ReaADR Preferences", 0);
+    return;
+  }
+  const auto& preferences = loaded.view.preferences;
+  std::ostringstream summary;
+  summary << "Active tab: " << loaded.view.active_tab << "\n"
+          << "Overlay preset: " << reaadr::core::detect_overlay_profile(preferences.overlay) << "\n"
+          << "Remember layout: " << (preferences.remember_layout ? "yes" : "no") << "\n"
+          << "Hover preview: " << (preferences.hover_preview ? "yes" : "no") << "\n"
+          << "Tooltips: " << (preferences.tooltips ? "yes" : "no") << "\n"
+          << "Navigation wrap: " << (preferences.navigation_wrap ? "yes" : "no");
+  ShowMessageBox(summary.str().c_str(), "ReaADR Preferences (Native)", 0);
 }
 
 MediaTrack* native_overlay_get_track(ReaProject* project, int index)
@@ -1037,6 +1062,10 @@ bool hook_native_command(int command, int)
     run_native_cue_manager_action();
     return true;
   }
+  if (command == g_preferences_command_id && command != 0) {
+    run_native_preferences_action();
+    return true;
+  }
   if (command == g_ui_test_command_id && command != 0) {
     reaadr::ui::show_test_window();
     return true;
@@ -1116,6 +1145,8 @@ bool register_native_actions()
     g_jump_to_cue_command_id, g_jump_to_cue_accel, g_jump_to_cue_action);
   register_secondary_action(kCueManagerCommandName, "ReaADR: Cue Manager (Native)",
     g_cue_manager_command_id, g_cue_manager_accel, g_cue_manager_action);
+  register_secondary_action(kPreferencesCommandName, "ReaADR: Preferences (Native Preview)",
+    g_preferences_command_id, g_preferences_accel, g_preferences_action);
   register_secondary_action(kRefreshSessionCommandName, kRefreshSessionActionLabel,
     g_refresh_session_command_id, g_refresh_session_accel, g_refresh_session_action);
   register_secondary_action(kUpdateCuesFromRegionsCommandName, kUpdateCuesFromRegionsActionLabel,
@@ -1199,6 +1230,12 @@ void unregister_native_actions()
     g_cue_manager_command_id = 0;
     g_cue_manager_action.command_id = 0;
     g_cue_manager_accel = {};
+  }
+  if (g_preferences_command_id) {
+    g_plugin->Register("-gaccel", reinterpret_cast<void*>(&g_preferences_accel));
+    g_preferences_command_id = 0;
+    g_preferences_action.command_id = 0;
+    g_preferences_accel = {};
   }
   if (g_ui_test_command_id) {
     g_plugin->Register("-gaccel", reinterpret_cast<void*>(&g_ui_test_accel));

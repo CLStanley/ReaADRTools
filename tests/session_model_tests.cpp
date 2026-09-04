@@ -2844,7 +2844,7 @@ void test_manager_navigation()
           reaadr::core::is_manager_tab("help") &&
           reaadr::core::normalize_manager_tab("overlay") == "overlay" &&
           reaadr::core::normalize_manager_tab("missing") == "import" &&
-          actions.size() == 17 && actions[0].module == "import" &&
+          actions.size() == 18 && actions[0].module == "import" &&
           actions[4].key == "validate_session" && actions.back().module == "help",
         "native Manager navigation mirrors Lua module order and safe launch tabs");
   check(reaadr::core::manager_action_is_native("validate_session") &&
@@ -2853,6 +2853,7 @@ void test_manager_navigation()
           reaadr::core::manager_action_is_native("sync_regions") &&
           reaadr::core::manager_action_is_native("clear_character_cues") &&
           reaadr::core::manager_action_is_native("character_filter") &&
+          reaadr::core::manager_action_is_native("preferences") &&
           !reaadr::core::manager_action_is_native("import_cue_sheet"),
         "native Manager action catalog distinguishes cut-over commands from Lua routes");
   const auto layout = reaadr::core::default_manager_window_layout();

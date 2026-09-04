@@ -325,6 +325,10 @@ Native character-filter application now also coordinates canonical filter
 state, lane-aware planning, transactional REAPER mutation, and persistence;
 the native Character Filter command is now wired to the REAPER action/menu
 surface, while the existing Lua filter window remains a compatibility UI.
+The native Preferences preview command now reads the shared Manager preference
+repository and overlay profile contract through the native view service; the
+full editable Preferences surface remains part of the graphical Manager UI
+cutover.
 These domain operations and adapters are test-covered but are not yet all
 public writers; the full native filter/manager UI, deferred recording frame/UI
 wiring, other overlay UI, and in-REAPER smoke tests remain. Lua source and
