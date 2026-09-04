@@ -638,14 +638,14 @@ void run_native_preferences_action()
   ShowMessageBox(summary.str().c_str(), "ReaADR Preferences (Native)", 0);
   if (!GetUserInputs) return;
   std::array<char, 1024> input = {};
-  if (!GetUserInputs("ReaADR Preferences: Update", 6,
-                    "Overlay profile (actor/engineer/studio/minimal),Preroll seconds,Remember layout (0/1),Hover preview (0/1),Tooltips (0/1),Navigation wrap (0/1)",
+  if (!GetUserInputs("ReaADR Preferences: Update", 9,
+                    "Overlay profile (actor/engineer/studio/minimal),Preroll seconds,Remember layout (0/1),Hover preview (0/1),Tooltips (0/1),Navigation wrap (0/1),Show status (0/1),Show metadata (0/1),Preroll each loop (0/1)",
                     input.data(), input.size())) return;
-  std::array<std::string, 6> values;
+  std::array<std::string, 9> values;
   std::stringstream fields(input.data());
   for (std::size_t index = 0; index < values.size(); ++index) {
     if (!std::getline(fields, values[index], ',')) {
-      ShowMessageBox("Enter six comma-separated preference values.", "ReaADR Preferences", 0);
+      ShowMessageBox("Enter nine comma-separated preference values.", "ReaADR Preferences", 0);
       return;
     }
     const auto first = values[index].find_first_not_of(" \t\r\n");
@@ -657,8 +657,9 @@ void run_native_preferences_action()
     }
   }
   reaadr::core::ManagerPreferences updated = loaded.preferences;
-  const std::array<const char*, 6> keys = {
+  const std::array<const char*, 9> keys = {
     "overlay_profile", "preroll_seconds", "remember_layout", "hover_preview", "tooltips", "navigation_wrap",
+    "show_status", "show_metadata", "include_preroll_each_loop",
   };
   for (std::size_t index = 0; index < keys.size(); ++index) {
     const auto result = reaadr::core::update_manager_preferences(updated, keys[index], values[index]);
