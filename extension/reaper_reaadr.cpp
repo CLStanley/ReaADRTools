@@ -645,7 +645,7 @@ void run_native_preferences_action()
   std::stringstream fields(input.data());
   for (std::size_t index = 0; index < values.size(); ++index) {
     if (!std::getline(fields, values[index], ',')) {
-      ShowMessageBox("Enter four comma-separated 0/1 values.", "ReaADR Preferences", 0);
+      ShowMessageBox("Enter six comma-separated preference values.", "ReaADR Preferences", 0);
       return;
     }
     const auto first = values[index].find_first_not_of(" \t\r\n");
