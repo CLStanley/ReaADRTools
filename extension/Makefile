@@ -28,9 +28,9 @@ CORE_SOURCES := reaadr_core/session_model.cpp reaadr_core/model_repository.cpp r
 	reaadr_core/recording_setup.cpp reaadr_core/recording_transport.cpp reaadr_core/cue_status.cpp \
 	reaadr_core/recording_preferences.cpp reaadr_core/overlay_settings.cpp \
 	reaadr_core/overlay_eel.cpp reaadr_core/overlay_refresh.cpp
-UI_SOURCES := ui/reaadr_ui.cpp ui/cue_manager_controller.cpp ui/cue_manager_window.cpp \
-	ui/manager_view_model.cpp ui/manager_navigation.cpp ui/manager_ui_contract.cpp \
-	ui/cue_manager_ui_contract.cpp
+UI_SOURCES := reaadr_ui/reaadr_ui.cpp reaadr_ui/cue_manager_controller.cpp reaadr_ui/cue_manager_window.cpp \
+	reaadr_ui/manager_view_model.cpp reaadr_ui/manager_navigation.cpp reaadr_ui/manager_ui_contract.cpp \
+	reaadr_ui/cue_manager_ui_contract.cpp
 UNAME_S := $(shell uname -s)
 ifeq ($(UNAME_S),Darwin)
 UI_SOURCES += $(WDL)/swell/swell-modstub.mm

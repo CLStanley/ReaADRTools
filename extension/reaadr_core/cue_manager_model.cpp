@@ -1,5 +1,5 @@
 #include "cue_manager_model.hpp"
-#include "ui/cue_manager_ui_contract.hpp"
+#include "reaadr_ui/cue_manager_ui_contract.hpp"
 #include "domain_utils.hpp"
 #include <utility>
 #include <algorithm>

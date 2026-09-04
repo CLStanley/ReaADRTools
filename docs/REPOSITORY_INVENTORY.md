@@ -46,8 +46,8 @@ Native source follows the same dependency boundaries in its directory layout:
 - `extension/reaadr_core/`: REAPER-independent model, persistence, and rules
 - `extension/reaadr_reaper/`: REAPER SDK adapters and host services
 - `extension/app/`: application-level orchestration and transaction boundaries
-- `extension/ui/`: native presentation and controllers
-- `extension/ui/legacy/`: retained native shell experiments excluded from the
+- `extension/reaadr_ui/`: native presentation and controllers
+- `extension/reaadr_ui/legacy/`: retained native shell experiments excluded from the
   current build until their replacement is complete
 
 See `extension/README.md` for the native dependency direction.

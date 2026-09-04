@@ -11,10 +11,10 @@
 #include "reaadr_core/overlay_refresh.hpp"
 #include "reaadr_core/overlay_settings.hpp"
 #include "reaadr_core/manager_preferences.hpp"
-#include "ui/manager_view_model.hpp"
-#include "ui/manager_ui_contract.hpp"
-#include "ui/manager_navigation.hpp"
-#include "ui/cue_manager_ui_contract.hpp"
+#include "reaadr_ui/manager_view_model.hpp"
+#include "reaadr_ui/manager_ui_contract.hpp"
+#include "reaadr_ui/manager_navigation.hpp"
+#include "reaadr_ui/cue_manager_ui_contract.hpp"
 #include "reaadr_core/region_timing_sync.hpp"
 #include "reaadr_core/record_arm.hpp"
 #include "reaadr_core/recording_setup.hpp"
@@ -44,7 +44,7 @@
 #include "app/cue_manager_application_service.hpp"
 #include "app/session_refresh_application_service.hpp"
 #include "app/region_timing_application_service.hpp"
-#include "ui/cue_manager_controller.hpp"
+#include "reaadr_ui/cue_manager_controller.hpp"
 
 #include <algorithm>
 #include <cmath>

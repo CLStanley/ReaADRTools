@@ -1,7 +1,7 @@
 #include "native_manager_window.hpp"
 
-#include "ui/manager_navigation.hpp"
-#include "ui/manager_view_model.hpp"
+#include "reaadr_ui/manager_navigation.hpp"
+#include "reaadr_ui/manager_view_model.hpp"
 #include "reaadr_core/manager_preferences.hpp"
 #include <reaper_plugin.h>
 #include <string>
