@@ -42,6 +42,7 @@
 #include "reaadr_reaper/track_region_adapter.hpp"
 #include "app/manager_view_application_service.hpp"
 #include "app/cue_manager_application_service.hpp"
+#include "app/session_refresh_application_service.hpp"
 #include "ui/cue_manager_controller.hpp"
 
 #include <algorithm>
@@ -2847,6 +2848,7 @@ void test_manager_navigation()
         "native Manager navigation mirrors Lua module order and safe launch tabs");
   check(reaadr::core::manager_action_is_native("validate_session") &&
           reaadr::core::manager_action_is_native("refresh_overlay") &&
+          reaadr::core::manager_action_is_native("refresh_session") &&
           !reaadr::core::manager_action_is_native("import_cue_sheet"),
         "native Manager action catalog distinguishes cut-over commands from Lua routes");
   const auto layout = reaadr::core::default_manager_window_layout();
@@ -3765,6 +3767,14 @@ void test_cue_manager_application_service()
           empty_selection.state.active_overlay_cue_key.empty() &&
           render_adapter_probe.regions.empty() && events.load().lines.size() == 10,
         "Cue Manager application can remove the final cue and clear derived selection/artifacts");
+
+  reaadr::reaper::SessionRefreshApplicationService refresh_service(
+    repository, renderer, render_options, "2026-09-03T12:02:00Z");
+  const auto refreshed = refresh_service.refresh();
+  check(refreshed && refreshed.synchronization.commit.revision == 10 &&
+          refreshed.synchronization.commit.model.cues.empty() &&
+          events.load().lines.size() == 12,
+        "native Refresh Session rebuilds an empty canonical session through the render boundary");
 
   for (FakeTrack& track : render_adapter_probe.tracks) {
     for (const auto& item : track.items) destroy_fake_source(item->take.source);

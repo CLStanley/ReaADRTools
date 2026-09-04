@@ -282,6 +282,10 @@ renumbering. The post-mutation Manager/overlay selection is written inside the
 render transaction before overlay generation and is compensated if rendering
 fails. Full rendering removes stale owned regions and cue audio after a delete
 without treating user recording tracks as disposable.
+The Manager's Refresh Session action is now native as well. It reloads the
+canonical cue model and invokes the same full renderer used by edits, so a
+repair rebuilds generated tracks, regions, cue audio, filters, overlays,
+revision, and events atomically.
 Search, character, and status filters now live in the native Cue Manager action
 bar instead of a separate launch prompt. The native Jump control uses the
 shared navigation service and clears stale filters when needed so its target is

@@ -343,6 +343,10 @@ the application layer renders the complete replacement cue set and publishes
 `CueCreated` or `CueDeleted` inside one Undo-owned operation. Paired Manager and
 overlay selection is updated before overlay refresh and restored with the model
 if a derived-surface update fails.
+Refresh Session is also exposed through a native application service. It treats
+the persisted cue set as intent and delegates the complete repair to
+`SessionRenderService`, keeping rebuilds and edits on the same model-first,
+Undo-backed path.
 The same window applies search, character, and status through one controller
 reload and routes Jump through the canonical navigation service. A successful
 explicit jump clears filters that could hide its target; builds without a

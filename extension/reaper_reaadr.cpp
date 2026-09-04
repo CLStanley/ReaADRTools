@@ -102,6 +102,7 @@
 #include "app/overlay_application_service.hpp"
 #include "app/manager_view_application_service.hpp"
 #include "app/cue_manager_application_service.hpp"
+#include "app/session_refresh_application_service.hpp"
 #include "reaadr_reaper/overlay_refresh_adapter.hpp"
 #include "reaadr_reaper/cue_navigation_service.hpp"
 #include "reaadr_reaper/session_render_service.hpp"
@@ -124,6 +125,8 @@ constexpr const char* kValidateSessionCommandName = "ReaADRValidateSessionModelN
 constexpr const char* kValidateSessionActionLabel = "ReaADR: Validate Session Model (Native Preview)";
 constexpr const char* kRefreshOverlayCommandName = "ReaADRRefreshVideoOverlayNative";
 constexpr const char* kRefreshOverlayActionLabel = "ReaADR: Refresh Video Overlay (Native)";
+constexpr const char* kRefreshSessionCommandName = "ReaADRRefreshSessionNative";
+constexpr const char* kRefreshSessionActionLabel = "ReaADR: Refresh Session (Native)";
 constexpr const char* kNextCueCommandName = "ReaADRNextCueNative";
 constexpr const char* kPreviousCueCommandName = "ReaADRPreviousCueNative";
 constexpr const char* kJumpToCueCommandName = "ReaADRJumpToCueNative";
@@ -148,6 +151,8 @@ int g_validate_session_command_id = 0;
 gaccel_register_t g_validate_session_accel = {};
 int g_refresh_overlay_command_id = 0;
 gaccel_register_t g_refresh_overlay_accel = {};
+int g_refresh_session_command_id = 0;
+gaccel_register_t g_refresh_session_accel = {};
 int g_next_cue_command_id = 0;
 gaccel_register_t g_next_cue_accel = {};
 int g_previous_cue_command_id = 0;
@@ -201,6 +206,9 @@ ScriptAction g_refresh_overlay_action = {
   "Refresh Video Overlay (Native)",
   nullptr,
   0,
+};
+ScriptAction g_refresh_session_action = {
+  "Refresh Session (Native)", nullptr, 0,
 };
 ScriptAction g_next_cue_action = {"Next Cue (Native)", nullptr, 0};
 ScriptAction g_previous_cue_action = {"Previous Cue (Native)", nullptr, 0};
@@ -710,6 +718,43 @@ void run_refresh_overlay_action()
     std::to_string(result.displayed_cue_count));
 }
 
+void run_refresh_session_action()
+{
+  reaadr::reaper::ProjectStateStore project_state(
+    nullptr, {GetProjExtState, SetProjExtState});
+  reaadr::core::SessionModelRepository repository(project_state);
+  reaadr::core::EventLogRepository event_log(project_state);
+  reaadr::core::CharacterFilterRepository character_filter(project_state);
+  reaadr::core::OverlaySettingsRepository overlay_settings(project_state);
+  reaadr::core::CueSelectionRepository cue_selection(project_state);
+  const reaadr::reaper::OverlayApplicationApi overlay_api = {
+    native_overlay_frame_rate, native_overlay_selection,
+    native_overlay_refresh_callback,
+  };
+  reaadr::reaper::OverlayApplicationService overlay_application(
+    repository, overlay_settings, cue_selection, character_filter, overlay_api);
+  reaadr::reaper::SessionRenderService renderer(
+    repository, event_log, character_filter, nullptr, native_track_region_api(),
+    native_ruler_lane_api(), native_cue_audio_api(), native_session_transaction_api());
+  reaadr::reaper::SessionRenderOptions render_options;
+  render_options.cue_audio_path = native_cue_audio_path();
+  render_options.event.source = "native_refresh_session";
+  render_options.refresh_overlay = [&overlay_application](std::string* error) {
+    const auto refreshed = overlay_application.refresh();
+    if (!refreshed && error) *error = refreshed.error;
+    return static_cast<bool>(refreshed);
+  };
+  reaadr::reaper::SessionRefreshApplicationService refresh(
+    repository, renderer, render_options, native_utc_timestamp());
+  const auto result = refresh.refresh();
+  if (!result) {
+    ShowMessageBox(result.error.c_str(), "ReaADR Session Refresh", 0);
+    return;
+  }
+  ShowMessageBox("The canonical session and ReaADR-owned project artifacts were refreshed.",
+                 "ReaADR Session Refresh", 0);
+}
+
 void run_cue_navigation_action(bool next)
 {
   reaadr::reaper::ProjectStateStore project_state(
@@ -761,6 +806,10 @@ bool hook_native_command(int command, int)
   }
   if (command == g_refresh_overlay_command_id && command != 0) {
     run_refresh_overlay_action();
+    return true;
+  }
+  if (command == g_refresh_session_command_id && command != 0) {
+    run_refresh_session_action();
     return true;
   }
   if (command == g_next_cue_command_id && command != 0) {
@@ -858,6 +907,8 @@ bool register_native_actions()
     g_jump_to_cue_command_id, g_jump_to_cue_accel, g_jump_to_cue_action);
   register_secondary_action(kCueManagerCommandName, "ReaADR: Cue Manager (Native)",
     g_cue_manager_command_id, g_cue_manager_accel, g_cue_manager_action);
+  register_secondary_action(kRefreshSessionCommandName, kRefreshSessionActionLabel,
+    g_refresh_session_command_id, g_refresh_session_accel, g_refresh_session_action);
   register_secondary_action(kUiTestCommandName, "ReaADR: Native UI Test Window",
     g_ui_test_command_id, g_ui_test_accel, g_ui_test_action);
   log_line("Registered native UI test command_id=" + std::to_string(g_ui_test_command_id));
@@ -883,6 +934,12 @@ void unregister_native_actions()
     g_refresh_overlay_command_id = 0;
     g_refresh_overlay_action.command_id = 0;
     g_refresh_overlay_accel = {};
+  }
+  if (g_refresh_session_command_id) {
+    g_plugin->Register("-gaccel", reinterpret_cast<void*>(&g_refresh_session_accel));
+    g_refresh_session_command_id = 0;
+    g_refresh_session_action.command_id = 0;
+    g_refresh_session_accel = {};
   }
   if (g_next_cue_command_id) {
     g_plugin->Register("-gaccel", reinterpret_cast<void*>(&g_next_cue_accel));
@@ -1402,10 +1459,11 @@ void hook_custom_menu(const char* menu_id, void* menu, int flag)
     }
     add_menu_item(hmenu, position, g_validate_session_action);
     add_menu_item(hmenu, position + 1, g_refresh_overlay_action);
-    add_menu_item(hmenu, position + 2, g_next_cue_action);
-    add_menu_item(hmenu, position + 3, g_previous_cue_action);
-    add_menu_item(hmenu, position + 4, g_jump_to_cue_action);
-    add_menu_item(hmenu, position + 5, g_cue_manager_action);
+    add_menu_item(hmenu, position + 2, g_refresh_session_action);
+    add_menu_item(hmenu, position + 3, g_next_cue_action);
+    add_menu_item(hmenu, position + 4, g_previous_cue_action);
+    add_menu_item(hmenu, position + 5, g_jump_to_cue_action);
+    add_menu_item(hmenu, position + 6, g_cue_manager_action);
     log_line("Added top-level ReaADR Tools menu.");
     return;
   }
@@ -1434,29 +1492,36 @@ void hook_custom_menu(const char* menu_id, void* menu, int flag)
   } else {
     add_menu_item(hmenu, position + 1, g_refresh_overlay_action);
   }
-  const int next_position = validation_position + 2;
+  const int refresh_session_position = validation_position + 2;
+  if (refresh_session_position < existing_items) {
+    update_menu_item_label(hmenu, refresh_session_position, g_refresh_session_action,
+      g_refresh_session_action.label);
+  } else {
+    add_menu_item(hmenu, position + 2, g_refresh_session_action);
+  }
+  const int next_position = validation_position + 3;
   if (next_position < existing_items) {
     update_menu_item_label(hmenu, next_position, g_next_cue_action, g_next_cue_action.label);
   } else {
-    add_menu_item(hmenu, position + 2, g_next_cue_action);
+    add_menu_item(hmenu, position + 3, g_next_cue_action);
   }
-  const int previous_position = validation_position + 3;
+  const int previous_position = validation_position + 4;
   if (previous_position < existing_items) {
     update_menu_item_label(hmenu, previous_position, g_previous_cue_action, g_previous_cue_action.label);
   } else {
-    add_menu_item(hmenu, position + 3, g_previous_cue_action);
+    add_menu_item(hmenu, position + 4, g_previous_cue_action);
   }
-  const int jump_position = validation_position + 4;
+  const int jump_position = validation_position + 5;
   if (jump_position < existing_items) {
     update_menu_item_label(hmenu, jump_position, g_jump_to_cue_action, g_jump_to_cue_action.label);
   } else {
-    add_menu_item(hmenu, position + 4, g_jump_to_cue_action);
+    add_menu_item(hmenu, position + 5, g_jump_to_cue_action);
   }
-  const int manager_position = validation_position + 5;
+  const int manager_position = validation_position + 6;
   if (manager_position < existing_items) {
     update_menu_item_label(hmenu, manager_position, g_cue_manager_action, g_cue_manager_action.label);
   } else {
-    add_menu_item(hmenu, position + 5, g_cue_manager_action);
+    add_menu_item(hmenu, position + 6, g_cue_manager_action);
   }
   log_line("Updated top-level ReaADR quick-action labels.");
 }

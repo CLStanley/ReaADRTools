@@ -11,7 +11,7 @@ code change, a user-visible workflow, or a documented constraint.
 | E - Recording loop and transcription | Partial | Pre-roll repeat behavior is mostly implemented. Transcription remains future work; selected-media detection is currently threshold-based speech detection. |
 | F - Reliability and integrity | Mostly implemented | Model-first import/update, ownership-scoped deletion, model snapshots, centralized Undo rollback, and QA logging exist. Durable logs need expansion. |
 | G - Session state model | Mostly implemented | `adr_session_model_v1` is the source of truth for imported/generated ADR data. Some compatibility paths still read REAPER state directly. |
-| H - Sync engine | Partial | Initial sync APIs exist and are used by refresh, cue edits, import, detection, and cue generation. Native Cue Manager add/edit/remove now use the transactional full-render coordinator, including paired selection, overlay refresh, and rollback. Exact-ownership region timing sync is implemented in the C++ domain/application layers but not cut over in the UI. Remaining work is drift resolution UI, merge handling, and broader incremental sync coverage. |
+| H - Sync engine | Partial | Initial sync APIs exist and are used by refresh, cue edits, import, detection, and cue generation. Native Refresh Session and Cue Manager add/edit/remove now use the transactional full-render coordinator, including paired selection, overlay refresh, and rollback. Exact-ownership region timing sync is implemented in the C++ domain/application layers but not cut over in the UI. Remaining work is drift resolution UI, merge handling, and broader incremental sync coverage. |
 | I - Event system | Partial | Lua provides the synchronous queue/subscriptions, and both Lua and C++ now publish to one bounded project-local event log. UI windows still use `session_revision` polling. |
 | J - Recovery and snapshots | Partial | Last-operation model snapshots and Undo-backed render rollback exist. Full snapshot history, restore UI, diffing, autosave, and crash recovery are not implemented. |
 
@@ -75,6 +75,8 @@ Initial migration targets:
 
 - Move full rebuild logic out of direct UI paths and behind `sync_full`. (Done:
   `refresh_session()` and user-facing rebuild paths call the sync boundary.)
+  The native Refresh Session command now routes the same canonical cue set
+  through `SessionRefreshApplicationService` and `SessionRenderService`.
 - Move cue status/field update rendering behind a sync boundary. (Implemented
   for native Cue Manager add/edit/remove through the full session renderer; transitional
   Lua status and cached cue edits continue to use `sync_incremental()`.)
