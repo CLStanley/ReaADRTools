@@ -639,7 +639,7 @@ void run_native_preferences_action()
   if (!GetUserInputs) return;
   std::array<char, 1024> input = {};
   if (!GetUserInputs("ReaADR Preferences: Update", 6,
-                    "Overlay profile (actor/engineer/studio/minimal/custom),Preroll seconds,Remember layout (0/1),Hover preview (0/1),Tooltips (0/1),Navigation wrap (0/1)",
+                    "Overlay profile (actor/engineer/studio/minimal),Preroll seconds,Remember layout (0/1),Hover preview (0/1),Tooltips (0/1),Navigation wrap (0/1)",
                     input.data(), input.size())) return;
   std::array<std::string, 6> values;
   std::stringstream fields(input.data());
