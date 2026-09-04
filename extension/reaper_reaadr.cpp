@@ -1778,6 +1778,7 @@ void hook_custom_menu(const char* menu_id, void* menu, int flag)
     add_menu_item(hmenu, position + 7, g_previous_cue_action);
     add_menu_item(hmenu, position + 8, g_jump_to_cue_action);
     add_menu_item(hmenu, position + 9, g_cue_manager_action);
+    add_menu_item(hmenu, position + 10, g_preferences_action);
     log_line("Added top-level ReaADR Tools menu.");
     return;
   }
@@ -1857,6 +1858,13 @@ void hook_custom_menu(const char* menu_id, void* menu, int flag)
     update_menu_item_label(hmenu, manager_position, g_cue_manager_action, g_cue_manager_action.label);
   } else {
     add_menu_item(hmenu, position + 9, g_cue_manager_action);
+  }
+  const int preferences_position = validation_position + 10;
+  if (preferences_position < existing_items) {
+    update_menu_item_label(hmenu, preferences_position, g_preferences_action,
+      g_preferences_action.label);
+  } else {
+    add_menu_item(hmenu, position + 10, g_preferences_action);
   }
   log_line("Updated top-level ReaADR quick-action labels.");
 }
