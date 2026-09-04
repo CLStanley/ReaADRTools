@@ -8,7 +8,7 @@ be investigated before removal.
 | --- | --- | --- | --- |
 | `scripts/` | Source/runtime | Yes | Lua application, UI entry points, workflows, and shared core modules. |
 | `assets/` | Runtime assets | Yes | Logo resources used by ReaADR interfaces. |
-| `extension/` | Native source/build tooling | Binary only | C++ extension, pinned dependencies, and platform build scripts. |
+| `extension/` | Native source/build tooling | Binary only | C++ extension, organized by domain core, REAPER adapters, application services, UI, and platform build scripts. |
 | `packaging/` | Packaging tooling | Install/uninstall launchers only | Builds and validates archives; installs/removes ReaADR-owned files. |
 | `tests/` | Test | No | Deterministic Lua tests and their runner. |
 | `docs/` | Documentation | User Guide only | Maintainer docs, beta checklist, and user documentation. |
@@ -40,6 +40,17 @@ that are no longer shipped. They are not current runtime entry points and should
 not be removed until upgrade behavior from older installations is verified.
 
 ## Shared core boundaries
+
+Native source follows the same dependency boundaries in its directory layout:
+
+- `extension/reaadr_core/`: REAPER-independent model, persistence, and rules
+- `extension/reaadr_reaper/`: REAPER SDK adapters and host services
+- `extension/app/`: application-level orchestration and transaction boundaries
+- `extension/ui/`: native presentation and controllers
+- `extension/ui/legacy/`: retained native shell experiments excluded from the
+  current build until their replacement is complete
+
+See `extension/README.md` for the native dependency direction.
 
 These modules are runtime-required and preserve safety responsibilities:
 
