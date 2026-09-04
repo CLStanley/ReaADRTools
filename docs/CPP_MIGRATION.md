@@ -328,7 +328,8 @@ surface, while the existing Lua filter window remains a compatibility UI.
 The native Preferences preview command now reads the shared Manager preference
 repository and overlay profile contract through the native view service; the
 full editable Preferences surface remains part of the graphical Manager UI
-cutover.
+cutover. The command is also exposed in the top-level ReaADR menu, and its
+project-scoped Manager toggles are editable with native validation and Undo.
 These domain operations and adapters are test-covered but are not yet all
 public writers; the full native filter/manager UI, deferred recording frame/UI
 wiring, other overlay UI, and in-REAPER smoke tests remain. Lua source and

@@ -45,6 +45,9 @@ code change, a user-visible workflow, or a documented constraint.
 - Coordinate native character-filter state, planning, and REAPER mutation.
   (Application service and native command wiring are implemented; in-REAPER smoke
   testing and the full native filter window remain.)
+- Expose the shared Manager preference contract through native command wiring.
+  (Native preview/edit command and top-level menu exposure are implemented;
+  graphical Preferences controls remain part of the full Manager UI.)
 - Keep model save and generated-project rendering in one Undo-owned operation.
   (Done for import, generation, region timing, Cue Manager add/remove, refresh,
   setup, filtering, and character clearing. The native full-render coordinator
