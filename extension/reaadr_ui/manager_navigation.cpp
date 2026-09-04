@@ -38,6 +38,7 @@ const std::vector<ManagerAction>& manager_actions()
     {"session", "refresh_session", "Refresh Session", "Repair generated tracks, regions, cue audio, and overlays."},
     {"session", "sync_regions", "Update Cues From Regions", "Save region timing back to the canonical cue session."},
     {"session", "clear_character_cues", "Clear Character Cues", "Remove owned generated character cues while preserving takes."},
+    {"session", "character_filter", "Character Filter", "Mute inactive character lanes and optionally hide their regions."},
     {"reports", "export_cue_sheet", "Export Cue Sheet CSV", "Export regions and cues to a flexible CSV."},
     {"overlay", "refresh_overlay", "Refresh Video Overlay", "Rebuild video overlay effects from canonical cue data."},
     {"help", "search_help", "Search Help", "Search the built-in guide by action or workflow."},
