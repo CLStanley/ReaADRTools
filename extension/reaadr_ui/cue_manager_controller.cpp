@@ -36,6 +36,13 @@ void CueManagerController::trigger_import(const std::string& mapping, bool previ
   if (trigger_import_) trigger_import_(mapping, preview, mode, characters);
 }
 
+std::string CueManagerController::last_import_mapping() const
+{
+  const auto value = project_state_.read(core::SessionModelRepository::kNamespace,
+                                         "import_mapping_last");
+  return value ? value.value : std::string();
+}
+
 bool CueManagerController::set_tab(const std::string& tab)
 {
   requested_tab_ = core::normalize_manager_tab(tab);

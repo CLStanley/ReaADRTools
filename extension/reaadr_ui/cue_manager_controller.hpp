@@ -20,6 +20,7 @@ public:
   bool set_tab(const std::string& tab);
   void trigger_import(const std::string& mapping = {}, bool preview = false,
                       const std::string& mode = "all", const std::string& characters = {});
+  std::string last_import_mapping() const;
   bool set_filters(const std::string& query,
                    const std::string& character,
                    const std::string& status);

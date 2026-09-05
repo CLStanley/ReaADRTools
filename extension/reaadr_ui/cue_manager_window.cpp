@@ -96,6 +96,8 @@ INT_PTR cue_manager_proc(HWND hwnd, UINT message, WPARAM wparam, LPARAM)
   if (message == WM_INITDIALOG) {
     SetDlgItemText(hwnd, kImportMode, "all");
     if (g_controller) {
+      const std::string mapping = g_controller->last_import_mapping();
+      if (!mapping.empty()) SetDlgItemText(hwnd, kImportMapping, mapping.c_str());
       const auto& view = g_controller->view();
       refresh_rows(hwnd);
       for (std::size_t i = 0; i < view.cues.rows.size(); ++i)

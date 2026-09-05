@@ -716,7 +716,25 @@ void run_native_import_cue_sheet_action(const std::string& mapping_override, boo
     if (!validation) {
       summary << "\nValidation error: " << validation.message;
     } else {
-      summary << "\nValidation: " << validation.cues.size() << " cue(s) ready to import.";
+      std::size_t selected_count = validation.cues.size();
+      if (mode == "selected") {
+        std::vector<std::string> selected_characters;
+        std::stringstream values(characters);
+        std::string value;
+        while (std::getline(values, value, ';')) {
+          const auto first = value.find_first_not_of(" \t\r\n");
+          const auto last = value.find_last_not_of(" \t\r\n");
+          if (first != std::string::npos) selected_characters.push_back(value.substr(first, last - first + 1));
+        }
+        selected_count = 0;
+        for (const auto& cue : validation.cues) {
+          const auto found = cue.find("character");
+          if (found != cue.end() && std::find(selected_characters.begin(), selected_characters.end(), found->second) != selected_characters.end())
+            ++selected_count;
+        }
+      }
+      summary << "\nValidation: " << selected_count << " cue(s) ready to import (mode: "
+              << (mode == "selected" ? "selected characters" : "entire sheet") << ").";
     }
     if (!preview.table.rows.empty()) {
       summary << "\n\nFirst row:\n";
