@@ -650,7 +650,31 @@ void run_native_import_cue_sheet_action(const std::string& mapping_override, boo
     return;
   }
   if (preview_only) {
-    const auto inferred_mapping = reaadr::core::default_column_mapping(preview.table.headers);
+    std::optional<reaadr::core::ColumnMapping> requested_mapping;
+    if (!mapping_override.empty()) {
+      reaadr::core::ColumnMapping parsed_mapping;
+      std::stringstream entries(mapping_override);
+      std::string entry;
+      while (std::getline(entries, entry, ';')) {
+        const std::size_t equals = entry.find('=');
+        if (equals == std::string::npos) {
+          ShowMessageBox("Mappings must use key=column pairs separated by semicolons.",
+                         "ReaADR Import Preview", 0);
+          return;
+        }
+        const std::string key = entry.substr(0, equals);
+        const std::string column = entry.substr(equals + 1);
+        if (key.empty() || column.empty()) {
+          ShowMessageBox("Mappings cannot contain empty keys or columns.",
+                         "ReaADR Import Preview", 0);
+          return;
+        }
+        parsed_mapping[key] = column;
+      }
+      if (!parsed_mapping.empty()) requested_mapping = parsed_mapping;
+    }
+    const auto inferred_mapping = requested_mapping
+      ? *requested_mapping : reaadr::core::default_column_mapping(preview.table.headers);
     const auto validation = reaadr::core::import_cues(
       preview.table, native_overlay_frame_rate(), inferred_mapping);
     std::ostringstream summary;
