@@ -641,7 +641,7 @@ void run_native_import_cue_sheet_action(const std::string& mapping_override, boo
     return;
   }
   std::array<char, 4096> path = {};
-  if (!GetUserFileNameForRead(path.data(), "ReaADR: Import Cue Sheet", "csv")) return;
+  if (!GetUserFileNameForRead(path.data(), "ReaADR: Import Cue Sheet", "csv;tsv;tab;txt;xlsx")) return;
   std::ifstream file(path.data(), std::ios::binary);
   if (!file) {
     ShowMessageBox("Could not open the selected cue sheet.", "ReaADR Import", 0);
