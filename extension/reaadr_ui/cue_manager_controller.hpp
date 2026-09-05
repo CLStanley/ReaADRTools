@@ -14,6 +14,7 @@ public:
                        core::ProjectStateStore& project_state,
                        reaper::CueNavigationApi navigation_api);
   bool reload();
+  bool set_tab(const std::string& tab);
   bool set_filters(const std::string& query,
                    const std::string& character,
                    const std::string& status);
@@ -37,6 +38,7 @@ private:
   core::CueManagerViewOptions options_;
   core::ManagerViewModel view_;
   std::string selected_key_;
+  std::string requested_tab_ = "cues";
 };
 
 } // namespace reaadr::ui

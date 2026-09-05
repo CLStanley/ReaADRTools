@@ -24,6 +24,8 @@ constexpr int kEditCueId = 48015, kEditCharacter = 48016;
 constexpr int kSearchFilter = 48017, kStatusFilter = 48018, kResetFilter = 48019;
 constexpr int kJumpCueId = 48020, kJump = 48021;
 constexpr int kNewCue = 48022, kAddCue = 48023, kRemoveCue = 48024;
+constexpr int kTabImport = 48025, kTabCues = 48026, kTabSession = 48027;
+constexpr int kTabReports = 48028, kTabOverlay = 48029, kTabPreferences = 48030, kTabHelp = 48031;
 CueManagerController* g_controller = nullptr;
 
 void populate_add_editor(HWND hwnd)
@@ -116,6 +118,19 @@ INT_PTR cue_manager_proc(HWND hwnd, UINT message, WPARAM wparam, LPARAM)
     GetDlgItemText(hwnd, kStatusFilter, status, sizeof(status));
     if (g_controller && g_controller->set_filters(query, character, status)) refresh_rows(hwnd);
     return 1;
+  }
+  if (message == WM_COMMAND) {
+    const int command = LOWORD(wparam);
+    const char* tab = command == kTabImport ? "import" : command == kTabCues ? "cues" :
+      command == kTabSession ? "session" : command == kTabReports ? "reports" :
+      command == kTabOverlay ? "overlay" : command == kTabPreferences ? "preferences" :
+      command == kTabHelp ? "help" : nullptr;
+    if (tab && g_controller && g_controller->set_tab(tab)) {
+      const std::string title = "ReaADR Manager - " + g_controller->view().active_tab;
+      SetWindowText(hwnd, title.c_str());
+      SetDlgItemText(hwnd, kDetails, ("Active tab: " + g_controller->view().active_tab).c_str());
+      return 1;
+    }
   }
   if (message == WM_COMMAND && LOWORD(wparam) == kResetFilter) {
     SetDlgItemText(hwnd, kSearchFilter, "");
@@ -216,6 +231,13 @@ SWELL_DEFINE_DIALOG_RESOURCE_BEGIN2(kDialog, SWELL_DLG_WS_FLIPPED,
   "ReaADR Tools - Cue Manager", 1180, 820)
 BEGIN
   LTEXT "ReaADR Cue Manager", -1, 16, 12, 300, 16
+  PUSHBUTTON "Import", kTabImport, 320, 10, 72, 22
+  PUSHBUTTON "Cues", kTabCues, 396, 10, 72, 22
+  PUSHBUTTON "Session", kTabSession, 472, 10, 72, 22
+  PUSHBUTTON "Reports", kTabReports, 548, 10, 72, 22
+  PUSHBUTTON "Overlay", kTabOverlay, 624, 10, 72, 22
+  PUSHBUTTON "Preferences", kTabPreferences, 700, 10, 92, 22
+  PUSHBUTTON "Help", kTabHelp, 796, 10, 72, 22
   LTEXT "Search", -1, 16, 42, 48, 14
   EDITTEXT kSearchFilter, 66, 40, 220, 20, ES_AUTOHSCROLL
   LTEXT "Character", -1, 294, 42, 68, 14

@@ -15,7 +15,7 @@ CueManagerController::CueManagerController(reaper::ManagerViewApplicationService
 bool CueManagerController::reload()
 {
   options_.selected_cue_key = selected_key_;
-  const auto loaded = service_.load(options_, "cues");
+  const auto loaded = service_.load(options_, requested_tab_);
   if (!loaded) { view_.error = loaded.error; return false; }
   view_ = loaded.view;
   if (view_.cues.rows.empty()) { selected_key_.clear(); view_.cues.selected_cue_key.clear(); return true; }
@@ -26,6 +26,12 @@ bool CueManagerController::reload()
   view_.cues.selected_cue_key = selected_key_;
   for (std::size_t i = 0; i < view_.cues.rows.size(); ++i) view_.cues.rows[i].selected = i == selected;
   return true;
+}
+
+bool CueManagerController::set_tab(const std::string& tab)
+{
+  requested_tab_ = core::normalize_manager_tab(tab);
+  return reload();
 }
 
 bool CueManagerController::set_filters(const std::string& query,

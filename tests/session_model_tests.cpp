@@ -2814,6 +2814,8 @@ void test_manager_view_model()
           controller.selected_row() &&
           controller.selected_row()->cue_key == "B",
         "native Cue Manager controller applies search, character, and status filters together");
+  check(controller.set_tab("preferences") && controller.view().active_tab == "preferences",
+        "native Manager controller switches tabs through the shared view service");
   navigation_cursor_moves = 0;
   std::string jump_error;
   check(controller.navigate_to_id("A", jump_error) &&
