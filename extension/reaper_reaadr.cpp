@@ -650,6 +650,9 @@ void run_native_import_cue_sheet_action(const std::string& mapping_override, boo
     return;
   }
   if (preview_only) {
+    const auto inferred_mapping = reaadr::core::default_column_mapping(preview.table.headers);
+    const auto validation = reaadr::core::import_cues(
+      preview.table, native_overlay_frame_rate(), inferred_mapping);
     std::ostringstream summary;
     summary << "Detected " << preview.table.delimiter_name << " with "
             << preview.table.headers.size() << " column(s) and "
@@ -657,6 +660,14 @@ void run_native_import_cue_sheet_action(const std::string& mapping_override, boo
     for (std::size_t index = 0; index < preview.table.headers.size(); ++index) {
       if (index) summary << ", ";
       summary << preview.table.headers[index];
+    }
+    summary << "\n\nResolved mapping:\n";
+    for (const auto& entry : inferred_mapping)
+      summary << entry.first << " = " << entry.second << "\n";
+    if (!validation) {
+      summary << "\nValidation error: " << validation.message;
+    } else {
+      summary << "\nValidation: " << validation.cues.size() << " cue(s) ready to import.";
     }
     if (!preview.table.rows.empty()) {
       summary << "\n\nFirst row:\n";
