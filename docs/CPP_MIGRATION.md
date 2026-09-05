@@ -82,7 +82,8 @@ rebuilding cue-derived collections, and the model-only commit service performs
 snapshot/save/revision/rollback sequencing. These paths are test-covered but
 are not invoked by the UI yet. Native `SessionSaved` and `SyncFull` publication
 now writes the same bounded project event history used by Lua. XLSX unification,
-file-selection UI, the rendering cutover, and the import cutover remain pending.
+file-selection and mapping UI remain pending; the native cue-sheet import
+command now routes selected CSV/TSV content through the transactional renderer.
 
 ### Stage 3: REAPER rendering and recording workflows (started)
 

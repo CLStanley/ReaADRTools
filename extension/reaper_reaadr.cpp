@@ -32,6 +32,7 @@
 #define REAPERAPI_WANT_GetSelectedMediaItem
 #define REAPERAPI_WANT_GetTrack
 #define REAPERAPI_WANT_GetUserInputs
+#define REAPERAPI_WANT_GetUserFileNameForRead
 #define REAPERAPI_WANT_GetSetMediaItemInfo_String
 #define REAPERAPI_WANT_GetSetMediaItemTakeInfo
 #define REAPERAPI_WANT_GetSetMediaItemTakeInfo_String
@@ -107,6 +108,7 @@
 #include "app/region_timing_application_service.hpp"
 #include "app/cue_cleanup_application_service.hpp"
 #include "app/character_filter_application_service.hpp"
+#include "app/cue_import_application_service.hpp"
 #include "reaadr_reaper/overlay_refresh_adapter.hpp"
 #include "reaadr_reaper/cue_navigation_service.hpp"
 #include "reaadr_reaper/session_render_service.hpp"
@@ -141,6 +143,7 @@ constexpr const char* kNextCueCommandName = "ReaADRNextCueNative";
 constexpr const char* kPreviousCueCommandName = "ReaADRPreviousCueNative";
 constexpr const char* kJumpToCueCommandName = "ReaADRJumpToCueNative";
 constexpr const char* kCueManagerCommandName = "ReaADRShowCueManagerNative";
+constexpr const char* kImportCueSheetCommandName = "ReaADRImportCueSheetNative";
 constexpr const char* kPreferencesCommandName = "ReaADRShowPreferencesNative";
 constexpr const char* kUiTestCommandName = "ReaADRNativeUiTestWindowV2";
 
@@ -177,6 +180,8 @@ int g_jump_to_cue_command_id = 0;
 gaccel_register_t g_jump_to_cue_accel = {};
 int g_cue_manager_command_id = 0;
 gaccel_register_t g_cue_manager_accel = {};
+int g_import_cue_sheet_command_id = 0;
+gaccel_register_t g_import_cue_sheet_accel = {};
 int g_preferences_command_id = 0;
 gaccel_register_t g_preferences_accel = {};
 int g_ui_test_command_id = 0;
@@ -243,6 +248,7 @@ ScriptAction g_jump_to_cue_action = {"Jump To Cue (Native)", nullptr, 0};
 // Kept as one command/action internally so existing keyboard mappings remain
 // stable, while the menu exposes the complete native Manager shell directly.
 ScriptAction g_cue_manager_action = {"Open Manager (Native Preview)", nullptr, 0};
+ScriptAction g_import_cue_sheet_action = {"Import Cue Sheet (Native)", nullptr, 0};
 ScriptAction g_preferences_action = {"Preferences (Native Preview)", nullptr, 0};
 ScriptAction g_ui_test_action = {"Native UI Test Window (C++)", nullptr, 0};
 
@@ -616,6 +622,56 @@ void run_native_cue_manager_action()
   options.status = comma + 1;
   const auto updated = mutations.edit(options);
   if (!updated) ShowMessageBox(updated.error.c_str(), "ReaADR Cue Manager", 0);
+}
+
+void run_native_import_cue_sheet_action()
+{
+  if (!GetUserFileNameForRead) {
+    ShowMessageBox("The native file chooser is unavailable.", "ReaADR Import", 0);
+    return;
+  }
+  std::array<char, 4096> path = {};
+  if (!GetUserFileNameForRead(path.data(), "ReaADR: Import Cue Sheet", "csv")) return;
+  std::ifstream file(path.data(), std::ios::binary);
+  if (!file) {
+    ShowMessageBox("Could not open the selected cue sheet.", "ReaADR Import", 0);
+    return;
+  }
+  const std::string content((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
+
+  reaadr::reaper::ProjectStateStore project_state(nullptr, {GetProjExtState, SetProjExtState});
+  reaadr::core::SessionModelRepository repository(project_state);
+  reaadr::core::EventLogRepository event_log(project_state);
+  reaadr::core::CharacterFilterRepository character_filter(project_state);
+  reaadr::core::OverlaySettingsRepository overlay_settings(project_state);
+  reaadr::core::CueSelectionRepository cue_selection(project_state);
+  const reaadr::reaper::OverlayApplicationApi overlay_api = {
+    native_overlay_frame_rate, native_overlay_selection, native_overlay_refresh_callback,
+  };
+  reaadr::reaper::OverlayApplicationService overlay_application(
+    repository, overlay_settings, cue_selection, character_filter, overlay_api);
+  reaadr::reaper::SessionRenderService renderer(
+    repository, event_log, character_filter, nullptr, native_track_region_api(),
+    native_ruler_lane_api(), native_cue_audio_api(), native_session_transaction_api());
+  reaadr::reaper::SessionRenderOptions options;
+  options.cue_audio_path = native_cue_audio_path();
+  options.event.source = "native_import";
+  options.refresh_overlay = [&overlay_application](std::string* error) {
+    const auto refreshed = overlay_application.refresh();
+    if (!refreshed && error) *error = refreshed.error;
+    return static_cast<bool>(refreshed);
+  };
+  reaadr::reaper::CueImportApplicationService importer(renderer, native_overlay_frame_rate());
+  const auto result = importer.import_content(content, path.data(), std::nullopt, options);
+  if (!result) {
+    ShowMessageBox(result.error.c_str(), "ReaADR Import", 0);
+    return;
+  }
+  const std::string summary = "Imported " + std::to_string(result.imported.cues.size()) +
+    " cue(s) from " + std::string(path.data()) + ".\n\nTracks created: " +
+    std::to_string(result.rendered.render.tracks_and_regions.tracks_created) +
+    "\nRegions created: " + std::to_string(result.rendered.render.tracks_and_regions.regions_created);
+  ShowMessageBox(summary.c_str(), "ReaADR Import (Native)", 0);
 }
 
 void run_native_preferences_action()
@@ -1106,6 +1162,10 @@ bool hook_native_command(int command, int)
     run_native_cue_manager_action();
     return true;
   }
+  if (command == g_import_cue_sheet_command_id && command != 0) {
+    run_native_import_cue_sheet_action();
+    return true;
+  }
   if (command == g_preferences_command_id && command != 0) {
     run_native_preferences_action();
     return true;
@@ -1189,6 +1249,8 @@ bool register_native_actions()
     g_jump_to_cue_command_id, g_jump_to_cue_accel, g_jump_to_cue_action);
   register_secondary_action(kCueManagerCommandName, "ReaADR: Cue Manager (Native)",
     g_cue_manager_command_id, g_cue_manager_accel, g_cue_manager_action);
+  register_secondary_action(kImportCueSheetCommandName, "ReaADR: Import Cue Sheet (Native)",
+    g_import_cue_sheet_command_id, g_import_cue_sheet_accel, g_import_cue_sheet_action);
   register_secondary_action(kPreferencesCommandName, "ReaADR: Preferences (Native Preview)",
     g_preferences_command_id, g_preferences_accel, g_preferences_action);
   register_secondary_action(kRefreshSessionCommandName, kRefreshSessionActionLabel,
@@ -1274,6 +1336,12 @@ void unregister_native_actions()
     g_cue_manager_command_id = 0;
     g_cue_manager_action.command_id = 0;
     g_cue_manager_accel = {};
+  }
+  if (g_import_cue_sheet_command_id) {
+    g_plugin->Register("-gaccel", reinterpret_cast<void*>(&g_import_cue_sheet_accel));
+    g_import_cue_sheet_command_id = 0;
+    g_import_cue_sheet_action.command_id = 0;
+    g_import_cue_sheet_accel = {};
   }
   if (g_preferences_command_id) {
     g_plugin->Register("-gaccel", reinterpret_cast<void*>(&g_preferences_accel));
@@ -1783,7 +1851,8 @@ void hook_custom_menu(const char* menu_id, void* menu, int flag)
     add_menu_item(hmenu, position + 7, g_previous_cue_action);
     add_menu_item(hmenu, position + 8, g_jump_to_cue_action);
     add_menu_item(hmenu, position + 9, g_cue_manager_action);
-    add_menu_item(hmenu, position + 10, g_preferences_action);
+    add_menu_item(hmenu, position + 10, g_import_cue_sheet_action);
+    add_menu_item(hmenu, position + 11, g_preferences_action);
     log_line("Added top-level ReaADR Tools menu.");
     return;
   }
@@ -1864,12 +1933,19 @@ void hook_custom_menu(const char* menu_id, void* menu, int flag)
   } else {
     add_menu_item(hmenu, position + 9, g_cue_manager_action);
   }
-  const int preferences_position = validation_position + 10;
+  const int import_position = validation_position + 10;
+  if (import_position < existing_items) {
+    update_menu_item_label(hmenu, import_position, g_import_cue_sheet_action,
+      g_import_cue_sheet_action.label);
+  } else {
+    add_menu_item(hmenu, position + 10, g_import_cue_sheet_action);
+  }
+  const int preferences_position = validation_position + 11;
   if (preferences_position < existing_items) {
     update_menu_item_label(hmenu, preferences_position, g_preferences_action,
       g_preferences_action.label);
   } else {
-    add_menu_item(hmenu, position + 10, g_preferences_action);
+    add_menu_item(hmenu, position + 11, g_preferences_action);
   }
   log_line("Updated top-level ReaADR quick-action labels.");
 }

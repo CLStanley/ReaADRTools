@@ -45,6 +45,9 @@ code change, a user-visible workflow, or a documented constraint.
 - Coordinate native character-filter state, planning, and REAPER mutation.
   (Application service and native command wiring are implemented; in-REAPER smoke
   testing and the full native filter window remain.)
+- Port cue-sheet import through the native application/render boundary.
+  (Native file selection, parsing, mapping, and transactional rendering are
+  wired; richer mapping UI and in-REAPER smoke testing remain.)
 - Expose the shared Manager preference contract through native command wiring.
   (Native preview/edit command and top-level menu exposure are implemented;
   graphical Preferences controls remain part of the full Manager UI.)
