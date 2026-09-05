@@ -817,6 +817,12 @@ void run_native_import_cue_sheet_action(const std::string& mapping_override, boo
   reaadr::reaper::SessionRenderOptions options;
   options.cue_audio_path = native_cue_audio_path();
   options.event.source = "native_import";
+  const auto existing_session = repository.load();
+  options.commit.replacement.build.frame_rate = std::to_string(native_overlay_frame_rate());
+  if (!existing_session) {
+    options.commit.replacement.build.session_id = "native-import-" + native_utc_timestamp();
+    options.commit.replacement.build.session_name = path.data();
+  }
   options.refresh_overlay = [&overlay_application](std::string* error) {
     const auto refreshed = overlay_application.refresh();
     if (!refreshed && error) *error = refreshed.error;
