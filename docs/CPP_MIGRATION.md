@@ -85,6 +85,8 @@ now writes the same bounded project event history used by Lua. XLSX unification,
 file-selection and mapping UI remain pending; the native cue-sheet import
 command now routes selected CSV/TSV content through the transactional renderer
 and accepts explicit key-to-column mappings when inference is insufficient.
+The native Import tab also previews detected delimiters, headers, row counts,
+and a sample row before committing.
 
 ### Stage 3: REAPER rendering and recording workflows (started)
 

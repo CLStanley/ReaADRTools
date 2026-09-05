@@ -10,7 +10,7 @@ CueManagerController::CueManagerController(reaper::ManagerViewApplicationService
                                            reaper::CueManagerMutationService& mutations,
                                            core::ProjectStateStore& project_state,
                                            reaper::CueNavigationApi navigation_api,
-                                           std::function<void(const std::string&)> trigger_import)
+                                           std::function<void(const std::string&, bool)> trigger_import)
   : service_(service), mutations_(mutations), project_state_(project_state),
     navigation_api_(navigation_api), trigger_import_(std::move(trigger_import)) {}
 
@@ -30,9 +30,9 @@ bool CueManagerController::reload()
   return true;
 }
 
-void CueManagerController::trigger_import(const std::string& mapping)
+void CueManagerController::trigger_import(const std::string& mapping, bool preview)
 {
-  if (trigger_import_) trigger_import_(mapping);
+  if (trigger_import_) trigger_import_(mapping, preview);
 }
 
 bool CueManagerController::set_tab(const std::string& tab)

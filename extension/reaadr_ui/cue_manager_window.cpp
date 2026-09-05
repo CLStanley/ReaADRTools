@@ -26,7 +26,7 @@ constexpr int kJumpCueId = 48020, kJump = 48021;
 constexpr int kNewCue = 48022, kAddCue = 48023, kRemoveCue = 48024;
 constexpr int kTabImport = 48025, kTabCues = 48026, kTabSession = 48027;
 constexpr int kTabReports = 48028, kTabOverlay = 48029, kTabPreferences = 48030, kTabHelp = 48031;
-constexpr int kImportBrowse = 48032, kImportRun = 48033;
+constexpr int kImportBrowse = 48032, kImportRun = 48033, kImportPreview = 48035;
 constexpr int kImportMapping = 48034;
 CueManagerController* g_controller = nullptr;
 
@@ -138,7 +138,15 @@ INT_PTR cue_manager_proc(HWND hwnd, UINT message, WPARAM wparam, LPARAM)
     if (g_controller) {
       char mapping[2048] = {};
       GetDlgItemText(hwnd, kImportMapping, mapping, sizeof(mapping));
-      g_controller->trigger_import(mapping);
+      g_controller->trigger_import(mapping, false);
+    }
+    return 1;
+  }
+  if (message == WM_COMMAND && LOWORD(wparam) == kImportPreview) {
+    if (g_controller) {
+      char mapping[2048] = {};
+      GetDlgItemText(hwnd, kImportMapping, mapping, sizeof(mapping));
+      g_controller->trigger_import(mapping, true);
     }
     return 1;
   }
@@ -252,6 +260,7 @@ BEGIN
   LTEXT "Mapping (optional)", -1, 16, 92, 110, 16
   EDITTEXT kImportMapping, 126, 90, 500, 20, ES_AUTOHSCROLL
   PUSHBUTTON "Choose Cue Sheet and Import", kImportRun, 650, 66, 190, 24
+  PUSHBUTTON "Preview Headers", kImportPreview, 846, 66, 120, 24
   LTEXT "Search", -1, 16, 42, 48, 14
   EDITTEXT kSearchFilter, 66, 40, 220, 20, ES_AUTOHSCROLL
   LTEXT "Character", -1, 294, 42, 68, 14
