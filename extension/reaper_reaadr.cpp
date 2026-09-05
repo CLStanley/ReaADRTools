@@ -638,6 +638,38 @@ void run_native_import_cue_sheet_action()
     return;
   }
   const std::string content((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
+  std::optional<reaadr::core::ColumnMapping> mapping;
+  if (GetUserInputs) {
+    std::array<char, 2048> mapping_input = {};
+    if (GetUserInputs("ReaADR Import: Column Mapping", 1,
+                      "Optional mapping key=column;... (blank=auto-detect)",
+                      mapping_input.data(), mapping_input.size())) {
+      reaadr::core::ColumnMapping parsed_mapping;
+      std::stringstream entries(mapping_input.data());
+      std::string entry;
+      while (std::getline(entries, entry, ';')) {
+        const std::size_t equals = entry.find('=');
+        if (equals == std::string::npos) {
+          ShowMessageBox("Mappings must use key=column pairs separated by semicolons.",
+                         "ReaADR Import", 0);
+          return;
+        }
+        const auto trim = [](const std::string& value) {
+          const auto first = value.find_first_not_of(" \t\r\n");
+          const auto last = value.find_last_not_of(" \t\r\n");
+          return first == std::string::npos ? std::string() : value.substr(first, last - first + 1);
+        };
+        const std::string key = trim(entry.substr(0, equals));
+        const std::string column = trim(entry.substr(equals + 1));
+        if (key.empty() || column.empty()) {
+          ShowMessageBox("Mappings cannot contain empty keys or columns.", "ReaADR Import", 0);
+          return;
+        }
+        parsed_mapping[key] = column;
+      }
+      if (!parsed_mapping.empty()) mapping = parsed_mapping;
+    }
+  }
 
   reaadr::reaper::ProjectStateStore project_state(nullptr, {GetProjExtState, SetProjExtState});
   reaadr::core::SessionModelRepository repository(project_state);
@@ -662,7 +694,7 @@ void run_native_import_cue_sheet_action()
     return static_cast<bool>(refreshed);
   };
   reaadr::reaper::CueImportApplicationService importer(renderer, native_overlay_frame_rate());
-  const auto result = importer.import_content(content, path.data(), std::nullopt, options);
+  const auto result = importer.import_content(content, path.data(), mapping, options);
   if (!result) {
     ShowMessageBox(result.error.c_str(), "ReaADR Import", 0);
     return;

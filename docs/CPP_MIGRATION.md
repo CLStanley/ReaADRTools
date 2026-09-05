@@ -83,7 +83,8 @@ snapshot/save/revision/rollback sequencing. These paths are test-covered but
 are not invoked by the UI yet. Native `SessionSaved` and `SyncFull` publication
 now writes the same bounded project event history used by Lua. XLSX unification,
 file-selection and mapping UI remain pending; the native cue-sheet import
-command now routes selected CSV/TSV content through the transactional renderer.
+command now routes selected CSV/TSV content through the transactional renderer
+and accepts explicit key-to-column mappings when inference is insufficient.
 
 ### Stage 3: REAPER rendering and recording workflows (started)
 
