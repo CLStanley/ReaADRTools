@@ -663,6 +663,12 @@ void run_native_import_cue_sheet_action(const std::string& mapping_override, boo
     }
     content = tsv.data();
   }
+  std::string last_mapping;
+  if (GetProjExtState) {
+    std::array<char, 4096> saved = {};
+    if (GetProjExtState(nullptr, "ReaADRTools", "import_mapping_last", saved.data(), saved.size()) > 0)
+      last_mapping = saved.data();
+  }
   const auto preview = reaadr::core::parse_delimited_content(content, path.data());
   if (!preview) {
     ShowMessageBox(preview.message.c_str(), "ReaADR Import Preview", 0);
@@ -761,6 +767,19 @@ void run_native_import_cue_sheet_action(const std::string& mapping_override, boo
       }
       if (!parsed_mapping.empty()) mapping = parsed_mapping;
     }
+    if (!has_mapping && !last_mapping.empty()) {
+      std::stringstream entries(last_mapping);
+      reaadr::core::ColumnMapping parsed_mapping;
+      std::string entry;
+      while (std::getline(entries, entry, ';')) {
+        const std::size_t equals = entry.find('=');
+        if (equals == std::string::npos) continue;
+        const std::string key = entry.substr(0, equals);
+        const std::string column = entry.substr(equals + 1);
+        if (!key.empty() && !column.empty()) parsed_mapping[key] = column;
+      }
+      if (!parsed_mapping.empty()) mapping = parsed_mapping;
+    }
   }
 
   reaadr::reaper::ProjectStateStore project_state(nullptr, {GetProjExtState, SetProjExtState});
@@ -801,6 +820,16 @@ void run_native_import_cue_sheet_action(const std::string& mapping_override, boo
   if (!result) {
     ShowMessageBox(result.error.c_str(), "ReaADR Import", 0);
     return;
+  }
+  if (mapping && SetProjExtState) {
+    std::ostringstream serialized;
+    bool first = true;
+    for (const auto& entry : *mapping) {
+      if (!first) serialized << ';';
+      first = false;
+      serialized << entry.first << '=' << entry.second;
+    }
+    SetProjExtState(nullptr, "ReaADRTools", "import_mapping_last", serialized.str().c_str());
   }
   const std::string summary = "Imported " + std::to_string(result.imported.cues.size()) +
     " cue(s) from " + std::string(path.data()) + ".\n\nTracks created: " +
