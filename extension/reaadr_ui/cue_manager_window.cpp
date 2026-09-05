@@ -28,6 +28,7 @@ constexpr int kTabImport = 48025, kTabCues = 48026, kTabSession = 48027;
 constexpr int kTabReports = 48028, kTabOverlay = 48029, kTabPreferences = 48030, kTabHelp = 48031;
 constexpr int kImportBrowse = 48032, kImportRun = 48033, kImportPreview = 48035;
 constexpr int kImportMapping = 48034;
+constexpr int kImportMode = 48036, kImportCharacters = 48037;
 CueManagerController* g_controller = nullptr;
 
 void populate_add_editor(HWND hwnd)
@@ -93,6 +94,7 @@ void refresh_rows(HWND hwnd)
 INT_PTR cue_manager_proc(HWND hwnd, UINT message, WPARAM wparam, LPARAM)
 {
   if (message == WM_INITDIALOG) {
+    SetDlgItemText(hwnd, kImportMode, "all");
     if (g_controller) {
       const auto& view = g_controller->view();
       refresh_rows(hwnd);
@@ -137,16 +139,22 @@ INT_PTR cue_manager_proc(HWND hwnd, UINT message, WPARAM wparam, LPARAM)
   if (message == WM_COMMAND && LOWORD(wparam) == kImportRun) {
     if (g_controller) {
       char mapping[2048] = {};
+      char mode[64] = {}, characters[512] = {};
       GetDlgItemText(hwnd, kImportMapping, mapping, sizeof(mapping));
-      g_controller->trigger_import(mapping, false);
+      GetDlgItemText(hwnd, kImportMode, mode, sizeof(mode));
+      GetDlgItemText(hwnd, kImportCharacters, characters, sizeof(characters));
+      g_controller->trigger_import(mapping, false, mode, characters);
     }
     return 1;
   }
   if (message == WM_COMMAND && LOWORD(wparam) == kImportPreview) {
     if (g_controller) {
       char mapping[2048] = {};
+      char mode[64] = {}, characters[512] = {};
       GetDlgItemText(hwnd, kImportMapping, mapping, sizeof(mapping));
-      g_controller->trigger_import(mapping, true);
+      GetDlgItemText(hwnd, kImportMode, mode, sizeof(mode));
+      GetDlgItemText(hwnd, kImportCharacters, characters, sizeof(characters));
+      g_controller->trigger_import(mapping, true, mode, characters);
     }
     return 1;
   }
@@ -259,6 +267,10 @@ BEGIN
   LTEXT "Cue sheet import uses the native transactional parser and renderer.", -1, 16, 70, 620, 16
   LTEXT "Mapping (optional)", -1, 16, 92, 110, 16
   EDITTEXT kImportMapping, 126, 90, 500, 20, ES_AUTOHSCROLL
+  LTEXT "Mode (all/selected)", -1, 16, 118, 110, 16
+  EDITTEXT kImportMode, 126, 116, 120, 20, ES_AUTOHSCROLL
+  LTEXT "Characters (; separated)", -1, 260, 118, 150, 16
+  EDITTEXT kImportCharacters, 414, 116, 300, 20, ES_AUTOHSCROLL
   PUSHBUTTON "Choose Cue Sheet and Import", kImportRun, 650, 66, 190, 24
   PUSHBUTTON "Preview Headers", kImportPreview, 846, 66, 120, 24
   LTEXT "Search", -1, 16, 42, 48, 14

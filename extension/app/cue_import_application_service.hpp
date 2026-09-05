@@ -5,6 +5,7 @@
 
 #include <optional>
 #include <string>
+#include <vector>
 
 namespace reaadr::reaper {
 
@@ -28,7 +29,9 @@ public:
     const std::string& content,
     const std::string& source_path,
     const std::optional<core::ColumnMapping>& mapping,
-    const SessionRenderOptions& options);
+    const SessionRenderOptions& options,
+    const std::string& mode = "all",
+    const std::vector<std::string>& characters = {});
 
 private:
   SessionRenderService& renderer_;

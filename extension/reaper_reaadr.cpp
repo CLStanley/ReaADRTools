@@ -543,7 +543,8 @@ reaadr::reaper::OverlaySelectionInput native_overlay_selection();
 double native_overlay_frame_rate();
 bool native_overlay_refresh_callback(
   const reaadr::core::OverlayRefreshOptions& options, std::string* error);
-void run_native_import_cue_sheet_action(const std::string& mapping_override = {}, bool preview_only = false);
+void run_native_import_cue_sheet_action(const std::string& mapping_override = {}, bool preview_only = false,
+                                        const std::string& mode = "all", const std::string& characters = {});
 
 void run_native_cue_manager_action()
 {
@@ -580,9 +581,9 @@ void run_native_cue_manager_action()
   };
   reaadr::ui::CueManagerController controller(
     service, mutations, project_state, navigation_api,
-    [](const std::string& mapping, bool preview) {
+    [](const std::string& mapping, bool preview, const std::string& mode, const std::string& characters) {
       if (g_import_cue_sheet_command_id && Main_OnCommand)
-        run_native_import_cue_sheet_action(mapping, preview);
+        run_native_import_cue_sheet_action(mapping, preview, mode, characters);
     });
   if (!controller.reload()) { ShowMessageBox(controller.view().error.c_str(), "ReaADR Cue Manager", 0); return; }
   if (reaadr::ui::show_cue_manager(controller)) return;
@@ -630,7 +631,8 @@ void run_native_cue_manager_action()
   if (!updated) ShowMessageBox(updated.error.c_str(), "ReaADR Cue Manager", 0);
 }
 
-void run_native_import_cue_sheet_action(const std::string& mapping_override, bool preview_only)
+void run_native_import_cue_sheet_action(const std::string& mapping_override, bool preview_only,
+                                        const std::string& mode, const std::string& characters)
 {
   if (!GetUserFileNameForRead) {
     ShowMessageBox("The native file chooser is unavailable.", "ReaADR Import", 0);
@@ -767,7 +769,18 @@ void run_native_import_cue_sheet_action(const std::string& mapping_override, boo
     return static_cast<bool>(refreshed);
   };
   reaadr::reaper::CueImportApplicationService importer(renderer, native_overlay_frame_rate());
-  const auto result = importer.import_content(content, path.data(), mapping, options);
+  std::vector<std::string> selected_characters;
+  if (mode == "selected") {
+    std::stringstream values(characters);
+    std::string value;
+    while (std::getline(values, value, ';')) {
+      const auto first = value.find_first_not_of(" \t\r\n");
+      const auto last = value.find_last_not_of(" \t\r\n");
+      if (first != std::string::npos) selected_characters.push_back(value.substr(first, last - first + 1));
+    }
+  }
+  const auto result = importer.import_content(content, path.data(), mapping, options,
+                                              mode.empty() ? "all" : mode, selected_characters);
   if (!result) {
     ShowMessageBox(result.error.c_str(), "ReaADR Import", 0);
     return;
