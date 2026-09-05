@@ -84,6 +84,7 @@
 #include <algorithm>
 #include <array>
 #include <cmath>
+#include <cctype>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -545,6 +546,7 @@ bool native_overlay_refresh_callback(
   const reaadr::core::OverlayRefreshOptions& options, std::string* error);
 void run_native_import_cue_sheet_action(const std::string& mapping_override = {}, bool preview_only = false,
                                         const std::string& mode = "all", const std::string& characters = {});
+bool read_xlsx_as_tsv(const char* path, char* tsv_out, int tsv_out_sz, char* error_out, int error_out_sz);
 
 void run_native_cue_manager_action()
 {
@@ -645,7 +647,22 @@ void run_native_import_cue_sheet_action(const std::string& mapping_override, boo
     ShowMessageBox("Could not open the selected cue sheet.", "ReaADR Import", 0);
     return;
   }
-  const std::string content((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
+  std::string content((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
+  const std::string lower_path = [&path]() {
+    std::string value(path.data());
+    std::transform(value.begin(), value.end(), value.begin(),
+                   [](unsigned char ch) { return static_cast<char>(std::tolower(ch)); });
+    return value;
+  }();
+  if (lower_path.size() >= 5 && lower_path.compare(lower_path.size() - 5, 5, ".xlsx") == 0) {
+    std::vector<char> tsv(8 * 1024 * 1024), error(4096);
+    if (!read_xlsx_as_tsv(path.data(), tsv.data(), static_cast<int>(tsv.size()),
+                          error.data(), static_cast<int>(error.size()))) {
+      ShowMessageBox(error.data(), "ReaADR Import", 0);
+      return;
+    }
+    content = tsv.data();
+  }
   const auto preview = reaadr::core::parse_delimited_content(content, path.data());
   if (!preview) {
     ShowMessageBox(preview.message.c_str(), "ReaADR Import Preview", 0);
