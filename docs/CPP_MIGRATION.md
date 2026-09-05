@@ -330,6 +330,10 @@ repository and overlay profile contract through the native view service; the
 full editable Preferences surface remains part of the graphical Manager UI
 cutover. The command is also exposed in the top-level ReaADR menu, and its
 project-scoped Manager toggles are editable with native validation and Undo.
+Delimited cue content can now also flow through a native import application
+service, which keeps parsing/mapping deterministic and commits the replacement
+through the existing transactional session renderer; file selection remains at
+the host/UI boundary.
 These domain operations and adapters are test-covered but are not yet all
 public writers; the full native filter/manager UI, deferred recording frame/UI
 wiring, other overlay UI, and in-REAPER smoke tests remain. Lua source and

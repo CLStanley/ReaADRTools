@@ -358,6 +358,9 @@ action surface. It persists the selected character/lane tokens and visibility
 setting, then applies ownership-checked track mute and region visibility changes
 inside one project transaction; the Lua filter window remains a compatibility
 route until the full native Manager UI is complete.
+Native cue import orchestration likewise lives in the application layer: loaded
+CSV/TSV text is parsed and mapped by the domain core, then rendered through the
+same canonical model/project transaction used by native edits.
 Preferences preview uses the same native Manager view snapshot and repository,
 so displayed overlay/profile and UI flags cannot drift from persisted extstate.
 The same window applies search, character, and status through one controller
