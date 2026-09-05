@@ -33,6 +33,7 @@
 #define REAPERAPI_WANT_GetTrack
 #define REAPERAPI_WANT_GetUserInputs
 #define REAPERAPI_WANT_GetUserFileNameForRead
+#define REAPERAPI_WANT_Main_OnCommand
 #define REAPERAPI_WANT_GetSetMediaItemInfo_String
 #define REAPERAPI_WANT_GetSetMediaItemTakeInfo
 #define REAPERAPI_WANT_GetSetMediaItemTakeInfo_String
@@ -577,7 +578,11 @@ void run_native_cue_manager_action()
     GetPlayState, GetPlayPosition, GetCursorPosition, SetEditCurPos,
   };
   reaadr::ui::CueManagerController controller(
-    service, mutations, project_state, navigation_api);
+    service, mutations, project_state, navigation_api,
+    []() {
+      if (g_import_cue_sheet_command_id && Main_OnCommand)
+        Main_OnCommand(g_import_cue_sheet_command_id, 0);
+    });
   if (!controller.reload()) { ShowMessageBox(controller.view().error.c_str(), "ReaADR Cue Manager", 0); return; }
   if (reaadr::ui::show_cue_manager(controller)) return;
 

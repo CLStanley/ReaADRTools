@@ -5,6 +5,8 @@
 #include "app/manager_view_application_service.hpp"
 #include "reaadr_reaper/cue_navigation_service.hpp"
 
+#include <functional>
+
 namespace reaadr::ui {
 
 class CueManagerController {
@@ -12,9 +14,11 @@ public:
   CueManagerController(reaper::ManagerViewApplicationService& service,
                        reaper::CueManagerMutationService& mutations,
                        core::ProjectStateStore& project_state,
-                       reaper::CueNavigationApi navigation_api);
+                       reaper::CueNavigationApi navigation_api,
+                       std::function<void()> trigger_import = {});
   bool reload();
   bool set_tab(const std::string& tab);
+  void trigger_import();
   bool set_filters(const std::string& query,
                    const std::string& character,
                    const std::string& status);
@@ -39,6 +43,7 @@ private:
   core::ManagerViewModel view_;
   std::string selected_key_;
   std::string requested_tab_ = "cues";
+  std::function<void()> trigger_import_;
 };
 
 } // namespace reaadr::ui

@@ -2,15 +2,17 @@
 
 #include <iomanip>
 #include <sstream>
+#include <utility>
 
 namespace reaadr::ui {
 
 CueManagerController::CueManagerController(reaper::ManagerViewApplicationService& service,
                                            reaper::CueManagerMutationService& mutations,
                                            core::ProjectStateStore& project_state,
-                                           reaper::CueNavigationApi navigation_api)
+                                           reaper::CueNavigationApi navigation_api,
+                                           std::function<void()> trigger_import)
   : service_(service), mutations_(mutations), project_state_(project_state),
-    navigation_api_(navigation_api) {}
+    navigation_api_(navigation_api), trigger_import_(std::move(trigger_import)) {}
 
 bool CueManagerController::reload()
 {
@@ -26,6 +28,11 @@ bool CueManagerController::reload()
   view_.cues.selected_cue_key = selected_key_;
   for (std::size_t i = 0; i < view_.cues.rows.size(); ++i) view_.cues.rows[i].selected = i == selected;
   return true;
+}
+
+void CueManagerController::trigger_import()
+{
+  if (trigger_import_) trigger_import_();
 }
 
 bool CueManagerController::set_tab(const std::string& tab)
