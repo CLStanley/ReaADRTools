@@ -31,7 +31,27 @@ CueImportApplicationResult CueImportApplicationService::import_content(
         filtered.push_back(cue);
     }
     result.imported.cues = std::move(filtered);
-  } else if (mode != "all") {
+  } else if (mode == "update") {
+    if (!repository_) {
+      result.error = "Native update import requires a canonical session repository.";
+      return result;
+    }
+    const auto loaded = repository_->load();
+    if (!loaded) {
+      result.error = core::session_load_error_message(loaded);
+      return result;
+    }
+    std::vector<core::Fields> merged = loaded.model.cues;
+    for (const auto& incoming : result.imported.cues) {
+      const std::string key = core::render_cue_key(incoming);
+      auto existing = std::find_if(merged.begin(), merged.end(), [&key](const core::Fields& cue) {
+        return core::render_cue_key(cue) == key;
+      });
+      if (existing == merged.end()) merged.push_back(incoming);
+      else *existing = incoming;
+    }
+    result.imported.cues = std::move(merged);
+  } else {
     result.error = "Unsupported native import mode: " + mode;
     return result;
   }

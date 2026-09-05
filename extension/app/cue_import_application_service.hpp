@@ -22,8 +22,9 @@ struct CueImportApplicationResult {
 // the replacement through the same model/project transaction as native edits.
 class CueImportApplicationService final {
 public:
-  CueImportApplicationService(SessionRenderService& renderer, double frame_rate)
-    : renderer_(renderer), frame_rate_(frame_rate) {}
+  CueImportApplicationService(SessionRenderService& renderer, double frame_rate,
+                              core::SessionModelRepository* repository = nullptr)
+    : renderer_(renderer), frame_rate_(frame_rate), repository_(repository) {}
 
   CueImportApplicationResult import_content(
     const std::string& content,
@@ -36,6 +37,7 @@ public:
 private:
   SessionRenderService& renderer_;
   double frame_rate_ = 30.0;
+  core::SessionModelRepository* repository_ = nullptr;
 };
 
 } // namespace reaadr::reaper

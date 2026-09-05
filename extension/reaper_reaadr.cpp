@@ -822,7 +822,8 @@ void run_native_import_cue_sheet_action(const std::string& mapping_override, boo
     if (!refreshed && error) *error = refreshed.error;
     return static_cast<bool>(refreshed);
   };
-  reaadr::reaper::CueImportApplicationService importer(renderer, native_overlay_frame_rate());
+  reaadr::reaper::CueImportApplicationService importer(
+    renderer, native_overlay_frame_rate(), &repository);
   std::vector<std::string> selected_characters;
   if (mode == "selected") {
     std::stringstream values(characters);
