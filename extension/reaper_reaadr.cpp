@@ -543,6 +543,7 @@ reaadr::reaper::OverlaySelectionInput native_overlay_selection();
 double native_overlay_frame_rate();
 bool native_overlay_refresh_callback(
   const reaadr::core::OverlayRefreshOptions& options, std::string* error);
+void run_native_import_cue_sheet_action(const std::string& mapping_override = {});
 
 void run_native_cue_manager_action()
 {
@@ -579,9 +580,9 @@ void run_native_cue_manager_action()
   };
   reaadr::ui::CueManagerController controller(
     service, mutations, project_state, navigation_api,
-    []() {
+    [](const std::string& mapping) {
       if (g_import_cue_sheet_command_id && Main_OnCommand)
-        Main_OnCommand(g_import_cue_sheet_command_id, 0);
+        run_native_import_cue_sheet_action(mapping);
     });
   if (!controller.reload()) { ShowMessageBox(controller.view().error.c_str(), "ReaADR Cue Manager", 0); return; }
   if (reaadr::ui::show_cue_manager(controller)) return;
@@ -629,7 +630,7 @@ void run_native_cue_manager_action()
   if (!updated) ShowMessageBox(updated.error.c_str(), "ReaADR Cue Manager", 0);
 }
 
-void run_native_import_cue_sheet_action()
+void run_native_import_cue_sheet_action(const std::string& mapping_override)
 {
   if (!GetUserFileNameForRead) {
     ShowMessageBox("The native file chooser is unavailable.", "ReaADR Import", 0);
@@ -644,11 +645,17 @@ void run_native_import_cue_sheet_action()
   }
   const std::string content((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
   std::optional<reaadr::core::ColumnMapping> mapping;
-  if (GetUserInputs) {
+  if (GetUserInputs || !mapping_override.empty()) {
     std::array<char, 2048> mapping_input = {};
-    if (GetUserInputs("ReaADR Import: Column Mapping", 1,
-                      "Optional mapping key=column;... (blank=auto-detect)",
-                      mapping_input.data(), mapping_input.size())) {
+    bool has_mapping = !mapping_override.empty();
+    if (has_mapping) {
+      std::strncpy(mapping_input.data(), mapping_override.c_str(), mapping_input.size() - 1);
+    } else if (GetUserInputs("ReaADR Import: Column Mapping", 1,
+                             "Optional mapping key=column;... (blank=auto-detect)",
+                             mapping_input.data(), mapping_input.size())) {
+      has_mapping = true;
+    }
+    if (has_mapping) {
       reaadr::core::ColumnMapping parsed_mapping;
       std::stringstream entries(mapping_input.data());
       std::string entry;
