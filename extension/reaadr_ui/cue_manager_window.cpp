@@ -94,6 +94,7 @@ void refresh_rows(HWND hwnd)
 void apply_tab_visibility(HWND hwnd, const std::string& tab)
 {
   const bool import = tab == "import";
+  const bool cues = tab == "cues";
   const int import_controls[] = {
     kImportMapping, kImportClearMapping, kImportMode, kImportCharacters,
     kImportRun, kImportPreview,
@@ -108,7 +109,7 @@ void apply_tab_visibility(HWND hwnd, const std::string& tab)
     kResetFilter, kJumpCueId, kJump, kNewCue, kAddCue, kRemoveCue,
   };
   for (const int id : cue_controls)
-    ShowWindow(GetDlgItem(hwnd, id), import ? SW_HIDE : SW_SHOW);
+    ShowWindow(GetDlgItem(hwnd, id), cues ? SW_SHOW : SW_HIDE);
 }
 
 #ifndef _WIN32
