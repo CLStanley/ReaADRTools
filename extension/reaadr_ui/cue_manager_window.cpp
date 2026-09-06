@@ -31,6 +31,7 @@ constexpr int kImportMapping = 48034;
 constexpr int kImportMode = 48036, kImportCharacters = 48037;
 constexpr int kImportClearMapping = 48038;
 constexpr int kSessionValidate = 48039, kSessionRefresh = 48040, kSessionSync = 48041;
+constexpr int kOverlayRefresh = 48042, kPreferencesOpen = 48043;
 CueManagerController* g_controller = nullptr;
 
 void populate_add_editor(HWND hwnd)
@@ -115,6 +116,9 @@ void apply_tab_visibility(HWND hwnd, const std::string& tab)
   const int session_controls[] = {kSessionValidate, kSessionRefresh, kSessionSync};
   for (const int id : session_controls)
     ShowWindow(GetDlgItem(hwnd, id), tab == "session" ? SW_SHOW : SW_HIDE);
+
+  ShowWindow(GetDlgItem(hwnd, kOverlayRefresh), tab == "overlay" ? SW_SHOW : SW_HIDE);
+  ShowWindow(GetDlgItem(hwnd, kPreferencesOpen), tab == "preferences" ? SW_SHOW : SW_HIDE);
 }
 
 #ifndef _WIN32
@@ -204,6 +208,12 @@ INT_PTR cue_manager_proc(HWND hwnd, UINT message, WPARAM wparam, LPARAM)
         LOWORD(wparam) == kSessionRefresh ? "refresh_session" : "sync_regions";
       g_controller->trigger_action(action);
     }
+    return 1;
+  }
+  if (message == WM_COMMAND &&
+      (LOWORD(wparam) == kOverlayRefresh || LOWORD(wparam) == kPreferencesOpen)) {
+    if (g_controller)
+      g_controller->trigger_action(LOWORD(wparam) == kOverlayRefresh ? "refresh_overlay" : "preferences");
     return 1;
   }
   if (message == WM_COMMAND && LOWORD(wparam) == kResetFilter) {
@@ -325,6 +335,8 @@ BEGIN
   PUSHBUTTON "Check Session", kSessionValidate, 16, 150, 120, 24
   PUSHBUTTON "Refresh Session", kSessionRefresh, 142, 150, 120, 24
   PUSHBUTTON "Update From Regions", kSessionSync, 268, 150, 150, 24
+  PUSHBUTTON "Refresh Video Overlay", kOverlayRefresh, 16, 150, 160, 24
+  PUSHBUTTON "Open Preferences", kPreferencesOpen, 16, 150, 140, 24
   LTEXT "Search", -1, 16, 42, 48, 14
   EDITTEXT kSearchFilter, 66, 40, 220, 20, ES_AUTOHSCROLL
   LTEXT "Character", -1, 294, 42, 68, 14
