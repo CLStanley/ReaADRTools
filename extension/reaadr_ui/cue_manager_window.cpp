@@ -269,7 +269,7 @@ BEGIN
   LTEXT "Cue sheet import uses the native transactional parser and renderer.", -1, 16, 70, 620, 16
   LTEXT "Mapping (optional)", -1, 16, 92, 110, 16
   EDITTEXT kImportMapping, 126, 90, 500, 20, ES_AUTOHSCROLL
-  LTEXT "Mode (all/selected)", -1, 16, 118, 110, 16
+  LTEXT "Mode (all/selected/update)", -1, 16, 118, 150, 16
   EDITTEXT kImportMode, 126, 116, 120, 20, ES_AUTOHSCROLL
   LTEXT "Characters (; separated)", -1, 260, 118, 150, 16
   EDITTEXT kImportCharacters, 414, 116, 300, 20, ES_AUTOHSCROLL

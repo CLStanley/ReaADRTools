@@ -734,7 +734,8 @@ void run_native_import_cue_sheet_action(const std::string& mapping_override, boo
         }
       }
       summary << "\nValidation: " << selected_count << " cue(s) ready to import (mode: "
-              << (mode == "selected" ? "selected characters" : "entire sheet") << ").";
+              << (mode == "selected" ? "selected characters" : mode == "update" ? "update existing" : "entire sheet")
+              << ").";
     }
     if (!preview.table.rows.empty()) {
       summary << "\n\nFirst row:\n";
