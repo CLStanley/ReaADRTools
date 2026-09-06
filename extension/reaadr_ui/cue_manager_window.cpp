@@ -91,6 +91,26 @@ void refresh_rows(HWND hwnd)
   }
 }
 
+void apply_tab_visibility(HWND hwnd, const std::string& tab)
+{
+  const bool import = tab == "import";
+  const int import_controls[] = {
+    kImportMapping, kImportClearMapping, kImportMode, kImportCharacters,
+    kImportRun, kImportPreview,
+  };
+  for (const int id : import_controls)
+    ShowWindow(GetDlgItem(hwnd, id), import ? SW_SHOW : SW_HIDE);
+
+  const int cue_controls[] = {
+    kRows, kPrevious, kNext, kCharacterFilter, kApplyFilter,
+    kEditDialogue, kEditNotes, kEditType, kEditStart, kEditEnd, kEditStatus,
+    kApplyEdit, kEditCueId, kEditCharacter, kSearchFilter, kStatusFilter,
+    kResetFilter, kJumpCueId, kJump, kNewCue, kAddCue, kRemoveCue,
+  };
+  for (const int id : cue_controls)
+    ShowWindow(GetDlgItem(hwnd, id), import ? SW_HIDE : SW_SHOW);
+}
+
 #ifndef _WIN32
 INT_PTR cue_manager_proc(HWND hwnd, UINT message, WPARAM wparam, LPARAM)
 {
@@ -107,6 +127,7 @@ INT_PTR cue_manager_proc(HWND hwnd, UINT message, WPARAM wparam, LPARAM)
           update_details(hwnd, static_cast<int>(i));
         }
     }
+    if (g_controller) apply_tab_visibility(hwnd, g_controller->view().active_tab);
     return 1;
   }
   if (message == WM_COMMAND && (LOWORD(wparam) == IDOK || LOWORD(wparam) == IDCANCEL)) {
@@ -136,6 +157,7 @@ INT_PTR cue_manager_proc(HWND hwnd, UINT message, WPARAM wparam, LPARAM)
       const std::string title = "ReaADR Manager - " + g_controller->view().active_tab;
       SetWindowText(hwnd, title.c_str());
       SetDlgItemText(hwnd, kDetails, ("Active tab: " + g_controller->view().active_tab).c_str());
+      apply_tab_visibility(hwnd, g_controller->view().active_tab);
       return 1;
     }
   }
