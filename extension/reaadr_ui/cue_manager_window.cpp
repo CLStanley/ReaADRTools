@@ -4,6 +4,7 @@
 #include <swell/swell-dlggen.h>
 #endif
 #include <string>
+#include <map>
 
 #ifndef LBS_NOTIFY
 #define LBS_NOTIFY 0x0001L
@@ -244,6 +245,17 @@ INT_PTR cue_manager_proc(HWND hwnd, UINT message, WPARAM wparam, LPARAM)
         "\nRevision: " + view.revision +
         "\nTotal cues: " + std::to_string(view.total_cues) +
         "\nVisible cues: " + std::to_string(view.cues.rows.size());
+      std::map<std::string, int> characters, statuses;
+      for (const auto& row : view.cues.rows) {
+        ++characters[row.character];
+        ++statuses[row.status];
+      }
+      summary += "\n\nCharacters:";
+      for (const auto& entry : characters)
+        summary += "\n  " + entry.first + ": " + std::to_string(entry.second);
+      summary += "\n\nStatuses:";
+      for (const auto& entry : statuses)
+        summary += "\n  " + entry.first + ": " + std::to_string(entry.second);
       MessageBox(hwnd, summary.c_str(), "ReaADR Session Summary", 0);
     }
     return 1;
