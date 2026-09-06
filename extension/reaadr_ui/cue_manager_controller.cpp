@@ -43,6 +43,11 @@ std::string CueManagerController::last_import_mapping() const
   return value ? value.value : std::string();
 }
 
+void CueManagerController::clear_import_mapping()
+{
+  project_state_.write(core::SessionModelRepository::kNamespace, "import_mapping_last", {});
+}
+
 bool CueManagerController::set_tab(const std::string& tab)
 {
   requested_tab_ = core::normalize_manager_tab(tab);

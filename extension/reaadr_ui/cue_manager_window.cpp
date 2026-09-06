@@ -29,6 +29,7 @@ constexpr int kTabReports = 48028, kTabOverlay = 48029, kTabPreferences = 48030,
 constexpr int kImportBrowse = 48032, kImportRun = 48033, kImportPreview = 48035;
 constexpr int kImportMapping = 48034;
 constexpr int kImportMode = 48036, kImportCharacters = 48037;
+constexpr int kImportClearMapping = 48038;
 CueManagerController* g_controller = nullptr;
 
 void populate_add_editor(HWND hwnd)
@@ -160,6 +161,13 @@ INT_PTR cue_manager_proc(HWND hwnd, UINT message, WPARAM wparam, LPARAM)
     }
     return 1;
   }
+  if (message == WM_COMMAND && LOWORD(wparam) == kImportClearMapping) {
+    if (g_controller) {
+      g_controller->clear_import_mapping();
+      SetDlgItemText(hwnd, kImportMapping, "");
+    }
+    return 1;
+  }
   if (message == WM_COMMAND && LOWORD(wparam) == kResetFilter) {
     SetDlgItemText(hwnd, kSearchFilter, "");
     SetDlgItemText(hwnd, kCharacterFilter, "");
@@ -269,6 +277,7 @@ BEGIN
   LTEXT "Cue sheet import uses the native transactional parser and renderer.", -1, 16, 70, 620, 16
   LTEXT "Mapping (optional)", -1, 16, 92, 110, 16
   EDITTEXT kImportMapping, 126, 90, 500, 20, ES_AUTOHSCROLL
+  PUSHBUTTON "Clear", kImportClearMapping, 632, 90, 58, 20
   LTEXT "Mode (all/selected/update)", -1, 16, 118, 150, 16
   EDITTEXT kImportMode, 126, 116, 120, 20, ES_AUTOHSCROLL
   LTEXT "Characters (; separated)", -1, 260, 118, 150, 16
