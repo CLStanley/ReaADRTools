@@ -636,6 +636,22 @@ void run_native_cue_manager_action()
 void run_native_import_cue_sheet_action(const std::string& mapping_override, bool preview_only,
                                         const std::string& mode, const std::string& characters)
 {
+  const auto normalize_mode = [](std::string value) {
+    const auto first = value.find_first_not_of(" \t\r\n");
+    const auto last = value.find_last_not_of(" \t\r\n");
+    value = first == std::string::npos ? std::string() : value.substr(first, last - first + 1);
+    std::transform(value.begin(), value.end(), value.begin(), [](unsigned char ch) {
+      return static_cast<char>(std::tolower(ch));
+    });
+    if (value == "1" || value == "all" || value == "import entire script" ||
+        value == "import entire sheet") return std::string("all");
+    if (value == "2" || value == "selected" || value == "import selected characters" ||
+        value == "add selected characters") return std::string("selected");
+    if (value == "3" || value == "update" || value == "update existing import" ||
+        value == "update already imported characters") return std::string("update");
+    return value;
+  };
+  const std::string normalized_mode = normalize_mode(mode.empty() ? "all" : mode);
   if (!GetUserFileNameForRead) {
     ShowMessageBox("The native file chooser is unavailable.", "ReaADR Import", 0);
     return;
@@ -717,7 +733,7 @@ void run_native_import_cue_sheet_action(const std::string& mapping_override, boo
       summary << "\nValidation error: " << validation.message;
     } else {
       std::size_t selected_count = validation.cues.size();
-      if (mode == "selected") {
+      if (normalized_mode == "selected") {
         std::vector<std::string> selected_characters;
         std::stringstream values(characters);
         std::string value;
@@ -734,7 +750,7 @@ void run_native_import_cue_sheet_action(const std::string& mapping_override, boo
         }
       }
       summary << "\nValidation: " << selected_count << " cue(s) ready to import (mode: "
-              << (mode == "selected" ? "selected characters" : mode == "update" ? "update existing" : "entire sheet")
+              << (normalized_mode == "selected" ? "selected characters" : normalized_mode == "update" ? "update existing" : "entire sheet")
               << ").";
     }
     if (!preview.table.rows.empty()) {
@@ -837,7 +853,7 @@ void run_native_import_cue_sheet_action(const std::string& mapping_override, boo
   reaadr::reaper::CueImportApplicationService importer(
     renderer, native_overlay_frame_rate(), &repository);
   std::vector<std::string> selected_characters;
-  if (mode == "selected") {
+  if (normalized_mode == "selected") {
     std::stringstream values(characters);
     std::string value;
     while (std::getline(values, value, ';')) {
@@ -847,7 +863,7 @@ void run_native_import_cue_sheet_action(const std::string& mapping_override, boo
     }
   }
   const auto result = importer.import_content(content, path.data(), mapping, options,
-                                              mode.empty() ? "all" : mode, selected_characters);
+                                              normalized_mode, selected_characters);
   if (!result) {
     ShowMessageBox(result.error.c_str(), "ReaADR Import", 0);
     return;

@@ -1,6 +1,31 @@
 #include "cue_import_application_service.hpp"
 
 #include <algorithm>
+#include <cctype>
+
+namespace {
+
+std::string normalize_import_mode(std::string value)
+{
+  value.erase(value.begin(), std::find_if(value.begin(), value.end(), [](unsigned char ch) {
+    return !std::isspace(ch);
+  }));
+  value.erase(std::find_if(value.rbegin(), value.rend(), [](unsigned char ch) {
+    return !std::isspace(ch);
+  }).base(), value.end());
+  std::transform(value.begin(), value.end(), value.begin(), [](unsigned char ch) {
+    return static_cast<char>(std::tolower(ch));
+  });
+  if (value == "1" || value == "all" || value == "import entire script" ||
+      value == "import entire sheet") return "all";
+  if (value == "2" || value == "selected" || value == "import selected characters" ||
+      value == "add selected characters") return "selected";
+  if (value == "3" || value == "update" || value == "update existing import" ||
+      value == "update already imported characters") return "update";
+  return value;
+}
+
+} // namespace
 
 namespace reaadr::reaper {
 
@@ -23,7 +48,8 @@ CueImportApplicationResult CueImportApplicationService::import_content(
     result.error = result.imported.message;
     return result;
   }
-  if (mode == "selected") {
+  const std::string normalized_mode = normalize_import_mode(mode.empty() ? "all" : mode);
+  if (normalized_mode == "selected") {
     std::vector<core::Fields> filtered;
     for (const auto& cue : result.imported.cues) {
       const auto found = cue.find("character");
@@ -31,7 +57,7 @@ CueImportApplicationResult CueImportApplicationService::import_content(
         filtered.push_back(cue);
     }
     result.imported.cues = std::move(filtered);
-  } else if (mode == "update") {
+  } else if (normalized_mode == "update") {
     if (!repository_) {
       result.error = "Native update import requires a canonical session repository.";
       return result;
@@ -51,7 +77,7 @@ CueImportApplicationResult CueImportApplicationService::import_content(
       else *existing = incoming;
     }
     result.imported.cues = std::move(merged);
-  } else {
+  } else if (normalized_mode != "all") {
     result.error = "Unsupported native import mode: " + mode;
     return result;
   }
