@@ -32,6 +32,8 @@ constexpr int kImportMode = 48036, kImportCharacters = 48037;
 constexpr int kImportClearMapping = 48038;
 constexpr int kSessionValidate = 48039, kSessionRefresh = 48040, kSessionSync = 48041;
 constexpr int kOverlayRefresh = 48042, kPreferencesOpen = 48043;
+constexpr int kHelpImport = 48044, kHelpCues = 48045, kHelpOverlay = 48046,
+              kHelpReports = 48047, kHelpQuickActions = 48048;
 CueManagerController* g_controller = nullptr;
 
 void populate_add_editor(HWND hwnd)
@@ -119,6 +121,9 @@ void apply_tab_visibility(HWND hwnd, const std::string& tab)
 
   ShowWindow(GetDlgItem(hwnd, kOverlayRefresh), tab == "overlay" ? SW_SHOW : SW_HIDE);
   ShowWindow(GetDlgItem(hwnd, kPreferencesOpen), tab == "preferences" ? SW_SHOW : SW_HIDE);
+  const int help_controls[] = {kHelpImport, kHelpCues, kHelpOverlay, kHelpReports, kHelpQuickActions};
+  for (const int id : help_controls)
+    ShowWindow(GetDlgItem(hwnd, id), tab == "help" ? SW_SHOW : SW_HIDE);
 }
 
 #ifndef _WIN32
@@ -214,6 +219,20 @@ INT_PTR cue_manager_proc(HWND hwnd, UINT message, WPARAM wparam, LPARAM)
       (LOWORD(wparam) == kOverlayRefresh || LOWORD(wparam) == kPreferencesOpen)) {
     if (g_controller)
       g_controller->trigger_action(LOWORD(wparam) == kOverlayRefresh ? "refresh_overlay" : "preferences");
+    return 1;
+  }
+  if (message == WM_COMMAND && LOWORD(wparam) >= kHelpImport && LOWORD(wparam) <= kHelpQuickActions) {
+    const char* title = "ReaADR Manager Help";
+    const char* text = LOWORD(wparam) == kHelpImport ?
+      "Import loads CSV, TSV, TAB, TXT, or XLSX cue sheets. Preview headers first, then use optional key=column mappings. Modes are all, selected, or update." :
+      LOWORD(wparam) == kHelpCues ?
+      "Cue Management filters and edits the canonical ADR session. Select a row to edit dialogue, timing, status, or type; changes rebuild generated artifacts transactionally." :
+      LOWORD(wparam) == kHelpOverlay ?
+      "Video Overlay rebuilds overlay effects from the canonical session model. Refresh after changing cues or overlay preferences." :
+      LOWORD(wparam) == kHelpReports ?
+      "Reports can export cue and recording information for review or spreadsheet workflows. Export remains available from the established ReaADR action surface." :
+      "Quick Actions are exposed through the ReaADR action and menu surface. Use Session Tools for validation, refresh, and region synchronization.";
+    MessageBox(hwnd, text, title, 0);
     return 1;
   }
   if (message == WM_COMMAND && LOWORD(wparam) == kResetFilter) {
@@ -337,6 +356,11 @@ BEGIN
   PUSHBUTTON "Update From Regions", kSessionSync, 268, 150, 150, 24
   PUSHBUTTON "Refresh Video Overlay", kOverlayRefresh, 16, 150, 160, 24
   PUSHBUTTON "Open Preferences", kPreferencesOpen, 16, 150, 140, 24
+  PUSHBUTTON "Import Help", kHelpImport, 16, 150, 120, 24
+  PUSHBUTTON "Cue Help", kHelpCues, 142, 150, 100, 24
+  PUSHBUTTON "Overlay Help", kHelpOverlay, 248, 150, 110, 24
+  PUSHBUTTON "Reports Help", kHelpReports, 364, 150, 110, 24
+  PUSHBUTTON "Quick Actions", kHelpQuickActions, 480, 150, 120, 24
   LTEXT "Search", -1, 16, 42, 48, 14
   EDITTEXT kSearchFilter, 66, 40, 220, 20, ES_AUTOHSCROLL
   LTEXT "Character", -1, 294, 42, 68, 14
