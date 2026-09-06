@@ -819,7 +819,12 @@ void run_native_import_cue_sheet_action(const std::string& mapping_override, boo
   options.event.source = "native_import";
   const auto existing_session = repository.load();
   options.commit.replacement.build.frame_rate = std::to_string(native_overlay_frame_rate());
-  if (!existing_session) {
+  if (!existing_session && existing_session.error != reaadr::core::SessionLoadError::missing) {
+    ShowMessageBox(reaadr::core::session_load_error_message(existing_session),
+                   "ReaADR Import", 0);
+    return;
+  }
+  if (existing_session.error == reaadr::core::SessionLoadError::missing) {
     options.commit.replacement.build.session_id = "native-import-" + native_utc_timestamp();
     options.commit.replacement.build.session_name = path.data();
   }
