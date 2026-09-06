@@ -586,6 +586,14 @@ void run_native_cue_manager_action()
     [](const std::string& mapping, bool preview, const std::string& mode, const std::string& characters) {
       if (g_import_cue_sheet_command_id && Main_OnCommand)
         run_native_import_cue_sheet_action(mapping, preview, mode, characters);
+    },
+    [](const std::string& action) {
+      int command = 0;
+      if (action == "validate_session") command = g_validate_session_command_id;
+      else if (action == "refresh_session") command = g_refresh_session_command_id;
+      else if (action == "sync_regions") command = g_update_cues_from_regions_command_id;
+      else if (action == "refresh_overlay") command = g_refresh_overlay_command_id;
+      if (command && Main_OnCommand) Main_OnCommand(command, 0);
     });
   if (!controller.reload()) { ShowMessageBox(controller.view().error.c_str(), "ReaADR Cue Manager", 0); return; }
   if (reaadr::ui::show_cue_manager(controller)) return;

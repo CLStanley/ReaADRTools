@@ -15,13 +15,15 @@ public:
                        reaper::CueManagerMutationService& mutations,
                        core::ProjectStateStore& project_state,
                        reaper::CueNavigationApi navigation_api,
-                       std::function<void(const std::string&, bool, const std::string&, const std::string&)> trigger_import = {});
+                       std::function<void(const std::string&, bool, const std::string&, const std::string&)> trigger_import = {},
+                       std::function<void(const std::string&)> trigger_action = {});
   bool reload();
   bool set_tab(const std::string& tab);
   void trigger_import(const std::string& mapping = {}, bool preview = false,
                       const std::string& mode = "all", const std::string& characters = {});
   std::string last_import_mapping() const;
   void clear_import_mapping();
+  void trigger_action(const std::string& action);
   bool set_filters(const std::string& query,
                    const std::string& character,
                    const std::string& status);
@@ -47,6 +49,7 @@ private:
   std::string selected_key_;
   std::string requested_tab_ = "cues";
   std::function<void(const std::string&, bool, const std::string&, const std::string&)> trigger_import_;
+  std::function<void(const std::string&)> trigger_action_;
 };
 
 } // namespace reaadr::ui

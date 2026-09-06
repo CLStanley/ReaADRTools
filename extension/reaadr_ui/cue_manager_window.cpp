@@ -30,6 +30,7 @@ constexpr int kImportBrowse = 48032, kImportRun = 48033, kImportPreview = 48035;
 constexpr int kImportMapping = 48034;
 constexpr int kImportMode = 48036, kImportCharacters = 48037;
 constexpr int kImportClearMapping = 48038;
+constexpr int kSessionValidate = 48039, kSessionRefresh = 48040, kSessionSync = 48041;
 CueManagerController* g_controller = nullptr;
 
 void populate_add_editor(HWND hwnd)
@@ -110,6 +111,10 @@ void apply_tab_visibility(HWND hwnd, const std::string& tab)
   };
   for (const int id : cue_controls)
     ShowWindow(GetDlgItem(hwnd, id), cues ? SW_SHOW : SW_HIDE);
+
+  const int session_controls[] = {kSessionValidate, kSessionRefresh, kSessionSync};
+  for (const int id : session_controls)
+    ShowWindow(GetDlgItem(hwnd, id), tab == "session" ? SW_SHOW : SW_HIDE);
 }
 
 #ifndef _WIN32
@@ -188,6 +193,16 @@ INT_PTR cue_manager_proc(HWND hwnd, UINT message, WPARAM wparam, LPARAM)
     if (g_controller) {
       g_controller->clear_import_mapping();
       SetDlgItemText(hwnd, kImportMapping, "");
+    }
+    return 1;
+  }
+  if (message == WM_COMMAND &&
+      (LOWORD(wparam) == kSessionValidate || LOWORD(wparam) == kSessionRefresh ||
+       LOWORD(wparam) == kSessionSync)) {
+    if (g_controller) {
+      const char* action = LOWORD(wparam) == kSessionValidate ? "validate_session" :
+        LOWORD(wparam) == kSessionRefresh ? "refresh_session" : "sync_regions";
+      g_controller->trigger_action(action);
     }
     return 1;
   }
@@ -307,6 +322,9 @@ BEGIN
   EDITTEXT kImportCharacters, 414, 116, 300, 20, ES_AUTOHSCROLL
   PUSHBUTTON "Choose Cue Sheet and Import", kImportRun, 650, 66, 190, 24
   PUSHBUTTON "Preview Headers", kImportPreview, 846, 66, 120, 24
+  PUSHBUTTON "Check Session", kSessionValidate, 16, 150, 120, 24
+  PUSHBUTTON "Refresh Session", kSessionRefresh, 142, 150, 120, 24
+  PUSHBUTTON "Update From Regions", kSessionSync, 268, 150, 150, 24
   LTEXT "Search", -1, 16, 42, 48, 14
   EDITTEXT kSearchFilter, 66, 40, 220, 20, ES_AUTOHSCROLL
   LTEXT "Character", -1, 294, 42, 68, 14
