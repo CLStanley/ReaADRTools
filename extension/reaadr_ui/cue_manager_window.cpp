@@ -187,6 +187,11 @@ INT_PTR cue_manager_proc(HWND hwnd, UINT message, WPARAM wparam, LPARAM)
     refresh_rows(hwnd);
     return 1;
   }
+  if (message == WM_KEYDOWN && g_controller && (wparam == VK_PRIOR || wparam == VK_NEXT)) {
+    g_controller->select_relative(wparam == VK_NEXT ? 10 : -10);
+    refresh_rows(hwnd);
+    return 1;
+  }
   if (message == WM_KEYDOWN && g_controller && wparam == VK_RETURN) {
     const auto* row = g_controller->selected_row();
     if (row) {
