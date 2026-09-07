@@ -362,6 +362,8 @@ through the existing transactional session renderer; file selection remains at
 the host/UI boundary. The native Manager Reports tab now exports the canonical
 cue model to CSV (using a native output-path prompt) and provides a session
 summary with character and status counts.
+It also provides a native Timing Report CSV with cue start/end, duration, and
+status data.
 These domain operations and adapters are test-covered but are not yet all
 public writers; the full native filter/manager UI, deferred recording frame/UI
 wiring, other overlay UI, and in-REAPER smoke tests remain. Lua source and
