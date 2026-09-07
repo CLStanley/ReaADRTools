@@ -35,6 +35,7 @@ constexpr int kImportRestoreMapping = 48053;
 constexpr int kSessionValidate = 48039, kSessionRefresh = 48040, kSessionSync = 48041;
 constexpr int kSessionClear = 48051, kSessionFilter = 48052;
 constexpr int kOverlayRefresh = 48042, kPreferencesOpen = 48043;
+constexpr int kPreferencesReload = 48054;
 constexpr int kHelpImport = 48044, kHelpCues = 48045, kHelpOverlay = 48046,
               kHelpReports = 48047, kHelpQuickActions = 48048;
 constexpr int kReportsSummary = 48049, kReportsExport = 48050;
@@ -127,6 +128,7 @@ void apply_tab_visibility(HWND hwnd, const std::string& tab)
 
   ShowWindow(GetDlgItem(hwnd, kOverlayRefresh), tab == "overlay" ? SW_SHOW : SW_HIDE);
   ShowWindow(GetDlgItem(hwnd, kPreferencesOpen), tab == "preferences" ? SW_SHOW : SW_HIDE);
+  ShowWindow(GetDlgItem(hwnd, kPreferencesReload), tab == "preferences" ? SW_SHOW : SW_HIDE);
   const int help_controls[] = {kHelpImport, kHelpCues, kHelpOverlay, kHelpReports, kHelpQuickActions};
   for (const int id : help_controls)
     ShowWindow(GetDlgItem(hwnd, id), tab == "help" ? SW_SHOW : SW_HIDE);
@@ -262,6 +264,10 @@ INT_PTR cue_manager_proc(HWND hwnd, UINT message, WPARAM wparam, LPARAM)
       (LOWORD(wparam) == kOverlayRefresh || LOWORD(wparam) == kPreferencesOpen)) {
     if (g_controller)
       g_controller->trigger_action(LOWORD(wparam) == kOverlayRefresh ? "refresh_overlay" : "preferences");
+    return 1;
+  }
+  if (message == WM_COMMAND && LOWORD(wparam) == kPreferencesReload) {
+    if (g_controller && g_controller->reload()) update_tab_details(hwnd);
     return 1;
   }
   if (message == WM_COMMAND && LOWORD(wparam) >= kHelpImport && LOWORD(wparam) <= kHelpQuickActions) {
@@ -428,6 +434,7 @@ BEGIN
   PUSHBUTTON "Character Filter", kSessionFilter, 588, 150, 120, 24
   PUSHBUTTON "Refresh Video Overlay", kOverlayRefresh, 16, 150, 160, 24
   PUSHBUTTON "Open Preferences", kPreferencesOpen, 16, 150, 140, 24
+  PUSHBUTTON "Reload Preferences", kPreferencesReload, 164, 150, 150, 24
   PUSHBUTTON "Import Help", kHelpImport, 16, 150, 120, 24
   PUSHBUTTON "Cue Help", kHelpCues, 142, 150, 100, 24
   PUSHBUTTON "Overlay Help", kHelpOverlay, 248, 150, 110, 24
