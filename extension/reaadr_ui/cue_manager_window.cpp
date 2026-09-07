@@ -1,4 +1,5 @@
 #include "cue_manager_window.hpp"
+#include "cue_manager_ui_contract.hpp"
 #include <reaper_plugin.h>
 #ifndef _WIN32
 #include <swell/swell-dlggen.h>
@@ -165,6 +166,10 @@ INT_PTR cue_manager_proc(HWND hwnd, UINT message, WPARAM wparam, LPARAM)
 {
   if (message == WM_INITDIALOG) {
     SetDlgItemText(hwnd, kImportMode, "all");
+    for (const auto& choice : core::cue_manager_type_choices())
+      SendDlgItemMessage(hwnd, kEditType, CB_ADDSTRING, 0, reinterpret_cast<LPARAM>(choice.c_str()));
+    for (const auto& choice : core::cue_manager_status_choices())
+      SendDlgItemMessage(hwnd, kEditStatus, CB_ADDSTRING, 0, reinterpret_cast<LPARAM>(choice.c_str()));
     if (g_controller) {
       const std::string mapping = g_controller->last_import_mapping();
       if (!mapping.empty()) SetDlgItemText(hwnd, kImportMapping, mapping.c_str());
@@ -562,13 +567,13 @@ BEGIN
   LTEXT "Notes", -1, 430, 756, 50, 14
   EDITTEXT kEditNotes, 480, 754, 330, 20, ES_AUTOHSCROLL
   LTEXT "Type", -1, 820, 756, 40, 14
-  EDITTEXT kEditType, 860, 754, 100, 20, ES_AUTOHSCROLL
+  COMBOBOX kEditType, 860, 754, 100, 80, CBS_DROPDOWNLIST | WS_VSCROLL
   LTEXT "Start", -1, 16, 782, 50, 14
   EDITTEXT kEditStart, 70, 780, 120, 20, ES_AUTOHSCROLL
   LTEXT "End", -1, 200, 782, 40, 14
   EDITTEXT kEditEnd, 245, 780, 120, 20, ES_AUTOHSCROLL
   LTEXT "Status", -1, 380, 782, 50, 14
-  EDITTEXT kEditStatus, 435, 780, 180, 20, ES_AUTOHSCROLL
+  COMBOBOX kEditStatus, 435, 780, 180, 80, CBS_DROPDOWNLIST | WS_VSCROLL
   PUSHBUTTON "Apply Edit", kApplyEdit, 630, 778, 100, 24
   LISTBOX kRows, 16, 98, 1124, 594, LBS_NOTIFY | WS_VSCROLL | WS_BORDER
   PUSHBUTTON "Previous", kPrevious, 740, 778, 90, 24
