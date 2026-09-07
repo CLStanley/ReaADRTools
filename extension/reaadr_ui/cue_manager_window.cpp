@@ -35,7 +35,7 @@ constexpr int kSessionValidate = 48039, kSessionRefresh = 48040, kSessionSync = 
 constexpr int kOverlayRefresh = 48042, kPreferencesOpen = 48043;
 constexpr int kHelpImport = 48044, kHelpCues = 48045, kHelpOverlay = 48046,
               kHelpReports = 48047, kHelpQuickActions = 48048;
-constexpr int kReportsSummary = 48049;
+constexpr int kReportsSummary = 48049, kReportsExport = 48050;
 CueManagerController* g_controller = nullptr;
 
 void populate_add_editor(HWND hwnd)
@@ -127,6 +127,7 @@ void apply_tab_visibility(HWND hwnd, const std::string& tab)
   for (const int id : help_controls)
     ShowWindow(GetDlgItem(hwnd, id), tab == "help" ? SW_SHOW : SW_HIDE);
   ShowWindow(GetDlgItem(hwnd, kReportsSummary), tab == "reports" ? SW_SHOW : SW_HIDE);
+  ShowWindow(GetDlgItem(hwnd, kReportsExport), tab == "reports" ? SW_SHOW : SW_HIDE);
 }
 
 #ifndef _WIN32
@@ -260,6 +261,10 @@ INT_PTR cue_manager_proc(HWND hwnd, UINT message, WPARAM wparam, LPARAM)
     }
     return 1;
   }
+  if (message == WM_COMMAND && LOWORD(wparam) == kReportsExport) {
+    if (g_controller) g_controller->trigger_action("export_cue_sheet");
+    return 1;
+  }
   if (message == WM_COMMAND && LOWORD(wparam) == kResetFilter) {
     SetDlgItemText(hwnd, kSearchFilter, "");
     SetDlgItemText(hwnd, kCharacterFilter, "");
@@ -387,6 +392,7 @@ BEGIN
   PUSHBUTTON "Reports Help", kHelpReports, 364, 150, 110, 24
   PUSHBUTTON "Quick Actions", kHelpQuickActions, 480, 150, 120, 24
   PUSHBUTTON "Session Summary", kReportsSummary, 16, 150, 140, 24
+  PUSHBUTTON "Export Cue Sheet CSV", kReportsExport, 164, 150, 160, 24
   LTEXT "Search", -1, 16, 42, 48, 14
   EDITTEXT kSearchFilter, 66, 40, 220, 20, ES_AUTOHSCROLL
   LTEXT "Character", -1, 294, 42, 68, 14

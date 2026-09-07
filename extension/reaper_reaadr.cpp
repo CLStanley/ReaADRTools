@@ -546,6 +546,7 @@ bool native_overlay_refresh_callback(
   const reaadr::core::OverlayRefreshOptions& options, std::string* error);
 void run_native_import_cue_sheet_action(const std::string& mapping_override = {}, bool preview_only = false,
                                         const std::string& mode = "all", const std::string& characters = {});
+void run_native_export_cue_sheet_action();
 bool read_xlsx_as_tsv(const char* path, char* tsv_out, int tsv_out_sz, char* error_out, int error_out_sz);
 
 void run_native_cue_manager_action()
@@ -595,6 +596,7 @@ void run_native_cue_manager_action()
       else if (action == "refresh_overlay") command = g_refresh_overlay_command_id;
       else if (action == "preferences") command = g_preferences_command_id;
       if (command && Main_OnCommand) Main_OnCommand(command, 0);
+      else if (action == "export_cue_sheet") run_native_export_cue_sheet_action();
     });
   if (!controller.reload()) { ShowMessageBox(controller.view().error.c_str(), "ReaADR Cue Manager", 0); return; }
   if (reaadr::ui::show_cue_manager(controller)) return;
@@ -892,6 +894,51 @@ void run_native_import_cue_sheet_action(const std::string& mapping_override, boo
     std::to_string(result.rendered.render.tracks_and_regions.tracks_created) +
     "\nRegions created: " + std::to_string(result.rendered.render.tracks_and_regions.regions_created);
   ShowMessageBox(summary.c_str(), "ReaADR Import (Native)", 0);
+}
+
+void run_native_export_cue_sheet_action()
+{
+  if (!GetUserInputs) {
+    ShowMessageBox("The native output-path prompt is unavailable.", "ReaADR Export", 0);
+    return;
+  }
+  std::array<char, 4096> path = {};
+  if (!GetUserInputs("ReaADR: Export Cue Sheet", 1, "Output CSV path", path.data(), path.size())) return;
+  reaadr::reaper::ProjectStateStore project_state(nullptr, {GetProjExtState, SetProjExtState});
+  reaadr::core::SessionModelRepository repository(project_state);
+  const auto loaded = repository.load();
+  if (!loaded) {
+    ShowMessageBox(reaadr::core::session_load_error_message(loaded), "ReaADR Export", 0);
+    return;
+  }
+  std::ofstream file(path.data(), std::ios::binary | std::ios::trunc);
+  if (!file) {
+    ShowMessageBox("Could not create the selected CSV file.", "ReaADR Export", 0);
+    return;
+  }
+  const auto field = [](const reaadr::core::Fields& cue, const char* key) {
+    const auto found = cue.find(key);
+    return found == cue.end() ? std::string() : found->second;
+  };
+  const auto csv = [](const std::string& value) {
+    std::string escaped = "\"";
+    for (const char ch : value) {
+      if (ch == '"') escaped += "\"\"";
+      else escaped += ch;
+    }
+    escaped += '"';
+    return escaped;
+  };
+  file << "Cue ID,Character,Start,End,Status,Type,Dialogue,Notes\n";
+  for (const auto& cue : loaded.model.cues) {
+    file << csv(field(cue, "id")) << ',' << csv(field(cue, "character")) << ','
+         << csv(field(cue, "start_time")) << ',' << csv(field(cue, "end_time")) << ','
+         << csv(field(cue, "status")) << ',' << csv(field(cue, "cue_type")) << ','
+         << csv(field(cue, "line")) << ',' << csv(field(cue, "notes")) << '\n';
+  }
+  const std::string summary = "Exported " + std::to_string(loaded.model.cues.size()) +
+    " cue(s) to " + std::string(path.data()) + ".";
+  ShowMessageBox(summary.c_str(), "ReaADR Export (Native)", 0);
 }
 
 void run_native_preferences_action()
