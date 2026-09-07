@@ -276,6 +276,14 @@ INT_PTR cue_manager_proc(HWND hwnd, UINT message, WPARAM wparam, LPARAM)
     }
     return 1;
   }
+  if (message == WM_KEYDOWN && g_controller && wparam == VK_F1) {
+    if (g_controller->set_tab("help")) {
+      SetWindowText(hwnd, "ReaADR Manager - help");
+      apply_tab_visibility(hwnd, "help");
+      update_tab_details(hwnd);
+    }
+    return 1;
+  }
   if (message == WM_COMMAND && (LOWORD(wparam) == IDOK || LOWORD(wparam) == IDCANCEL)) {
     EndDialog(hwnd, 0); return 1;
   }
