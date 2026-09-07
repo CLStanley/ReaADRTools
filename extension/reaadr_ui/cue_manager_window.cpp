@@ -32,6 +32,7 @@ constexpr int kImportMapping = 48034;
 constexpr int kImportMode = 48036, kImportCharacters = 48037;
 constexpr int kImportClearMapping = 48038;
 constexpr int kSessionValidate = 48039, kSessionRefresh = 48040, kSessionSync = 48041;
+constexpr int kSessionClear = 48051, kSessionFilter = 48052;
 constexpr int kOverlayRefresh = 48042, kPreferencesOpen = 48043;
 constexpr int kHelpImport = 48044, kHelpCues = 48045, kHelpOverlay = 48046,
               kHelpReports = 48047, kHelpQuickActions = 48048;
@@ -117,7 +118,9 @@ void apply_tab_visibility(HWND hwnd, const std::string& tab)
   for (const int id : cue_controls)
     ShowWindow(GetDlgItem(hwnd, id), cues ? SW_SHOW : SW_HIDE);
 
-  const int session_controls[] = {kSessionValidate, kSessionRefresh, kSessionSync};
+  const int session_controls[] = {
+    kSessionValidate, kSessionRefresh, kSessionSync, kSessionClear, kSessionFilter,
+  };
   for (const int id : session_controls)
     ShowWindow(GetDlgItem(hwnd, id), tab == "session" ? SW_SHOW : SW_HIDE);
 
@@ -215,6 +218,14 @@ INT_PTR cue_manager_proc(HWND hwnd, UINT message, WPARAM wparam, LPARAM)
     if (g_controller) {
       const char* action = LOWORD(wparam) == kSessionValidate ? "validate_session" :
         LOWORD(wparam) == kSessionRefresh ? "refresh_session" : "sync_regions";
+      g_controller->trigger_action(action);
+    }
+    return 1;
+  }
+  if (message == WM_COMMAND &&
+      (LOWORD(wparam) == kSessionClear || LOWORD(wparam) == kSessionFilter)) {
+    if (g_controller) {
+      const char* action = LOWORD(wparam) == kSessionClear ? "clear_character_cues" : "character_filter";
       g_controller->trigger_action(action);
     }
     return 1;
@@ -384,6 +395,8 @@ BEGIN
   PUSHBUTTON "Check Session", kSessionValidate, 16, 150, 120, 24
   PUSHBUTTON "Refresh Session", kSessionRefresh, 142, 150, 120, 24
   PUSHBUTTON "Update From Regions", kSessionSync, 268, 150, 150, 24
+  PUSHBUTTON "Clear Character Cues", kSessionClear, 428, 150, 150, 24
+  PUSHBUTTON "Character Filter", kSessionFilter, 588, 150, 120, 24
   PUSHBUTTON "Refresh Video Overlay", kOverlayRefresh, 16, 150, 160, 24
   PUSHBUTTON "Open Preferences", kPreferencesOpen, 16, 150, 140, 24
   PUSHBUTTON "Import Help", kHelpImport, 16, 150, 120, 24
