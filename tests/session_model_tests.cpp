@@ -2865,6 +2865,7 @@ void test_manager_navigation()
           reaadr::core::manager_action_is_native("clear_character_cues") &&
           reaadr::core::manager_action_is_native("character_filter") &&
           reaadr::core::manager_action_is_native("preferences") &&
+          reaadr::core::manager_action_is_native("export_cue_sheet") &&
           !reaadr::core::manager_action_is_native("import_cue_sheet"),
         "native Manager action catalog distinguishes cut-over commands from Lua routes");
   const auto layout = reaadr::core::default_manager_window_layout();

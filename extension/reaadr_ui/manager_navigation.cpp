@@ -59,6 +59,7 @@ bool manager_action_is_native(const std::string& key)
   // host wiring are cut over.
   return key == "validate_session" || key == "refresh_session" || key == "sync_regions" ||
     key == "clear_character_cues" || key == "character_filter" || key == "preferences" || key == "refresh_overlay" ||
+    key == "export_cue_sheet" ||
     key == "next_cue" || key == "previous_cue" || key == "jump_to_cue";
 }
 
