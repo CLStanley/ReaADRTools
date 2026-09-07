@@ -32,6 +32,7 @@ constexpr int kImportMapping = 48034;
 constexpr int kImportMode = 48036, kImportCharacters = 48037;
 constexpr int kImportClearMapping = 48038;
 constexpr int kImportRestoreMapping = 48053;
+constexpr int kImportSessionCharacters = 48055;
 constexpr int kSessionValidate = 48039, kSessionRefresh = 48040, kSessionSync = 48041;
 constexpr int kSessionClear = 48051, kSessionFilter = 48052;
 constexpr int kOverlayRefresh = 48042, kPreferencesOpen = 48043;
@@ -106,7 +107,7 @@ void apply_tab_visibility(HWND hwnd, const std::string& tab)
   const bool cues = tab == "cues";
   const int import_controls[] = {
     kImportMapping, kImportClearMapping, kImportMode, kImportCharacters,
-    kImportRun, kImportPreview, kImportRestoreMapping,
+    kImportRun, kImportPreview, kImportRestoreMapping, kImportSessionCharacters,
   };
   for (const int id : import_controls)
     ShowWindow(GetDlgItem(hwnd, id), import ? SW_SHOW : SW_HIDE);
@@ -240,6 +241,13 @@ INT_PTR cue_manager_proc(HWND hwnd, UINT message, WPARAM wparam, LPARAM)
   }
   if (message == WM_COMMAND && LOWORD(wparam) == kImportRestoreMapping) {
     if (g_controller) SetDlgItemText(hwnd, kImportMapping, g_controller->last_import_mapping().c_str());
+    return 1;
+  }
+  if (message == WM_COMMAND && LOWORD(wparam) == kImportSessionCharacters) {
+    if (g_controller) {
+      SetDlgItemText(hwnd, kImportCharacters, g_controller->session_characters_csv().c_str());
+      SetDlgItemText(hwnd, kImportMode, "selected");
+    }
     return 1;
   }
   if (message == WM_COMMAND &&
@@ -421,6 +429,7 @@ BEGIN
   EDITTEXT kImportMapping, 126, 90, 500, 20, ES_AUTOHSCROLL
   PUSHBUTTON "Clear", kImportClearMapping, 632, 90, 58, 20
   PUSHBUTTON "Restore", kImportRestoreMapping, 694, 90, 72, 20
+  PUSHBUTTON "Use Session Characters", kImportSessionCharacters, 772, 90, 150, 20
   LTEXT "Mode (all/selected/update)", -1, 16, 118, 150, 16
   EDITTEXT kImportMode, 126, 116, 120, 20, ES_AUTOHSCROLL
   LTEXT "Characters (; separated)", -1, 260, 118, 150, 16

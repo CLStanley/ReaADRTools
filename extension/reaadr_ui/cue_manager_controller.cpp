@@ -1,6 +1,7 @@
 #include "cue_manager_controller.hpp"
 
 #include <iomanip>
+#include <set>
 #include <sstream>
 #include <utility>
 
@@ -43,6 +44,18 @@ std::string CueManagerController::last_import_mapping() const
   const auto value = project_state_.read(core::SessionModelRepository::kNamespace,
                                          "import_mapping_last");
   return value ? value.value : std::string();
+}
+
+std::string CueManagerController::session_characters_csv() const
+{
+  std::set<std::string> names;
+  for (const auto& row : view_.cues.rows) if (!row.character.empty()) names.insert(row.character);
+  std::string result;
+  for (const auto& name : names) {
+    if (!result.empty()) result += ';';
+    result += name;
+  }
+  return result;
 }
 
 void CueManagerController::clear_import_mapping()

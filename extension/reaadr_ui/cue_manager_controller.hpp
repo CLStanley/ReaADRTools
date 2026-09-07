@@ -22,6 +22,7 @@ public:
   void trigger_import(const std::string& mapping = {}, bool preview = false,
                       const std::string& mode = "all", const std::string& characters = {});
   std::string last_import_mapping() const;
+  std::string session_characters_csv() const;
   void clear_import_mapping();
   void trigger_action(const std::string& action);
   bool set_filters(const std::string& query,
