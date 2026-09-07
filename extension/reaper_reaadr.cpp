@@ -906,6 +906,18 @@ void run_native_export_cue_sheet_action()
   }
   std::array<char, 4096> path = {};
   if (!GetUserInputs("ReaADR: Export Cue Sheet", 1, "Output CSV path", path.data(), path.size())) return;
+  std::string output_path(path.data());
+  const auto first_path_char = output_path.find_first_not_of(" \t\r\n");
+  const auto last_path_char = output_path.find_last_not_of(" \t\r\n");
+  if (first_path_char == std::string::npos) {
+    ShowMessageBox("Enter an output path for the cue-sheet CSV.", "ReaADR Export", 0);
+    return;
+  }
+  output_path = output_path.substr(first_path_char, last_path_char - first_path_char + 1);
+  const std::size_t slash = output_path.find_last_of("/\\");
+  const std::size_t dot = output_path.find_last_of('.');
+  if (dot == std::string::npos || (slash != std::string::npos && dot < slash))
+    output_path += ".csv";
   reaadr::reaper::ProjectStateStore project_state(nullptr, {GetProjExtState, SetProjExtState});
   reaadr::core::SessionModelRepository repository(project_state);
   const auto loaded = repository.load();
@@ -913,7 +925,7 @@ void run_native_export_cue_sheet_action()
     ShowMessageBox(reaadr::core::session_load_error_message(loaded), "ReaADR Export", 0);
     return;
   }
-  std::ofstream file(path.data(), std::ios::binary | std::ios::trunc);
+  std::ofstream file(output_path, std::ios::binary | std::ios::trunc);
   if (!file) {
     ShowMessageBox("Could not create the selected CSV file.", "ReaADR Export", 0);
     return;
@@ -939,7 +951,7 @@ void run_native_export_cue_sheet_action()
          << csv(field(cue, "line")) << ',' << csv(field(cue, "notes")) << '\n';
   }
   const std::string summary = "Exported " + std::to_string(loaded.model.cues.size()) +
-    " cue(s) to " + std::string(path.data()) + ".";
+    " cue(s) to " + output_path + ".";
   ShowMessageBox(summary.c_str(), "ReaADR Export (Native)", 0);
 }
 
