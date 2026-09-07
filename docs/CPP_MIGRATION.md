@@ -336,6 +336,8 @@ cutover. The command is also exposed in the top-level ReaADR menu, and its
 project-scoped Manager toggles are editable with native validation and Undo.
 The native Manager Preferences tab also surfaces all four persisted quick-action
 assignments and the Lua-compatible UI toggle states.
+The native Cues tab header now reports the active session name, total cue count,
+and distinct visible character count like the Lua Manager header.
 Delimited cue content can now also flow through a native import application
 service, which keeps parsing/mapping deterministic and commits the replacement
 through the existing transactional session renderer; file selection remains at
