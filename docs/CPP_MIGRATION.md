@@ -79,12 +79,11 @@ inspection, column aliases and mapping, row validation, metadata retention, and
 complete cue-derived session construction are implemented in the native domain
 core. Cue replacement now preserves the existing session envelope while
 rebuilding cue-derived collections, and the model-only commit service performs
-snapshot/save/revision/rollback sequencing. These paths are test-covered but
-are not invoked by the UI yet. Native `SessionSaved` and `SyncFull` publication
-now writes the same bounded project event history used by Lua. XLSX unification,
-file-selection and mapping UI remain pending; the native cue-sheet import
-command now routes selected CSV/TSV content through the transactional renderer
-and accepts explicit key-to-column mappings when inference is insufficient.
+snapshot/save/revision/rollback sequencing. Native `SessionSaved` and `SyncFull`
+publication now writes the same bounded project event history used by Lua. XLSX
+content, native file selection, mapping controls, and preview are routed through
+the same transactional renderer; explicit key-to-column mappings remain
+available when inference is insufficient.
 The native Import tab also previews detected delimiters, headers, row counts,
 and a sample row before committing.
 
