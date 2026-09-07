@@ -197,6 +197,19 @@ INT_PTR cue_manager_proc(HWND hwnd, UINT message, WPARAM wparam, LPARAM)
     }
     return 1;
   }
+  if (message == WM_KEYDOWN && g_controller && wparam == VK_DELETE) {
+    const auto* row = g_controller->selected_row();
+    if (row) {
+      const std::string prompt = "Remove cue " + row->cue_key + " (" + row->character + ")?";
+      if (MessageBox(hwnd, prompt.c_str(), "ReaADR Cue Manager", MB_YESNO | MB_ICONWARNING) == IDYES) {
+        std::string error;
+        if (!g_controller->remove_selected(error) && !error.empty())
+          MessageBox(hwnd, error.c_str(), "ReaADR Cue Manager", 0);
+        else refresh_rows(hwnd);
+      }
+    }
+    return 1;
+  }
   if (message == WM_COMMAND && (LOWORD(wparam) == IDOK || LOWORD(wparam) == IDCANCEL)) {
     EndDialog(hwnd, 0); return 1;
   }
