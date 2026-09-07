@@ -197,6 +197,13 @@ INT_PTR cue_manager_proc(HWND hwnd, UINT message, WPARAM wparam, LPARAM)
     refresh_rows(hwnd);
     return 1;
   }
+  if (message == WM_KEYDOWN && g_controller && wparam == VK_ESCAPE) {
+    SetDlgItemText(hwnd, kSearchFilter, "");
+    SetDlgItemText(hwnd, kCharacterFilter, "");
+    SetDlgItemText(hwnd, kStatusFilter, "");
+    if (g_controller->set_filters({}, {}, {})) refresh_rows(hwnd);
+    return 1;
+  }
   if (message == WM_KEYDOWN && g_controller && wparam == VK_RETURN) {
     const auto* row = g_controller->selected_row();
     if (row) {
