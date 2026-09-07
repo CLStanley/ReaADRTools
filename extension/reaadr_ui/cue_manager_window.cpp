@@ -39,6 +39,8 @@ constexpr int kSessionClear = 48051, kSessionFilter = 48052;
 constexpr int kOverlayRefresh = 48042, kPreferencesOpen = 48043;
 constexpr int kOverlayActor = 48059, kOverlayEngineer = 48060,
               kOverlayStudio = 48061, kOverlayMinimal = 48062;
+constexpr int kOverlayEnabled = 48063, kOverlayCueId = 48064, kOverlayCharacter = 48065,
+              kOverlayDialogue = 48066, kOverlayStatus = 48067;
 constexpr int kPreferencesReload = 48054;
 constexpr int kHelpImport = 48044, kHelpCues = 48045, kHelpOverlay = 48046,
               kHelpReports = 48047, kHelpQuickActions = 48048;
@@ -134,6 +136,10 @@ void apply_tab_visibility(HWND hwnd, const std::string& tab)
   const int overlay_profiles[] = {kOverlayActor, kOverlayEngineer, kOverlayStudio, kOverlayMinimal};
   for (const int id : overlay_profiles)
     ShowWindow(GetDlgItem(hwnd, id), tab == "overlay" ? SW_SHOW : SW_HIDE);
+  const int overlay_toggles[] = {kOverlayEnabled, kOverlayCueId, kOverlayCharacter,
+                                 kOverlayDialogue, kOverlayStatus};
+  for (const int id : overlay_toggles)
+    ShowWindow(GetDlgItem(hwnd, id), tab == "overlay" ? SW_SHOW : SW_HIDE);
   ShowWindow(GetDlgItem(hwnd, kPreferencesOpen), tab == "preferences" ? SW_SHOW : SW_HIDE);
   ShowWindow(GetDlgItem(hwnd, kPreferencesReload), tab == "preferences" ? SW_SHOW : SW_HIDE);
   const int help_controls[] = {kHelpImport, kHelpCues, kHelpOverlay, kHelpReports, kHelpQuickActions};
@@ -173,6 +179,17 @@ void update_tab_details(HWND hwnd)
   SetDlgItemText(hwnd, kDetails, details.c_str());
 }
 
+void update_overlay_controls(HWND hwnd)
+{
+  if (!g_controller) return;
+  const auto& overlay = g_controller->view().preferences.overlay;
+  CheckDlgButton(hwnd, kOverlayEnabled, overlay.enabled ? BST_CHECKED : BST_UNCHECKED);
+  CheckDlgButton(hwnd, kOverlayCueId, overlay.show_cue_id ? BST_CHECKED : BST_UNCHECKED);
+  CheckDlgButton(hwnd, kOverlayCharacter, overlay.show_character ? BST_CHECKED : BST_UNCHECKED);
+  CheckDlgButton(hwnd, kOverlayDialogue, overlay.show_dialogue ? BST_CHECKED : BST_UNCHECKED);
+  CheckDlgButton(hwnd, kOverlayStatus, overlay.show_status ? BST_CHECKED : BST_UNCHECKED);
+}
+
 #ifndef _WIN32
 INT_PTR cue_manager_proc(HWND hwnd, UINT message, WPARAM wparam, LPARAM)
 {
@@ -203,6 +220,7 @@ INT_PTR cue_manager_proc(HWND hwnd, UINT message, WPARAM wparam, LPARAM)
     if (g_controller) {
       apply_tab_visibility(hwnd, g_controller->view().active_tab);
       update_tab_details(hwnd);
+      update_overlay_controls(hwnd);
     }
     return 1;
   }
@@ -246,6 +264,7 @@ INT_PTR cue_manager_proc(HWND hwnd, UINT message, WPARAM wparam, LPARAM)
       SetWindowText(hwnd, title.c_str());
       apply_tab_visibility(hwnd, g_controller->view().active_tab);
       update_tab_details(hwnd);
+      update_overlay_controls(hwnd);
       return 1;
     }
   }
@@ -301,6 +320,16 @@ INT_PTR cue_manager_proc(HWND hwnd, UINT message, WPARAM wparam, LPARAM)
         LOWORD(wparam) == kOverlayEngineer ? "engineer" :
         LOWORD(wparam) == kOverlayStudio ? "studio" : "minimal";
       g_controller->trigger_action(std::string("overlay_profile:") + profile);
+    }
+    return 1;
+  }
+  if (message == WM_COMMAND && LOWORD(wparam) >= kOverlayEnabled && LOWORD(wparam) <= kOverlayStatus) {
+    if (g_controller) {
+      const char* key = LOWORD(wparam) == kOverlayEnabled ? "enabled" :
+        LOWORD(wparam) == kOverlayCueId ? "show_cue_id" :
+        LOWORD(wparam) == kOverlayCharacter ? "show_character" :
+        LOWORD(wparam) == kOverlayDialogue ? "show_dialogue" : "show_status";
+      g_controller->trigger_action(std::string("overlay_toggle:") + key);
     }
     return 1;
   }
@@ -473,6 +502,11 @@ BEGIN
   PUSHBUTTON "Engineer", kOverlayEngineer, 272, 150, 90, 24
   PUSHBUTTON "Studio", kOverlayStudio, 370, 150, 80, 24
   PUSHBUTTON "Minimal", kOverlayMinimal, 458, 150, 80, 24
+  CHECKBOX "Enable video overlay", kOverlayEnabled, 16, 190, 180, 20
+  CHECKBOX "Cue ID", kOverlayCueId, 16, 216, 120, 20
+  CHECKBOX "Character", kOverlayCharacter, 144, 216, 120, 20
+  CHECKBOX "Dialogue", kOverlayDialogue, 272, 216, 120, 20
+  CHECKBOX "Status", kOverlayStatus, 400, 216, 100, 20
   PUSHBUTTON "Open Preferences", kPreferencesOpen, 16, 150, 140, 24
   PUSHBUTTON "Reload Preferences", kPreferencesReload, 164, 150, 150, 24
   PUSHBUTTON "Import Help", kHelpImport, 16, 150, 120, 24

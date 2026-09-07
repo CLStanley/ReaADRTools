@@ -341,6 +341,8 @@ and distinct visible character count like the Lua Manager header.
 The native Overlay tab now exposes the Lua-compatible Actor, Engineer, Studio,
 and Minimal profile controls through the persisted preference repository and an
 Undo-owned transaction.
+Its primary enabled, cue-ID, character, dialogue, and status element toggles
+also now persist through the same native settings and transaction boundary.
 Delimited cue content can now also flow through a native import application
 service, which keeps parsing/mapping deterministic and commits the replacement
 through the existing transactional session renderer; file selection remains at
