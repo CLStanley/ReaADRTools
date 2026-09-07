@@ -5,6 +5,7 @@
 #include <swell/swell-dlggen.h>
 #endif
 #include <string>
+#include <cstring>
 #include <map>
 
 #ifndef LBS_NOTIFY
@@ -173,6 +174,10 @@ INT_PTR cue_manager_proc(HWND hwnd, UINT message, WPARAM wparam, LPARAM)
       SendDlgItemMessage(hwnd, kEditType, CB_ADDSTRING, 0, reinterpret_cast<LPARAM>(choice.c_str()));
     for (const auto& choice : core::cue_manager_status_choices())
       SendDlgItemMessage(hwnd, kEditStatus, CB_ADDSTRING, 0, reinterpret_cast<LPARAM>(choice.c_str()));
+    SendDlgItemMessage(hwnd, kStatusFilter, CB_ADDSTRING, 0, reinterpret_cast<LPARAM>("Any"));
+    for (const auto& choice : core::cue_manager_status_choices())
+      SendDlgItemMessage(hwnd, kStatusFilter, CB_ADDSTRING, 0, reinterpret_cast<LPARAM>(choice.c_str()));
+    SetDlgItemText(hwnd, kStatusFilter, "Any");
     if (g_controller) {
       const std::string mapping = g_controller->last_import_mapping();
       if (!mapping.empty()) SetDlgItemText(hwnd, kImportMapping, mapping.c_str());
@@ -276,6 +281,7 @@ INT_PTR cue_manager_proc(HWND hwnd, UINT message, WPARAM wparam, LPARAM)
     GetDlgItemText(hwnd, kSearchFilter, query, sizeof(query));
     GetDlgItemText(hwnd, kCharacterFilter, character, sizeof(character));
     GetDlgItemText(hwnd, kStatusFilter, status, sizeof(status));
+    if (std::strcmp(status, "Any") == 0) status[0] = '\0';
     if (g_controller && g_controller->set_filters(query, character, status)) refresh_rows(hwnd);
     return 1;
   }
@@ -414,7 +420,7 @@ INT_PTR cue_manager_proc(HWND hwnd, UINT message, WPARAM wparam, LPARAM)
   if (message == WM_COMMAND && LOWORD(wparam) == kResetFilter) {
     SetDlgItemText(hwnd, kSearchFilter, "");
     SetDlgItemText(hwnd, kCharacterFilter, "");
-    SetDlgItemText(hwnd, kStatusFilter, "");
+    SetDlgItemText(hwnd, kStatusFilter, "Any");
     if (g_controller && g_controller->set_filters({}, {}, {})) refresh_rows(hwnd);
     return 1;
   }
@@ -423,9 +429,9 @@ INT_PTR cue_manager_proc(HWND hwnd, UINT message, WPARAM wparam, LPARAM)
     GetDlgItemText(hwnd, kJumpCueId, cue_id, sizeof(cue_id));
     std::string error;
     if (g_controller && g_controller->navigate_to_id(cue_id, error)) {
-      SetDlgItemText(hwnd, kSearchFilter, "");
-      SetDlgItemText(hwnd, kCharacterFilter, "");
-      SetDlgItemText(hwnd, kStatusFilter, "");
+    SetDlgItemText(hwnd, kSearchFilter, "");
+    SetDlgItemText(hwnd, kCharacterFilter, "");
+    SetDlgItemText(hwnd, kStatusFilter, "Any");
       refresh_rows(hwnd);
     }
     else if (!error.empty()) MessageBox(nullptr, error.c_str(), "ReaADR Cue Manager", 0);
@@ -551,7 +557,7 @@ BEGIN
   LTEXT "Character", -1, 294, 42, 68, 14
   EDITTEXT kCharacterFilter, 364, 40, 170, 20, ES_AUTOHSCROLL
   LTEXT "Status", -1, 542, 42, 48, 14
-  EDITTEXT kStatusFilter, 592, 40, 145, 20, ES_AUTOHSCROLL
+  COMBOBOX kStatusFilter, 592, 40, 145, 120, CBS_DROPDOWNLIST | WS_VSCROLL
   PUSHBUTTON "Apply", kApplyFilter, 745, 40, 58, 20
   PUSHBUTTON "Reset", kResetFilter, 807, 40, 58, 20
   LTEXT "Jump", -1, 878, 42, 38, 14
