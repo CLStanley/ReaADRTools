@@ -204,6 +204,10 @@ INT_PTR cue_manager_proc(HWND hwnd, UINT message, WPARAM wparam, LPARAM)
     if (g_controller->set_filters({}, {}, {})) refresh_rows(hwnd);
     return 1;
   }
+  if (message == WM_KEYDOWN && g_controller && wparam == VK_INSERT) {
+    populate_add_editor(hwnd);
+    return 1;
+  }
   if (message == WM_KEYDOWN && g_controller && wparam == VK_RETURN) {
     const auto* row = g_controller->selected_row();
     if (row) {
