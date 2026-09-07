@@ -552,6 +552,7 @@ void run_native_overlay_toggle_action(const std::string& key);
 void run_native_overlay_text_color_action(const std::string& color);
 void run_native_overlay_settings_action(const std::string& value);
 void run_native_quick_actions_action(const std::string& value);
+void run_native_preference_toggles_action(const std::string& value);
 bool read_xlsx_as_tsv(const char* path, char* tsv_out, int tsv_out_sz, char* error_out, int error_out_sz);
 
 void run_native_cue_manager_action()
@@ -614,6 +615,8 @@ void run_native_cue_manager_action()
         run_native_overlay_settings_action(action.substr(17));
       else if (action.rfind("quick_actions:", 0) == 0)
         run_native_quick_actions_action(action.substr(14));
+      else if (action.rfind("preference_toggles:", 0) == 0)
+        run_native_preference_toggles_action(action.substr(19));
     });
   if (!controller.reload()) { ShowMessageBox(controller.view().error.c_str(), "ReaADR Cue Manager", 0); return; }
   if (reaadr::ui::show_cue_manager(controller)) return;
@@ -1084,6 +1087,39 @@ void run_native_quick_actions_action(const std::string& value)
   }
   reaadr::reaper::ProjectTransaction transaction(
     nullptr, native_session_transaction_api(), "ReaADR: update quick actions", -1, true);
+  const auto saved = preferences.save(updated);
+  if (!saved) { transaction.mark_failed(); ShowMessageBox(saved.error.c_str(), "ReaADR Preferences", 0); }
+}
+
+void run_native_preference_toggles_action(const std::string& value)
+{
+  std::array<std::string, 5> fields = {};
+  std::stringstream input(value);
+  for (std::size_t index = 0; index < fields.size(); ++index) {
+    if (!std::getline(input, fields[index], ',')) {
+      ShowMessageBox("Enter all five UI preference values.", "ReaADR Preferences", 0);
+      return;
+    }
+  }
+  reaadr::reaper::ProjectStateStore project_state(nullptr, {GetProjExtState, SetProjExtState});
+  reaadr::reaper::GlobalStateStore global_state({GetExtState, SetExtState});
+  reaadr::core::ManagerPreferencesRepository preferences(project_state, &global_state);
+  const auto loaded = preferences.load();
+  if (!loaded) { ShowMessageBox(loaded.error.c_str(), "ReaADR Preferences", 0); return; }
+  auto updated = loaded.preferences;
+  for (const auto& field : fields) {
+    const std::size_t equals = field.find('=');
+    if (equals == std::string::npos || (field.substr(equals + 1) != "0" && field.substr(equals + 1) != "1")) {
+      ShowMessageBox("UI preferences must use 0 or 1 values.", "ReaADR Preferences", 0);
+      return;
+    }
+    const auto result = reaadr::core::update_manager_preferences(
+      updated, field.substr(0, equals), field.substr(equals + 1));
+    if (!result) { ShowMessageBox(result.error.c_str(), "ReaADR Preferences", 0); return; }
+    updated = result.preferences;
+  }
+  reaadr::reaper::ProjectTransaction transaction(
+    nullptr, native_session_transaction_api(), "ReaADR: update UI preferences", -1, true);
   const auto saved = preferences.save(updated);
   if (!saved) { transaction.mark_failed(); ShowMessageBox(saved.error.c_str(), "ReaADR Preferences", 0); }
 }

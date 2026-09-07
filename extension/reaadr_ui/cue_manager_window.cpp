@@ -56,6 +56,9 @@ constexpr int kPreferencesReload = 48054;
 constexpr int kQuickAction1 = 48090, kQuickAction2 = 48091,
               kQuickAction3 = 48092, kQuickAction4 = 48093,
               kQuickActionSave = 48094;
+constexpr int kPrefRememberLayout = 48095, kPrefHoverPreview = 48096,
+              kPrefTooltips = 48097, kPrefNavigationWrap = 48098,
+              kPrefAutoDock = 48099, kPrefSave = 48100;
 constexpr int kHelpImport = 48044, kHelpCues = 48045, kHelpOverlay = 48046,
               kHelpReports = 48047, kHelpQuickActions = 48048;
 constexpr int kReportsSummary = 48049, kReportsExport = 48050;
@@ -168,6 +171,10 @@ void apply_tab_visibility(HWND hwnd, const std::string& tab)
   const int quick_controls[] = {kQuickAction1, kQuickAction2, kQuickAction3, kQuickAction4, kQuickActionSave};
   for (const int id : quick_controls)
     ShowWindow(GetDlgItem(hwnd, id), tab == "preferences" ? SW_SHOW : SW_HIDE);
+  const int pref_controls[] = {kPrefRememberLayout, kPrefHoverPreview, kPrefTooltips,
+                               kPrefNavigationWrap, kPrefAutoDock, kPrefSave};
+  for (const int id : pref_controls)
+    ShowWindow(GetDlgItem(hwnd, id), tab == "preferences" ? SW_SHOW : SW_HIDE);
   const int help_controls[] = {kHelpImport, kHelpCues, kHelpOverlay, kHelpReports, kHelpQuickActions};
   for (const int id : help_controls)
     ShowWindow(GetDlgItem(hwnd, id), tab == "help" ? SW_SHOW : SW_HIDE);
@@ -236,6 +243,17 @@ void update_quick_action_controls(HWND hwnd)
     SetDlgItemText(hwnd, ids[index], actions[index].c_str());
 }
 
+void update_preference_controls(HWND hwnd)
+{
+  if (!g_controller) return;
+  const auto& preferences = g_controller->view().preferences;
+  CheckDlgButton(hwnd, kPrefRememberLayout, preferences.remember_layout ? BST_CHECKED : BST_UNCHECKED);
+  CheckDlgButton(hwnd, kPrefHoverPreview, preferences.hover_preview ? BST_CHECKED : BST_UNCHECKED);
+  CheckDlgButton(hwnd, kPrefTooltips, preferences.tooltips ? BST_CHECKED : BST_UNCHECKED);
+  CheckDlgButton(hwnd, kPrefNavigationWrap, preferences.navigation_wrap ? BST_CHECKED : BST_UNCHECKED);
+  CheckDlgButton(hwnd, kPrefAutoDock, preferences.cue_manager_auto_dock ? BST_CHECKED : BST_UNCHECKED);
+}
+
 const char* overlay_key_for_control(int id)
 {
   switch (id) {
@@ -290,6 +308,7 @@ INT_PTR cue_manager_proc(HWND hwnd, UINT message, WPARAM wparam, LPARAM)
       update_tab_details(hwnd);
       update_overlay_controls(hwnd);
       update_quick_action_controls(hwnd);
+      update_preference_controls(hwnd);
     }
     return 1;
   }
@@ -335,6 +354,7 @@ INT_PTR cue_manager_proc(HWND hwnd, UINT message, WPARAM wparam, LPARAM)
       update_tab_details(hwnd);
       update_overlay_controls(hwnd);
       update_quick_action_controls(hwnd);
+      update_preference_controls(hwnd);
       return 1;
     }
   }
@@ -429,6 +449,23 @@ INT_PTR cue_manager_proc(HWND hwnd, UINT message, WPARAM wparam, LPARAM)
         GetDlgItemText(hwnd, ids[index], values[index], sizeof(values[index]));
         if (index) action += ',';
         action += values[index];
+      }
+      g_controller->trigger_action(action);
+    }
+    return 1;
+  }
+  if (message == WM_COMMAND && LOWORD(wparam) == kPrefSave) {
+    if (g_controller) {
+      const int ids[] = {kPrefRememberLayout, kPrefHoverPreview, kPrefTooltips,
+                         kPrefNavigationWrap, kPrefAutoDock};
+      const char* keys[] = {"remember_layout", "hover_preview", "tooltips",
+                            "navigation_wrap", "cue_manager_auto_dock"};
+      std::string action = "preference_toggles:";
+      for (int index = 0; index < 5; ++index) {
+        if (index) action += ',';
+        action += keys[index];
+        action += '=';
+        action += IsDlgButtonChecked(hwnd, ids[index]) == BST_CHECKED ? "1" : "0";
       }
       g_controller->trigger_action(action);
     }
@@ -641,6 +678,12 @@ BEGIN
   LTEXT "Quick Action 4", -1, 16, 280, 100, 16
   COMBOBOX kQuickAction4, 122, 276, 220, 100, CBS_DROPDOWNLIST | WS_VSCROLL
   PUSHBUTTON "Save Quick Actions", kQuickActionSave, 360, 186, 160, 24
+  CHECKBOX "Remember window layout", kPrefRememberLayout, 360, 226, 220, 20
+  CHECKBOX "Show cue preview on hover", kPrefHoverPreview, 360, 252, 220, 20
+  CHECKBOX "Show tooltips", kPrefTooltips, 360, 278, 160, 20
+  CHECKBOX "Wrap cue navigation", kPrefNavigationWrap, 360, 304, 180, 20
+  CHECKBOX "Open Cue Manager docked", kPrefAutoDock, 360, 330, 220, 20
+  PUSHBUTTON "Save UI Preferences", kPrefSave, 360, 362, 160, 24
   PUSHBUTTON "Import Help", kHelpImport, 16, 150, 120, 24
   PUSHBUTTON "Cue Help", kHelpCues, 142, 150, 100, 24
   PUSHBUTTON "Overlay Help", kHelpOverlay, 248, 150, 110, 24

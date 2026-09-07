@@ -338,6 +338,9 @@ The native Manager Preferences tab also surfaces all four persisted quick-action
 assignments and the Lua-compatible UI toggle states.
 Those four quick-action assignments are now editable through native dropdowns
 and saved transactionally using the same persisted keys as Lua.
+The five Lua Manager UI toggles—remembered layout, hover preview, tooltips,
+navigation wrapping, and Cue Manager auto-docking—are now editable through
+native checkboxes and saved transactionally as well.
 The native Cues tab header now reports the active session name, total cue count,
 and distinct visible character count like the Lua Manager header.
 The native Overlay tab now exposes the Lua-compatible Actor, Engineer, Studio,
