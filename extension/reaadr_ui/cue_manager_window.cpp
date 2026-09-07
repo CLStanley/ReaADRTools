@@ -258,6 +258,14 @@ INT_PTR cue_manager_proc(HWND hwnd, UINT message, WPARAM wparam, LPARAM)
     SetFocus(GetDlgItem(hwnd, kSearchFilter));
     return 1;
   }
+  if (message == WM_KEYDOWN && wparam == VK_F3) {
+    SetFocus(GetDlgItem(hwnd, kCharacterFilter));
+    return 1;
+  }
+  if (message == WM_KEYDOWN && wparam == VK_F4) {
+    SetFocus(GetDlgItem(hwnd, kStatusFilter));
+    return 1;
+  }
   if (message == WM_COMMAND && (LOWORD(wparam) == IDOK || LOWORD(wparam) == IDCANCEL)) {
     EndDialog(hwnd, 0); return 1;
   }
