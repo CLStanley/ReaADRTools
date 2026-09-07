@@ -7,6 +7,7 @@
 #include <string>
 #include <cstring>
 #include <map>
+#include <set>
 
 #ifndef LBS_NOTIFY
 #define LBS_NOTIFY 0x0001L
@@ -156,6 +157,11 @@ void update_tab_details(HWND hwnd)
       if (index) details += ", ";
       details += std::to_string(index + 1) + "=" + view.preferences.quick_actions[index];
     }
+  } else if (view.active_tab == "cues") {
+    std::set<std::string> characters;
+    for (const auto& row : view.cues.rows) if (!row.character.empty()) characters.insert(row.character);
+    details += " | Session: " + view.session_name + " | Cues: " +
+      std::to_string(view.total_cues) + " | Characters: " + std::to_string(characters.size());
   } else if (view.active_tab == "help") {
     details += " | Select a topic below for native guidance";
   }
