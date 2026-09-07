@@ -182,6 +182,11 @@ INT_PTR cue_manager_proc(HWND hwnd, UINT message, WPARAM wparam, LPARAM)
     }
     return 1;
   }
+  if (message == WM_KEYDOWN && g_controller && (wparam == VK_UP || wparam == VK_DOWN)) {
+    g_controller->select_relative(wparam == VK_DOWN ? 1 : -1);
+    refresh_rows(hwnd);
+    return 1;
+  }
   if (message == WM_COMMAND && (LOWORD(wparam) == IDOK || LOWORD(wparam) == IDCANCEL)) {
     EndDialog(hwnd, 0); return 1;
   }
