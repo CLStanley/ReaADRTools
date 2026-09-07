@@ -266,6 +266,16 @@ INT_PTR cue_manager_proc(HWND hwnd, UINT message, WPARAM wparam, LPARAM)
     SetFocus(GetDlgItem(hwnd, kStatusFilter));
     return 1;
   }
+  if (message == WM_KEYDOWN && g_controller && wparam >= VK_F6 && wparam <= VK_F12) {
+    const char* tabs[] = {"import", "cues", "session", "reports", "overlay", "preferences", "help"};
+    const char* tab = tabs[static_cast<int>(wparam - VK_F6)];
+    if (g_controller->set_tab(tab)) {
+      SetWindowText(hwnd, (std::string("ReaADR Manager - ") + tab).c_str());
+      apply_tab_visibility(hwnd, tab);
+      update_tab_details(hwnd);
+    }
+    return 1;
+  }
   if (message == WM_COMMAND && (LOWORD(wparam) == IDOK || LOWORD(wparam) == IDCANCEL)) {
     EndDialog(hwnd, 0); return 1;
   }
