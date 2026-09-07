@@ -51,6 +51,7 @@ constexpr int kOverlayBgCueId = 48076, kOverlayBgCharacter = 48077,
               kOverlayBgCueType = 48082, kOverlayBgStatus = 48083,
               kOverlayBgMetadata = 48084;
 constexpr int kOverlayTextWhite = 48085, kOverlayTextYellow = 48086;
+constexpr int kOverlayMetadataFields = 48087, kOverlayPreroll = 48088, kOverlaySaveSettings = 48089;
 constexpr int kPreferencesReload = 48054;
 constexpr int kHelpImport = 48044, kHelpCues = 48045, kHelpOverlay = 48046,
               kHelpReports = 48047, kHelpQuickActions = 48048;
@@ -156,6 +157,9 @@ void apply_tab_visibility(HWND hwnd, const std::string& tab)
     ShowWindow(GetDlgItem(hwnd, id), tab == "overlay" ? SW_SHOW : SW_HIDE);
   ShowWindow(GetDlgItem(hwnd, kOverlayTextWhite), tab == "overlay" ? SW_SHOW : SW_HIDE);
   ShowWindow(GetDlgItem(hwnd, kOverlayTextYellow), tab == "overlay" ? SW_SHOW : SW_HIDE);
+  ShowWindow(GetDlgItem(hwnd, kOverlayMetadataFields), tab == "overlay" ? SW_SHOW : SW_HIDE);
+  ShowWindow(GetDlgItem(hwnd, kOverlayPreroll), tab == "overlay" ? SW_SHOW : SW_HIDE);
+  ShowWindow(GetDlgItem(hwnd, kOverlaySaveSettings), tab == "overlay" ? SW_SHOW : SW_HIDE);
   ShowWindow(GetDlgItem(hwnd, kPreferencesOpen), tab == "preferences" ? SW_SHOW : SW_HIDE);
   ShowWindow(GetDlgItem(hwnd, kPreferencesReload), tab == "preferences" ? SW_SHOW : SW_HIDE);
   const int help_controls[] = {kHelpImport, kHelpCues, kHelpOverlay, kHelpReports, kHelpQuickActions};
@@ -213,6 +217,8 @@ void update_overlay_controls(HWND hwnd)
     {kOverlayBgStatus, overlay.bg_status}, {kOverlayBgMetadata, overlay.bg_metadata},
   };
   for (const auto& value : values) CheckDlgButton(hwnd, value.first, value.second ? BST_CHECKED : BST_UNCHECKED);
+  SetDlgItemText(hwnd, kOverlayMetadataFields, overlay.metadata_fields.c_str());
+  SetDlgItemText(hwnd, kOverlayPreroll, std::to_string(overlay.preroll_seconds).c_str());
 }
 
 const char* overlay_key_for_control(int id)
@@ -378,6 +384,15 @@ INT_PTR cue_manager_proc(HWND hwnd, UINT message, WPARAM wparam, LPARAM)
     if (g_controller)
       g_controller->trigger_action(std::string("overlay_text_color:") +
         (LOWORD(wparam) == kOverlayTextYellow ? "yellow" : "white"));
+    return 1;
+  }
+  if (message == WM_COMMAND && LOWORD(wparam) == kOverlaySaveSettings) {
+    if (g_controller) {
+      char metadata[512] = {}, preroll[64] = {};
+      GetDlgItemText(hwnd, kOverlayMetadataFields, metadata, sizeof(metadata));
+      GetDlgItemText(hwnd, kOverlayPreroll, preroll, sizeof(preroll));
+      g_controller->trigger_action(std::string("overlay_settings:") + metadata + "|" + preroll);
+    }
     return 1;
   }
   if (message == WM_COMMAND && LOWORD(wparam) == kPreferencesReload) {
@@ -575,6 +590,11 @@ BEGIN
   LTEXT "Text Color", -1, 16, 326, 90, 16
   PUSHBUTTON "White", kOverlayTextWhite, 112, 322, 80, 24
   PUSHBUTTON "Yellow", kOverlayTextYellow, 200, 322, 80, 24
+  LTEXT "Metadata Fields (comma separated)", -1, 16, 356, 210, 16
+  EDITTEXT kOverlayMetadataFields, 232, 352, 500, 20, ES_AUTOHSCROLL
+  LTEXT "Preroll (seconds)", -1, 16, 386, 110, 16
+  EDITTEXT kOverlayPreroll, 132, 382, 90, 20, ES_AUTOHSCROLL
+  PUSHBUTTON "Save Overlay Settings", kOverlaySaveSettings, 232, 380, 170, 24
   PUSHBUTTON "Open Preferences", kPreferencesOpen, 16, 150, 140, 24
   PUSHBUTTON "Reload Preferences", kPreferencesReload, 164, 150, 150, 24
   PUSHBUTTON "Import Help", kHelpImport, 16, 150, 120, 24

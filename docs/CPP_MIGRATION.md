@@ -347,6 +347,8 @@ The remaining Lua-compatible overlay visibility and text-background toggles are
 also exposed natively and persist through that same boundary.
 Native Overlay text-color selection now also matches the Lua White/Yellow
 choices and persists transactionally.
+Metadata field lists and preroll timing can now be edited and saved from the
+native Overlay tab with Lua-compatible normalization and validation.
 Delimited cue content can now also flow through a native import application
 service, which keeps parsing/mapping deterministic and commits the replacement
 through the existing transactional session renderer; file selection remains at
