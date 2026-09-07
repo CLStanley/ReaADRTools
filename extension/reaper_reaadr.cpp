@@ -551,6 +551,7 @@ void run_native_overlay_profile_action(const std::string& profile);
 void run_native_overlay_toggle_action(const std::string& key);
 void run_native_overlay_text_color_action(const std::string& color);
 void run_native_overlay_settings_action(const std::string& value);
+void run_native_quick_actions_action(const std::string& value);
 bool read_xlsx_as_tsv(const char* path, char* tsv_out, int tsv_out_sz, char* error_out, int error_out_sz);
 
 void run_native_cue_manager_action()
@@ -611,6 +612,8 @@ void run_native_cue_manager_action()
         run_native_overlay_text_color_action(action.substr(19));
       else if (action.rfind("overlay_settings:", 0) == 0)
         run_native_overlay_settings_action(action.substr(17));
+      else if (action.rfind("quick_actions:", 0) == 0)
+        run_native_quick_actions_action(action.substr(14));
     });
   if (!controller.reload()) { ShowMessageBox(controller.view().error.c_str(), "ReaADR Cue Manager", 0); return; }
   if (reaadr::ui::show_cue_manager(controller)) return;
@@ -1055,6 +1058,34 @@ void run_native_overlay_settings_action(const std::string& value)
     nullptr, native_session_transaction_api(), "ReaADR: update overlay settings", -1, true);
   const auto saved = overlays.save(updated);
   if (!saved) { transaction.mark_failed(); ShowMessageBox(saved.error.c_str(), "ReaADR Overlay", 0); }
+}
+
+void run_native_quick_actions_action(const std::string& value)
+{
+  std::array<std::string, 4> actions = {};
+  std::stringstream input(value);
+  for (std::size_t index = 0; index < actions.size(); ++index) {
+    if (!std::getline(input, actions[index], ',') || actions[index].empty()) {
+      ShowMessageBox("Choose an action for all four quick-action slots.", "ReaADR Preferences", 0);
+      return;
+    }
+  }
+  reaadr::reaper::ProjectStateStore project_state(nullptr, {GetProjExtState, SetProjExtState});
+  reaadr::reaper::GlobalStateStore global_state({GetExtState, SetExtState});
+  reaadr::core::ManagerPreferencesRepository preferences(project_state, &global_state);
+  const auto loaded = preferences.load();
+  if (!loaded) { ShowMessageBox(loaded.error.c_str(), "ReaADR Preferences", 0); return; }
+  auto updated = loaded.preferences;
+  for (std::size_t index = 0; index < actions.size(); ++index) {
+    const auto result = reaadr::core::update_manager_preferences(
+      updated, "quick_action_" + std::to_string(index + 1), actions[index]);
+    if (!result) { ShowMessageBox(result.error.c_str(), "ReaADR Preferences", 0); return; }
+    updated = result.preferences;
+  }
+  reaadr::reaper::ProjectTransaction transaction(
+    nullptr, native_session_transaction_api(), "ReaADR: update quick actions", -1, true);
+  const auto saved = preferences.save(updated);
+  if (!saved) { transaction.mark_failed(); ShowMessageBox(saved.error.c_str(), "ReaADR Preferences", 0); }
 }
 
 void run_native_preferences_action()

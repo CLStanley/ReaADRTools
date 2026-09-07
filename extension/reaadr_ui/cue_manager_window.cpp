@@ -53,6 +53,9 @@ constexpr int kOverlayBgCueId = 48076, kOverlayBgCharacter = 48077,
 constexpr int kOverlayTextWhite = 48085, kOverlayTextYellow = 48086;
 constexpr int kOverlayMetadataFields = 48087, kOverlayPreroll = 48088, kOverlaySaveSettings = 48089;
 constexpr int kPreferencesReload = 48054;
+constexpr int kQuickAction1 = 48090, kQuickAction2 = 48091,
+              kQuickAction3 = 48092, kQuickAction4 = 48093,
+              kQuickActionSave = 48094;
 constexpr int kHelpImport = 48044, kHelpCues = 48045, kHelpOverlay = 48046,
               kHelpReports = 48047, kHelpQuickActions = 48048;
 constexpr int kReportsSummary = 48049, kReportsExport = 48050;
@@ -162,6 +165,9 @@ void apply_tab_visibility(HWND hwnd, const std::string& tab)
   ShowWindow(GetDlgItem(hwnd, kOverlaySaveSettings), tab == "overlay" ? SW_SHOW : SW_HIDE);
   ShowWindow(GetDlgItem(hwnd, kPreferencesOpen), tab == "preferences" ? SW_SHOW : SW_HIDE);
   ShowWindow(GetDlgItem(hwnd, kPreferencesReload), tab == "preferences" ? SW_SHOW : SW_HIDE);
+  const int quick_controls[] = {kQuickAction1, kQuickAction2, kQuickAction3, kQuickAction4, kQuickActionSave};
+  for (const int id : quick_controls)
+    ShowWindow(GetDlgItem(hwnd, id), tab == "preferences" ? SW_SHOW : SW_HIDE);
   const int help_controls[] = {kHelpImport, kHelpCues, kHelpOverlay, kHelpReports, kHelpQuickActions};
   for (const int id : help_controls)
     ShowWindow(GetDlgItem(hwnd, id), tab == "help" ? SW_SHOW : SW_HIDE);
@@ -221,6 +227,15 @@ void update_overlay_controls(HWND hwnd)
   SetDlgItemText(hwnd, kOverlayPreroll, std::to_string(overlay.preroll_seconds).c_str());
 }
 
+void update_quick_action_controls(HWND hwnd)
+{
+  if (!g_controller) return;
+  const auto& actions = g_controller->view().preferences.quick_actions;
+  const int ids[] = {kQuickAction1, kQuickAction2, kQuickAction3, kQuickAction4};
+  for (std::size_t index = 0; index < actions.size(); ++index)
+    SetDlgItemText(hwnd, ids[index], actions[index].c_str());
+}
+
 const char* overlay_key_for_control(int id)
 {
   switch (id) {
@@ -255,6 +270,10 @@ INT_PTR cue_manager_proc(HWND hwnd, UINT message, WPARAM wparam, LPARAM)
     for (const auto& choice : core::cue_manager_status_choices())
       SendDlgItemMessage(hwnd, kStatusFilter, CB_ADDSTRING, 0, reinterpret_cast<LPARAM>(choice.c_str()));
     SetDlgItemText(hwnd, kStatusFilter, "Any");
+    const int quick_ids[] = {kQuickAction1, kQuickAction2, kQuickAction3, kQuickAction4};
+    for (const auto& choice : core::manager_quick_action_choices())
+      for (const int id : quick_ids)
+        SendDlgItemMessage(hwnd, id, CB_ADDSTRING, 0, reinterpret_cast<LPARAM>(choice.c_str()));
     if (g_controller) {
       const std::string mapping = g_controller->last_import_mapping();
       if (!mapping.empty()) SetDlgItemText(hwnd, kImportMapping, mapping.c_str());
@@ -270,6 +289,7 @@ INT_PTR cue_manager_proc(HWND hwnd, UINT message, WPARAM wparam, LPARAM)
       apply_tab_visibility(hwnd, g_controller->view().active_tab);
       update_tab_details(hwnd);
       update_overlay_controls(hwnd);
+      update_quick_action_controls(hwnd);
     }
     return 1;
   }
@@ -314,6 +334,7 @@ INT_PTR cue_manager_proc(HWND hwnd, UINT message, WPARAM wparam, LPARAM)
       apply_tab_visibility(hwnd, g_controller->view().active_tab);
       update_tab_details(hwnd);
       update_overlay_controls(hwnd);
+      update_quick_action_controls(hwnd);
       return 1;
     }
   }
@@ -397,6 +418,20 @@ INT_PTR cue_manager_proc(HWND hwnd, UINT message, WPARAM wparam, LPARAM)
   }
   if (message == WM_COMMAND && LOWORD(wparam) == kPreferencesReload) {
     if (g_controller && g_controller->reload()) update_tab_details(hwnd);
+    return 1;
+  }
+  if (message == WM_COMMAND && LOWORD(wparam) == kQuickActionSave) {
+    if (g_controller) {
+      char values[4][64] = {};
+      const int ids[] = {kQuickAction1, kQuickAction2, kQuickAction3, kQuickAction4};
+      std::string action = "quick_actions:";
+      for (int index = 0; index < 4; ++index) {
+        GetDlgItemText(hwnd, ids[index], values[index], sizeof(values[index]));
+        if (index) action += ',';
+        action += values[index];
+      }
+      g_controller->trigger_action(action);
+    }
     return 1;
   }
   if (message == WM_COMMAND && LOWORD(wparam) >= kHelpImport && LOWORD(wparam) <= kHelpQuickActions) {
@@ -597,6 +632,15 @@ BEGIN
   PUSHBUTTON "Save Overlay Settings", kOverlaySaveSettings, 232, 380, 170, 24
   PUSHBUTTON "Open Preferences", kPreferencesOpen, 16, 150, 140, 24
   PUSHBUTTON "Reload Preferences", kPreferencesReload, 164, 150, 150, 24
+  LTEXT "Quick Action 1", -1, 16, 190, 100, 16
+  COMBOBOX kQuickAction1, 122, 186, 220, 100, CBS_DROPDOWNLIST | WS_VSCROLL
+  LTEXT "Quick Action 2", -1, 16, 220, 100, 16
+  COMBOBOX kQuickAction2, 122, 216, 220, 100, CBS_DROPDOWNLIST | WS_VSCROLL
+  LTEXT "Quick Action 3", -1, 16, 250, 100, 16
+  COMBOBOX kQuickAction3, 122, 246, 220, 100, CBS_DROPDOWNLIST | WS_VSCROLL
+  LTEXT "Quick Action 4", -1, 16, 280, 100, 16
+  COMBOBOX kQuickAction4, 122, 276, 220, 100, CBS_DROPDOWNLIST | WS_VSCROLL
+  PUSHBUTTON "Save Quick Actions", kQuickActionSave, 360, 186, 160, 24
   PUSHBUTTON "Import Help", kHelpImport, 16, 150, 120, 24
   PUSHBUTTON "Cue Help", kHelpCues, 142, 150, 100, 24
   PUSHBUTTON "Overlay Help", kHelpOverlay, 248, 150, 110, 24
