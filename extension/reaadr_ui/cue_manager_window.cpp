@@ -210,6 +210,14 @@ INT_PTR cue_manager_proc(HWND hwnd, UINT message, WPARAM wparam, LPARAM)
     }
     return 1;
   }
+  if (message == WM_KEYDOWN && g_controller && wparam == VK_F5) {
+    if (g_controller->reload()) {
+      refresh_rows(hwnd);
+      apply_tab_visibility(hwnd, g_controller->view().active_tab);
+      update_tab_details(hwnd);
+    }
+    return 1;
+  }
   if (message == WM_COMMAND && (LOWORD(wparam) == IDOK || LOWORD(wparam) == IDCANCEL)) {
     EndDialog(hwnd, 0); return 1;
   }
