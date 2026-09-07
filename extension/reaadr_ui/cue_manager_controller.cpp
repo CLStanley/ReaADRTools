@@ -1,7 +1,6 @@
 #include "cue_manager_controller.hpp"
 
 #include <iomanip>
-#include <set>
 #include <sstream>
 #include <utility>
 
@@ -46,23 +45,6 @@ std::string CueManagerController::last_import_mapping() const
   return value ? value.value : std::string();
 }
 
-std::string CueManagerController::session_characters_csv() const
-{
-  std::set<std::string> names;
-  for (const auto& row : view_.cues.rows) if (!row.character.empty()) names.insert(row.character);
-  std::string result;
-  for (const auto& name : names) {
-    if (!result.empty()) result += ';';
-    result += name;
-  }
-  return result;
-}
-
-void CueManagerController::clear_import_mapping()
-{
-  project_state_.write(core::SessionModelRepository::kNamespace, "import_mapping_last", {});
-}
-
 void CueManagerController::trigger_action(const std::string& action)
 {
   if (trigger_action_) trigger_action_(action);
@@ -92,12 +74,6 @@ void CueManagerController::select_index(int index)
   for (std::size_t i = 0; i < view_.cues.rows.size(); ++i) view_.cues.rows[i].selected = static_cast<int>(i) == index;
   project_state_.write(core::SessionModelRepository::kNamespace,
                        "manager_selected_cue_key", selected_key_);
-}
-
-void CueManagerController::select_boundary(bool last)
-{
-  if (view_.cues.rows.empty()) return;
-  select_index(last ? static_cast<int>(view_.cues.rows.size() - 1) : 0);
 }
 
 void CueManagerController::select_relative(int delta)

@@ -33,11 +33,6 @@ constexpr int kTabReports = 48028, kTabOverlay = 48029, kTabPreferences = 48030,
 constexpr int kImportBrowse = 48032, kImportRun = 48033, kImportPreview = 48035;
 constexpr int kImportMapping = 48034;
 constexpr int kImportMode = 48036, kImportCharacters = 48037;
-constexpr int kImportClearMapping = 48038;
-constexpr int kImportRestoreMapping = 48053;
-constexpr int kImportSessionCharacters = 48055;
-constexpr int kImportEntireSheet = 48056;
-constexpr int kImportUpdateExisting = 48057;
 constexpr int kSessionValidate = 48039, kSessionRefresh = 48040, kSessionSync = 48041;
 constexpr int kSessionClear = 48051, kSessionFilter = 48052;
 constexpr int kOverlayRefresh = 48042, kPreferencesOpen = 48043;
@@ -111,9 +106,7 @@ void apply_tab_visibility(HWND hwnd, const std::string& tab)
   const bool import = tab == "import";
   const bool cues = tab == "cues";
   const int import_controls[] = {
-    kImportMapping, kImportClearMapping, kImportMode, kImportCharacters,
-    kImportRun, kImportPreview, kImportRestoreMapping, kImportSessionCharacters,
-    kImportEntireSheet, kImportUpdateExisting,
+    kImportMapping, kImportMode, kImportCharacters, kImportRun, kImportPreview,
   };
   for (const int id : import_controls)
     ShowWindow(GetDlgItem(hwnd, id), import ? SW_SHOW : SW_HIDE);
@@ -197,93 +190,6 @@ INT_PTR cue_manager_proc(HWND hwnd, UINT message, WPARAM wparam, LPARAM)
     }
     return 1;
   }
-  if (message == WM_KEYDOWN && g_controller && (wparam == VK_UP || wparam == VK_DOWN)) {
-    g_controller->select_relative(wparam == VK_DOWN ? 1 : -1);
-    refresh_rows(hwnd);
-    return 1;
-  }
-  if (message == WM_KEYDOWN && g_controller && (wparam == VK_PRIOR || wparam == VK_NEXT)) {
-    g_controller->select_relative(wparam == VK_NEXT ? 10 : -10);
-    refresh_rows(hwnd);
-    return 1;
-  }
-  if (message == WM_KEYDOWN && g_controller && (wparam == VK_HOME || wparam == VK_END)) {
-    g_controller->select_boundary(wparam == VK_END);
-    refresh_rows(hwnd);
-    return 1;
-  }
-  if (message == WM_KEYDOWN && g_controller && wparam == VK_ESCAPE) {
-    SetDlgItemText(hwnd, kSearchFilter, "");
-    SetDlgItemText(hwnd, kCharacterFilter, "");
-    SetDlgItemText(hwnd, kStatusFilter, "");
-    if (g_controller->set_filters({}, {}, {})) refresh_rows(hwnd);
-    return 1;
-  }
-  if (message == WM_KEYDOWN && g_controller && wparam == VK_INSERT) {
-    populate_add_editor(hwnd);
-    return 1;
-  }
-  if (message == WM_KEYDOWN && g_controller && wparam == VK_RETURN) {
-    const auto* row = g_controller->selected_row();
-    if (row) {
-      std::string error;
-      if (!g_controller->navigate_to_id(row->cue_key, error) && !error.empty())
-        MessageBox(hwnd, error.c_str(), "ReaADR Cue Manager", 0);
-      else refresh_rows(hwnd);
-    }
-    return 1;
-  }
-  if (message == WM_KEYDOWN && g_controller && wparam == VK_DELETE) {
-    const auto* row = g_controller->selected_row();
-    if (row) {
-      const std::string prompt = "Remove cue " + row->cue_key + " (" + row->character + ")?";
-      if (MessageBox(hwnd, prompt.c_str(), "ReaADR Cue Manager", MB_YESNO | MB_ICONWARNING) == IDYES) {
-        std::string error;
-        if (!g_controller->remove_selected(error) && !error.empty())
-          MessageBox(hwnd, error.c_str(), "ReaADR Cue Manager", 0);
-        else refresh_rows(hwnd);
-      }
-    }
-    return 1;
-  }
-  if (message == WM_KEYDOWN && g_controller && wparam == VK_F5) {
-    if (g_controller->reload()) {
-      refresh_rows(hwnd);
-      apply_tab_visibility(hwnd, g_controller->view().active_tab);
-      update_tab_details(hwnd);
-    }
-    return 1;
-  }
-  if (message == WM_KEYDOWN && wparam == VK_F2) {
-    SetFocus(GetDlgItem(hwnd, kSearchFilter));
-    return 1;
-  }
-  if (message == WM_KEYDOWN && wparam == VK_F3) {
-    SetFocus(GetDlgItem(hwnd, kCharacterFilter));
-    return 1;
-  }
-  if (message == WM_KEYDOWN && wparam == VK_F4) {
-    SetFocus(GetDlgItem(hwnd, kStatusFilter));
-    return 1;
-  }
-  if (message == WM_KEYDOWN && g_controller && wparam >= VK_F6 && wparam <= VK_F12) {
-    const char* tabs[] = {"import", "cues", "session", "reports", "overlay", "preferences", "help"};
-    const char* tab = tabs[static_cast<int>(wparam - VK_F6)];
-    if (g_controller->set_tab(tab)) {
-      SetWindowText(hwnd, (std::string("ReaADR Manager - ") + tab).c_str());
-      apply_tab_visibility(hwnd, tab);
-      update_tab_details(hwnd);
-    }
-    return 1;
-  }
-  if (message == WM_KEYDOWN && g_controller && wparam == VK_F1) {
-    if (g_controller->set_tab("help")) {
-      SetWindowText(hwnd, "ReaADR Manager - help");
-      apply_tab_visibility(hwnd, "help");
-      update_tab_details(hwnd);
-    }
-    return 1;
-  }
   if (message == WM_COMMAND && (LOWORD(wparam) == IDOK || LOWORD(wparam) == IDCANCEL)) {
     EndDialog(hwnd, 0); return 1;
   }
@@ -347,34 +253,6 @@ INT_PTR cue_manager_proc(HWND hwnd, UINT message, WPARAM wparam, LPARAM)
       GetDlgItemText(hwnd, kImportCharacters, characters, sizeof(characters));
       g_controller->trigger_import(mapping, true, mode, characters);
     }
-    return 1;
-  }
-  if (message == WM_COMMAND && LOWORD(wparam) == kImportClearMapping) {
-    if (g_controller) {
-      g_controller->clear_import_mapping();
-      SetDlgItemText(hwnd, kImportMapping, "");
-    }
-    return 1;
-  }
-  if (message == WM_COMMAND && LOWORD(wparam) == kImportRestoreMapping) {
-    if (g_controller) SetDlgItemText(hwnd, kImportMapping, g_controller->last_import_mapping().c_str());
-    return 1;
-  }
-  if (message == WM_COMMAND && LOWORD(wparam) == kImportSessionCharacters) {
-    if (g_controller) {
-      SetDlgItemText(hwnd, kImportCharacters, g_controller->session_characters_csv().c_str());
-      SetDlgItemText(hwnd, kImportMode, "selected");
-    }
-    return 1;
-  }
-  if (message == WM_COMMAND && LOWORD(wparam) == kImportEntireSheet) {
-    SetDlgItemText(hwnd, kImportCharacters, "");
-    SetDlgItemText(hwnd, kImportMode, "all");
-    return 1;
-  }
-  if (message == WM_COMMAND && LOWORD(wparam) == kImportUpdateExisting) {
-    SetDlgItemText(hwnd, kImportCharacters, "");
-    SetDlgItemText(hwnd, kImportMode, "update");
     return 1;
   }
   if (message == WM_COMMAND &&
@@ -554,11 +432,6 @@ BEGIN
   LTEXT "Cue sheet import uses the native transactional parser and renderer.", -1, 16, 70, 620, 16
   LTEXT "Mapping (optional)", -1, 16, 92, 110, 16
   EDITTEXT kImportMapping, 126, 90, 500, 20, ES_AUTOHSCROLL
-  PUSHBUTTON "Clear", kImportClearMapping, 632, 90, 58, 20
-  PUSHBUTTON "Restore", kImportRestoreMapping, 694, 90, 72, 20
-  PUSHBUTTON "Use Session Characters", kImportSessionCharacters, 772, 90, 150, 20
-  PUSHBUTTON "Use Entire Sheet", kImportEntireSheet, 928, 90, 120, 20
-  PUSHBUTTON "Update Existing", kImportUpdateExisting, 1054, 90, 120, 20
   LTEXT "Mode (all/selected/update)", -1, 16, 118, 150, 16
   COMBOBOX kImportMode, 126, 116, 120, 80, CBS_DROPDOWNLIST | WS_VSCROLL
   LTEXT "Characters (; separated)", -1, 260, 118, 150, 16
