@@ -150,7 +150,12 @@ void update_tab_details(HWND hwnd)
   } else if (view.active_tab == "preferences") {
     details += " | Hover preview: " + std::string(view.preferences.hover_preview ? "on" : "off") +
       " | Tooltips: " + (view.preferences.tooltips ? "on" : "off") +
-      " | Navigation wrap: " + (view.preferences.navigation_wrap ? "on" : "off");
+      " | Navigation wrap: " + (view.preferences.navigation_wrap ? "on" : "off") +
+      " | Quick actions: ";
+    for (std::size_t index = 0; index < view.preferences.quick_actions.size(); ++index) {
+      if (index) details += ", ";
+      details += std::to_string(index + 1) + "=" + view.preferences.quick_actions[index];
+    }
   } else if (view.active_tab == "help") {
     details += " | Select a topic below for native guidance";
   }
