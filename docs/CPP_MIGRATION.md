@@ -337,7 +337,9 @@ project-scoped Manager toggles are editable with native validation and Undo.
 Delimited cue content can now also flow through a native import application
 service, which keeps parsing/mapping deterministic and commits the replacement
 through the existing transactional session renderer; file selection remains at
-the host/UI boundary.
+the host/UI boundary. The native Manager Reports tab now exports the canonical
+cue model to CSV (using a native output-path prompt) and provides a session
+summary with character and status counts.
 These domain operations and adapters are test-covered but are not yet all
 public writers; the full native filter/manager UI, deferred recording frame/UI
 wiring, other overlay UI, and in-REAPER smoke tests remain. Lua source and
