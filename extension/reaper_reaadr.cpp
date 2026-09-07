@@ -996,7 +996,15 @@ void run_native_overlay_toggle_action(const std::string& key)
   auto updated = loaded.settings;
   bool* target = key == "enabled" ? &updated.enabled : key == "show_cue_id" ? &updated.show_cue_id :
     key == "show_character" ? &updated.show_character : key == "show_dialogue" ? &updated.show_dialogue :
-    key == "show_status" ? &updated.show_status : nullptr;
+    key == "show_status" ? &updated.show_status : key == "show_cue_timecode" ? &updated.show_cue_timecode :
+    key == "show_project_timer" ? &updated.show_project_timer : key == "show_visual_cue" ? &updated.show_visual_cue :
+    key == "show_direction" ? &updated.show_direction : key == "show_cue_type" ? &updated.show_cue_type :
+    key == "show_streamer" ? &updated.show_streamer : key == "show_flash" ? &updated.show_flash :
+    key == "show_metadata" ? &updated.show_metadata : key == "bg_cue_id" ? &updated.bg_cue_id :
+    key == "bg_character" ? &updated.bg_character : key == "bg_cue_timecode" ? &updated.bg_cue_timecode :
+    key == "bg_project_timer" ? &updated.bg_project_timer : key == "bg_dialogue" ? &updated.bg_dialogue :
+    key == "bg_direction" ? &updated.bg_direction : key == "bg_cue_type" ? &updated.bg_cue_type :
+    key == "bg_status" ? &updated.bg_status : key == "bg_metadata" ? &updated.bg_metadata : nullptr;
   if (!target) return;
   *target = !*target;
   reaadr::reaper::ProjectTransaction transaction(

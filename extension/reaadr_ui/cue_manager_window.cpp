@@ -41,6 +41,15 @@ constexpr int kOverlayActor = 48059, kOverlayEngineer = 48060,
               kOverlayStudio = 48061, kOverlayMinimal = 48062;
 constexpr int kOverlayEnabled = 48063, kOverlayCueId = 48064, kOverlayCharacter = 48065,
               kOverlayDialogue = 48066, kOverlayStatus = 48067;
+constexpr int kOverlayCueTimecode = 48068, kOverlayProjectTimer = 48069,
+              kOverlayVisualCue = 48070, kOverlayDirection = 48071,
+              kOverlayCueType = 48072, kOverlayStreamer = 48073,
+              kOverlayFlash = 48074, kOverlayMetadata = 48075;
+constexpr int kOverlayBgCueId = 48076, kOverlayBgCharacter = 48077,
+              kOverlayBgCueTimecode = 48078, kOverlayBgProjectTimer = 48079,
+              kOverlayBgDialogue = 48080, kOverlayBgDirection = 48081,
+              kOverlayBgCueType = 48082, kOverlayBgStatus = 48083,
+              kOverlayBgMetadata = 48084;
 constexpr int kPreferencesReload = 48054;
 constexpr int kHelpImport = 48044, kHelpCues = 48045, kHelpOverlay = 48046,
               kHelpReports = 48047, kHelpQuickActions = 48048;
@@ -137,7 +146,11 @@ void apply_tab_visibility(HWND hwnd, const std::string& tab)
   for (const int id : overlay_profiles)
     ShowWindow(GetDlgItem(hwnd, id), tab == "overlay" ? SW_SHOW : SW_HIDE);
   const int overlay_toggles[] = {kOverlayEnabled, kOverlayCueId, kOverlayCharacter,
-                                 kOverlayDialogue, kOverlayStatus};
+    kOverlayDialogue, kOverlayStatus, kOverlayCueTimecode, kOverlayProjectTimer,
+    kOverlayVisualCue, kOverlayDirection, kOverlayCueType, kOverlayStreamer,
+    kOverlayFlash, kOverlayMetadata, kOverlayBgCueId, kOverlayBgCharacter,
+    kOverlayBgCueTimecode, kOverlayBgProjectTimer, kOverlayBgDialogue,
+    kOverlayBgDirection, kOverlayBgCueType, kOverlayBgStatus, kOverlayBgMetadata};
   for (const int id : overlay_toggles)
     ShowWindow(GetDlgItem(hwnd, id), tab == "overlay" ? SW_SHOW : SW_HIDE);
   ShowWindow(GetDlgItem(hwnd, kPreferencesOpen), tab == "preferences" ? SW_SHOW : SW_HIDE);
@@ -183,11 +196,38 @@ void update_overlay_controls(HWND hwnd)
 {
   if (!g_controller) return;
   const auto& overlay = g_controller->view().preferences.overlay;
-  CheckDlgButton(hwnd, kOverlayEnabled, overlay.enabled ? BST_CHECKED : BST_UNCHECKED);
-  CheckDlgButton(hwnd, kOverlayCueId, overlay.show_cue_id ? BST_CHECKED : BST_UNCHECKED);
-  CheckDlgButton(hwnd, kOverlayCharacter, overlay.show_character ? BST_CHECKED : BST_UNCHECKED);
-  CheckDlgButton(hwnd, kOverlayDialogue, overlay.show_dialogue ? BST_CHECKED : BST_UNCHECKED);
-  CheckDlgButton(hwnd, kOverlayStatus, overlay.show_status ? BST_CHECKED : BST_UNCHECKED);
+  const std::pair<int, bool> values[] = {
+    {kOverlayEnabled, overlay.enabled}, {kOverlayCueId, overlay.show_cue_id},
+    {kOverlayCharacter, overlay.show_character}, {kOverlayDialogue, overlay.show_dialogue},
+    {kOverlayStatus, overlay.show_status}, {kOverlayCueTimecode, overlay.show_cue_timecode},
+    {kOverlayProjectTimer, overlay.show_project_timer}, {kOverlayVisualCue, overlay.show_visual_cue},
+    {kOverlayDirection, overlay.show_direction}, {kOverlayCueType, overlay.show_cue_type},
+    {kOverlayStreamer, overlay.show_streamer}, {kOverlayFlash, overlay.show_flash},
+    {kOverlayMetadata, overlay.show_metadata}, {kOverlayBgCueId, overlay.bg_cue_id},
+    {kOverlayBgCharacter, overlay.bg_character}, {kOverlayBgCueTimecode, overlay.bg_cue_timecode},
+    {kOverlayBgProjectTimer, overlay.bg_project_timer}, {kOverlayBgDialogue, overlay.bg_dialogue},
+    {kOverlayBgDirection, overlay.bg_direction}, {kOverlayBgCueType, overlay.bg_cue_type},
+    {kOverlayBgStatus, overlay.bg_status}, {kOverlayBgMetadata, overlay.bg_metadata},
+  };
+  for (const auto& value : values) CheckDlgButton(hwnd, value.first, value.second ? BST_CHECKED : BST_UNCHECKED);
+}
+
+const char* overlay_key_for_control(int id)
+{
+  switch (id) {
+    case kOverlayEnabled: return "enabled"; case kOverlayCueId: return "show_cue_id";
+    case kOverlayCharacter: return "show_character"; case kOverlayDialogue: return "show_dialogue";
+    case kOverlayStatus: return "show_status"; case kOverlayCueTimecode: return "show_cue_timecode";
+    case kOverlayProjectTimer: return "show_project_timer"; case kOverlayVisualCue: return "show_visual_cue";
+    case kOverlayDirection: return "show_direction"; case kOverlayCueType: return "show_cue_type";
+    case kOverlayStreamer: return "show_streamer"; case kOverlayFlash: return "show_flash";
+    case kOverlayMetadata: return "show_metadata"; case kOverlayBgCueId: return "bg_cue_id";
+    case kOverlayBgCharacter: return "bg_character"; case kOverlayBgCueTimecode: return "bg_cue_timecode";
+    case kOverlayBgProjectTimer: return "bg_project_timer"; case kOverlayBgDialogue: return "bg_dialogue";
+    case kOverlayBgDirection: return "bg_direction"; case kOverlayBgCueType: return "bg_cue_type";
+    case kOverlayBgStatus: return "bg_status"; case kOverlayBgMetadata: return "bg_metadata";
+    default: return nullptr;
+  }
 }
 
 #ifndef _WIN32
@@ -323,13 +363,10 @@ INT_PTR cue_manager_proc(HWND hwnd, UINT message, WPARAM wparam, LPARAM)
     }
     return 1;
   }
-  if (message == WM_COMMAND && LOWORD(wparam) >= kOverlayEnabled && LOWORD(wparam) <= kOverlayStatus) {
+  if (message == WM_COMMAND && LOWORD(wparam) >= kOverlayEnabled && LOWORD(wparam) <= kOverlayBgMetadata) {
     if (g_controller) {
-      const char* key = LOWORD(wparam) == kOverlayEnabled ? "enabled" :
-        LOWORD(wparam) == kOverlayCueId ? "show_cue_id" :
-        LOWORD(wparam) == kOverlayCharacter ? "show_character" :
-        LOWORD(wparam) == kOverlayDialogue ? "show_dialogue" : "show_status";
-      g_controller->trigger_action(std::string("overlay_toggle:") + key);
+      if (const char* key = overlay_key_for_control(LOWORD(wparam)))
+        g_controller->trigger_action(std::string("overlay_toggle:") + key);
     }
     return 1;
   }
@@ -507,6 +544,24 @@ BEGIN
   CHECKBOX "Character", kOverlayCharacter, 144, 216, 120, 20
   CHECKBOX "Dialogue", kOverlayDialogue, 272, 216, 120, 20
   CHECKBOX "Status", kOverlayStatus, 400, 216, 100, 20
+  CHECKBOX "Cue Timecode", kOverlayCueTimecode, 16, 242, 130, 20
+  CHECKBOX "Project Timer", kOverlayProjectTimer, 154, 242, 130, 20
+  CHECKBOX "Visual Cue", kOverlayVisualCue, 292, 242, 110, 20
+  CHECKBOX "Direction", kOverlayDirection, 410, 242, 100, 20
+  CHECKBOX "Cue Type", kOverlayCueType, 518, 242, 100, 20
+  CHECKBOX "Streamer", kOverlayStreamer, 626, 242, 100, 20
+  CHECKBOX "Flash", kOverlayFlash, 734, 242, 80, 20
+  CHECKBOX "Metadata", kOverlayMetadata, 822, 242, 100, 20
+  LTEXT "Text Backgrounds", -1, 16, 272, 160, 16
+  CHECKBOX "Cue ID", kOverlayBgCueId, 16, 294, 100, 20
+  CHECKBOX "Character", kOverlayBgCharacter, 124, 294, 110, 20
+  CHECKBOX "Cue Timecode", kOverlayBgCueTimecode, 242, 294, 130, 20
+  CHECKBOX "Project Timer", kOverlayBgProjectTimer, 380, 294, 130, 20
+  CHECKBOX "Dialogue", kOverlayBgDialogue, 518, 294, 100, 20
+  CHECKBOX "Direction", kOverlayBgDirection, 626, 294, 100, 20
+  CHECKBOX "Cue Type", kOverlayBgCueType, 734, 294, 100, 20
+  CHECKBOX "Status", kOverlayBgStatus, 842, 294, 90, 20
+  CHECKBOX "Metadata", kOverlayBgMetadata, 940, 294, 100, 20
   PUSHBUTTON "Open Preferences", kPreferencesOpen, 16, 150, 140, 24
   PUSHBUTTON "Reload Preferences", kPreferencesReload, 164, 150, 150, 24
   PUSHBUTTON "Import Help", kHelpImport, 16, 150, 120, 24
