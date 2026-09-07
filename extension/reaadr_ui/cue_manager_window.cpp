@@ -50,6 +50,7 @@ constexpr int kOverlayBgCueId = 48076, kOverlayBgCharacter = 48077,
               kOverlayBgDialogue = 48080, kOverlayBgDirection = 48081,
               kOverlayBgCueType = 48082, kOverlayBgStatus = 48083,
               kOverlayBgMetadata = 48084;
+constexpr int kOverlayTextWhite = 48085, kOverlayTextYellow = 48086;
 constexpr int kPreferencesReload = 48054;
 constexpr int kHelpImport = 48044, kHelpCues = 48045, kHelpOverlay = 48046,
               kHelpReports = 48047, kHelpQuickActions = 48048;
@@ -153,6 +154,8 @@ void apply_tab_visibility(HWND hwnd, const std::string& tab)
     kOverlayBgDirection, kOverlayBgCueType, kOverlayBgStatus, kOverlayBgMetadata};
   for (const int id : overlay_toggles)
     ShowWindow(GetDlgItem(hwnd, id), tab == "overlay" ? SW_SHOW : SW_HIDE);
+  ShowWindow(GetDlgItem(hwnd, kOverlayTextWhite), tab == "overlay" ? SW_SHOW : SW_HIDE);
+  ShowWindow(GetDlgItem(hwnd, kOverlayTextYellow), tab == "overlay" ? SW_SHOW : SW_HIDE);
   ShowWindow(GetDlgItem(hwnd, kPreferencesOpen), tab == "preferences" ? SW_SHOW : SW_HIDE);
   ShowWindow(GetDlgItem(hwnd, kPreferencesReload), tab == "preferences" ? SW_SHOW : SW_HIDE);
   const int help_controls[] = {kHelpImport, kHelpCues, kHelpOverlay, kHelpReports, kHelpQuickActions};
@@ -370,6 +373,13 @@ INT_PTR cue_manager_proc(HWND hwnd, UINT message, WPARAM wparam, LPARAM)
     }
     return 1;
   }
+  if (message == WM_COMMAND &&
+      (LOWORD(wparam) == kOverlayTextWhite || LOWORD(wparam) == kOverlayTextYellow)) {
+    if (g_controller)
+      g_controller->trigger_action(std::string("overlay_text_color:") +
+        (LOWORD(wparam) == kOverlayTextYellow ? "yellow" : "white"));
+    return 1;
+  }
   if (message == WM_COMMAND && LOWORD(wparam) == kPreferencesReload) {
     if (g_controller && g_controller->reload()) update_tab_details(hwnd);
     return 1;
@@ -562,6 +572,9 @@ BEGIN
   CHECKBOX "Cue Type", kOverlayBgCueType, 734, 294, 100, 20
   CHECKBOX "Status", kOverlayBgStatus, 842, 294, 90, 20
   CHECKBOX "Metadata", kOverlayBgMetadata, 940, 294, 100, 20
+  LTEXT "Text Color", -1, 16, 326, 90, 16
+  PUSHBUTTON "White", kOverlayTextWhite, 112, 322, 80, 24
+  PUSHBUTTON "Yellow", kOverlayTextYellow, 200, 322, 80, 24
   PUSHBUTTON "Open Preferences", kPreferencesOpen, 16, 150, 140, 24
   PUSHBUTTON "Reload Preferences", kPreferencesReload, 164, 150, 150, 24
   PUSHBUTTON "Import Help", kHelpImport, 16, 150, 120, 24

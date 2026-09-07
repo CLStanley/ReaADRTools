@@ -345,6 +345,8 @@ Its primary enabled, cue-ID, character, dialogue, and status element toggles
 also now persist through the same native settings and transaction boundary.
 The remaining Lua-compatible overlay visibility and text-background toggles are
 also exposed natively and persist through that same boundary.
+Native Overlay text-color selection now also matches the Lua White/Yellow
+choices and persists transactionally.
 Delimited cue content can now also flow through a native import application
 service, which keeps parsing/mapping deterministic and commits the replacement
 through the existing transactional session renderer; file selection remains at

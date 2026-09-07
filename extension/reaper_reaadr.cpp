@@ -549,6 +549,7 @@ void run_native_import_cue_sheet_action(const std::string& mapping_override = {}
 void run_native_export_cue_sheet_action();
 void run_native_overlay_profile_action(const std::string& profile);
 void run_native_overlay_toggle_action(const std::string& key);
+void run_native_overlay_text_color_action(const std::string& color);
 bool read_xlsx_as_tsv(const char* path, char* tsv_out, int tsv_out_sz, char* error_out, int error_out_sz);
 
 void run_native_cue_manager_action()
@@ -605,6 +606,8 @@ void run_native_cue_manager_action()
         run_native_overlay_profile_action(action.substr(16));
       else if (action.rfind("overlay_toggle:", 0) == 0)
         run_native_overlay_toggle_action(action.substr(15));
+      else if (action.rfind("overlay_text_color:", 0) == 0)
+        run_native_overlay_text_color_action(action.substr(19));
     });
   if (!controller.reload()) { ShowMessageBox(controller.view().error.c_str(), "ReaADR Cue Manager", 0); return; }
   if (reaadr::ui::show_cue_manager(controller)) return;
@@ -1009,6 +1012,20 @@ void run_native_overlay_toggle_action(const std::string& key)
   *target = !*target;
   reaadr::reaper::ProjectTransaction transaction(
     nullptr, native_session_transaction_api(), "ReaADR: toggle overlay element", -1, true);
+  const auto saved = overlays.save(updated);
+  if (!saved) { transaction.mark_failed(); ShowMessageBox(saved.error.c_str(), "ReaADR Overlay", 0); }
+}
+
+void run_native_overlay_text_color_action(const std::string& color)
+{
+  reaadr::reaper::ProjectStateStore project_state(nullptr, {GetProjExtState, SetProjExtState});
+  reaadr::core::OverlaySettingsRepository overlays(project_state);
+  const auto loaded = overlays.load();
+  if (!loaded) { ShowMessageBox(loaded.error.c_str(), "ReaADR Overlay", 0); return; }
+  auto updated = loaded.settings;
+  updated.text_color = reaadr::core::normalize_overlay_text_color(color);
+  reaadr::reaper::ProjectTransaction transaction(
+    nullptr, native_session_transaction_api(), "ReaADR: set overlay text color", -1, true);
   const auto saved = overlays.save(updated);
   if (!saved) { transaction.mark_failed(); ShowMessageBox(saved.error.c_str(), "ReaADR Overlay", 0); }
 }
