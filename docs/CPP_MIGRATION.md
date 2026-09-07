@@ -356,6 +356,9 @@ Native Overlay text-color selection now also matches the Lua White/Yellow
 choices and persists transactionally.
 Metadata field lists and preroll timing can now be edited and saved from the
 native Overlay tab with Lua-compatible normalization and validation.
+Native Overlay and Preferences edits immediately reload the persisted view
+state so checkbox, text, and quick-action controls stay synchronized after a
+save.
 Delimited cue content can now also flow through a native import application
 service, which keeps parsing/mapping deterministic and commits the replacement
 through the existing transactional session renderer; file selection remains at

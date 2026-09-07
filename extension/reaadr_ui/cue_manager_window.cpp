@@ -418,21 +418,26 @@ INT_PTR cue_manager_proc(HWND hwnd, UINT message, WPARAM wparam, LPARAM)
         LOWORD(wparam) == kOverlayEngineer ? "engineer" :
         LOWORD(wparam) == kOverlayStudio ? "studio" : "minimal";
       g_controller->trigger_action(std::string("overlay_profile:") + profile);
+      if (g_controller->reload()) { update_tab_details(hwnd); update_overlay_controls(hwnd); }
     }
     return 1;
   }
   if (message == WM_COMMAND && LOWORD(wparam) >= kOverlayEnabled && LOWORD(wparam) <= kOverlayBgMetadata) {
     if (g_controller) {
-      if (const char* key = overlay_key_for_control(LOWORD(wparam)))
+      if (const char* key = overlay_key_for_control(LOWORD(wparam))) {
         g_controller->trigger_action(std::string("overlay_toggle:") + key);
+        if (g_controller->reload()) { update_tab_details(hwnd); update_overlay_controls(hwnd); }
+      }
     }
     return 1;
   }
   if (message == WM_COMMAND &&
       (LOWORD(wparam) == kOverlayTextWhite || LOWORD(wparam) == kOverlayTextYellow)) {
-    if (g_controller)
+    if (g_controller) {
       g_controller->trigger_action(std::string("overlay_text_color:") +
         (LOWORD(wparam) == kOverlayTextYellow ? "yellow" : "white"));
+      if (g_controller->reload()) { update_tab_details(hwnd); update_overlay_controls(hwnd); }
+    }
     return 1;
   }
   if (message == WM_COMMAND && LOWORD(wparam) == kOverlaySaveSettings) {
@@ -441,6 +446,7 @@ INT_PTR cue_manager_proc(HWND hwnd, UINT message, WPARAM wparam, LPARAM)
       GetDlgItemText(hwnd, kOverlayMetadataFields, metadata, sizeof(metadata));
       GetDlgItemText(hwnd, kOverlayPreroll, preroll, sizeof(preroll));
       g_controller->trigger_action(std::string("overlay_settings:") + metadata + "|" + preroll);
+      if (g_controller->reload()) { update_tab_details(hwnd); update_overlay_controls(hwnd); }
     }
     return 1;
   }
@@ -459,6 +465,7 @@ INT_PTR cue_manager_proc(HWND hwnd, UINT message, WPARAM wparam, LPARAM)
         action += values[index];
       }
       g_controller->trigger_action(action);
+      if (g_controller->reload()) { update_tab_details(hwnd); update_quick_action_controls(hwnd); }
     }
     return 1;
   }
@@ -476,6 +483,7 @@ INT_PTR cue_manager_proc(HWND hwnd, UINT message, WPARAM wparam, LPARAM)
         action += IsDlgButtonChecked(hwnd, ids[index]) == BST_CHECKED ? "1" : "0";
       }
       g_controller->trigger_action(action);
+      if (g_controller->reload()) { update_tab_details(hwnd); update_preference_controls(hwnd); }
     }
     return 1;
   }
