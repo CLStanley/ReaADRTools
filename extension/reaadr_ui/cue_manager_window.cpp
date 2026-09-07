@@ -65,6 +65,7 @@ constexpr int kHelpImport = 48044, kHelpCues = 48045, kHelpOverlay = 48046,
 constexpr int kHelpSearch = 48101, kHelpSearchRun = 48102;
 constexpr int kReportsSummary = 48049, kReportsExport = 48050;
 constexpr int kReportsTiming = 48103;
+constexpr int kReportsMetadata = 48104;
 CueManagerController* g_controller = nullptr;
 
 void populate_add_editor(HWND hwnd)
@@ -186,6 +187,7 @@ void apply_tab_visibility(HWND hwnd, const std::string& tab)
   ShowWindow(GetDlgItem(hwnd, kReportsSummary), tab == "reports" ? SW_SHOW : SW_HIDE);
   ShowWindow(GetDlgItem(hwnd, kReportsExport), tab == "reports" ? SW_SHOW : SW_HIDE);
   ShowWindow(GetDlgItem(hwnd, kReportsTiming), tab == "reports" ? SW_SHOW : SW_HIDE);
+  ShowWindow(GetDlgItem(hwnd, kReportsMetadata), tab == "reports" ? SW_SHOW : SW_HIDE);
 }
 
 void update_tab_details(HWND hwnd)
@@ -540,6 +542,10 @@ INT_PTR cue_manager_proc(HWND hwnd, UINT message, WPARAM wparam, LPARAM)
     if (g_controller) g_controller->trigger_action("export_timing_report");
     return 1;
   }
+  if (message == WM_COMMAND && LOWORD(wparam) == kReportsMetadata) {
+    if (g_controller) g_controller->trigger_action("export_session_metadata");
+    return 1;
+  }
   if (message == WM_COMMAND && LOWORD(wparam) == kResetFilter) {
     SetDlgItemText(hwnd, kSearchFilter, "");
     SetDlgItemText(hwnd, kCharacterFilter, "");
@@ -724,6 +730,7 @@ BEGIN
   PUSHBUTTON "Session Summary", kReportsSummary, 16, 150, 140, 24
   PUSHBUTTON "Export Cue Sheet CSV", kReportsExport, 164, 150, 160, 24
   PUSHBUTTON "Export Timing Report", kReportsTiming, 332, 150, 160, 24
+  PUSHBUTTON "Export Session Metadata", kReportsMetadata, 500, 150, 180, 24
   LTEXT "Search", -1, 16, 42, 48, 14
   EDITTEXT kSearchFilter, 66, 40, 220, 20, ES_AUTOHSCROLL
   LTEXT "Character", -1, 294, 42, 68, 14

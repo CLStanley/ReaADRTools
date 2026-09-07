@@ -364,6 +364,8 @@ cue model to CSV (using a native output-path prompt) and provides a session
 summary with character and status counts.
 It also provides a native Timing Report CSV with cue start/end, duration, and
 status data.
+Session metadata can also be exported natively as a Field/Value CSV from the
+canonical session envelope.
 These domain operations and adapters are test-covered but are not yet all
 public writers; the full native filter/manager UI, deferred recording frame/UI
 wiring, other overlay UI, and in-REAPER smoke tests remain. Lua source and

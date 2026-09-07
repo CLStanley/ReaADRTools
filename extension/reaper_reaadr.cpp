@@ -548,6 +548,7 @@ void run_native_import_cue_sheet_action(const std::string& mapping_override = {}
                                         const std::string& mode = "all", const std::string& characters = {});
 void run_native_export_cue_sheet_action();
 void run_native_export_timing_report_action();
+void run_native_export_session_metadata_action();
 void run_native_overlay_profile_action(const std::string& profile);
 void run_native_overlay_toggle_action(const std::string& key);
 void run_native_overlay_text_color_action(const std::string& color);
@@ -607,6 +608,7 @@ void run_native_cue_manager_action()
       if (command && Main_OnCommand) Main_OnCommand(command, 0);
       else if (action == "export_cue_sheet") run_native_export_cue_sheet_action();
       else if (action == "export_timing_report") run_native_export_timing_report_action();
+      else if (action == "export_session_metadata") run_native_export_session_metadata_action();
       else if (action.rfind("overlay_profile:", 0) == 0)
         run_native_overlay_profile_action(action.substr(16));
       else if (action.rfind("overlay_toggle:", 0) == 0)
@@ -1003,6 +1005,30 @@ void run_native_export_timing_report_action()
          << (end - start) << ',' << field("status") << '\n';
   }
   ShowMessageBox(("Exported timing report to " + output_path + ".").c_str(), "ReaADR Report", 0);
+}
+
+void run_native_export_session_metadata_action()
+{
+  if (!GetUserInputs) { ShowMessageBox("The native output-path prompt is unavailable.", "ReaADR Report", 0); return; }
+  std::array<char, 4096> path = {};
+  if (!GetUserInputs("ReaADR: Export Session Metadata", 1, "Output CSV path", path.data(), path.size())) return;
+  std::string output_path(path.data());
+  const auto first = output_path.find_first_not_of(" \t\r\n");
+  const auto last = output_path.find_last_not_of(" \t\r\n");
+  if (first == std::string::npos) { ShowMessageBox("Enter an output path.", "ReaADR Report", 0); return; }
+  output_path = output_path.substr(first, last - first + 1);
+  const std::size_t slash = output_path.find_last_of("/\\");
+  const std::size_t dot = output_path.find_last_of('.');
+  if (dot == std::string::npos || (slash != std::string::npos && dot < slash)) output_path += ".csv";
+  reaadr::reaper::ProjectStateStore project_state(nullptr, {GetProjExtState, SetProjExtState});
+  reaadr::core::SessionModelRepository repository(project_state);
+  const auto loaded = repository.load();
+  if (!loaded) { ShowMessageBox(reaadr::core::session_load_error_message(loaded), "ReaADR Report", 0); return; }
+  std::ofstream file(output_path, std::ios::binary | std::ios::trunc);
+  if (!file) { ShowMessageBox("Could not create the selected report file.", "ReaADR Report", 0); return; }
+  file << "Field,Value\n";
+  for (const auto& entry : loaded.model.session) file << entry.first << ',' << entry.second << '\n';
+  ShowMessageBox(("Exported session metadata to " + output_path + ".").c_str(), "ReaADR Report", 0);
 }
 
 void run_native_overlay_profile_action(const std::string& profile)
