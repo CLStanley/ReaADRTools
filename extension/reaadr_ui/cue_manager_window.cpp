@@ -16,6 +16,7 @@ namespace reaadr::ui {
 namespace {
 constexpr int kDialog = 48001;
 constexpr int kRows = 48002;
+constexpr int kCueHeader = 48058;
 constexpr int kDetails = 48003;
 constexpr int kPrevious = 48004;
 constexpr int kNext = 48005;
@@ -125,6 +126,7 @@ void apply_tab_visibility(HWND hwnd, const std::string& tab)
   };
   for (const int id : cue_controls)
     ShowWindow(GetDlgItem(hwnd, id), cues ? SW_SHOW : SW_HIDE);
+  ShowWindow(GetDlgItem(hwnd, kCueHeader), cues ? SW_SHOW : SW_HIDE);
 
   const int session_controls[] = {
     kSessionValidate, kSessionRefresh, kSessionSync, kSessionClear, kSessionFilter,
@@ -584,7 +586,8 @@ BEGIN
   LTEXT "Status", -1, 380, 782, 50, 14
   COMBOBOX kEditStatus, 435, 780, 180, 80, CBS_DROPDOWNLIST | WS_VSCROLL
   PUSHBUTTON "Apply Edit", kApplyEdit, 630, 778, 100, 24
-  LISTBOX kRows, 16, 98, 1124, 594, LBS_NOTIFY | WS_VSCROLL | WS_BORDER
+  LTEXT "Cue ID    Character    Status    Type    Dialogue", kCueHeader, 16, 98, 1124, 14
+  LISTBOX kRows, 16, 114, 1124, 578, LBS_NOTIFY | WS_VSCROLL | WS_BORDER
   PUSHBUTTON "Previous", kPrevious, 740, 778, 90, 24
   PUSHBUTTON "Next", kNext, 836, 778, 90, 24
   DEFPUSHBUTTON "Close", IDCANCEL, 1050, 778, 90, 24
