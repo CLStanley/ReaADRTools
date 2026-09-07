@@ -94,6 +94,12 @@ void CueManagerController::select_index(int index)
                        "manager_selected_cue_key", selected_key_);
 }
 
+void CueManagerController::select_boundary(bool last)
+{
+  if (view_.cues.rows.empty()) return;
+  select_index(last ? static_cast<int>(view_.cues.rows.size() - 1) : 0);
+}
+
 void CueManagerController::select_relative(int delta)
 {
   if (view_.cues.rows.empty()) return;

@@ -29,6 +29,7 @@ public:
                    const std::string& character,
                    const std::string& status);
   void select_index(int index);
+  void select_boundary(bool last);
   void select_relative(int delta);
   bool navigate_next();
   bool navigate_previous();
