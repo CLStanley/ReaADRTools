@@ -206,7 +206,8 @@ and navigation are being added without routing unsupported edits back through
 Lua.
 The native Cue Manager command now opens the SWELL-based C++ Manager shell,
 which exposes the seven established Manager tabs and a native content surface;
-the remaining tab-specific controls are being cut over incrementally.
+remaining compatibility work is concentrated in dialogue detection, marker/
+region cue generation, recording controls, and in-REAPER smoke validation.
 Cue Manager view loading now restores Lua-compatible `manager_selected_cue_key`
 from project extstate when no explicit selection is supplied, keeping native
 and compatibility windows focused on the same cue.
