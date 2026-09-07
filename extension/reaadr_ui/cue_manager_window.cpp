@@ -206,6 +206,17 @@ INT_PTR cue_manager_proc(HWND hwnd, UINT message, WPARAM wparam, LPARAM)
     update_details(hwnd, index);
     return 1;
   }
+  if (message == WM_COMMAND && LOWORD(wparam) == kRows && HIWORD(wparam) == LBN_DBLCLK) {
+    if (g_controller) {
+      const auto* row = g_controller->selected_row();
+      if (row) {
+        std::string error;
+        if (!g_controller->navigate_to_id(row->cue_key, error) && !error.empty())
+          MessageBox(hwnd, error.c_str(), "ReaADR Cue Manager", 0);
+      }
+    }
+    return 1;
+  }
   if (message == WM_COMMAND && LOWORD(wparam) == kApplyFilter) {
     char query[256] = {}, character[256] = {}, status[128] = {};
     GetDlgItemText(hwnd, kSearchFilter, query, sizeof(query));
