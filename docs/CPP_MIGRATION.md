@@ -334,6 +334,8 @@ repository and overlay profile contract through the native view service; the
 full editable Preferences surface remains part of the graphical Manager UI
 cutover. The command is also exposed in the top-level ReaADR menu, and its
 project-scoped Manager toggles are editable with native validation and Undo.
+The native Manager Preferences tab also surfaces all four persisted quick-action
+assignments and the Lua-compatible UI toggle states.
 Delimited cue content can now also flow through a native import application
 service, which keeps parsing/mapping deterministic and commits the replacement
 through the existing transactional session renderer; file selection remains at
