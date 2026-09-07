@@ -133,6 +133,26 @@ void apply_tab_visibility(HWND hwnd, const std::string& tab)
   ShowWindow(GetDlgItem(hwnd, kReportsExport), tab == "reports" ? SW_SHOW : SW_HIDE);
 }
 
+void update_tab_details(HWND hwnd)
+{
+  if (!g_controller) return;
+  const auto& view = g_controller->view();
+  std::string details = "Active tab: " + view.active_tab;
+  if (view.active_tab == "session" || view.active_tab == "reports") {
+    details += " | Session: " + view.session_name + " | Cues: " +
+      std::to_string(view.total_cues) + " | Revision: " + view.revision;
+  } else if (view.active_tab == "overlay") {
+    details += " | Overlay profile: " + core::detect_overlay_profile(view.preferences.overlay);
+  } else if (view.active_tab == "preferences") {
+    details += " | Hover preview: " + std::string(view.preferences.hover_preview ? "on" : "off") +
+      " | Tooltips: " + (view.preferences.tooltips ? "on" : "off") +
+      " | Navigation wrap: " + (view.preferences.navigation_wrap ? "on" : "off");
+  } else if (view.active_tab == "help") {
+    details += " | Select a topic below for native guidance";
+  }
+  SetDlgItemText(hwnd, kDetails, details.c_str());
+}
+
 #ifndef _WIN32
 INT_PTR cue_manager_proc(HWND hwnd, UINT message, WPARAM wparam, LPARAM)
 {
@@ -149,7 +169,10 @@ INT_PTR cue_manager_proc(HWND hwnd, UINT message, WPARAM wparam, LPARAM)
           update_details(hwnd, static_cast<int>(i));
         }
     }
-    if (g_controller) apply_tab_visibility(hwnd, g_controller->view().active_tab);
+    if (g_controller) {
+      apply_tab_visibility(hwnd, g_controller->view().active_tab);
+      update_tab_details(hwnd);
+    }
     return 1;
   }
   if (message == WM_COMMAND && (LOWORD(wparam) == IDOK || LOWORD(wparam) == IDCANCEL)) {
@@ -178,8 +201,8 @@ INT_PTR cue_manager_proc(HWND hwnd, UINT message, WPARAM wparam, LPARAM)
     if (tab && g_controller && g_controller->set_tab(tab)) {
       const std::string title = "ReaADR Manager - " + g_controller->view().active_tab;
       SetWindowText(hwnd, title.c_str());
-      SetDlgItemText(hwnd, kDetails, ("Active tab: " + g_controller->view().active_tab).c_str());
       apply_tab_visibility(hwnd, g_controller->view().active_tab);
+      update_tab_details(hwnd);
       return 1;
     }
   }
