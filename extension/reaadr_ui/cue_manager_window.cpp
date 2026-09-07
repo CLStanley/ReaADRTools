@@ -166,6 +166,9 @@ INT_PTR cue_manager_proc(HWND hwnd, UINT message, WPARAM wparam, LPARAM)
 {
   if (message == WM_INITDIALOG) {
     SetDlgItemText(hwnd, kImportMode, "all");
+    const char* import_modes[] = {"all", "selected", "update"};
+    for (const char* mode : import_modes)
+      SendDlgItemMessage(hwnd, kImportMode, CB_ADDSTRING, 0, reinterpret_cast<LPARAM>(mode));
     for (const auto& choice : core::cue_manager_type_choices())
       SendDlgItemMessage(hwnd, kEditType, CB_ADDSTRING, 0, reinterpret_cast<LPARAM>(choice.c_str()));
     for (const auto& choice : core::cue_manager_status_choices())
@@ -523,7 +526,7 @@ BEGIN
   PUSHBUTTON "Use Entire Sheet", kImportEntireSheet, 928, 90, 120, 20
   PUSHBUTTON "Update Existing", kImportUpdateExisting, 1054, 90, 120, 20
   LTEXT "Mode (all/selected/update)", -1, 16, 118, 150, 16
-  EDITTEXT kImportMode, 126, 116, 120, 20, ES_AUTOHSCROLL
+  COMBOBOX kImportMode, 126, 116, 120, 80, CBS_DROPDOWNLIST | WS_VSCROLL
   LTEXT "Characters (; separated)", -1, 260, 118, 150, 16
   EDITTEXT kImportCharacters, 414, 116, 300, 20, ES_AUTOHSCROLL
   PUSHBUTTON "Choose Cue Sheet and Import", kImportRun, 650, 66, 190, 24
