@@ -37,6 +37,8 @@ constexpr int kImportMode = 48036, kImportCharacters = 48037;
 constexpr int kSessionValidate = 48039, kSessionRefresh = 48040, kSessionSync = 48041;
 constexpr int kSessionClear = 48051, kSessionFilter = 48052;
 constexpr int kOverlayRefresh = 48042, kPreferencesOpen = 48043;
+constexpr int kOverlayActor = 48059, kOverlayEngineer = 48060,
+              kOverlayStudio = 48061, kOverlayMinimal = 48062;
 constexpr int kPreferencesReload = 48054;
 constexpr int kHelpImport = 48044, kHelpCues = 48045, kHelpOverlay = 48046,
               kHelpReports = 48047, kHelpQuickActions = 48048;
@@ -129,6 +131,9 @@ void apply_tab_visibility(HWND hwnd, const std::string& tab)
     ShowWindow(GetDlgItem(hwnd, id), tab == "session" ? SW_SHOW : SW_HIDE);
 
   ShowWindow(GetDlgItem(hwnd, kOverlayRefresh), tab == "overlay" ? SW_SHOW : SW_HIDE);
+  const int overlay_profiles[] = {kOverlayActor, kOverlayEngineer, kOverlayStudio, kOverlayMinimal};
+  for (const int id : overlay_profiles)
+    ShowWindow(GetDlgItem(hwnd, id), tab == "overlay" ? SW_SHOW : SW_HIDE);
   ShowWindow(GetDlgItem(hwnd, kPreferencesOpen), tab == "preferences" ? SW_SHOW : SW_HIDE);
   ShowWindow(GetDlgItem(hwnd, kPreferencesReload), tab == "preferences" ? SW_SHOW : SW_HIDE);
   const int help_controls[] = {kHelpImport, kHelpCues, kHelpOverlay, kHelpReports, kHelpQuickActions};
@@ -288,6 +293,15 @@ INT_PTR cue_manager_proc(HWND hwnd, UINT message, WPARAM wparam, LPARAM)
       (LOWORD(wparam) == kOverlayRefresh || LOWORD(wparam) == kPreferencesOpen)) {
     if (g_controller)
       g_controller->trigger_action(LOWORD(wparam) == kOverlayRefresh ? "refresh_overlay" : "preferences");
+    return 1;
+  }
+  if (message == WM_COMMAND && LOWORD(wparam) >= kOverlayActor && LOWORD(wparam) <= kOverlayMinimal) {
+    if (g_controller) {
+      const char* profile = LOWORD(wparam) == kOverlayActor ? "actor" :
+        LOWORD(wparam) == kOverlayEngineer ? "engineer" :
+        LOWORD(wparam) == kOverlayStudio ? "studio" : "minimal";
+      g_controller->trigger_action(std::string("overlay_profile:") + profile);
+    }
     return 1;
   }
   if (message == WM_COMMAND && LOWORD(wparam) == kPreferencesReload) {
@@ -455,6 +469,10 @@ BEGIN
   PUSHBUTTON "Clear Character Cues", kSessionClear, 428, 150, 150, 24
   PUSHBUTTON "Character Filter", kSessionFilter, 588, 150, 120, 24
   PUSHBUTTON "Refresh Video Overlay", kOverlayRefresh, 16, 150, 160, 24
+  PUSHBUTTON "Actor", kOverlayActor, 184, 150, 80, 24
+  PUSHBUTTON "Engineer", kOverlayEngineer, 272, 150, 90, 24
+  PUSHBUTTON "Studio", kOverlayStudio, 370, 150, 80, 24
+  PUSHBUTTON "Minimal", kOverlayMinimal, 458, 150, 80, 24
   PUSHBUTTON "Open Preferences", kPreferencesOpen, 16, 150, 140, 24
   PUSHBUTTON "Reload Preferences", kPreferencesReload, 164, 150, 150, 24
   PUSHBUTTON "Import Help", kHelpImport, 16, 150, 120, 24

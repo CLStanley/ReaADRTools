@@ -338,6 +338,9 @@ The native Manager Preferences tab also surfaces all four persisted quick-action
 assignments and the Lua-compatible UI toggle states.
 The native Cues tab header now reports the active session name, total cue count,
 and distinct visible character count like the Lua Manager header.
+The native Overlay tab now exposes the Lua-compatible Actor, Engineer, Studio,
+and Minimal profile controls through the persisted preference repository and an
+Undo-owned transaction.
 Delimited cue content can now also flow through a native import application
 service, which keeps parsing/mapping deterministic and commits the replacement
 through the existing transactional session renderer; file selection remains at

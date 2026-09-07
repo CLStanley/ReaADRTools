@@ -547,6 +547,7 @@ bool native_overlay_refresh_callback(
 void run_native_import_cue_sheet_action(const std::string& mapping_override = {}, bool preview_only = false,
                                         const std::string& mode = "all", const std::string& characters = {});
 void run_native_export_cue_sheet_action();
+void run_native_overlay_profile_action(const std::string& profile);
 bool read_xlsx_as_tsv(const char* path, char* tsv_out, int tsv_out_sz, char* error_out, int error_out_sz);
 
 void run_native_cue_manager_action()
@@ -599,6 +600,8 @@ void run_native_cue_manager_action()
       else if (action == "preferences") command = g_preferences_command_id;
       if (command && Main_OnCommand) Main_OnCommand(command, 0);
       else if (action == "export_cue_sheet") run_native_export_cue_sheet_action();
+      else if (action.rfind("overlay_profile:", 0) == 0)
+        run_native_overlay_profile_action(action.substr(16));
     });
   if (!controller.reload()) { ShowMessageBox(controller.view().error.c_str(), "ReaADR Cue Manager", 0); return; }
   if (reaadr::ui::show_cue_manager(controller)) return;
@@ -953,6 +956,32 @@ void run_native_export_cue_sheet_action()
   const std::string summary = "Exported " + std::to_string(loaded.model.cues.size()) +
     " cue(s) to " + output_path + ".";
   ShowMessageBox(summary.c_str(), "ReaADR Export (Native)", 0);
+}
+
+void run_native_overlay_profile_action(const std::string& profile)
+{
+  reaadr::reaper::ProjectStateStore project_state(nullptr, {GetProjExtState, SetProjExtState});
+  reaadr::reaper::GlobalStateStore global_state({GetExtState, SetExtState});
+  reaadr::core::ManagerPreferencesRepository preferences(project_state, &global_state);
+  const auto loaded = preferences.load();
+  if (!loaded) {
+    ShowMessageBox(loaded.error.c_str(), "ReaADR Overlay", 0);
+    return;
+  }
+  auto updated = reaadr::core::update_manager_preferences(loaded.preferences, "overlay_profile", profile);
+  if (!updated) {
+    ShowMessageBox(updated.error.c_str(), "ReaADR Overlay", 0);
+    return;
+  }
+  reaadr::reaper::ProjectTransaction transaction(
+    nullptr, native_session_transaction_api(), "ReaADR: set overlay profile", -1, true);
+  const auto saved = preferences.save(updated.preferences);
+  if (!saved) {
+    transaction.mark_failed();
+    ShowMessageBox(saved.error.c_str(), "ReaADR Overlay", 0);
+    return;
+  }
+  ShowMessageBox(("Overlay profile set to " + profile + ".").c_str(), "ReaADR Overlay", 0);
 }
 
 void run_native_preferences_action()
