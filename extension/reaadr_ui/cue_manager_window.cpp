@@ -6,6 +6,7 @@
 #endif
 #include <string>
 #include <cstring>
+#include <cctype>
 #include <map>
 #include <set>
 
@@ -61,6 +62,7 @@ constexpr int kPrefRememberLayout = 48095, kPrefHoverPreview = 48096,
               kPrefAutoDock = 48099, kPrefSave = 48100;
 constexpr int kHelpImport = 48044, kHelpCues = 48045, kHelpOverlay = 48046,
               kHelpReports = 48047, kHelpQuickActions = 48048;
+constexpr int kHelpSearch = 48101, kHelpSearchRun = 48102;
 constexpr int kReportsSummary = 48049, kReportsExport = 48050;
 CueManagerController* g_controller = nullptr;
 
@@ -178,6 +180,8 @@ void apply_tab_visibility(HWND hwnd, const std::string& tab)
   const int help_controls[] = {kHelpImport, kHelpCues, kHelpOverlay, kHelpReports, kHelpQuickActions};
   for (const int id : help_controls)
     ShowWindow(GetDlgItem(hwnd, id), tab == "help" ? SW_SHOW : SW_HIDE);
+  ShowWindow(GetDlgItem(hwnd, kHelpSearch), tab == "help" ? SW_SHOW : SW_HIDE);
+  ShowWindow(GetDlgItem(hwnd, kHelpSearchRun), tab == "help" ? SW_SHOW : SW_HIDE);
   ShowWindow(GetDlgItem(hwnd, kReportsSummary), tab == "reports" ? SW_SHOW : SW_HIDE);
   ShowWindow(GetDlgItem(hwnd, kReportsExport), tab == "reports" ? SW_SHOW : SW_HIDE);
 }
@@ -485,6 +489,25 @@ INT_PTR cue_manager_proc(HWND hwnd, UINT message, WPARAM wparam, LPARAM)
     MessageBox(hwnd, text, title, 0);
     return 1;
   }
+  if (message == WM_COMMAND && LOWORD(wparam) == kHelpSearchRun) {
+    char query[256] = {};
+    GetDlgItemText(hwnd, kHelpSearch, query, sizeof(query));
+    std::string value(query);
+    for (char& ch : value) ch = static_cast<char>(std::tolower(static_cast<unsigned char>(ch)));
+    const char* result = value.find("import") != std::string::npos ?
+      "Import Help: use CSV, TSV, TAB, TXT, or XLSX files; preview headers and configure mappings." :
+      value.find("cue") != std::string::npos ?
+      "Cue Help: browse, filter, edit, navigate, and refresh canonical session cues." :
+      value.find("overlay") != std::string::npos ?
+      "Overlay Help: choose a profile, toggle elements, edit metadata/preroll, and refresh." :
+      value.find("report") != std::string::npos || value.find("export") != std::string::npos ?
+      "Reports Help: review the session summary or export the canonical cue model to CSV." :
+      value.find("quick") != std::string::npos || value.find("preference") != std::string::npos ?
+      "Preferences Help: configure quick actions and persisted Manager UI toggles." :
+      "Search topics: import, cues, overlay, reports, quick actions, preferences.";
+    MessageBox(hwnd, result, "ReaADR Manager Help", 0);
+    return 1;
+  }
   if (message == WM_COMMAND && LOWORD(wparam) == kReportsSummary) {
     if (g_controller) {
       const auto& view = g_controller->view();
@@ -689,6 +712,9 @@ BEGIN
   PUSHBUTTON "Overlay Help", kHelpOverlay, 248, 150, 110, 24
   PUSHBUTTON "Reports Help", kHelpReports, 364, 150, 110, 24
   PUSHBUTTON "Quick Actions", kHelpQuickActions, 480, 150, 120, 24
+  LTEXT "Search Help", -1, 16, 190, 90, 16
+  EDITTEXT kHelpSearch, 112, 186, 360, 20, ES_AUTOHSCROLL
+  PUSHBUTTON "Search", kHelpSearchRun, 480, 184, 90, 24
   PUSHBUTTON "Session Summary", kReportsSummary, 16, 150, 140, 24
   PUSHBUTTON "Export Cue Sheet CSV", kReportsExport, 164, 150, 160, 24
   LTEXT "Search", -1, 16, 42, 48, 14
