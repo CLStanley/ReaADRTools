@@ -127,6 +127,17 @@
 
 namespace {
 
+std::string native_csv_escape(const std::string& value)
+{
+  std::string escaped = "\"";
+  for (const char ch : value) {
+    if (ch == '"') escaped += "\"\"";
+    else escaped += ch;
+  }
+  escaped += '"';
+  return escaped;
+}
+
 constexpr int kMainSection = 0;
 constexpr const char* kReaADRMenuId = "ReaADR Tools";
 constexpr const char* kValidateSessionCommandName = "ReaADRValidateSessionModelNative";
@@ -1001,8 +1012,8 @@ void run_native_export_timing_report_action()
     const auto field = [&cue](const char* key) { const auto found = cue.find(key); return found == cue.end() ? std::string() : found->second; };
     double start = std::strtod(field("start_time").c_str(), nullptr);
     double end = std::strtod(field("end_time").c_str(), nullptr);
-    file << field("id") << ',' << field("character") << ',' << start << ',' << end << ','
-         << (end - start) << ',' << field("status") << '\n';
+    file << native_csv_escape(field("id")) << ',' << native_csv_escape(field("character")) << ','
+         << start << ',' << end << ',' << (end - start) << ',' << native_csv_escape(field("status")) << '\n';
   }
   ShowMessageBox(("Exported timing report to " + output_path + ".").c_str(), "ReaADR Report", 0);
 }
@@ -1027,7 +1038,8 @@ void run_native_export_session_metadata_action()
   std::ofstream file(output_path, std::ios::binary | std::ios::trunc);
   if (!file) { ShowMessageBox("Could not create the selected report file.", "ReaADR Report", 0); return; }
   file << "Field,Value\n";
-  for (const auto& entry : loaded.model.session) file << entry.first << ',' << entry.second << '\n';
+  for (const auto& entry : loaded.model.session)
+    file << native_csv_escape(entry.first) << ',' << native_csv_escape(entry.second) << '\n';
   ShowMessageBox(("Exported session metadata to " + output_path + ".").c_str(), "ReaADR Report", 0);
 }
 
