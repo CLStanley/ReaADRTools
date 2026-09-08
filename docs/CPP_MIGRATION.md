@@ -331,9 +331,10 @@ the native Character Filter command is now wired to the REAPER action/menu
 surface, while the existing Lua filter window remains a compatibility UI.
 The native Preferences preview command now reads the shared Manager preference
 repository and overlay profile contract through the native view service; the
-full editable Preferences surface remains part of the graphical Manager UI
-cutover. The command is also exposed in the top-level ReaADR menu, and its
-project-scoped Manager toggles are editable with native validation and Undo.
+native graphical Preferences surface now exposes the migrated quick-action,
+UI-toggle, and overlay settings controls. The command is also exposed in the
+top-level ReaADR menu, and its project-scoped Manager toggles are editable with
+native validation and Undo.
 The native Manager Preferences tab also surfaces all four persisted quick-action
 assignments and the Lua-compatible UI toggle states.
 Those four quick-action assignments are now editable through native dropdowns
@@ -369,6 +370,8 @@ It also provides a native Timing Report CSV with cue start/end, duration, and
 status data.
 Session metadata can also be exported natively as a Field/Value CSV from the
 canonical session envelope.
+The current native report path uses an explicit output-path prompt because this
+SDK build does not provide a write-file chooser API.
 These domain operations and adapters are test-covered but are not yet all
 public writers; the full native filter/manager UI, deferred recording frame/UI
 wiring, other overlay UI, and in-REAPER smoke tests remain. Lua source and
