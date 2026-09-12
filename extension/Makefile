@@ -12,6 +12,7 @@ MARKER_TEST_TARGET := $(BUILD_DIR)/marker_cue_generation_tests
 DIALOGUE_TEST_TARGET := $(BUILD_DIR)/dialogue_cue_generation_tests
 DIALOGUE_DETECTION_TEST_TARGET := $(BUILD_DIR)/dialogue_detection_adapter_tests
 RECORDING_TARGET_TEST_TARGET := $(BUILD_DIR)/recording_target_tests
+CUE_INFO_TEST_TARGET := $(BUILD_DIR)/cue_info_tests
 DIST_DIR := ../dist
 DIST_USERPLUGINS_DIR := $(DIST_DIR)/UserPlugins
 DIST_REAADR_DIR := $(DIST_DIR)/Scripts/ReaADRTools
@@ -21,7 +22,7 @@ CPPFLAGS += -I. -isystem $(REAPER_SDK)/sdk -isystem $(WDL)
 CPPFLAGS += -DSWELL_PROVIDED_BY_APP
 LDFLAGS += -shared -ldl
 CORE_SOURCES := reaadr_core/session_model.cpp reaadr_core/model_repository.cpp reaadr_core/domain_utils.cpp \
-	reaadr_core/cue_import.cpp reaadr_core/marker_cue_generation.cpp reaadr_core/dialogue_cue_generation.cpp reaadr_core/session_builder.cpp reaadr_core/session_mutation.cpp \
+	reaadr_core/cue_import.cpp reaadr_core/marker_cue_generation.cpp reaadr_core/dialogue_cue_generation.cpp reaadr_core/cue_info.cpp reaadr_core/session_builder.cpp reaadr_core/session_mutation.cpp \
 	reaadr_core/session_commit.cpp reaadr_core/lane_assignment.cpp reaadr_core/render_plan.cpp reaadr_core/cue_wav.cpp reaadr_core/event_log.cpp \
 	reaadr_core/character_filter.cpp reaadr_core/cue_cleanup.cpp reaadr_core/cue_manager_model.cpp reaadr_core/manager_preferences.cpp \
 	reaadr_core/region_timing_sync.cpp reaadr_core/cue_navigation.cpp reaadr_core/record_arm.cpp reaadr_core/recording_setup.cpp \
@@ -37,7 +38,7 @@ else
 UI_SOURCES += $(WDL)/swell/swell-modstub-generic.cpp
 endif
 CORE_HEADERS := reaadr_core/session_model.hpp reaadr_core/model_repository.hpp reaadr_core/domain_utils.hpp reaadr_core/cue_import.hpp \
-	reaadr_core/marker_cue_generation.hpp reaadr_core/dialogue_cue_generation.hpp reaadr_core/session_builder.hpp reaadr_core/session_mutation.hpp \
+	reaadr_core/marker_cue_generation.hpp reaadr_core/dialogue_cue_generation.hpp reaadr_core/cue_info.hpp reaadr_core/session_builder.hpp reaadr_core/session_mutation.hpp \
 	reaadr_core/session_commit.hpp reaadr_core/lane_assignment.hpp reaadr_core/render_plan.hpp reaadr_core/cue_wav.hpp reaadr_core/event_log.hpp \
 	reaadr_core/character_filter.hpp reaadr_core/cue_cleanup.hpp reaadr_core/cue_manager_model.hpp reaadr_core/manager_preferences.hpp \
 	reaadr_core/region_timing_sync.hpp reaadr_core/cue_navigation.hpp reaadr_core/record_arm.hpp reaadr_core/recording_setup.hpp \
@@ -93,12 +94,16 @@ $(DIALOGUE_DETECTION_TEST_TARGET): ../tests/dialogue_detection_adapter_tests.cpp
 $(RECORDING_TARGET_TEST_TARGET): ../tests/recording_target_tests.cpp reaadr_core/recording_target.cpp reaadr_core/cue_navigation.cpp reaadr_core/lane_assignment.cpp reaadr_core/character_filter.cpp reaadr_core/domain_utils.cpp reaadr_core/render_plan.cpp reaadr_core/session_model.cpp
 	@mkdir -p "$(BUILD_DIR)"
 	$(CXX) $(CPPFLAGS) $(CXXFLAGS) ../tests/recording_target_tests.cpp reaadr_core/recording_target.cpp reaadr_core/cue_navigation.cpp reaadr_core/lane_assignment.cpp reaadr_core/character_filter.cpp reaadr_core/domain_utils.cpp reaadr_core/render_plan.cpp reaadr_core/session_model.cpp -o $@
-test: $(TEST_TARGET) $(MARKER_TEST_TARGET) $(DIALOGUE_TEST_TARGET) $(DIALOGUE_DETECTION_TEST_TARGET) $(RECORDING_TARGET_TEST_TARGET)
+$(CUE_INFO_TEST_TARGET): ../tests/cue_info_tests.cpp reaadr_core/cue_info.cpp reaadr_core/domain_utils.cpp reaadr_core/cue_info.hpp reaadr_core/domain_utils.hpp reaadr_core/session_model.hpp
+	@mkdir -p "$(BUILD_DIR)"
+	$(CXX) $(CPPFLAGS) $(CXXFLAGS) ../tests/cue_info_tests.cpp reaadr_core/cue_info.cpp reaadr_core/domain_utils.cpp -o $@
+test: $(TEST_TARGET) $(MARKER_TEST_TARGET) $(DIALOGUE_TEST_TARGET) $(DIALOGUE_DETECTION_TEST_TARGET) $(RECORDING_TARGET_TEST_TARGET) $(CUE_INFO_TEST_TARGET)
 	$(TEST_TARGET)
 	$(MARKER_TEST_TARGET)
 	$(DIALOGUE_TEST_TARGET)
 	$(DIALOGUE_DETECTION_TEST_TARGET)
 	$(RECORDING_TARGET_TEST_TARGET)
+	$(CUE_INFO_TEST_TARGET)
 dist: all
 	rm -rf "$(DIST_DIR)"
 	@mkdir -p "$(DIST_USERPLUGINS_DIR)" "$(DIST_REAADR_DIR)/scripts" "$(DIST_REAADR_DIR)/assets"
