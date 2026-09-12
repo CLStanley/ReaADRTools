@@ -42,6 +42,7 @@ cl /nologo /EHsc /O2 /LD /std:c++17 ^
   reaadr_core\domain_utils.cpp ^
   reaadr_core\cue_import.cpp ^
   reaadr_core\marker_cue_generation.cpp ^
+  reaadr_core\dialogue_cue_generation.cpp ^
   reaadr_core\session_builder.cpp ^
   reaadr_core\session_mutation.cpp ^
   reaadr_core\session_commit.cpp ^
@@ -80,6 +81,7 @@ cl /nologo /EHsc /O2 /LD /std:c++17 ^
   app\overlay_application_service.cpp ^
   app\cue_import_application_service.cpp ^
   app\marker_cue_generation_application_service.cpp ^
+  app\dialogue_cue_generation_application_service.cpp ^
   app\cue_cleanup_application_service.cpp ^
   app\character_filter_application_service.cpp ^
   app\manager_view_application_service.cpp ^
