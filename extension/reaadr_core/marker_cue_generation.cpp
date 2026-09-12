@@ -1,7 +1,6 @@
 #include "marker_cue_generation.hpp"
 
 #include <algorithm>
-#include <cctype>
 #include <iomanip>
 #include <regex>
 #include <sstream>
@@ -64,15 +63,16 @@ std::vector<Fields> build_cues_from_project_markers(
     const double end_time = source.is_region && source.end_time > source.start_time
       ? source.end_time : source.start_time + options.default_duration;
 
+    const bool use_owned_export_fields = options.flexible_export && !owned.cue_id.empty();
     Fields cue = {
       {"id", owned.cue_id.empty() ? std::to_string(source.marker_id) : owned.cue_id},
-      {"character", owned.character.empty() ? options.character : owned.character},
+      {"character", use_owned_export_fields && !owned.character.empty() ? owned.character : options.character},
       {"start_time", number_string(source.start_time)},
       {"end_time", number_string(end_time)},
-      {"line", owned.cue_id.empty() ? label : std::string()},
+      {"line", use_owned_export_fields ? std::string() : label},
       {"notes", ""},
       {"direction", ""},
-      {"cue_type", owned.cue_id.empty() ? (source.is_region ? "Region" : "Marker") : "Dialogue"},
+      {"cue_type", use_owned_export_fields ? "Dialogue" : (source.is_region ? "Region" : "Marker")},
       {"status", "Not Recorded"},
       {"source_line", std::to_string(cues.size() + 1)},
     };
