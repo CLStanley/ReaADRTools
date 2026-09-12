@@ -1,5 +1,6 @@
 #pragma once
 
+#include "dialogue_detection_adapter.hpp"
 #include "marker_snapshot_adapter.hpp"
 #include "overlay_refresh_adapter.hpp"
 #include "render_artifact_adapter.hpp"
@@ -19,6 +20,7 @@ RulerLaneApi native_ruler_lane_api();
 CueAudioApi native_cue_audio_api();
 TransactionApi native_transaction_api();
 MarkerSnapshotApi native_marker_snapshot_api();
+DialogueDetectionApi native_dialogue_detection_api();
 OverlayRefreshApi native_overlay_refresh_api();
 
 double native_project_frame_rate(ReaProject* project = nullptr);
