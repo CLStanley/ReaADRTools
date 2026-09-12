@@ -94,9 +94,9 @@ $(TEST_TARGET): ../tests/session_model_tests.cpp $(NATIVE_SOURCES) $(NATIVE_HEAD
 	@mkdir -p "$(BUILD_DIR)"
 	$(CXX) $(CPPFLAGS) $(CXXFLAGS) ../tests/session_model_tests.cpp $(NATIVE_SOURCES) -o $@
 
-$(MARKER_TEST_TARGET): ../tests/marker_cue_generation_tests.cpp reaadr_core/marker_cue_generation.cpp reaadr_core/marker_cue_generation.hpp reaadr_core/session_model.hpp
+$(MARKER_TEST_TARGET): ../tests/marker_cue_generation_tests.cpp reaadr_core/marker_cue_generation.cpp reaadr_reaper/marker_snapshot_adapter.cpp reaadr_core/marker_cue_generation.hpp reaadr_reaper/marker_snapshot_adapter.hpp reaadr_core/session_model.hpp
 	@mkdir -p "$(BUILD_DIR)"
-	$(CXX) $(CPPFLAGS) $(CXXFLAGS) ../tests/marker_cue_generation_tests.cpp reaadr_core/marker_cue_generation.cpp -o $@
+	$(CXX) $(CPPFLAGS) $(CXXFLAGS) ../tests/marker_cue_generation_tests.cpp reaadr_core/marker_cue_generation.cpp reaadr_reaper/marker_snapshot_adapter.cpp -o $@
 
 test: $(TEST_TARGET) $(MARKER_TEST_TARGET)
 	$(TEST_TARGET)
