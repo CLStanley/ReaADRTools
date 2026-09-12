@@ -1,7 +1,7 @@
 #!/bin/sh
 set -eu
 
-script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+script_dir=$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd)
 
 payload_root="$script_dir"
 if [ ! -d "$payload_root/UserPlugins" ] && [ -d "$script_dir/../dist/UserPlugins" ]; then
