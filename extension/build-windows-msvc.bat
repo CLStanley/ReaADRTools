@@ -102,6 +102,7 @@ cl /nologo /EHsc /O2 /LD /std:c++17 ^
   reaadr_ui\reaadr_ui.cpp ^
   reaadr_ui\cue_manager_controller.cpp ^
   reaadr_ui\cue_manager_window.cpp ^
+  reaadr_ui\recording_controller.cpp ^
   reaadr_ui\manager_view_model.cpp ^
   reaadr_ui\manager_navigation.cpp ^
   reaadr_ui\manager_ui_contract.cpp ^
