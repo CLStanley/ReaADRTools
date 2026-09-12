@@ -65,6 +65,7 @@ RecordingTargetResult resolve_recording_target(
       : "No ADR cues are available for recording.";
     return result;
   }
+  result.visible_cues = visible;
 
   if (!options.selected_cue_key.empty()) {
     for (std::size_t i = 0; i < visible.size(); ++i) {
