@@ -17,6 +17,7 @@
 #define REAPERAPI_WANT_GetAudioAccessorEndTime
 #define REAPERAPI_WANT_GetAudioAccessorSamples
 #define REAPERAPI_WANT_GetAudioAccessorStartTime
+#define REAPERAPI_WANT_GetCursorPosition
 #define REAPERAPI_WANT_GetMediaItemInfo_Value
 #define REAPERAPI_WANT_GetMediaSourceLength
 #define REAPERAPI_WANT_GetMediaTrackInfo_Value
@@ -248,6 +249,12 @@ int native_play_state()
 double native_play_position()
 {
   const double position = GetPlayPosition ? GetPlayPosition() : 0.0;
+  return std::isfinite(position) ? position : 0.0;
+}
+
+double native_cursor_position()
+{
+  const double position = GetCursorPosition ? GetCursorPosition() : 0.0;
   return std::isfinite(position) ? position : 0.0;
 }
 
