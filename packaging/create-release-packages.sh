@@ -1,7 +1,7 @@
 #!/usr/bin/env sh
 set -eu
 
-root_dir=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
+root_dir=$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd)
 dist_dir="$root_dir/dist"
 release_dir="$dist_dir/installers"
 
