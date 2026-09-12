@@ -9,6 +9,7 @@ TARGET := reaper_reaadr-x86_64.so
 BUILD_DIR := ../build/extension
 TEST_TARGET := $(BUILD_DIR)/session_model_tests
 MARKER_TEST_TARGET := $(BUILD_DIR)/marker_cue_generation_tests
+DIALOGUE_TEST_TARGET := $(BUILD_DIR)/dialogue_cue_generation_tests
 DIST_DIR := ../dist
 DIST_USERPLUGINS_DIR := $(DIST_DIR)/UserPlugins
 DIST_REAADR_DIR := $(DIST_DIR)/Scripts/ReaADRTools
@@ -19,7 +20,7 @@ CPPFLAGS += -I. -isystem $(REAPER_SDK)/sdk -isystem $(WDL)
 CPPFLAGS += -DSWELL_PROVIDED_BY_APP
 LDFLAGS += -shared -ldl
 CORE_SOURCES := reaadr_core/session_model.cpp reaadr_core/model_repository.cpp reaadr_core/domain_utils.cpp \
-	reaadr_core/cue_import.cpp reaadr_core/marker_cue_generation.cpp reaadr_core/session_builder.cpp reaadr_core/session_mutation.cpp \
+	reaadr_core/cue_import.cpp reaadr_core/marker_cue_generation.cpp reaadr_core/dialogue_cue_generation.cpp reaadr_core/session_builder.cpp reaadr_core/session_mutation.cpp \
 	reaadr_core/session_commit.cpp reaadr_core/lane_assignment.cpp reaadr_core/render_plan.cpp \
 	reaadr_core/cue_wav.cpp reaadr_core/event_log.cpp reaadr_core/character_filter.cpp \
 	reaadr_core/cue_cleanup.cpp \
@@ -39,7 +40,7 @@ else
 UI_SOURCES += $(WDL)/swell/swell-modstub-generic.cpp
 endif
 CORE_HEADERS := reaadr_core/session_model.hpp reaadr_core/model_repository.hpp reaadr_core/domain_utils.hpp \
-	reaadr_core/cue_import.hpp reaadr_core/marker_cue_generation.hpp reaadr_core/session_builder.hpp reaadr_core/session_mutation.hpp \
+	reaadr_core/cue_import.hpp reaadr_core/marker_cue_generation.hpp reaadr_core/dialogue_cue_generation.hpp reaadr_core/session_builder.hpp reaadr_core/session_mutation.hpp \
 	reaadr_core/session_commit.hpp reaadr_core/lane_assignment.hpp reaadr_core/render_plan.hpp \
 	reaadr_core/cue_wav.hpp reaadr_core/event_log.hpp reaadr_core/character_filter.hpp \
 	reaadr_core/cue_cleanup.hpp \
@@ -56,7 +57,7 @@ REAPER_SOURCES := reaadr_reaper/project_state.cpp reaadr_reaper/project_transact
 	reaadr_reaper/recording_setup_adapter.cpp reaadr_reaper/recording_transport_executor.cpp \
 	reaadr_reaper/overlay_refresh_adapter.cpp reaadr_reaper/cue_cleanup_adapter.cpp \
 	app/recording_application_service.cpp app/overlay_application_service.cpp \
-	app/cue_import_application_service.cpp app/marker_cue_generation_application_service.cpp \
+	app/cue_import_application_service.cpp app/marker_cue_generation_application_service.cpp app/dialogue_cue_generation_application_service.cpp \
 	app/cue_cleanup_application_service.cpp app/character_filter_application_service.cpp \
 	app/manager_view_application_service.cpp app/cue_manager_application_service.cpp \
 	app/session_refresh_application_service.cpp app/region_timing_application_service.cpp
@@ -67,7 +68,7 @@ REAPER_HEADERS := reaadr_reaper/project_state.hpp reaadr_reaper/project_transact
 	reaadr_reaper/recording_setup_adapter.hpp reaadr_reaper/recording_transport_executor.hpp \
 	reaadr_reaper/overlay_refresh_adapter.hpp reaadr_reaper/cue_cleanup_adapter.hpp \
 	app/recording_application_service.hpp app/overlay_application_service.hpp \
-	app/cue_import_application_service.hpp app/marker_cue_generation_application_service.hpp \
+	app/cue_import_application_service.hpp app/marker_cue_generation_application_service.hpp app/dialogue_cue_generation_application_service.hpp \
 	app/cue_cleanup_application_service.hpp app/character_filter_application_service.hpp \
 	app/manager_view_application_service.hpp app/cue_manager_application_service.hpp \
 	app/session_refresh_application_service.hpp app/region_timing_application_service.hpp
@@ -98,9 +99,14 @@ $(MARKER_TEST_TARGET): ../tests/marker_cue_generation_tests.cpp reaadr_core/mark
 	@mkdir -p "$(BUILD_DIR)"
 	$(CXX) $(CPPFLAGS) $(CXXFLAGS) ../tests/marker_cue_generation_tests.cpp reaadr_core/marker_cue_generation.cpp reaadr_reaper/marker_snapshot_adapter.cpp -o $@
 
-test: $(TEST_TARGET) $(MARKER_TEST_TARGET)
+$(DIALOGUE_TEST_TARGET): ../tests/dialogue_cue_generation_tests.cpp reaadr_core/dialogue_cue_generation.cpp reaadr_core/dialogue_cue_generation.hpp reaadr_core/session_model.hpp
+	@mkdir -p "$(BUILD_DIR)"
+	$(CXX) $(CPPFLAGS) $(CXXFLAGS) ../tests/dialogue_cue_generation_tests.cpp reaadr_core/dialogue_cue_generation.cpp -o $@
+
+test: $(TEST_TARGET) $(MARKER_TEST_TARGET) $(DIALOGUE_TEST_TARGET)
 	$(TEST_TARGET)
 	$(MARKER_TEST_TARGET)
+	$(DIALOGUE_TEST_TARGET)
 
 dist: all
 	rm -rf "$(DIST_DIR)"
