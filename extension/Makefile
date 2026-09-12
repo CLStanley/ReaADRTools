@@ -33,6 +33,7 @@ CORE_SOURCES := reaadr_core/session_model.cpp reaadr_core/model_repository.cpp r
 	reaadr_core/recording_preferences.cpp reaadr_core/overlay_settings.cpp \
 	reaadr_core/overlay_eel.cpp reaadr_core/overlay_refresh.cpp
 UI_SOURCES := reaadr_ui/reaadr_ui.cpp reaadr_ui/cue_manager_controller.cpp reaadr_ui/cue_manager_window.cpp \
+	reaadr_ui/recording_controller.cpp \
 	reaadr_ui/manager_view_model.cpp reaadr_ui/manager_navigation.cpp reaadr_ui/manager_ui_contract.cpp \
 	reaadr_ui/cue_manager_ui_contract.cpp
 UNAME_S := $(shell uname -s)
