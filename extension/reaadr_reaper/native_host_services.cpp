@@ -6,6 +6,7 @@
 #define REAPERAPI_WANT_ColorToNative
 #define REAPERAPI_WANT_CountProjectMarkers
 #define REAPERAPI_WANT_CountSelectedMediaItems
+#define REAPERAPI_WANT_CountTakes
 #define REAPERAPI_WANT_CountTrackMediaItems
 #define REAPERAPI_WANT_CountTracks
 #define REAPERAPI_WANT_CreateTakeAudioAccessor
@@ -188,6 +189,19 @@ DialogueDetectionApi native_dialogue_detection_api()
     GetAudioAccessorEndTime,
     GetAudioAccessorSamples,
     GetMediaItemInfo_Value,
+  };
+}
+
+CueTakeCountApi native_cue_take_count_api()
+{
+  return {
+    CountTracks,
+    GetTrack,
+    GetSetMediaTrackInfo_String,
+    CountTrackMediaItems,
+    GetTrackMediaItem,
+    GetMediaItemInfo_Value,
+    CountTakes,
   };
 }
 
