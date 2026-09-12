@@ -11,6 +11,7 @@ TEST_TARGET := $(BUILD_DIR)/session_model_tests
 MARKER_TEST_TARGET := $(BUILD_DIR)/marker_cue_generation_tests
 DIALOGUE_TEST_TARGET := $(BUILD_DIR)/dialogue_cue_generation_tests
 DIALOGUE_DETECTION_TEST_TARGET := $(BUILD_DIR)/dialogue_detection_adapter_tests
+RECORDING_TARGET_TEST_TARGET := $(BUILD_DIR)/recording_target_tests
 DIST_DIR := ../dist
 DIST_USERPLUGINS_DIR := $(DIST_DIR)/UserPlugins
 DIST_REAADR_DIR := $(DIST_DIR)/Scripts/ReaADRTools
@@ -28,7 +29,7 @@ CORE_SOURCES := reaadr_core/session_model.cpp reaadr_core/model_repository.cpp r
 	reaadr_core/cue_manager_model.cpp \
 	reaadr_core/manager_preferences.cpp \
 	reaadr_core/region_timing_sync.cpp reaadr_core/cue_navigation.cpp reaadr_core/record_arm.cpp \
-	reaadr_core/recording_setup.cpp reaadr_core/recording_transport.cpp reaadr_core/cue_status.cpp \
+	reaadr_core/recording_setup.cpp reaadr_core/recording_target.cpp reaadr_core/recording_transport.cpp reaadr_core/cue_status.cpp \
 	reaadr_core/recording_preferences.cpp reaadr_core/overlay_settings.cpp \
 	reaadr_core/overlay_eel.cpp reaadr_core/overlay_refresh.cpp
 UI_SOURCES := reaadr_ui/reaadr_ui.cpp reaadr_ui/cue_manager_controller.cpp reaadr_ui/cue_manager_window.cpp \
@@ -48,7 +49,7 @@ CORE_HEADERS := reaadr_core/session_model.hpp reaadr_core/model_repository.hpp r
 	reaadr_core/cue_manager_model.hpp \
 	reaadr_core/manager_preferences.hpp \
 	reaadr_core/region_timing_sync.hpp reaadr_core/cue_navigation.hpp reaadr_core/record_arm.hpp \
-	reaadr_core/recording_setup.hpp reaadr_core/recording_transport.hpp reaadr_core/cue_status.hpp \
+	reaadr_core/recording_setup.hpp reaadr_core/recording_target.hpp reaadr_core/recording_transport.hpp reaadr_core/cue_status.hpp \
 	reaadr_core/recording_preferences.hpp reaadr_core/overlay_settings.hpp \
 	reaadr_core/overlay_eel.hpp reaadr_core/overlay_refresh.hpp
 REAPER_SOURCES := reaadr_reaper/project_state.cpp reaadr_reaper/project_transaction.cpp \
@@ -112,11 +113,16 @@ $(DIALOGUE_DETECTION_TEST_TARGET): ../tests/dialogue_detection_adapter_tests.cpp
 	@mkdir -p "$(BUILD_DIR)"
 	$(CXX) $(CPPFLAGS) $(CXXFLAGS) ../tests/dialogue_detection_adapter_tests.cpp reaadr_reaper/dialogue_detection_adapter.cpp -o $@
 
-test: $(TEST_TARGET) $(MARKER_TEST_TARGET) $(DIALOGUE_TEST_TARGET) $(DIALOGUE_DETECTION_TEST_TARGET)
+$(RECORDING_TARGET_TEST_TARGET): ../tests/recording_target_tests.cpp reaadr_core/recording_target.cpp reaadr_core/cue_navigation.cpp reaadr_core/lane_assignment.cpp reaadr_core/character_filter.cpp reaadr_core/domain_utils.cpp reaadr_core/render_plan.cpp reaadr_core/session_model.cpp
+	@mkdir -p "$(BUILD_DIR)"
+	$(CXX) $(CPPFLAGS) $(CXXFLAGS) ../tests/recording_target_tests.cpp reaadr_core/recording_target.cpp reaadr_core/cue_navigation.cpp reaadr_core/lane_assignment.cpp reaadr_core/character_filter.cpp reaadr_core/domain_utils.cpp reaadr_core/render_plan.cpp reaadr_core/session_model.cpp -o $@
+
+test: $(TEST_TARGET) $(MARKER_TEST_TARGET) $(DIALOGUE_TEST_TARGET) $(DIALOGUE_DETECTION_TEST_TARGET) $(RECORDING_TARGET_TEST_TARGET)
 	$(TEST_TARGET)
 	$(MARKER_TEST_TARGET)
 	$(DIALOGUE_TEST_TARGET)
 	$(DIALOGUE_DETECTION_TEST_TARGET)
+	$(RECORDING_TARGET_TEST_TARGET)
 
 dist: all
 	rm -rf "$(DIST_DIR)"
