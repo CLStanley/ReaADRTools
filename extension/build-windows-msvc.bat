@@ -42,6 +42,7 @@ cl /nologo /EHsc /O2 /LD /std:c++17 ^
   reaadr_core\model_repository.cpp ^
   reaadr_core\domain_utils.cpp ^
   reaadr_core\cue_import.cpp ^
+  reaadr_core\marker_cue_generation.cpp ^
   reaadr_core\session_builder.cpp ^
   reaadr_core\session_mutation.cpp ^
   reaadr_core\session_commit.cpp ^
