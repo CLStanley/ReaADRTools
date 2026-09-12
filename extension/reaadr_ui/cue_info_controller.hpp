@@ -7,6 +7,7 @@
 
 #include <functional>
 #include <string>
+#include <utility>
 
 namespace reaadr::ui {
 
