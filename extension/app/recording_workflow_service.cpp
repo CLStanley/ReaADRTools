@@ -32,6 +32,7 @@ RecordingWorkflowStartResult RecordingWorkflowService::start(
   state_ = options.initial_state;
   application_options_ = options.application;
   application_options_.cue_key = plan_.cue_key;
+  application_options_.include_preroll_each_loop = state_.include_preroll_each_loop;
   pending_ = {};
   active_ = true;
 
@@ -96,6 +97,7 @@ RecordingWorkflowDispatchResult RecordingWorkflowService::dispatch(
   }
 
   state_ = transition.state;
+  application_options_.include_preroll_each_loop = state_.include_preroll_each_loop;
   pending_ = executed.pending;
   result.state = state_;
   result.pending = pending_;
