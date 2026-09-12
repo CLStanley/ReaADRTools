@@ -57,7 +57,7 @@ bool manager_action_is_native(const std::string& key)
   // These commands bind directly to native application services. Remaining
   // Manager actions stay explicit compatibility routes until their UI and host
   // wiring are cut over and smoke-tested inside REAPER.
-  return key == "generate_cues" ||
+  return key == "detect_dialogue" || key == "generate_cues" ||
     key == "validate_session" || key == "refresh_session" || key == "sync_regions" ||
     key == "clear_character_cues" || key == "character_filter" || key == "preferences" || key == "refresh_overlay" ||
     key == "export_cue_sheet" ||
