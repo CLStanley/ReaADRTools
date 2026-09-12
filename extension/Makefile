@@ -78,9 +78,9 @@ prepare-sdk:
 $(BUILD_DIR)/$(TARGET): $(EXTENSION_SOURCES) $(NATIVE_HEADERS) | prepare-sdk
 	@mkdir -p "$(BUILD_DIR)"
 	$(CXX) $(CPPFLAGS) $(CXXFLAGS) $(EXTENSION_SOURCES) -o $@ $(LDFLAGS)
-$(TEST_TARGET): ../tests/session_model_tests.cpp $(NATIVE_SOURCES) $(NATIVE_HEADERS)
+$(TEST_TARGET): ../tests/session_model_tests.cpp $(EXTENSION_SOURCES) $(NATIVE_HEADERS)
 	@mkdir -p "$(BUILD_DIR)"
-	$(CXX) $(CPPFLAGS) $(CXXFLAGS) ../tests/session_model_tests.cpp $(NATIVE_SOURCES) -o $@
+	$(CXX) $(CPPFLAGS) $(CXXFLAGS) ../tests/session_model_tests.cpp $(EXTENSION_SOURCES) -o $@ -ldl
 $(MARKER_TEST_TARGET): ../tests/marker_cue_generation_tests.cpp reaadr_core/marker_cue_generation.cpp reaadr_reaper/marker_snapshot_adapter.cpp reaadr_core/marker_cue_generation.hpp reaadr_reaper/marker_snapshot_adapter.hpp reaadr_core/session_model.hpp
 	@mkdir -p "$(BUILD_DIR)"
 	$(CXX) $(CPPFLAGS) $(CXXFLAGS) ../tests/marker_cue_generation_tests.cpp reaadr_core/marker_cue_generation.cpp reaadr_reaper/marker_snapshot_adapter.cpp -o $@
