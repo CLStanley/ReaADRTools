@@ -71,6 +71,7 @@ cl /nologo /EHsc /O2 /LD /std:c++17 ^
   reaadr_reaper\session_render_service.cpp ^
   reaadr_reaper\native_host_services.cpp ^
   reaadr_reaper\marker_snapshot_adapter.cpp ^
+  reaadr_reaper\marker_cue_generation_command.cpp ^
   reaadr_reaper\dialogue_detection_adapter.cpp ^
   reaadr_reaper\character_filter_adapter.cpp ^
   reaadr_reaper\cue_navigation_service.cpp ^
