@@ -42,12 +42,10 @@ void update_window(HWND hwnd)
   SetDlgItemText(hwnd, kCue, cue.c_str());
   SetDlgItemText(hwnd, kDialogue,
                  view.dialogue.empty() ? "(no dialogue)" : view.dialogue.c_str());
-
   const double duration = view.cue_end - view.cue_start;
   const std::string timing = "Start " + number(view.cue_start) + "s   Duration " +
     number(duration) + "s   Preroll " + number(view.preroll_seconds) + "s";
   SetDlgItemText(hwnd, kTiming, timing.c_str());
-
   const std::string track = "Track: " + view.track_key + "   Lane " +
     std::to_string(view.lane);
   SetDlgItemText(hwnd, kTrack, track.c_str());
@@ -55,7 +53,6 @@ void update_window(HWND hwnd)
   SetDlgItemText(hwnd, kLoop, view.loop_enabled ? "Loop: ON" : "Loop: OFF");
   SetDlgItemText(hwnd, kPreroll,
                  view.include_preroll_each_loop ? "Pre-roll Each Loop" : "Default Repeat");
-
   EnableWindow(GetDlgItem(hwnd, kRecord),
                view.mode == core::RecordingTransportMode::idle);
 }
@@ -95,7 +92,9 @@ INT_PTR recording_proc(HWND hwnd, UINT message, WPARAM wparam, LPARAM)
 
     case WM_TIMER:
       if (wparam == kTimer && g_controller) {
-        if (!g_controller->tick()) show_error(hwnd);
+        // Timer failures remain visible in the status text. Modal errors here
+        // would reopen every tick and make Stop/Close cleanup inaccessible.
+        g_controller->tick();
         update_window(hwnd);
       }
       return 1;
