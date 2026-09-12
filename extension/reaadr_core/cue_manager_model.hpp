@@ -4,6 +4,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <string>
+#include <optional>
 #include <vector>
 namespace reaadr::core {
 struct CueManagerRow {
@@ -25,6 +26,10 @@ struct CueManagerModel {
   std::string error;
   explicit operator bool() const { return error.empty(); }
 };
+// Manager footer navigation follows the displayed order and clamps at either end,
+// matching Lua independently of the separate timeline-navigation wrap preference.
+const CueManagerRow* adjacent_cue_manager_row(const CueManagerModel& view, bool next);
+
 struct CueManagerViewOptions {
   std::string query;
   std::string character;
@@ -47,6 +52,8 @@ struct CueManagerEditOptions {
   // Empty dialogue normally means "not supplied" for compatibility callers.
   // The native editor sets this flag so users can intentionally clear a line.
   bool dialogue_set = false;
+  // Host input rate may differ from the session metadata; omitted uses the session rate.
+  std::optional<double> input_frame_rate;
 };
 struct CueManagerEditResult {
   SessionModel model;
@@ -63,6 +70,7 @@ struct CueManagerAddOptions {
   std::string cue_type = "Dialogue";
   std::string status = "Not Recorded";
   std::string notes;
+  std::optional<double> input_frame_rate;
 };
 struct CueManagerMutationResult {
   SessionModel model;

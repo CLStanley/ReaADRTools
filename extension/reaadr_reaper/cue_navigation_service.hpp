@@ -3,6 +3,8 @@
 #include "reaadr_core/cue_navigation.hpp"
 
 #include <string>
+#include <functional>
+#include <utility>
 
 namespace reaadr::reaper {
 
@@ -21,17 +23,25 @@ struct CueNavigationResult {
   explicit operator bool() const { return error.empty(); }
 };
 
+// Persists paired selection before refreshing owned overlay FX. The callback
+// compensates failed FX mutations; this helper restores the previous keys.
+core::CueSelectionSaveResult save_cue_selection_and_refresh(
+  core::CueSelectionRepository& selections, const std::string& cue_key,
+  const std::function<bool(std::string*)>& refresh_overlay);
+
 // Application boundary for Next Cue, Previous Cue, and Jump To Cue. It reads
 // only the canonical session model, persists the paired UI selection keys, and
-// moves the REAPER cursor without creating a model revision or Undo point.
+// refreshes the overlay before moving the REAPER cursor. Selection creates no
+// model revision; the supplied overlay adapter owns any FX Undo transaction.
 class CueNavigationService {
 public:
   CueNavigationService(core::SessionModelRepository& model_repository,
                        core::CueSelectionRepository& selection_repository,
-                       CueNavigationApi api)
+                       CueNavigationApi api,
+                       std::function<bool(std::string*)> refresh_overlay = {})
     : model_repository_(model_repository),
       selection_repository_(selection_repository),
-      api_(api)
+      api_(api), refresh_overlay_(std::move(refresh_overlay))
   {
   }
 
@@ -46,6 +56,7 @@ private:
   core::SessionModelRepository& model_repository_;
   core::CueSelectionRepository& selection_repository_;
   CueNavigationApi api_;
+  std::function<bool(std::string*)> refresh_overlay_;
 };
 
 } // namespace reaadr::reaper

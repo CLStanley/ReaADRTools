@@ -4,11 +4,23 @@
 #include <utility>
 #include <algorithm>
 #include <cstdlib>
+#include <cmath>
 #include <cctype>
 #include <iomanip>
 #include <sstream>
 #include <set>
 namespace reaadr::core {
+const CueManagerRow* adjacent_cue_manager_row(const CueManagerModel& view, bool next)
+{
+  if (view.rows.empty()) return nullptr;
+  for (std::size_t i = 0; i < view.rows.size(); ++i) {
+    if (!view.rows[i].selected) continue;
+    const auto target = next ? std::min(i + 1, view.rows.size() - 1) : (i == 0 ? 0 : i - 1);
+    return &view.rows[target];
+  }
+  return &view.rows.front();
+}
+
 namespace { const std::string& field(const Fields& cue, const char* key) {
   const auto found = cue.find(key); static const std::string empty;
   return found == cue.end() ? empty : found->second;
@@ -160,12 +172,10 @@ CueManagerEditResult edit_cue_manager_row(const SessionModel& model,
     cue["character"] = options.new_character;
     result.changed = true;
   }
-  double frame_rate = 24.0;
-  const auto frame_rate_field = result.model.timecode.find("frame_rate");
-  if (frame_rate_field != result.model.timecode.end()) {
-    char* end = nullptr;
-    const double parsed = std::strtod(frame_rate_field->second.c_str(), &end);
-    if (end && end != frame_rate_field->second.c_str() && *end == '\0' && parsed > 0.0) frame_rate = parsed;
+  const double frame_rate = options.input_frame_rate.value_or(session_frame_rate(model));
+  if (!std::isfinite(frame_rate) || frame_rate <= 0.0) {
+    result.error = "Cue input frame rate must be finite and positive.";
+    return result;
   }
   for (const auto* timing : {&options.start_time, &options.end_time}) {
     if (timing->empty()) continue;
@@ -252,7 +262,11 @@ CueManagerMutationResult add_cue_manager_row(const SessionModel& model,
     }
   }
 
-  const double frame_rate = session_frame_rate(model);
+  const double frame_rate = options.input_frame_rate.value_or(session_frame_rate(model));
+  if (!std::isfinite(frame_rate) || frame_rate <= 0.0) {
+    result.error = "Cue input frame rate must be finite and positive.";
+    return result;
+  }
   const auto parsed_start = parse_timecode(options.start_time, frame_rate);
   if (!parsed_start) {
     result.error = "Cue start time is invalid.";

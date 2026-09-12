@@ -6,10 +6,18 @@
 #include "reaadr_reaper/session_render_service.hpp"
 
 #include <cstdint>
+#include <functional>
 #include <string>
 #include <utility>
 
 namespace reaadr::reaper {
+
+// Selects an exact canonical cue without moving the transport or revising the
+// session. The overlay callback owns transactional FX compensation on failure;
+// this boundary restores the prior paired selection if that refresh fails.
+bool select_manager_cue(core::ProjectStateStore& state, const std::string& cue_key,
+                        const std::function<bool(std::string*)>& refresh_overlay,
+                        std::string& error);
 
 struct CueManagerApplicationResult {
   core::CueManagerEditResult edit;
@@ -36,6 +44,8 @@ public:
 
 struct CueManagerApplicationApi {
   std::string (*utc_timestamp)() = nullptr;
+  // Read at submission so project frame-rate changes apply to subsequent edits.
+  double (*frame_rate)() = nullptr;
 };
 
 // Validates a cue edit against the canonical model, then commits the resulting

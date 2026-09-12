@@ -1,16 +1,24 @@
 #include "cue_manager_ui_contract.hpp"
+#include <algorithm>
 
 namespace reaadr::core {
 
 const std::vector<CueManagerColumn>& cue_manager_columns()
 {
   static const std::vector<CueManagerColumn> columns = {
-    {"id", "Cue", 44, false}, {"character", "Character", 128, true},
-    {"start_time", "Start SMPTE", 98, true}, {"end_time", "End SMPTE", 98, true},
-    {"status", "Status", 96, true}, {"cue_type", "Type", 72, true},
-    {"line", "Line", 0, true}, {"notes", "Notes", 0, true},
+    {"id", "Cue", 48, false}, {"character", "Character", 150, true},
+    {"start_time", "Start SMPTE", 112, true}, {"end_time", "End SMPTE", 112, true},
+    {"status", "Status", 112, true}, {"cue_type", "Type", 84, true},
+    {"line", "Line", 420, true}, {"notes", "Notes", 340, true},
   };
   return columns;
+}
+
+int adjust_cue_manager_column_width(int current, bool increase)
+{
+  // Widen before arithmetic so even a malformed host width cannot overflow.
+  const long long adjusted = std::max(44LL, static_cast<long long>(current)) + (increase ? 24 : -24);
+  return static_cast<int>(std::clamp(adjusted, 44LL, 900LL));
 }
 
 const std::vector<CueManagerAction>& cue_manager_actions()

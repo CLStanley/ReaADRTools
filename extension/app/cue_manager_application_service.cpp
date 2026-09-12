@@ -1,6 +1,27 @@
 #include "cue_manager_application_service.hpp"
+#include "reaadr_reaper/cue_navigation_service.hpp"
 
 namespace reaadr::reaper {
+
+bool select_manager_cue(core::ProjectStateStore& state, const std::string& cue_key,
+                        const std::function<bool(std::string*)>& refresh_overlay,
+                        std::string& error)
+{
+  error.clear();
+  core::SessionModelRepository sessions(state);
+  const auto loaded = sessions.load();
+  if (!loaded) { error = core::session_load_error_message(loaded); return false; }
+  const auto catalog = core::build_cue_navigation_catalog(loaded.model);
+  if (!catalog) { error = catalog.error; return false; }
+  bool found = false;
+  for (const auto& cue : catalog.cues) if (cue.cue_key == cue_key) { found = true; break; }
+  if (!found) { error = "The selected cue no longer exists in the session."; return false; }
+
+  core::CueSelectionRepository selections(state);
+  const auto saved = save_cue_selection_and_refresh(selections, cue_key, refresh_overlay);
+  error = saved.error;
+  return static_cast<bool>(saved);
+}
 
 bool CueManagerApplicationService::synchronize(
   const std::vector<core::Fields>& cues,
@@ -77,7 +98,9 @@ CueManagerApplicationResult CueManagerApplicationService::edit(
 
   // Validate before generating media or opening an Undo block. The renderer
   // will rebuild cue-derived model collections from this edited cue set.
-  result.edit = core::edit_cue_manager_row(loaded.model, options);
+  auto input = options;
+  if (api_.frame_rate) input.input_frame_rate = api_.frame_rate();
+  result.edit = core::edit_cue_manager_row(loaded.model, input);
   if (!result.edit) {
     result.error = result.edit.error;
     return result;
@@ -104,7 +127,9 @@ CueManagerApplicationResult CueManagerApplicationService::add(
     result.error = core::session_load_error_message(loaded);
     return result;
   }
-  result.mutation = core::add_cue_manager_row(loaded.model, options);
+  auto input = options;
+  if (api_.frame_rate) input.input_frame_rate = api_.frame_rate();
+  result.mutation = core::add_cue_manager_row(loaded.model, input);
   if (!result.mutation) {
     result.error = result.mutation.error;
     return result;

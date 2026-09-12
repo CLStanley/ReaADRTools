@@ -18,6 +18,30 @@ core::CueNavigationCatalogResult load_catalog(core::SessionModelRepository& repo
 
 } // namespace
 
+core::CueSelectionSaveResult save_cue_selection_and_refresh(
+  core::CueSelectionRepository& selections, const std::string& cue_key,
+  const std::function<bool(std::string*)>& refresh_overlay)
+{
+  const auto previous = selections.load();
+  if (!previous) {
+    core::CueSelectionSaveResult result;
+    result.error = previous.error;
+    return result;
+  }
+  auto result = selections.save_selected_cue(cue_key);
+  if (!result) return result;
+  // An explicit repeat is also a retry, even when the paired keys already match.
+  if (refresh_overlay && !refresh_overlay(&result.error)) {
+    if (result.error.empty()) result.error = "Could not refresh the selected cue overlay.";
+    const auto restored = selections.save_state(previous.state);
+    result.rolled_back = static_cast<bool>(restored);
+    result.state = restored.state;
+    if (restored) result.changed = false;
+    else result.error += " Selection rollback failed: " + restored.error;
+  }
+  return result;
+}
+
 CueNavigationResult CueNavigationService::navigate_next()
 {
   return navigate_relative(true);
@@ -92,7 +116,8 @@ CueNavigationResult CueNavigationService::jump_to(const core::CueNavigationEntry
 {
   CueNavigationResult result;
   result.cue = cue;
-  result.selection = selection_repository_.save_selected_cue(cue.cue_key);
+  result.selection = save_cue_selection_and_refresh(
+    selection_repository_, cue.cue_key, refresh_overlay_);
   if (!result.selection) {
     result.error = result.selection.error;
     return result;

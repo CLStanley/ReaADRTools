@@ -16,7 +16,8 @@ public:
                        core::ProjectStateStore& project_state,
                        reaper::CueNavigationApi navigation_api,
                        std::function<void(const std::string&, bool, const std::string&, const std::string&)> trigger_import = {},
-                       std::function<void(const std::string&)> trigger_action = {});
+                       std::function<void(const std::string&)> trigger_action = {},
+                       std::function<bool(std::string*)> refresh_overlay = {});
   bool reload();
   bool set_tab(const std::string& tab);
   void trigger_import(const std::string& mapping = {}, bool preview = false,
@@ -26,7 +27,9 @@ public:
   bool set_filters(const std::string& query,
                    const std::string& character,
                    const std::string& status);
-  void select_index(int index);
+  // Header clicks toggle direction while selection follows the canonical cue key.
+  bool sort_by(const std::string& key);
+  bool select_index(int index);
   void select_relative(int delta);
   bool navigate_next();
   bool navigate_previous();
@@ -39,6 +42,8 @@ public:
   const core::ManagerViewModel& view() const { return view_; }
 
 private:
+  bool navigate_displayed_row(bool next);
+  std::function<bool(std::string*)> refresh_overlay_;
   reaper::ManagerViewApplicationService& service_;
   reaper::CueManagerMutationService& mutations_;
   core::ProjectStateStore& project_state_;

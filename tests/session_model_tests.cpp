@@ -1,4 +1,6 @@
 #include "reaadr_core/session_model.hpp"
+#include "reaadr_ui/reaadr_ui.hpp"
+#include <limits>
 #include "reaadr_core/domain_utils.hpp"
 #include "reaadr_core/cue_import.hpp"
 #include "reaadr_core/cue_cleanup.hpp"
@@ -1831,8 +1833,19 @@ void test_cue_navigation()
   reaadr::core::SessionModelRepository model_repository(service_store);
   check(model_repository.save(model), "cue-navigation fixture saves a canonical session model");
   reaadr::core::CueSelectionRepository service_selection(service_store);
+  bool navigation_overlay_succeeds = true;
+  int navigation_overlay_refreshes = 0;
+  int cursor_moves_at_overlay_refresh = -1;
   reaadr::reaper::CueNavigationService service(
-    model_repository, service_selection, fake_navigation_api());
+    model_repository, service_selection, fake_navigation_api(), [&](std::string* error) {
+      ++navigation_overlay_refreshes;
+      cursor_moves_at_overlay_refresh = navigation_cursor_moves;
+      check(service_store.values.at("ReaADRTools:manager_selected_cue_key") ==
+              service_store.values.at("ReaADRTools:active_overlay_cue_key"),
+            "navigation overlay refresh observes paired selection");
+      if (!navigation_overlay_succeeds) *error = "Navigation overlay failed";
+      return navigation_overlay_succeeds;
+    });
 
   navigation_play_state = 0;
   navigation_cursor_position = 10.0;
@@ -1843,6 +1856,8 @@ void test_cue_navigation()
           service_store.values.at("ReaADRTools:manager_selected_cue_key") == "B" &&
           service_store.values.at("ReaADRTools:active_overlay_cue_key") == "B",
         "native next-cue navigation synchronizes selection before moving the edit cursor");
+  check(navigation_overlay_refreshes == 1 && cursor_moves_at_overlay_refresh == 0,
+        "native navigation refreshes overlay before moving the cursor");
 
   navigation_play_state = 1;
   navigation_play_position = 20.0;
@@ -1864,6 +1879,24 @@ void test_cue_navigation()
           service_store.values.at("ReaADRTools:manager_selected_cue_key") == "A2" &&
           service_store.values.at("ReaADRTools:active_overlay_cue_key") == "A2",
         "native navigation leaves the cursor and prior selection intact after persistence failure");
+  check(navigation_overlay_refreshes == 3,
+        "navigation persistence failure does not invoke overlay refresh");
+  const auto before_overlay_failure = service_store.values;
+  const int moves_before_overlay_failure = navigation_cursor_moves;
+  navigation_overlay_succeeds = false;
+  const auto failed_overlay = service.navigate_to_id("B");
+  check(!failed_overlay && failed_overlay.selection.rolled_back &&
+          failed_overlay.selection.state.manager_selected_cue_key == "A2" &&
+          failed_overlay.error == "Navigation overlay failed" &&
+          service_store.values == before_overlay_failure &&
+          navigation_cursor_moves == moves_before_overlay_failure,
+        "navigation overlay failure restores selection and leaves the cursor untouched");
+  navigation_overlay_succeeds = true;
+  const auto retried_jump = service.navigate_to_id("B");
+  check(retried_jump && navigation_cursor_position == 20.0 &&
+          navigation_cursor_moves == moves_before_overlay_failure + 1 &&
+          model_repository.revision().revision == 0,
+        "navigation can retry overlay refresh without adding session revisions");
 }
 
 void test_record_arm_manager()
@@ -2803,11 +2836,68 @@ void test_manager_view_model()
         "native Manager application service builds one persisted view snapshot");
 
   FakeCueManagerMutationService mutations(store);
+  bool selection_overlay_succeeds = true;
+  int selection_overlay_calls = 0;
   reaadr::ui::CueManagerController controller(
-    service, mutations, store, fake_navigation_api());
+    service, mutations, store, fake_navigation_api(), {}, {}, [&](std::string* error) {
+      ++selection_overlay_calls;
+      check(store.values.at("ReaADRTools:manager_selected_cue_key") ==
+              store.values.at("ReaADRTools:active_overlay_cue_key"),
+            "overlay refresh observes synchronized manager and overlay selection");
+      if (!selection_overlay_succeeds) *error = "Test overlay failure";
+      return selection_overlay_succeeds;
+    });
   check(controller.reload() && controller.selected_row() &&
           controller.selected_row()->cue_key == "A",
         "native Cue Manager controller restores the persisted row selection");
+  const auto selection_model = store.values.at("ReaADRTools:adr_session_model_v1");
+  const auto selection_revision = store.values.at("ReaADRTools:session_revision");
+  const int selection_cursor_moves = navigation_cursor_moves;
+  check(controller.select_index(1) && controller.selected_row()->cue_key == "B" &&
+          selection_overlay_calls == 1 &&
+          store.values.at("ReaADRTools:active_overlay_cue_key") == "B" &&
+          store.values.at("ReaADRTools:adr_session_model_v1") == selection_model &&
+          store.values.at("ReaADRTools:session_revision") == selection_revision &&
+          navigation_cursor_moves == selection_cursor_moves,
+        "row selection refreshes overlay without moving cursor or revising canonical cues");
+  const auto before_selection_failure = store.values;
+  store.failed_write_key = "ReaADRTools:active_overlay_cue_key";
+  store.failed_writes_remaining = 1;
+  check(!controller.select_index(0) && controller.selected_row()->cue_key == "B" &&
+          selection_overlay_calls == 1 && store.values == before_selection_failure,
+        "failed paired-selection write preserves the selected row and skips overlay refresh");
+  store.failed_write_key.clear();
+  selection_overlay_succeeds = false;
+  check(!controller.select_index(0) && controller.selected_row()->cue_key == "B" &&
+          controller.view().error == "Test overlay failure" && store.values == before_selection_failure,
+        "overlay failure restores both selection keys and preserves the selected row");
+  selection_overlay_succeeds = true;
+  check(controller.select_index(0) && controller.selected_row()->cue_key == "A" &&
+          controller.view().error.empty(), "row selection can retry successfully after overlay failure");
+  const auto before_repeat_selection = store.values;
+  const int refreshes_before_repeat = selection_overlay_calls;
+  check(controller.select_index(0) && selection_overlay_calls == refreshes_before_repeat + 1 &&
+          store.values == before_repeat_selection,
+        "reselecting a cue refreshes overlay without extra persisted state changes");
+  check(!controller.select_index(-1) && !controller.select_index(99) &&
+          selection_overlay_calls == refreshes_before_repeat + 1,
+        "invalid row selections do not refresh or persist state");
+  auto stale_selection_model = model;
+  stale_selection_model.cues.pop_back();
+  store.values["ReaADRTools:adr_session_model_v1"] = reaadr::core::serialize_session_model(stale_selection_model);
+  check(!controller.select_index(1) && controller.selected_row()->cue_key == "A" &&
+          selection_overlay_calls == refreshes_before_repeat + 1,
+        "selection rejects a displayed cue removed from the canonical model");
+  store.values["ReaADRTools:adr_session_model_v1"] = selection_model;
+  check(controller.reload(), "restore canonical selection fixture");
+  const auto before_sort = store.values;
+  check(controller.sort_by("character") && controller.view().cues.rows.front().cue_key == "A" &&
+          controller.sort_by("character") && controller.view().cues.rows.front().cue_key == "B" &&
+          controller.selected_row()->cue_key == "A",
+        "native table header sorting toggles direction without changing cue selection");
+  check(!controller.sort_by("invalid") && store.values == before_sort,
+        "table sorting rejects unknown columns and never mutates project state");
+  check(controller.sort_by("start_time"), "table can restore chronological ordering");
   const bool controller_filtered = controller.set_filters("goodbye", "Beta", "Recorded");
   check(controller_filtered &&
           controller.view().cues.rows.size() == 1 &&
@@ -2818,11 +2908,48 @@ void test_manager_view_model()
         "native Manager controller switches tabs through the shared view service");
   navigation_cursor_moves = 0;
   std::string jump_error;
+  selection_overlay_succeeds = false;
+  const auto before_failed_manager_jump = store.values;
+  check(!controller.navigate_to_id("A", jump_error) && !jump_error.empty() &&
+          controller.view().cues.rows.size() == 1 && controller.selected_row()->cue_key == "B" &&
+          store.values == before_failed_manager_jump && navigation_cursor_moves == 0,
+        "failed manager Jump preserves filters, selected row, and cursor");
+  selection_overlay_succeeds = true;
   check(controller.navigate_to_id("A", jump_error) &&
           controller.view().cues.rows.size() == 2 &&
           controller.selected_row() &&
           controller.selected_row()->cue_key == "A" && navigation_cursor_moves == 1,
         "native Cue Manager jump reveals and selects a cue hidden by the previous filter");
+  navigation_play_state = 1;
+  navigation_play_position = 99.0;
+  check(controller.navigate_next() && controller.selected_row()->cue_key == "B" &&
+          navigation_cursor_position == 3.0 &&
+          store.values.at("ReaADRTools:active_overlay_cue_key") == "B",
+        "manager Next follows selected row rather than playing timeline position");
+  check(controller.navigate_next() && controller.selected_row()->cue_key == "B",
+        "manager Next clamps at the last displayed cue");
+  check(controller.sort_by("character") && controller.sort_by("character") &&
+          controller.navigate_next() && controller.selected_row()->cue_key == "A" &&
+          controller.navigate_previous() && controller.selected_row()->cue_key == "B",
+        "manager Previous and Next follow descending table order");
+  check(controller.set_filters("hello", "Actor", "") && controller.navigate_next() &&
+          controller.view().cues.rows.size() == 1 && controller.selected_row()->cue_key == "A",
+        "manager navigation retains filters and clamps a single visible cue");
+  check(controller.set_filters("missing", "", "") && !controller.navigate_next() &&
+          !controller.navigate_previous(), "empty manager navigation is a no-op");
+  check(controller.set_filters("", "", "") && controller.sort_by("start_time"),
+        "restore manager navigation fixture");
+  controller.select_index(0);
+  const auto before_failed_navigation = store.values;
+  const int moves_before_failure = navigation_cursor_moves;
+  store.failed_write_key = "ReaADRTools:active_overlay_cue_key";
+  store.failed_writes_remaining = 1;
+  check(!controller.navigate_next() && controller.selected_row()->cue_key == "A" &&
+          navigation_cursor_moves == moves_before_failure && store.values == before_failed_navigation,
+        "failed selection persistence preserves manager selection, project state, and cursor");
+  store.failed_write_key.clear();
+  check(controller.reload(), "manager recovers from navigation failure");
+  navigation_play_state = 0;
   reaadr::core::CueManagerEditOptions rename;
   rename.new_cue_key = "A2";
   std::string rename_error;
@@ -2902,6 +3029,15 @@ void test_manager_navigation()
 void test_cue_manager_ui_contract()
 {
   const auto& columns = reaadr::core::cue_manager_columns();
+  const int lua_widths[] = {48, 150, 112, 112, 112, 84, 420, 340};
+  for (std::size_t i = 0; i < columns.size(); ++i)
+    check(columns[i].width == lua_widths[i], "native table widths match Lua reset defaults");
+  check(reaadr::core::adjust_cue_manager_column_width(150, true) == 174 &&
+          reaadr::core::adjust_cue_manager_column_width(150, false) == 126 &&
+          reaadr::core::adjust_cue_manager_column_width(48, false) == 44 &&
+          reaadr::core::adjust_cue_manager_column_width(890, true) == 900,
+        "native column controls use Lua increments and width limits");
+
   const auto& actions = reaadr::core::cue_manager_actions();
   const auto& statuses = reaadr::core::cue_manager_status_choices();
   const auto& types = reaadr::core::cue_manager_type_choices();
@@ -3005,12 +3141,54 @@ void test_cue_cleanup_plan()
 
 void test_cue_manager_model()
 {
+  const std::string long_control_text = std::string(8192, 'x') + " — café 日本語";
+  const auto control_value = reaadr::ui::read_control_text(
+    static_cast<int>(long_control_text.size()), [&](char* buffer, int capacity) {
+      check(capacity == static_cast<int>(long_control_text.size()) + 1,
+            "cue text reader allocates the full UTF-8 byte length plus terminator");
+      std::snprintf(buffer, static_cast<std::size_t>(capacity), "%s", long_control_text.c_str());
+    });
+  check(control_value == long_control_text,
+        "native cue text reader preserves long text and trailing multibyte characters");
+  check(reaadr::ui::read_control_text(0, [](char* buffer, int) { buffer[0] = 0; }).empty(),
+        "native cue text reader preserves intentional empty edits");
   reaadr::core::SessionModel model;
   model.session["session_id"] = "manager";
   model.cues = {
     {{"id", "A1"}, {"character", "Actor"}, {"dialogue", "Hello"}, {"direction", "Whisper"}, {"type", "D"}, {"status", "Pending"}, {"start_time", "1"}, {"end_time", "2"}},
     {{"id", "B1"}, {"character", "Beta"}, {"dialogue", "Bye"}, {"type", "A"}, {"status", "Recorded"}, {"start_time", "3"}, {"end_time", "4"}},
   };
+  reaadr::core::CueManagerEditOptions rate_edit;
+  rate_edit.cue_key = "A1";
+  rate_edit.start_time = "00:00:00:15";
+  rate_edit.end_time = "00:00:01:15";
+  const auto session_rate_edit = reaadr::core::edit_cue_manager_row(model, rate_edit);
+  rate_edit.input_frame_rate = 30.0;
+  const auto project_rate_edit = reaadr::core::edit_cue_manager_row(model, rate_edit);
+  check(session_rate_edit && project_rate_edit &&
+          session_rate_edit.model.cues[0].at("start_time") == "0.625" &&
+          project_rate_edit.model.cues[0].at("start_time") == "0.5" &&
+          project_rate_edit.model.cues[0].at("end_time") == "1.5" &&
+          project_rate_edit.model.timecode == model.timecode,
+        "SMPTE edits use the input frame rate without rewriting session timecode metadata");
+  reaadr::core::CueManagerAddOptions rate_add;
+  rate_add.cue_key = "RateTest";
+  rate_add.start_time = "00:00:00:15";
+  rate_add.end_time = "00:00:01:15";
+  rate_add.input_frame_rate = 30.0;
+  const auto project_rate_add = reaadr::core::add_cue_manager_row(model, rate_add);
+  check(project_rate_add && project_rate_add.affected_cue.at("start_time") == "0.5" &&
+          project_rate_add.affected_cue.at("end_time") == "1.5" &&
+          project_rate_add.model.timecode == model.timecode,
+        "cue creation uses the same input-rate contract as timing edits");
+  for (double rate : {0.0, -1.0, std::numeric_limits<double>::infinity(),
+                      std::numeric_limits<double>::quiet_NaN()}) {
+    rate_edit.input_frame_rate = rate;
+    rate_add.input_frame_rate = rate;
+    check(!reaadr::core::edit_cue_manager_row(model, rate_edit) &&
+            !reaadr::core::add_cue_manager_row(model, rate_add),
+          "cue timing rejects invalid explicit input frame rates");
+  }
   const auto view = reaadr::core::build_cue_manager_model(model, "B1");
   const auto characters = reaadr::core::cue_manager_character_choices(model);
   check(view && view.rows.size() == 2 && view.rows[0].dialogue == "Hello" && view.rows[0].notes == "Whisper" &&
@@ -3678,20 +3856,28 @@ void test_cue_manager_application_service()
   check(static_cast<bool>(initial),
         "Cue Manager application fixture creates an initially synchronized session");
 
+  static double manager_test_frame_rate = 30.0;
+  manager_test_frame_rate = 30.0;
   reaadr::reaper::CueManagerApplicationService service(
     repository, overlay_settings, cue_selection, renderer, render_options,
-    {[]() { return std::string("2026-09-03T12:01:00Z"); }});
+    {[]() { return std::string("2026-09-03T12:01:00Z"); },
+     []() { return manager_test_frame_rate; }});
   reaadr::core::CueManagerEditOptions edit;
   edit.cue_key = "A1";
-  edit.dialogue = "Revised line";
+  const std::string long_dialogue = "Revised line " + std::string(4096, 'd') + " café 日本語";
+  const std::string long_notes = "Direction " + std::string(4096, 'n') + " — tail";
+  edit.notes = long_notes;
+  edit.notes_set = true;
+  edit.dialogue = long_dialogue;
   edit.dialogue_set = true;
-  edit.start_time = "14";
+  edit.start_time = "00:00:13:30";
   edit.end_time = "16";
   transaction_probe = {};
   const auto updated = service.edit(edit);
   const auto loaded = repository.load();
   check(updated && loaded && updated.revision == 2 &&
-          loaded.model.cues[0].at("line") == "Revised line" &&
+          loaded.model.cues[0].at("line") == long_dialogue &&
+          loaded.model.cues[0].at("notes") == long_notes &&
           loaded.model.cues[0].at("start_time") == "14" &&
           loaded.model.regions[0].at("start_time") == "14",
         "Cue Manager application edits the canonical cue and rebuilds derived model records");
@@ -3723,7 +3909,8 @@ void test_cue_manager_application_service()
   const auto restored = repository.load();
   check(!failed && failed.synchronization.model_rolled_back &&
           transaction_probe.undos == 1 && overlay_refreshes == 3 && restored &&
-          restored.model.cues[0].at("line") == "Revised line" &&
+          restored.model.cues[0].at("line") == long_dialogue &&
+          restored.model.cues[0].at("notes") == long_notes &&
           restored.model.cues[0].at("start_time") == "14" &&
           events.load().lines.size() == 4,
         "Cue Manager overlay failure rolls back the canonical edit and success events");
@@ -3733,7 +3920,8 @@ void test_cue_manager_application_service()
   reaadr::core::CueManagerAddOptions add;
   add.cue_key = "B1";
   add.character = "Beta";
-  add.start_time = "18";
+  manager_test_frame_rate = 60.0;
+  add.start_time = "00:00:17:60";
   add.end_time = "20";
   add.dialogue = "Added line";
   const auto added = service.add(add);
@@ -3741,6 +3929,8 @@ void test_cue_manager_application_service()
   const auto selected_after_add = cue_selection.load();
   check(added && added.revision == 5 && after_add && after_add.model.cues.size() == 2 &&
           after_add.model.cues[1].at("id") == "B1" &&
+          after_add.model.cues[1].at("start_time") == "18" &&
+          after_add.model.timecode == initial.commit.model.timecode &&
           selected_after_add && selected_after_add.state.manager_selected_cue_key == "B1" &&
           selected_after_add.state.active_overlay_cue_key == "B1" &&
           transaction_probe.begins == 1 && transaction_probe.ends == 1,
@@ -3775,22 +3965,60 @@ void test_cue_manager_application_service()
           mutation_events.lines[6].find("|CueDeleted|") != std::string::npos,
         "Cue Manager application removes and renumbers cues while rebuilding derived artifacts");
 
+  reaadr::reaper::SessionRefreshApplicationService reviewed_refresh(
+    repository, renderer, render_options, "2026-09-03T12:01:30Z");
+  const auto inspect_refresh = [] {
+    return reaadr::reaper::TrackRegionAdapter(nullptr, fake_render_api()).inspect();
+  };
+  const double canonical_start = render_adapter_probe.regions.front().start_time;
+  render_adapter_probe.regions.front().start_time += 0.5;
+  const auto before_review = store.values;
+  transaction_probe = {};
+  int review_calls = 0;
+  const auto declined = reviewed_refresh.refresh(inspect_refresh, [&](std::size_t count) {
+    ++review_calls;
+    check(count == 1, "refresh review counts moved owned regions");
+    return false;
+  });
+  check(declined && declined.cancelled && review_calls == 1 && store.values == before_review &&
+          transaction_probe.begins == 0 &&
+          render_adapter_probe.regions.front().start_time == canonical_start + 0.5,
+        "declining refresh preserves moved regions, extstate, events, and Undo history");
+  const auto unreviewed = reviewed_refresh.refresh(inspect_refresh);
+  check(unreviewed.cancelled && transaction_probe.begins == 0,
+        "detected timing drift cannot be overwritten without a review callback");
+  const auto failed_inspection = reviewed_refresh.refresh([] {
+    reaadr::reaper::ProjectInspectionResult result;
+    result.error = "Inspection failed";
+    return result;
+  });
+  check(!failed_inspection && transaction_probe.begins == 0 && store.values == before_review,
+        "refresh inspection errors stop before any mutation");
+  const auto accepted = reviewed_refresh.refresh(inspect_refresh, [](std::size_t) { return true; });
+  check(accepted && !accepted.cancelled && accepted.synchronization.commit.revision == 9 &&
+          render_adapter_probe.regions.front().start_time == canonical_start &&
+          transaction_probe.begins == 1 && transaction_probe.ends == 1,
+        "approved refresh restores canonical region timing in one transaction");
+
   transaction_probe = {};
   const auto removed_last = service.remove("1");
   const auto empty_session = repository.load();
   const auto empty_selection = cue_selection.load();
-  check(removed_last && removed_last.revision == 9 && empty_session && empty_session.model.cues.empty() &&
+  check(removed_last && removed_last.revision == 10 && empty_session && empty_session.model.cues.empty() &&
           empty_selection && empty_selection.state.manager_selected_cue_key.empty() &&
           empty_selection.state.active_overlay_cue_key.empty() &&
-          render_adapter_probe.regions.empty() && events.load().lines.size() == 10,
+          render_adapter_probe.regions.empty() && events.load().lines.size() == 12,
         "Cue Manager application can remove the final cue and clear derived selection/artifacts");
 
   reaadr::reaper::SessionRefreshApplicationService refresh_service(
     repository, renderer, render_options, "2026-09-03T12:02:00Z");
-  const auto refreshed = refresh_service.refresh();
-  check(refreshed && refreshed.synchronization.commit.revision == 10 &&
+  const auto refreshed = refresh_service.refresh(inspect_refresh, [](std::size_t) {
+    check(false, "unchanged refresh must not prompt");
+    return false;
+  });
+  check(refreshed && refreshed.synchronization.commit.revision == 11 &&
           refreshed.synchronization.commit.model.cues.empty() &&
-          events.load().lines.size() == 12,
+          events.load().lines.size() == 14,
         "native Refresh Session rebuilds an empty canonical session through the render boundary");
 
   for (FakeTrack& track : render_adapter_probe.tracks) {

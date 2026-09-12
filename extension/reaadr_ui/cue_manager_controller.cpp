@@ -1,4 +1,5 @@
 #include "cue_manager_controller.hpp"
+#include "cue_manager_ui_contract.hpp"
 
 #include <iomanip>
 #include <sstream>
@@ -11,8 +12,9 @@ CueManagerController::CueManagerController(reaper::ManagerViewApplicationService
                                            core::ProjectStateStore& project_state,
                                            reaper::CueNavigationApi navigation_api,
                                            std::function<void(const std::string&, bool, const std::string&, const std::string&)> trigger_import,
-                                           std::function<void(const std::string&)> trigger_action)
-  : service_(service), mutations_(mutations), project_state_(project_state),
+                                           std::function<void(const std::string&)> trigger_action,
+                                           std::function<bool(std::string*)> refresh_overlay)
+  : refresh_overlay_(std::move(refresh_overlay)), service_(service), mutations_(mutations), project_state_(project_state),
     navigation_api_(navigation_api), trigger_import_(std::move(trigger_import)),
     trigger_action_(std::move(trigger_action)) {}
 
@@ -66,14 +68,24 @@ bool CueManagerController::set_filters(const std::string& query,
   return reload();
 }
 
-void CueManagerController::select_index(int index)
+bool CueManagerController::sort_by(const std::string& key)
 {
-  if (index < 0 || static_cast<std::size_t>(index) >= view_.cues.rows.size()) return;
-  selected_key_ = view_.cues.rows[static_cast<std::size_t>(index)].cue_key;
-  view_.cues.selected_cue_key = selected_key_;
-  for (std::size_t i = 0; i < view_.cues.rows.size(); ++i) view_.cues.rows[i].selected = static_cast<int>(i) == index;
-  project_state_.write(core::SessionModelRepository::kNamespace,
-                       "manager_selected_cue_key", selected_key_);
+  if (!core::is_cue_manager_sort_key(key)) return false;
+  options_.sort_ascending = options_.sort_key == key ? !options_.sort_ascending : true;
+  options_.sort_key = key;
+  return reload();
+}
+
+bool CueManagerController::select_index(int index)
+{
+  if (index < 0 || static_cast<std::size_t>(index) >= view_.cues.rows.size()) return false;
+  const std::string key = view_.cues.rows[static_cast<std::size_t>(index)].cue_key;
+  if (!reaper::select_manager_cue(project_state_, key, refresh_overlay_, view_.error)) return false;
+  selected_key_ = key;
+  view_.cues.selected_cue_key = key;
+  for (std::size_t i = 0; i < view_.cues.rows.size(); ++i)
+    view_.cues.rows[i].selected = static_cast<int>(i) == index;
+  return true;
 }
 
 void CueManagerController::select_relative(int delta)
@@ -88,26 +100,26 @@ void CueManagerController::select_relative(int delta)
 
 bool CueManagerController::navigate_next()
 {
-  if (!view_.preferences.navigation_wrap && !view_.cues.rows.empty() &&
-      view_.cues.rows.back().selected) return false;
-  core::SessionModelRepository sessions(project_state_);
-  core::CueSelectionRepository selections(project_state_);
-  reaper::CueNavigationService navigation(sessions, selections, navigation_api_);
-  const auto result = navigation.navigate_next();
-  if (!result) return false;
-  selected_key_ = result.cue.cue_key;
-  return reload();
+  return navigate_displayed_row(true);
 }
 
 bool CueManagerController::navigate_previous()
 {
-  if (!view_.preferences.navigation_wrap && !view_.cues.rows.empty() &&
-      view_.cues.rows.front().selected) return false;
+  return navigate_displayed_row(false);
+}
+
+bool CueManagerController::navigate_displayed_row(bool next)
+{
+  const auto* target = core::adjacent_cue_manager_row(view_.cues, next);
+  if (!target) return false;
+  const std::string target_key = target->cue_key;
   core::SessionModelRepository sessions(project_state_);
   core::CueSelectionRepository selections(project_state_);
-  reaper::CueNavigationService navigation(sessions, selections, navigation_api_);
-  const auto result = navigation.navigate_previous();
-  if (!result) return false;
+  reaper::CueNavigationService navigation(sessions, selections, navigation_api_, refresh_overlay_);
+  // Resolve canonical timing and persist both selection keys before moving the
+  // cursor. Unlike explicit Jump, stepping through the table retains filters.
+  const auto result = navigation.navigate_to_id(target_key);
+  if (!result) { view_.error = result.error; return false; }
   selected_key_ = result.cue.cue_key;
   return reload();
 }
@@ -116,7 +128,8 @@ bool CueManagerController::navigate_to_id(const std::string& cue_id, std::string
 {
   core::SessionModelRepository sessions(project_state_);
   core::CueSelectionRepository selections(project_state_);
-  reaper::CueNavigationService navigation(sessions, selections, navigation_api_);
+  reaper::CueNavigationService navigation(sessions, selections, navigation_api_, refresh_overlay_);
+  error.clear();
   const auto result = navigation.navigate_to_id(cue_id);
   if (!result) { error = result.error; return false; }
   selected_key_ = result.cue.cue_key;

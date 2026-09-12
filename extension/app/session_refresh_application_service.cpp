@@ -1,14 +1,32 @@
 #include "session_refresh_application_service.hpp"
+#include "reaadr_core/region_timing_sync.hpp"
 
 namespace reaadr::reaper {
 
-SessionRefreshApplicationResult SessionRefreshApplicationService::refresh()
+SessionRefreshApplicationResult SessionRefreshApplicationService::refresh(
+  std::function<ProjectInspectionResult()> inspect,
+  std::function<bool(std::size_t)> confirm_overwrite)
 {
   SessionRefreshApplicationResult result;
   const core::SessionLoadResult loaded = sessions_.load();
   if (!loaded) {
     result.error = core::session_load_error_message(loaded);
     return result;
+  }
+
+  if (inspect) {
+    const auto current = inspect();
+    if (!current) { result.error = current.error; return result; }
+    // Reuse exact generated-name ownership and timing tolerance from Update
+    // Cues From Regions, but discard its proposed cues: refresh stays model-first.
+    const auto drift = core::sync_cue_timings_from_regions(loaded.model, current.state.regions);
+    if (!drift) { result.error = drift.error; return result; }
+    result.modified_regions = drift.changed_cues;
+    if (result.modified_regions != 0 &&
+        (!confirm_overwrite || !confirm_overwrite(result.modified_regions))) {
+      result.cancelled = true;
+      return result;
+    }
   }
 
   SessionRenderOptions options = render_options_;

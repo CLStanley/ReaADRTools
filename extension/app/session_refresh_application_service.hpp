@@ -4,11 +4,14 @@
 #include "../reaadr_reaper/session_render_service.hpp"
 
 #include <string>
+#include <functional>
 
 namespace reaadr::reaper {
 
 struct SessionRefreshApplicationResult {
   SessionRenderResult synchronization;
+  bool cancelled = false;
+  std::size_t modified_regions = 0;
   std::string error;
   explicit operator bool() const { return error.empty(); }
 };
@@ -25,7 +28,11 @@ public:
     : sessions_(sessions), renderer_(renderer),
       render_options_(std::move(render_options)), utc_timestamp_(std::move(utc_timestamp)) {}
 
-  SessionRefreshApplicationResult refresh();
+  // Interactive callers inspect before opening any transaction. A declined review
+  // is a cancellation, with no snapshot, revision, artifact, or event writes.
+  SessionRefreshApplicationResult refresh(
+    std::function<ProjectInspectionResult()> inspect = {},
+    std::function<bool(std::size_t)> confirm_overwrite = {});
 
 private:
   core::SessionModelRepository& sessions_;

@@ -597,7 +597,7 @@ void run_native_cue_manager_action()
     return static_cast<bool>(refreshed);
   };
   reaadr::reaper::CueManagerApplicationService mutations(
-    repository, overlay_settings, cue_selection, renderer, render_options, {native_utc_timestamp});
+    repository, overlay_settings, cue_selection, renderer, render_options, {native_utc_timestamp, native_overlay_frame_rate});
   const reaadr::reaper::CueNavigationApi navigation_api = {
     GetPlayState, GetPlayPosition, GetCursorPosition, SetEditCurPos,
   };
@@ -632,9 +632,9 @@ void run_native_cue_manager_action()
         run_native_quick_actions_action(action.substr(14));
       else if (action.rfind("preference_toggles:", 0) == 0)
         run_native_preference_toggles_action(action.substr(19));
-    });
+    }, render_options.refresh_overlay);
   if (!controller.reload()) { ShowMessageBox(controller.view().error.c_str(), "ReaADR Cue Manager", 0); return; }
-  if (reaadr::ui::show_cue_manager(controller)) return;
+  if (reaadr::ui::show_cue_manager(controller, native_overlay_frame_rate())) return;
 
   // Builds without a native dialog resource retain a compact compatibility
   // prompt, but supported native windows keep filtering inside the Manager.
@@ -1416,7 +1416,16 @@ void run_refresh_session_action()
   };
   reaadr::reaper::SessionRefreshApplicationService refresh(
     repository, renderer, render_options, native_utc_timestamp());
-  const auto result = refresh.refresh();
+  const auto result = refresh.refresh(
+    [] { return reaadr::reaper::TrackRegionAdapter(nullptr, native_track_region_api()).inspect(); },
+    [](std::size_t modified) {
+      const std::string message = "Detected " + std::to_string(modified) +
+        " cue region(s) whose timing differs from the saved session.\n\n"
+        "Refresh Session will overwrite those moved regions. Use Update Cues From Regions "
+        "first if the moved regions are correct.\n\nContinue with Refresh Session?";
+      return ShowMessageBox(message.c_str(), "ReaADR Refresh Session", 4) == 6;
+    });
+  if (result.cancelled) return;
   if (!result) {
     ShowMessageBox(result.error.c_str(), "ReaADR Session Refresh", 0);
     return;
@@ -1597,6 +1606,22 @@ void run_character_filter_action()
   ShowMessageBox(summary.c_str(), "ReaADR Character Filter", 0);
 }
 
+bool refresh_navigation_overlay(std::string* error)
+{
+  reaadr::reaper::ProjectStateStore project_state(nullptr, {GetProjExtState, SetProjExtState});
+  reaadr::core::SessionModelRepository sessions(project_state);
+  reaadr::core::OverlaySettingsRepository settings(project_state);
+  reaadr::core::CueSelectionRepository selections(project_state);
+  reaadr::core::CharacterFilterRepository filters(project_state);
+  const reaadr::reaper::OverlayApplicationApi api = {
+    native_overlay_frame_rate, native_overlay_selection, native_overlay_refresh_callback,
+  };
+  reaadr::reaper::OverlayApplicationService service(sessions, settings, selections, filters, api);
+  const auto result = service.refresh();
+  if (!result && error) *error = result.error;
+  return static_cast<bool>(result);
+}
+
 void run_cue_navigation_action(bool next)
 {
   reaadr::reaper::ProjectStateStore project_state(
@@ -1606,7 +1631,7 @@ void run_cue_navigation_action(bool next)
   const reaadr::reaper::CueNavigationApi api = {
     GetPlayState, GetPlayPosition, GetCursorPosition, SetEditCurPos,
   };
-  reaadr::reaper::CueNavigationService service(sessions, selections, api);
+  reaadr::reaper::CueNavigationService service(sessions, selections, api, refresh_navigation_overlay);
   const auto result = next ? service.navigate_next() : service.navigate_previous();
   if (!result) {
     ShowMessageBox(result.error.c_str(), "ReaADR Cue Navigation", 0);
@@ -1631,7 +1656,7 @@ void run_jump_to_cue_action()
   const reaadr::reaper::CueNavigationApi api = {
     GetPlayState, GetPlayPosition, GetCursorPosition, SetEditCurPos,
   };
-  reaadr::reaper::CueNavigationService service(sessions, selections, api);
+  reaadr::reaper::CueNavigationService service(sessions, selections, api, refresh_navigation_overlay);
   const auto result = service.navigate_to_id(input.data());
   if (!result) {
     ShowMessageBox(result.error.c_str(), "ReaADR Cue Navigation", 0);

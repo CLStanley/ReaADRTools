@@ -378,6 +378,81 @@ wiring, other overlay UI, and in-REAPER smoke tests remain. Lua source and
 packaging payloads have now been removed;
 the native extension is the only installed runtime.
 
+The native SWELL Cue Manager now displays the eight Lua table columns in a
+report-style list view, including SMPTE timing at the project frame rate, line,
+and notes. Header clicks route through the existing domain sorting rules and
+preserve selection by cue key without writing session state. Full-row selection,
+keyboard selection, and double-click navigation are connected to the editor.
+Controller regression tests cover sorting direction and selection retention;
+in-REAPER visual/interaction smoke testing remains required. This is an
+incremental table parity improvement, not completion of the full UI cutover.
+
+Native Cue Manager Previous/Next now use the displayed sorted/filtered rows,
+matching the Lua footer's clamped endpoints rather than choosing a cue relative
+to the play cursor. The domain core chooses the adjacent row; the REAPER service
+resolves canonical timing and saves paired manager/overlay selection before
+moving the cursor. Filters remain active, and failed selection persistence
+leaves the cursor and selected row intact with an error shown by the window.
+Regression coverage includes sorted order, playback independence, filtered and
+empty lists, endpoint clamping, and persistence failure. In-REAPER interaction
+validation remains outstanding.
+
+Native Refresh Session now inspects exact owned region timing before mutation
+and offers Lua's overwrite review when moved regions differ from the canonical
+model. Declining creates no Undo block, snapshot, revision, or event; inspection
+and ownership ambiguity errors stop the refresh. Confirmed refresh still uses
+the complete transactional renderer. The Cue Manager action bar now exposes
+Refresh Session and Update Cues From Regions and reloads its table after either
+action. Regression tests cover cancellation, inspection failure, confirmed
+canonical timing restoration, and skipping review when no timing drift exists.
+In-REAPER dialog and action-bar smoke tests remain required.
+
+The native Cue Manager Columns button now opens a width-control dialog for all
+eight table columns. Initial/reset widths match the Lua ImGui Manager exactly;
+minus/plus controls adjust by 24 pixels within its 44..900 bounds. Controls read
+the table's current widths, including manual header resizing, and apply changes
+immediately. Widths remain local to the open window, with no model or extstate
+writes. Native tests cover defaults, increments, and boundary clamping. The
+native presentation uses a child dialog rather than Lua's inline expandable
+panel; in-REAPER visual/interaction verification remains outstanding.
+
+Native Cue Manager mouse/keyboard row selection now validates the selected key
+against the canonical model, saves paired manager/overlay selection, and invokes
+the native overlay refresh adapter before changing the editor selection. Failed
+selection writes stop before overlay refresh; failed overlay refresh restores
+the previous paired keys. The table restores its prior highlight and displays
+the error, allowing another selection attempt. Row selection never moves the
+cursor or revises the session model. Regression tests cover success, both
+failure paths, retry, repeated selection, invalid indices, and stale rows.
+In-REAPER selection/highlight/overlay smoke testing remains outstanding.
+
+Native Previous/Next/Jump navigation now uses the same paired-selection and
+overlay-refresh boundary as mouse/keyboard row selection. Both the Manager and
+standalone native actions refresh owned overlay FX before moving the cursor;
+failed refresh restores the prior selection and prevents cursor movement.
+Manager Jump retains its filters and selected row on failure, clearing filters
+only after success. Tests cover refresh ordering, persistence and overlay
+failures, selection compensation, and retry without session revisions.
+In-REAPER navigation/overlay smoke testing remains outstanding.
+
+Native Cue Manager Add/Edit now parse typed SMPTE at the current REAPER project
+frame rate, matching Lua even when the imported session's stored rate differs.
+The host reads the rate on each submission and passes a validated optional
+input rate into the domain operation; callers without a host rate retain the
+session-rate fallback. Converted cue timing still flows through the complete
+transactional renderer, without changing the session's timecode metadata.
+Tests cover differing rates, add/edit consistency, invalid rates, current-rate
+reads across submissions, and synchronized region/audio output. In-REAPER
+frame-rate-change interaction testing remains outstanding.
+
+Native Cue Manager Add/Apply Edit now read every cue field using the control's
+reported text length instead of fixed stack buffers. This removes the previous
+511-byte dialogue/notes truncation and the smaller ID/character limits imposed
+by the native read path. Tests exercise long UTF-8 text, empty reads, and
+multi-kilobyte dialogue/notes through canonical save, render, and rollback.
+The native dialogue/notes controls are still single-line editors; multiline
+editing presentation and in-REAPER long-text verification remain outstanding.
+
 ### Stage 4: native UI and Lua removal
 
 - Replace manager, cue editor, preferences, filter, overlay, and report windows
