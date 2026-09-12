@@ -54,6 +54,10 @@ struct CueManagerEditOptions {
   bool dialogue_set = false;
   // Host input rate may differ from the session metadata; omitted uses the session rate.
   std::optional<double> input_frame_rate;
+  // Cue Info exposes direction independently from Notes. These trailing fields
+  // preserve the legacy aggregate-initializer layout used by compatibility tests.
+  std::string direction;
+  bool direction_set = false;
 };
 struct CueManagerEditResult {
   SessionModel model;
