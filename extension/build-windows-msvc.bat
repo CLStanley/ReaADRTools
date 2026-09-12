@@ -80,6 +80,7 @@ cl /nologo /EHsc /O2 /LD /std:c++17 ^
   reaadr_reaper\record_arm_adapter.cpp ^
   reaadr_reaper\recording_setup_adapter.cpp ^
   reaadr_reaper\recording_transport_executor.cpp ^
+  reaadr_reaper\recording_command_context.cpp ^
   reaadr_reaper\overlay_refresh_adapter.cpp ^
   reaadr_reaper\cue_cleanup_adapter.cpp ^
   app\cue_status_application_service.cpp ^
