@@ -1,17 +1,9 @@
 #include "recording_application_service.hpp"
 
+#include "cue_status_application_service.hpp"
 #include "reaadr_core/render_plan.hpp"
 
 namespace reaadr::reaper {
-namespace {
-
-std::string field(const core::Fields& fields, const char* key)
-{
-  const auto found = fields.find(key);
-  return found == fields.end() ? std::string() : found->second;
-}
-
-} // namespace
 
 bool RecordingApplicationService::validate_cue_key(
   const std::string& cue_key,
@@ -82,56 +74,32 @@ bool RecordingApplicationService::finalize_takes(
   const RecordingApplicationOptions& options,
   RecordingApplicationResult& result)
 {
-  core::CueStatusCommitOptions commit_options = options.status_commit;
-  commit_options.update.cue_key = options.cue_key;
-  commit_options.update.status = "Recorded";
-  commit_options.update.last_operation = "record_cue";
-
-  bool restore_model = false;
-  {
-    ProjectTransaction transaction(
-      project_, transaction_api_, options.undo_description, -1, true);
-    result.status = core::commit_cue_status(model_repository_, commit_options);
-    if (!result.status) {
-      result.error = result.status.error;
-      transaction.mark_failed();
-    } else if (!api_.refresh_overlay || !api_.refresh_overlay()) {
-      result.error = "REAPER could not refresh the overlay after recording.";
-      restore_model = result.status.update.changed;
-      transaction.mark_failed();
-    } else {
+  CueStatusApplicationService status_service(
+    model_repository_, event_log_, project_, transaction_api_);
+  CueStatusApplicationOptions status_options;
+  status_options.commit = options.status_commit;
+  status_options.commit.update.last_operation = "record_cue";
+  status_options.event = options.event;
+  if (status_options.event.source.empty())
+    status_options.event.source = "native_recording";
+  status_options.undo_description = options.undo_description;
+  status_options.refresh_overlay = [this, &result](std::string* error) {
+    if (api_.refresh_overlay && api_.refresh_overlay()) {
       ++result.overlay_refreshes;
+      return true;
     }
-  }
+    if (error) *error = "REAPER could not refresh the overlay after recording.";
+    return false;
+  };
 
-  if (restore_model) {
-    const core::RevisionResult restored =
-      model_repository_.restore_snapshot(result.status.snapshot);
-    result.model_rolled_back = static_cast<bool>(restored);
-    if (!restored) result.error += " Cue status rollback also failed: " + restored.error;
-  }
-  if (!result.error.empty()) return false;
-
-  if (result.status.update.changed) {
-    core::EventPublishOptions event_options = options.event;
-    if (event_options.utc_timestamp.empty()) {
-      event_options.utc_timestamp = commit_options.utc_timestamp;
-    }
-    event_options.session_id = result.status.update.model.session_id();
-    if (event_options.source.empty()) event_options.source = "native_recording";
-    const core::Fields payload = {
-      {"cue_id", field(result.status.update.cue, "id")},
-      {"cue_key", options.cue_key},
-      {"revision", std::to_string(result.status.revision)},
-      {"status", result.status.update.normalized_status},
-    };
-    result.event = event_log_.publish("CueUpdated", payload, event_options);
-    if (!result.event) {
-      result.event_warning =
-        "CueUpdated event publication failed: " + result.event.error;
-    }
-  }
-  return true;
+  const CueStatusApplicationResult applied =
+    status_service.apply(options.cue_key, "Recorded", status_options);
+  result.status = applied.status;
+  result.event = applied.event;
+  result.model_rolled_back = applied.model_rolled_back;
+  result.event_warning = applied.event_warning;
+  result.error = applied.error;
+  return static_cast<bool>(applied);
 }
 
 RecordingApplicationResult RecordingApplicationService::apply(
