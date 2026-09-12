@@ -1,5 +1,7 @@
 #include "marker_snapshot_adapter.hpp"
 
+#include <utility>
+
 namespace reaadr::reaper {
 
 MarkerSnapshotResult snapshot_project_markers(ReaProject* project,
