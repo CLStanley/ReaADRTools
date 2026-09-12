@@ -81,6 +81,7 @@ cl /nologo /EHsc /O2 /LD /std:c++17 ^
   reaadr_reaper\recording_transport_executor.cpp ^
   reaadr_reaper\overlay_refresh_adapter.cpp ^
   reaadr_reaper\cue_cleanup_adapter.cpp ^
+  app\cue_status_application_service.cpp ^
   app\recording_application_service.cpp ^
   app\recording_workflow_service.cpp ^
   app\overlay_application_service.cpp ^
