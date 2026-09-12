@@ -11,11 +11,11 @@
 #include "../app/overlay_application_service.hpp"
 #include "../reaadr_core/model_repository.hpp"
 
-#include <reaper_plugin.h>
-#include <reaper_plugin_functions.h>
-
 #include <sstream>
 #include <utility>
+
+#include <reaper_plugin.h>
+#include <reaper_plugin_functions.h>
 
 namespace reaadr::reaper {
 namespace {
@@ -50,7 +50,7 @@ MarkerCueGenerationCommandResult run_marker_cue_generation_command(ReaProject* p
     return command;
   }
 
-  ProjectStateStore project_state(project, {GetProjExtState, SetProjExtState});
+  core::ProjectStateStore project_state(project, {GetProjExtState, SetProjExtState});
   core::SessionModelRepository repository(project_state);
   core::EventLogRepository event_log(project_state);
   core::CharacterFilterRepository character_filter(project_state);
