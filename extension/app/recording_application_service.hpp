@@ -7,6 +7,7 @@
 #include "../reaadr_reaper/project_transaction.hpp"
 #include "../reaadr_reaper/recording_transport_executor.hpp"
 
+#include <functional>
 #include <string>
 
 struct ReaProject;
@@ -16,7 +17,7 @@ namespace reaadr::reaper {
 struct RecordingApplicationApi {
   // Rebuilds the current generated overlay from canonical model and selection
   // state. The adapter owns exact FX identification and mutation safety.
-  bool (*refresh_overlay)() = nullptr;
+  std::function<bool()> refresh_overlay;
 };
 
 struct RecordingApplicationOptions {
@@ -60,7 +61,7 @@ public:
       event_log_(event_log),
       project_(project),
       transaction_api_(transaction_api),
-      api_(api)
+      api_(std::move(api))
   {
   }
 
