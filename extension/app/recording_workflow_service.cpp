@@ -122,4 +122,49 @@ RecordingWorkflowDispatchResult RecordingWorkflowService::retry_pending()
   return apply_pending();
 }
 
+void RecordingWorkflowService::release()
+{
+  application_options_ = {};
+  plan_ = {};
+  context_ = {};
+  state_ = {};
+  target_track_ = nullptr;
+  pending_ = {};
+  active_ = false;
+}
+
+RecordingWorkflowDispatchResult RecordingWorkflowService::shutdown(
+  int play_state,
+  double play_position)
+{
+  RecordingWorkflowDispatchResult result;
+  result.state = state_;
+  result.pending = pending_;
+  if (!active_) {
+    result.workflow_closed = true;
+    return result;
+  }
+
+  // Never discard retryable canonical work just because the window is closing.
+  // This mirrors the Lua flow's single finalize path while preserving the
+  // native application's explicit retry contract.
+  if (has_pending(pending_)) {
+    result = retry_pending();
+    if (!result) return result;
+  }
+
+  result = dispatch(core::RecordingTransportEvent::abort, play_state, play_position);
+  if (!result) return result;
+  if (has_pending(pending_)) {
+    result = retry_pending();
+    if (!result) return result;
+  }
+
+  release();
+  result.state = {};
+  result.pending = {};
+  result.workflow_closed = true;
+  return result;
+}
+
 } // namespace reaadr::reaper
