@@ -31,6 +31,7 @@ struct RecordingWorkflowDispatchResult {
   PendingRecordingApplicationActions pending;
   RecordingApplicationResult application;
   bool state_changed = false;
+  bool workflow_closed = false;
   std::string error;
 
   explicit operator bool() const { return error.empty(); }
@@ -56,6 +57,11 @@ public:
 
   RecordingWorkflowDispatchResult retry_pending();
 
+  // Used by every native window exit route. Abort first restores transport,
+  // loop range, and record-arm state; the workflow is released only after any
+  // resulting canonical status work also succeeds.
+  RecordingWorkflowDispatchResult shutdown(int play_state, double play_position);
+
   bool active() const { return active_; }
   const core::RecordingTransportState& state() const { return state_; }
   const core::RecordingTransportContext& context() const { return context_; }
@@ -65,6 +71,7 @@ public:
 private:
   static bool has_pending(const PendingRecordingApplicationActions& pending);
   RecordingWorkflowDispatchResult apply_pending();
+  void release();
 
   RecordingSetupService& setup_;
   RecordingTransportExecutor& transport_;
