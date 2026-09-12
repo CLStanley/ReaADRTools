@@ -1,5 +1,6 @@
 #include "cue_manager_controller.hpp"
 #include "cue_manager_ui_contract.hpp"
+#include "reaadr_reaper/marker_cue_generation_command.hpp"
 
 #include <iomanip>
 #include <sstream>
@@ -49,6 +50,12 @@ std::string CueManagerController::last_import_mapping() const
 
 void CueManagerController::trigger_action(const std::string& action)
 {
+  if (action == "generate_cues") {
+    const auto generated = reaper::run_marker_cue_generation_command();
+    if (!generated) view_.error = generated.error;
+    else if (!generated.cancelled) reload();
+    return;
+  }
   if (trigger_action_) trigger_action_(action);
 }
 
