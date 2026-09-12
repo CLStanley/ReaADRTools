@@ -20,11 +20,14 @@
 #define REAPERAPI_WANT_GetMediaItemInfo_Value
 #define REAPERAPI_WANT_GetMediaSourceLength
 #define REAPERAPI_WANT_GetMediaTrackInfo_Value
+#define REAPERAPI_WANT_GetPlayPosition
+#define REAPERAPI_WANT_GetPlayState
 #define REAPERAPI_WANT_GetProjectPathEx
 #define REAPERAPI_WANT_GetRegionOrMarker
 #define REAPERAPI_WANT_GetRegionOrMarkerInfo_Value
 #define REAPERAPI_WANT_GetResourcePath
 #define REAPERAPI_WANT_GetSelectedMediaItem
+#define REAPERAPI_WANT_GetSet_LoopTimeRange2
 #define REAPERAPI_WANT_GetSetMediaItemInfo_String
 #define REAPERAPI_WANT_GetSetMediaItemTakeInfo
 #define REAPERAPI_WANT_GetSetMediaItemTakeInfo_String
@@ -34,10 +37,12 @@
 #define REAPERAPI_WANT_GetTrack
 #define REAPERAPI_WANT_GetTrackMediaItem
 #define REAPERAPI_WANT_InsertTrackAtIndex
+#define REAPERAPI_WANT_Main_OnCommand
 #define REAPERAPI_WANT_MoveMediaItemToTrack
 #define REAPERAPI_WANT_PCM_Source_CreateFromFile
 #define REAPERAPI_WANT_PCM_Source_Destroy
 #define REAPERAPI_WANT_PreventUIRefresh
+#define REAPERAPI_WANT_SetEditCurPos
 #define REAPERAPI_WANT_SetMediaItemInfo_Value
 #define REAPERAPI_WANT_SetMediaTrackInfo_Value
 #define REAPERAPI_WANT_SetProjectMarker4
@@ -75,16 +80,52 @@ MediaTrack* overlay_get_track(ReaProject* project, int index)
   return GetTrack ? GetTrack(project, index) : nullptr;
 }
 
-bool overlay_validate_track(ReaProject* project, MediaTrack* track)
+bool validate_track(ReaProject* project, MediaTrack* track)
 {
   return ValidatePtr2 && ValidatePtr2(project, track, "MediaTrack*");
 }
 
-bool overlay_get_set_track_string(MediaTrack* track, const char* parameter,
-                                  char* value, bool set_value)
+bool get_set_track_string(MediaTrack* track, const char* parameter,
+                          char* value, bool set_value)
 {
   return GetSetMediaTrackInfo_String &&
     GetSetMediaTrackInfo_String(track, parameter, value, set_value);
+}
+
+bool set_track_value(MediaTrack* track, const char* parameter, double value)
+{
+  if (!SetMediaTrackInfo_Value) return false;
+  SetMediaTrackInfo_Value(track, parameter, value);
+  return true;
+}
+
+bool get_loop_time_range(double* start, double* end)
+{
+  if (!GetSet_LoopTimeRange2 || !start || !end) return false;
+  GetSet_LoopTimeRange2(nullptr, false, true, start, end, false);
+  return std::isfinite(*start) && std::isfinite(*end);
+}
+
+bool set_loop_time_range(double start, double end)
+{
+  if (!GetSet_LoopTimeRange2 || !std::isfinite(start) || !std::isfinite(end))
+    return false;
+  GetSet_LoopTimeRange2(nullptr, true, true, &start, &end, false);
+  return true;
+}
+
+bool set_edit_cursor_position(double position, bool move_view, bool seek_play)
+{
+  if (!SetEditCurPos || !std::isfinite(position)) return false;
+  SetEditCurPos(position, move_view, seek_play);
+  return true;
+}
+
+bool run_main_command(int command)
+{
+  if (!Main_OnCommand || command <= 0) return false;
+  Main_OnCommand(command, 0);
+  return true;
 }
 
 } // namespace
@@ -154,8 +195,8 @@ OverlayRefreshApi native_overlay_refresh_api()
   return {
     CountTracks,
     overlay_get_track,
-    overlay_validate_track,
-    overlay_get_set_track_string,
+    validate_track,
+    get_set_track_string,
     TrackFX_GetCount,
     TrackFX_GetNamedConfigParm,
     TrackFX_GetEnabled,
@@ -166,6 +207,48 @@ OverlayRefreshApi native_overlay_refresh_api()
     TrackList_AdjustWindows,
     UpdateArrange,
   };
+}
+
+RecordArmApi native_record_arm_api()
+{
+  return {
+    CountTracks,
+    GetTrack,
+    validate_track,
+    GetMediaTrackInfo_Value,
+    set_track_value,
+  };
+}
+
+RecordingSetupApi native_recording_setup_api()
+{
+  return {
+    CountTracks,
+    GetTrack,
+    validate_track,
+    get_set_track_string,
+  };
+}
+
+RecordingTransportApi native_recording_transport_api()
+{
+  return {
+    get_loop_time_range,
+    set_loop_time_range,
+    set_edit_cursor_position,
+    run_main_command,
+  };
+}
+
+int native_play_state()
+{
+  return GetPlayState ? GetPlayState() : 0;
+}
+
+double native_play_position()
+{
+  const double position = GetPlayPosition ? GetPlayPosition() : 0.0;
+  return std::isfinite(position) ? position : 0.0;
 }
 
 double native_project_frame_rate(ReaProject* project)
