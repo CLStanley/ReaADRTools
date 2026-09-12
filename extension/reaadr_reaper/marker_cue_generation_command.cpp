@@ -7,6 +7,7 @@
 
 #include "native_host_services.hpp"
 #include "overlay_refresh_adapter.hpp"
+#include "project_state.hpp"
 #include "../app/marker_cue_generation_application_service.hpp"
 #include "../app/overlay_application_service.hpp"
 #include "../reaadr_core/model_repository.hpp"
@@ -50,7 +51,7 @@ MarkerCueGenerationCommandResult run_marker_cue_generation_command(ReaProject* p
     return command;
   }
 
-  core::ProjectStateStore project_state(project, {GetProjExtState, SetProjExtState});
+  ProjectStateStore project_state(project, {GetProjExtState, SetProjExtState});
   core::SessionModelRepository repository(project_state);
   core::EventLogRepository event_log(project_state);
   core::CharacterFilterRepository character_filter(project_state);
