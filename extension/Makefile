@@ -8,6 +8,7 @@ WDL := ../vendor/WDL/WDL
 TARGET := reaper_reaadr-x86_64.so
 BUILD_DIR := ../build/extension
 TEST_TARGET := $(BUILD_DIR)/session_model_tests
+MARKER_TEST_TARGET := $(BUILD_DIR)/marker_cue_generation_tests
 DIST_DIR := ../dist
 DIST_USERPLUGINS_DIR := $(DIST_DIR)/UserPlugins
 DIST_REAADR_DIR := $(DIST_DIR)/Scripts/ReaADRTools
@@ -50,23 +51,23 @@ CORE_HEADERS := reaadr_core/session_model.hpp reaadr_core/model_repository.hpp r
 	reaadr_core/overlay_eel.hpp reaadr_core/overlay_refresh.hpp
 REAPER_SOURCES := reaadr_reaper/project_state.cpp reaadr_reaper/project_transaction.cpp \
 	reaadr_reaper/track_region_adapter.cpp reaadr_reaper/render_artifact_adapter.cpp \
-	reaadr_reaper/session_render_service.cpp reaadr_reaper/character_filter_adapter.cpp \
+	reaadr_reaper/session_render_service.cpp reaadr_reaper/marker_snapshot_adapter.cpp reaadr_reaper/character_filter_adapter.cpp \
 	reaadr_reaper/cue_navigation_service.cpp reaadr_reaper/record_arm_adapter.cpp \
 	reaadr_reaper/recording_setup_adapter.cpp reaadr_reaper/recording_transport_executor.cpp \
 	reaadr_reaper/overlay_refresh_adapter.cpp reaadr_reaper/cue_cleanup_adapter.cpp \
 	app/recording_application_service.cpp app/overlay_application_service.cpp \
-	app/cue_import_application_service.cpp \
+	app/cue_import_application_service.cpp app/marker_cue_generation_application_service.cpp \
 	app/cue_cleanup_application_service.cpp app/character_filter_application_service.cpp \
 	app/manager_view_application_service.cpp app/cue_manager_application_service.cpp \
 	app/session_refresh_application_service.cpp app/region_timing_application_service.cpp
 REAPER_HEADERS := reaadr_reaper/project_state.hpp reaadr_reaper/project_transaction.hpp \
 	reaadr_reaper/track_region_adapter.hpp reaadr_reaper/render_artifact_adapter.hpp \
-	reaadr_reaper/session_render_service.hpp reaadr_reaper/character_filter_adapter.hpp \
+	reaadr_reaper/session_render_service.hpp reaadr_reaper/marker_snapshot_adapter.hpp reaadr_reaper/character_filter_adapter.hpp \
 	reaadr_reaper/cue_navigation_service.hpp reaadr_reaper/record_arm_adapter.hpp \
 	reaadr_reaper/recording_setup_adapter.hpp reaadr_reaper/recording_transport_executor.hpp \
 	reaadr_reaper/overlay_refresh_adapter.hpp reaadr_reaper/cue_cleanup_adapter.hpp \
 	app/recording_application_service.hpp app/overlay_application_service.hpp \
-	app/cue_import_application_service.hpp \
+	app/cue_import_application_service.hpp app/marker_cue_generation_application_service.hpp \
 	app/cue_cleanup_application_service.hpp app/character_filter_application_service.hpp \
 	app/manager_view_application_service.hpp app/cue_manager_application_service.hpp \
 	app/session_refresh_application_service.hpp app/region_timing_application_service.hpp
@@ -93,8 +94,13 @@ $(TEST_TARGET): ../tests/session_model_tests.cpp $(NATIVE_SOURCES) $(NATIVE_HEAD
 	@mkdir -p "$(BUILD_DIR)"
 	$(CXX) $(CPPFLAGS) $(CXXFLAGS) ../tests/session_model_tests.cpp $(NATIVE_SOURCES) -o $@
 
-test: $(TEST_TARGET)
+$(MARKER_TEST_TARGET): ../tests/marker_cue_generation_tests.cpp reaadr_core/marker_cue_generation.cpp reaadr_core/marker_cue_generation.hpp reaadr_core/session_model.hpp
+	@mkdir -p "$(BUILD_DIR)"
+	$(CXX) $(CPPFLAGS) $(CXXFLAGS) ../tests/marker_cue_generation_tests.cpp reaadr_core/marker_cue_generation.cpp -o $@
+
+test: $(TEST_TARGET) $(MARKER_TEST_TARGET)
 	$(TEST_TARGET)
+	$(MARKER_TEST_TARGET)
 
 dist: all
 	rm -rf "$(DIST_DIR)"
