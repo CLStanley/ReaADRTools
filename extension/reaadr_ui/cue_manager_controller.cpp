@@ -2,6 +2,7 @@
 #include "cue_manager_ui_contract.hpp"
 #include "reaadr_reaper/dialogue_detection_command.hpp"
 #include "reaadr_reaper/marker_cue_generation_command.hpp"
+#include "reaadr_reaper/recording_command.hpp"
 
 #include <iomanip>
 #include <sstream>
@@ -61,6 +62,13 @@ void CueManagerController::trigger_action(const std::string& action)
     const auto detected = reaper::run_dialogue_detection_command();
     if (!detected) view_.error = detected.error;
     else if (!detected.cancelled) reload();
+    return;
+  }
+  if (action == "record_cue") {
+    if (!reaper::run_native_record_cue_command())
+      view_.error = "The native Record Cue workflow could not be opened.";
+    else
+      reload();
     return;
   }
   if (trigger_action_) trigger_action_(action);
