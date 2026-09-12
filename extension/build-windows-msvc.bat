@@ -31,7 +31,6 @@ if not exist "%BUILD_DIR%" mkdir "%BUILD_DIR%"
 if not exist "%DIST_USERPLUGINS_DIR%" mkdir "%DIST_USERPLUGINS_DIR%"
 if not exist "%DIST_REAADR_DIR%\scripts" mkdir "%DIST_REAADR_DIR%\scripts"
 if not exist "%DIST_REAADR_DIR%\assets" mkdir "%DIST_REAADR_DIR%\assets"
-if not exist "%DIST_REAADR_DIR%\scripts" mkdir "%DIST_REAADR_DIR%\scripts"
 
 pushd "%~dp0"
 cl /nologo /EHsc /O2 /LD /std:c++17 ^
@@ -69,6 +68,7 @@ cl /nologo /EHsc /O2 /LD /std:c++17 ^
   reaadr_reaper\track_region_adapter.cpp ^
   reaadr_reaper\render_artifact_adapter.cpp ^
   reaadr_reaper\session_render_service.cpp ^
+  reaadr_reaper\marker_snapshot_adapter.cpp ^
   reaadr_reaper\character_filter_adapter.cpp ^
   reaadr_reaper\cue_navigation_service.cpp ^
   reaadr_reaper\record_arm_adapter.cpp ^
@@ -79,19 +79,20 @@ cl /nologo /EHsc /O2 /LD /std:c++17 ^
   app\recording_application_service.cpp ^
   app\overlay_application_service.cpp ^
   app\cue_import_application_service.cpp ^
+  app\marker_cue_generation_application_service.cpp ^
   app\cue_cleanup_application_service.cpp ^
   app\character_filter_application_service.cpp ^
   app\manager_view_application_service.cpp ^
   app\cue_manager_application_service.cpp ^
   app\session_refresh_application_service.cpp ^
   app\region_timing_application_service.cpp ^
-  ui\reaadr_ui.cpp ^
-  ui\cue_manager_controller.cpp ^
-  ui\cue_manager_window.cpp ^
-  ui\manager_view_model.cpp ^
-  ui\manager_navigation.cpp ^
-  ui\manager_ui_contract.cpp ^
-  ui\cue_manager_ui_contract.cpp ^
+  reaadr_ui\reaadr_ui.cpp ^
+  reaadr_ui\cue_manager_controller.cpp ^
+  reaadr_ui\cue_manager_window.cpp ^
+  reaadr_ui\manager_view_model.cpp ^
+  reaadr_ui\manager_navigation.cpp ^
+  reaadr_ui\manager_ui_contract.cpp ^
+  reaadr_ui\cue_manager_ui_contract.cpp ^
   /Fe"%BUILD_DIR%\%TARGET%" ^
   /link user32.lib /DEF:reaper_reaadr.def
 
