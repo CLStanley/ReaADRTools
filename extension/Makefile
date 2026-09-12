@@ -18,7 +18,7 @@ CPPFLAGS += -I. -isystem $(REAPER_SDK)/sdk -isystem $(WDL)
 CPPFLAGS += -DSWELL_PROVIDED_BY_APP
 LDFLAGS += -shared -ldl
 CORE_SOURCES := reaadr_core/session_model.cpp reaadr_core/model_repository.cpp reaadr_core/domain_utils.cpp \
-	reaadr_core/cue_import.cpp reaadr_core/session_builder.cpp reaadr_core/session_mutation.cpp \
+	reaadr_core/cue_import.cpp reaadr_core/marker_cue_generation.cpp reaadr_core/session_builder.cpp reaadr_core/session_mutation.cpp \
 	reaadr_core/session_commit.cpp reaadr_core/lane_assignment.cpp reaadr_core/render_plan.cpp \
 	reaadr_core/cue_wav.cpp reaadr_core/event_log.cpp reaadr_core/character_filter.cpp \
 	reaadr_core/cue_cleanup.cpp \
@@ -38,7 +38,7 @@ else
 UI_SOURCES += $(WDL)/swell/swell-modstub-generic.cpp
 endif
 CORE_HEADERS := reaadr_core/session_model.hpp reaadr_core/model_repository.hpp reaadr_core/domain_utils.hpp \
-	reaadr_core/cue_import.hpp reaadr_core/session_builder.hpp reaadr_core/session_mutation.hpp \
+	reaadr_core/cue_import.hpp reaadr_core/marker_cue_generation.hpp reaadr_core/session_builder.hpp reaadr_core/session_mutation.hpp \
 	reaadr_core/session_commit.hpp reaadr_core/lane_assignment.hpp reaadr_core/render_plan.hpp \
 	reaadr_core/cue_wav.hpp reaadr_core/event_log.hpp reaadr_core/character_filter.hpp \
 	reaadr_core/cue_cleanup.hpp \
