@@ -83,6 +83,7 @@ cl /nologo /EHsc /O2 /LD /std:c++17 ^
   app\cue_import_application_service.cpp ^
   app\marker_cue_generation_application_service.cpp ^
   app\dialogue_cue_generation_application_service.cpp ^
+  app\dialogue_detection_application_service.cpp ^
   app\cue_cleanup_application_service.cpp ^
   app\character_filter_application_service.cpp ^
   app\manager_view_application_service.cpp ^
