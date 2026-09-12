@@ -86,6 +86,7 @@ cl /nologo /EHsc /O2 /LD /std:c++17 ^
   app\recording_application_service.cpp ^
   app\recording_target_application_service.cpp ^
   app\recording_workflow_service.cpp ^
+  app\recording_session_service.cpp ^
   app\overlay_application_service.cpp ^
   app\cue_import_application_service.cpp ^
   app\marker_cue_generation_application_service.cpp ^
