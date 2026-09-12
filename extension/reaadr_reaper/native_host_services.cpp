@@ -5,12 +5,18 @@
 #define REAPERAPI_WANT_ColorFromNative
 #define REAPERAPI_WANT_ColorToNative
 #define REAPERAPI_WANT_CountProjectMarkers
+#define REAPERAPI_WANT_CountSelectedMediaItems
 #define REAPERAPI_WANT_CountTrackMediaItems
 #define REAPERAPI_WANT_CountTracks
+#define REAPERAPI_WANT_CreateTakeAudioAccessor
 #define REAPERAPI_WANT_DeleteProjectMarker
 #define REAPERAPI_WANT_DeleteTrackMediaItem
+#define REAPERAPI_WANT_DestroyAudioAccessor
 #define REAPERAPI_WANT_EnumProjectMarkers3
 #define REAPERAPI_WANT_GetActiveTake
+#define REAPERAPI_WANT_GetAudioAccessorEndTime
+#define REAPERAPI_WANT_GetAudioAccessorSamples
+#define REAPERAPI_WANT_GetAudioAccessorStartTime
 #define REAPERAPI_WANT_GetMediaItemInfo_Value
 #define REAPERAPI_WANT_GetMediaSourceLength
 #define REAPERAPI_WANT_GetMediaTrackInfo_Value
@@ -18,6 +24,7 @@
 #define REAPERAPI_WANT_GetRegionOrMarker
 #define REAPERAPI_WANT_GetRegionOrMarkerInfo_Value
 #define REAPERAPI_WANT_GetResourcePath
+#define REAPERAPI_WANT_GetSelectedMediaItem
 #define REAPERAPI_WANT_GetSetMediaItemInfo_String
 #define REAPERAPI_WANT_GetSetMediaItemTakeInfo
 #define REAPERAPI_WANT_GetSetMediaItemTakeInfo_String
@@ -125,6 +132,21 @@ TransactionApi native_transaction_api()
 MarkerSnapshotApi native_marker_snapshot_api()
 {
   return {CountProjectMarkers, EnumProjectMarkers3};
+}
+
+DialogueDetectionApi native_dialogue_detection_api()
+{
+  return {
+    CountSelectedMediaItems,
+    GetSelectedMediaItem,
+    GetActiveTake,
+    CreateTakeAudioAccessor,
+    DestroyAudioAccessor,
+    GetAudioAccessorStartTime,
+    GetAudioAccessorEndTime,
+    GetAudioAccessorSamples,
+    GetMediaItemInfo_Value,
+  };
 }
 
 OverlayRefreshApi native_overlay_refresh_api()
