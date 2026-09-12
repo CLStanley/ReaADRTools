@@ -18,6 +18,7 @@ struct ProjectMarkerCueSource {
 struct MarkerCueGenerationOptions {
   bool include_markers = true;
   bool include_regions = true;
+  bool flexible_export = false;
   double default_duration = 2.0;
   std::string character = "ADR";
 };
