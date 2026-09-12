@@ -205,9 +205,9 @@ CueManagerEditResult edit_cue_manager_row(const SessionModel& model,
   const std::string start_value = canonical_time(options.start_time);
   const std::string end_value = canonical_time(options.end_time);
   const std::pair<const char*, const std::string*> updates[] = {
-    {"dialogue", &options.dialogue}, {"notes", &options.notes}, {"cue_type", &options.cue_type},
-    {"status", &options.status}, {"start_time", &options.start_time},
-    {"end_time", &options.end_time},
+    {"dialogue", &options.dialogue}, {"notes", &options.notes}, {"direction", &options.direction},
+    {"cue_type", &options.cue_type}, {"status", &options.status},
+    {"start_time", &options.start_time}, {"end_time", &options.end_time},
   };
   for (const auto& update : updates) {
     const char* key = update.first;
@@ -218,7 +218,8 @@ CueManagerEditResult edit_cue_manager_row(const SessionModel& model,
     else if (std::string(update.first) == "end_time") value = &end_value;
     const bool explicitly_empty =
       (std::string(update.first) == "notes" && options.notes_set) ||
-      (std::string(update.first) == "dialogue" && options.dialogue_set);
+      (std::string(update.first) == "dialogue" && options.dialogue_set) ||
+      (std::string(update.first) == "direction" && options.direction_set);
     if (value->empty() && !explicitly_empty) continue;
     if (field(cue, key) == *value) continue;
     cue[key] = *value;
