@@ -6,6 +6,7 @@
 
 #include "native_host_services.hpp"
 #include "overlay_refresh_adapter.hpp"
+#include "project_state.hpp"
 #include "../app/cue_status_application_service.hpp"
 #include "../app/overlay_application_service.hpp"
 #include "../reaadr_core/cue_navigation.hpp"
@@ -61,7 +62,7 @@ CueStatusCommandResult set_cue_status_at_current_position(
   ReaProject* project)
 {
   CueStatusCommandResult result;
-  core::ProjectStateStore project_state(project, {GetProjExtState, SetProjExtState});
+  ProjectStateStore project_state(project, {GetProjExtState, SetProjExtState});
   core::SessionModelRepository sessions(project_state);
   core::EventLogRepository event_log(project_state);
   core::CharacterFilterRepository filters(project_state);
