@@ -14,19 +14,16 @@ if not exist "%REAPER_SDK%\sdk\reaper_plugin.h" (
   echo Missing REAPER SDK at "%REAPER_SDK%\sdk".
   exit /b 1
 )
-
 if not exist "%WDL%\swell" (
   echo Missing WDL at "%WDL%".
   exit /b 1
 )
-
 where cl >nul 2>nul
 if errorlevel 1 (
   echo MSVC cl.exe was not found.
   echo Open "x64 Native Tools Command Prompt for VS" and run this script again.
   exit /b 1
 )
-
 if not exist "%BUILD_DIR%" mkdir "%BUILD_DIR%"
 if not exist "%DIST_USERPLUGINS_DIR%" mkdir "%DIST_USERPLUGINS_DIR%"
 if not exist "%DIST_REAADR_DIR%\scripts" mkdir "%DIST_REAADR_DIR%\scripts"
@@ -34,87 +31,39 @@ if not exist "%DIST_REAADR_DIR%\assets" mkdir "%DIST_REAADR_DIR%\assets"
 
 pushd "%~dp0"
 cl /nologo /EHsc /O2 /LD /std:c++17 ^
-  /I"%REAPER_SDK%\sdk" ^
-  /I"%WDL%" ^
+  /I"%REAPER_SDK%\sdk" /I"%WDL%" ^
   reaper_reaadr.cpp ^
-  reaadr_core\session_model.cpp ^
-  reaadr_core\model_repository.cpp ^
-  reaadr_core\domain_utils.cpp ^
-  reaadr_core\cue_import.cpp ^
-  reaadr_core\marker_cue_generation.cpp ^
-  reaadr_core\dialogue_cue_generation.cpp ^
-  reaadr_core\session_builder.cpp ^
-  reaadr_core\session_mutation.cpp ^
-  reaadr_core\session_commit.cpp ^
-  reaadr_core\lane_assignment.cpp ^
-  reaadr_core\render_plan.cpp ^
-  reaadr_core\cue_wav.cpp ^
-  reaadr_core\event_log.cpp ^
-  reaadr_core\character_filter.cpp ^
-  reaadr_core\cue_cleanup.cpp ^
-  reaadr_core\cue_manager_model.cpp ^
-  reaadr_core\manager_preferences.cpp ^
-  reaadr_core\region_timing_sync.cpp ^
-  reaadr_core\cue_navigation.cpp ^
-  reaadr_core\record_arm.cpp ^
-  reaadr_core\recording_setup.cpp ^
-  reaadr_core\recording_target.cpp ^
-  reaadr_core\recording_transport.cpp ^
-  reaadr_core\cue_status.cpp ^
-  reaadr_core\recording_preferences.cpp ^
-  reaadr_core\overlay_settings.cpp ^
-  reaadr_core\overlay_eel.cpp ^
-  reaadr_core\overlay_refresh.cpp ^
-  reaadr_reaper\project_state.cpp ^
-  reaadr_reaper\project_transaction.cpp ^
-  reaadr_reaper\track_region_adapter.cpp ^
-  reaadr_reaper\render_artifact_adapter.cpp ^
-  reaadr_reaper\session_render_service.cpp ^
-  reaadr_reaper\native_host_services.cpp ^
-  reaadr_reaper\marker_snapshot_adapter.cpp ^
-  reaadr_reaper\marker_cue_generation_command.cpp ^
-  reaadr_reaper\dialogue_detection_adapter.cpp ^
-  reaadr_reaper\dialogue_detection_command.cpp ^
-  reaadr_reaper\character_filter_adapter.cpp ^
-  reaadr_reaper\cue_navigation_service.cpp ^
-  reaadr_reaper\record_arm_adapter.cpp ^
-  reaadr_reaper\recording_setup_adapter.cpp ^
-  reaadr_reaper\recording_transport_executor.cpp ^
-  reaadr_reaper\recording_command_context.cpp ^
-  reaadr_reaper\overlay_refresh_adapter.cpp ^
-  reaadr_reaper\cue_cleanup_adapter.cpp ^
-  app\cue_status_application_service.cpp ^
-  app\recording_application_service.cpp ^
-  app\recording_target_application_service.cpp ^
-  app\recording_workflow_service.cpp ^
-  app\recording_session_service.cpp ^
-  app\overlay_application_service.cpp ^
-  app\cue_import_application_service.cpp ^
-  app\marker_cue_generation_application_service.cpp ^
-  app\dialogue_cue_generation_application_service.cpp ^
-  app\dialogue_detection_application_service.cpp ^
-  app\cue_cleanup_application_service.cpp ^
-  app\character_filter_application_service.cpp ^
-  app\manager_view_application_service.cpp ^
-  app\cue_manager_application_service.cpp ^
-  app\session_refresh_application_service.cpp ^
-  app\region_timing_application_service.cpp ^
-  reaadr_ui\reaadr_ui.cpp ^
-  reaadr_ui\cue_manager_controller.cpp ^
-  reaadr_ui\cue_manager_window.cpp ^
-  reaadr_ui\recording_controller.cpp ^
-  reaadr_ui\manager_view_model.cpp ^
-  reaadr_ui\manager_navigation.cpp ^
-  reaadr_ui\manager_ui_contract.cpp ^
-  reaadr_ui\cue_manager_ui_contract.cpp ^
-  /Fe"%BUILD_DIR%\%TARGET%" ^
-  /link user32.lib /DEF:reaper_reaadr.def
-
+  reaadr_core\session_model.cpp reaadr_core\model_repository.cpp reaadr_core\domain_utils.cpp ^
+  reaadr_core\cue_import.cpp reaadr_core\marker_cue_generation.cpp reaadr_core\dialogue_cue_generation.cpp ^
+  reaadr_core\session_builder.cpp reaadr_core\session_mutation.cpp reaadr_core\session_commit.cpp ^
+  reaadr_core\lane_assignment.cpp reaadr_core\render_plan.cpp reaadr_core\cue_wav.cpp ^
+  reaadr_core\event_log.cpp reaadr_core\character_filter.cpp reaadr_core\cue_cleanup.cpp ^
+  reaadr_core\cue_manager_model.cpp reaadr_core\manager_preferences.cpp reaadr_core\region_timing_sync.cpp ^
+  reaadr_core\cue_navigation.cpp reaadr_core\record_arm.cpp reaadr_core\recording_setup.cpp ^
+  reaadr_core\recording_target.cpp reaadr_core\recording_transport.cpp reaadr_core\cue_status.cpp ^
+  reaadr_core\recording_preferences.cpp reaadr_core\overlay_settings.cpp reaadr_core\overlay_eel.cpp reaadr_core\overlay_refresh.cpp ^
+  reaadr_reaper\project_state.cpp reaadr_reaper\project_transaction.cpp ^
+  reaadr_reaper\track_region_adapter.cpp reaadr_reaper\render_artifact_adapter.cpp reaadr_reaper\session_render_service.cpp ^
+  reaadr_reaper\native_host_services.cpp reaadr_reaper\marker_snapshot_adapter.cpp reaadr_reaper\marker_cue_generation_command.cpp ^
+  reaadr_reaper\dialogue_detection_adapter.cpp reaadr_reaper\dialogue_detection_command.cpp ^
+  reaadr_reaper\character_filter_adapter.cpp reaadr_reaper\cue_navigation_service.cpp reaadr_reaper\record_arm_adapter.cpp ^
+  reaadr_reaper\recording_setup_adapter.cpp reaadr_reaper\recording_transport_executor.cpp reaadr_reaper\recording_command_context.cpp ^
+  reaadr_reaper\overlay_refresh_adapter.cpp reaadr_reaper\cue_cleanup_adapter.cpp ^
+  app\cue_status_application_service.cpp app\recording_application_service.cpp app\recording_target_application_service.cpp ^
+  app\recording_workflow_service.cpp app\recording_session_service.cpp app\overlay_application_service.cpp ^
+  app\cue_import_application_service.cpp app\marker_cue_generation_application_service.cpp ^
+  app\dialogue_cue_generation_application_service.cpp app\dialogue_detection_application_service.cpp ^
+  app\cue_cleanup_application_service.cpp app\character_filter_application_service.cpp ^
+  app\manager_view_application_service.cpp app\cue_manager_application_service.cpp ^
+  app\session_refresh_application_service.cpp app\region_timing_application_service.cpp ^
+  reaadr_ui\reaadr_ui.cpp reaadr_ui\cue_manager_controller.cpp reaadr_ui\cue_manager_window.cpp ^
+  reaadr_ui\recording_controller.cpp reaadr_ui\recording_window.cpp ^
+  reaadr_ui\manager_view_model.cpp reaadr_ui\manager_navigation.cpp reaadr_ui\manager_ui_contract.cpp reaadr_ui\cue_manager_ui_contract.cpp ^
+  /Fe"%BUILD_DIR%\%TARGET%" /link user32.lib /DEF:reaper_reaadr.def
 if errorlevel 1 (
   popd
   exit /b 1
 )
-
 copy /Y "%BUILD_DIR%\%TARGET%" "%DIST_USERPLUGINS_DIR%\%TARGET%" >nul
 xcopy "%ROOT%\assets\*" "%DIST_REAADR_DIR%\assets\" /Y >nul
 xcopy "%ROOT%\scripts\*.lua" "%DIST_REAADR_DIR%\scripts\" /Y >nul
