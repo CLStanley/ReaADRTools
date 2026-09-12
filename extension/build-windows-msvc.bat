@@ -69,6 +69,7 @@ cl /nologo /EHsc /O2 /LD /std:c++17 ^
   reaadr_reaper\track_region_adapter.cpp ^
   reaadr_reaper\render_artifact_adapter.cpp ^
   reaadr_reaper\session_render_service.cpp ^
+  reaadr_reaper\native_host_services.cpp ^
   reaadr_reaper\marker_snapshot_adapter.cpp ^
   reaadr_reaper\dialogue_detection_adapter.cpp ^
   reaadr_reaper\character_filter_adapter.cpp ^
