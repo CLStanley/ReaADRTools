@@ -55,8 +55,8 @@ REAPER_SOURCES := reaadr_reaper/project_state.cpp reaadr_reaper/project_transact
 	reaadr_reaper/track_region_adapter.cpp reaadr_reaper/render_artifact_adapter.cpp \
 	reaadr_reaper/session_render_service.cpp reaadr_reaper/native_host_services.cpp \
 	reaadr_reaper/marker_snapshot_adapter.cpp reaadr_reaper/marker_cue_generation_command.cpp \
-	reaadr_reaper/dialogue_detection_adapter.cpp reaadr_reaper/character_filter_adapter.cpp \
-	reaadr_reaper/cue_navigation_service.cpp reaadr_reaper/record_arm_adapter.cpp \
+	reaadr_reaper/dialogue_detection_adapter.cpp reaadr_reaper/dialogue_detection_command.cpp \
+	reaadr_reaper/character_filter_adapter.cpp reaadr_reaper/cue_navigation_service.cpp reaadr_reaper/record_arm_adapter.cpp \
 	reaadr_reaper/recording_setup_adapter.cpp reaadr_reaper/recording_transport_executor.cpp \
 	reaadr_reaper/overlay_refresh_adapter.cpp reaadr_reaper/cue_cleanup_adapter.cpp \
 	app/recording_application_service.cpp app/overlay_application_service.cpp \
@@ -68,8 +68,8 @@ REAPER_HEADERS := reaadr_reaper/project_state.hpp reaadr_reaper/project_transact
 	reaadr_reaper/track_region_adapter.hpp reaadr_reaper/render_artifact_adapter.hpp \
 	reaadr_reaper/session_render_service.hpp reaadr_reaper/native_host_services.hpp \
 	reaadr_reaper/marker_snapshot_adapter.hpp reaadr_reaper/marker_cue_generation_command.hpp \
-	reaadr_reaper/dialogue_detection_adapter.hpp reaadr_reaper/character_filter_adapter.hpp \
-	reaadr_reaper/cue_navigation_service.hpp reaadr_reaper/record_arm_adapter.hpp \
+	reaadr_reaper/dialogue_detection_adapter.hpp reaadr_reaper/dialogue_detection_command.hpp \
+	reaadr_reaper/character_filter_adapter.hpp reaadr_reaper/cue_navigation_service.hpp reaadr_reaper/record_arm_adapter.hpp \
 	reaadr_reaper/recording_setup_adapter.hpp reaadr_reaper/recording_transport_executor.hpp \
 	reaadr_reaper/overlay_refresh_adapter.hpp reaadr_reaper/cue_cleanup_adapter.hpp \
 	app/recording_application_service.hpp app/overlay_application_service.hpp \
