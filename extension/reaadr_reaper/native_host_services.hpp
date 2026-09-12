@@ -1,5 +1,6 @@
 #pragma once
 
+#include "cue_take_count_adapter.hpp"
 #include "dialogue_detection_adapter.hpp"
 #include "marker_snapshot_adapter.hpp"
 #include "overlay_refresh_adapter.hpp"
@@ -24,6 +25,7 @@ CueAudioApi native_cue_audio_api();
 TransactionApi native_transaction_api();
 MarkerSnapshotApi native_marker_snapshot_api();
 DialogueDetectionApi native_dialogue_detection_api();
+CueTakeCountApi native_cue_take_count_api();
 OverlayRefreshApi native_overlay_refresh_api();
 RecordArmApi native_record_arm_api();
 RecordingSetupApi native_recording_setup_api();
