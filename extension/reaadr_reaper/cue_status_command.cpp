@@ -61,7 +61,7 @@ CueStatusCommandResult set_cue_status_at_current_position(
   ReaProject* project)
 {
   CueStatusCommandResult result;
-  ProjectStateStore project_state(project, {GetProjExtState, SetProjExtState});
+  core::ProjectStateStore project_state(project, {GetProjExtState, SetProjExtState});
   core::SessionModelRepository sessions(project_state);
   core::EventLogRepository event_log(project_state);
   core::CharacterFilterRepository filters(project_state);
