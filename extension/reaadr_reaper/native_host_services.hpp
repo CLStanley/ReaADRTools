@@ -31,6 +31,7 @@ RecordingTransportApi native_recording_transport_api();
 
 int native_play_state();
 double native_play_position();
+double native_cursor_position();
 double native_project_frame_rate(ReaProject* project = nullptr);
 std::string native_project_cue_audio_path(ReaProject* project = nullptr);
 std::string native_utc_timestamp();
