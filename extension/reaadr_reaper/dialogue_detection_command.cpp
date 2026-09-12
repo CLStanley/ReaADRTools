@@ -16,12 +16,12 @@
 #include <reaper_plugin.h>
 #include <reaper_plugin_functions.h>
 
+#include <algorithm>
 #include <array>
 #include <cerrno>
 #include <cstdlib>
 #include <sstream>
 #include <string>
-#include <utility>
 #include <vector>
 
 namespace reaadr::reaper {
