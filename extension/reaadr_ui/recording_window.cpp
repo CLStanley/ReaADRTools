@@ -2,14 +2,14 @@
 
 #include "recording_controller.hpp"
 
+#include <iomanip>
+#include <sstream>
+#include <string>
+
 #include <reaper_plugin.h>
 #ifndef _WIN32
 #include <swell/swell-dlggen.h>
 #endif
-
-#include <iomanip>
-#include <sstream>
-#include <string>
 
 namespace reaadr::ui {
 namespace {
@@ -92,8 +92,6 @@ INT_PTR recording_proc(HWND hwnd, UINT message, WPARAM wparam, LPARAM)
 
     case WM_TIMER:
       if (wparam == kTimer && g_controller) {
-        // Timer failures remain visible in the status text. Modal errors here
-        // would reopen every tick and make Stop/Close cleanup inaccessible.
         g_controller->tick();
         update_window(hwnd);
       }
@@ -139,8 +137,8 @@ INT_PTR recording_proc(HWND hwnd, UINT message, WPARAM wparam, LPARAM)
   return 0;
 }
 
-SWELL_DEFINE_DIALOG_RESOURCE_BEGIN(kDialog, SWELL_DLG_WS_FLIPPED,
-                                   "ReaADR Record Cue", 570, 300, 1.0)
+SWELL_DEFINE_DIALOG_RESOURCE_BEGIN2(kDialog, SWELL_DLG_WS_FLIPPED,
+                                   "ReaADR Record Cue", 570, 300)
 BEGIN
   LTEXT "", kCue, 20, 18, 520, 22
   LTEXT "", kDialogue, 20, 50, 520, 38
