@@ -13,9 +13,6 @@
 #include "../app/overlay_application_service.hpp"
 #include "../reaadr_core/model_repository.hpp"
 
-#include <reaper_plugin.h>
-#include <reaper_plugin_functions.h>
-
 #include <algorithm>
 #include <array>
 #include <cerrno>
@@ -23,6 +20,9 @@
 #include <sstream>
 #include <string>
 #include <vector>
+
+#include <reaper_plugin.h>
+#include <reaper_plugin_functions.h>
 
 namespace reaadr::reaper {
 namespace {
@@ -135,7 +135,7 @@ DialogueDetectionCommandResult run_dialogue_detection_command(ReaProject* projec
     return command;
   }
 
-  ProjectStateStore project_state(project, {GetProjExtState, SetProjExtState});
+  core::ProjectStateStore project_state(project, {GetProjExtState, SetProjExtState});
   core::SessionModelRepository repository(project_state);
   core::EventLogRepository event_log(project_state);
   core::CharacterFilterRepository character_filter(project_state);
