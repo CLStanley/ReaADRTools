@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <set>
 
 namespace reaadr::ui {
 
@@ -52,6 +53,19 @@ CueInfoEditValues CueInfoController::edit_values() const
   values.dialogue = view.dialogue;
   values.notes = view.notes;
   return values;
+}
+
+std::vector<std::string> CueInfoController::character_choices() const
+{
+  const core::SessionLoadResult loaded = sessions_.load();
+  if (!loaded) return {};
+
+  std::set<std::string> unique;
+  for (const auto& cue : loaded.model.cues) {
+    const auto found = cue.find("character");
+    if (found != cue.end() && !found->second.empty()) unique.insert(found->second);
+  }
+  return {unique.begin(), unique.end()};
 }
 
 bool CueInfoController::save(const CueInfoEditValues& values)
