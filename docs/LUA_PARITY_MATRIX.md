@@ -38,7 +38,7 @@ Until all seven gates pass, the Lua implementation remains the specification and
 | `ReaADR_Core_Ownership.lua` | Support module / native foundation | Verify every owned artifact rule before retirement. |
 | `ReaADR_Core_Persistence.lua` | Support module / native foundation | Complete persistence/event/snapshot parity audit. |
 | `ReaADR_Core_Transactions.lua` | Support module / native foundation | Native project/model transactions exist; keep Lua until all callers migrate. |
-| `ReaADR_Cue_Info_Panel.lua` | Native foundation/backend | Native live view, take counts, inline editing, character choices, filtered navigation, Space transport shortcut, and floating geometry persistence exist. Remaining: true docking, Windows presentation, launch-option parity, host/UI exposure and REAPER smoke testing. |
+| `ReaADR_Cue_Info_Panel.lua` | Native foundation/backend | Native live view, take counts, inline editing, character choices, filtered navigation, Space transport shortcut, floating geometry persistence, and one-shot `close_on_save` launch behavior exist. Lua's `open_edit` flag is consumed but currently inert in the Lua panel itself, so native code intentionally preserves/consumes it without inventing behavior. Remaining: true docking, Windows presentation, host/UI exposure and REAPER smoke testing. |
 | `ReaADR_Cue_Manager.lua` | Native routed/backend | Full native Manager parity smoke test. |
 | `ReaADR_Cue_Manager_Gfx.lua` | Lua reference / native Manager replacement in progress | Visual/interaction parity audit; keep as reference. |
 | `ReaADR_Cue_Manager_ImGui.lua` | Lua reference / native Manager replacement in progress | Visual/interaction parity audit; keep as reference. |
