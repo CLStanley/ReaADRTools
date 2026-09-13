@@ -158,7 +158,7 @@ void restore_window_geometry(HWND hwnd)
   const int height = (std::max)(kMinWindowHeight, saved.height);
   const int x = saved.has_position ? saved.x : current.left;
   const int y = saved.has_position ? saved.y : current.top;
-  MoveWindow(hwnd, x, y, width, height, TRUE);
+  SetWindowPos(hwnd, nullptr, x, y, width, height, SWP_NOZORDER | SWP_NOACTIVATE);
 }
 
 void save_window_geometry(HWND hwnd)
