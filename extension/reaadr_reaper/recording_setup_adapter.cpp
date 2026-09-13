@@ -74,7 +74,9 @@ PreparedRecordingSetup RecordingSetupService::prepare(
         result.plan.expected_track_key) {
     result.target_track = nullptr;
     result.error = "The selected ADR recording track changed while recording was prepared.";
+    return result;
   }
+  result.target_track_name = track_string(api_, result.target_track, "P_NAME");
   return result;
 }
 
