@@ -13,9 +13,18 @@ constexpr std::array<UiFlag, 5> kUiFlags = {{
   {"ui.navigation_wrap_enabled", &ManagerPreferences::navigation_wrap},
   {"ui.cue_manager_auto_dock", &ManagerPreferences::cue_manager_auto_dock},
 }};
+constexpr std::array<const char*, 4> kQuickActionDefaults = {{
+  "import", "cue_manager", "export_reports", "overlay_settings",
+}};
 bool truthy(const std::string& value)
 {
   return value == "1" || value == "true" || value == "yes";
+}
+const ManagerQuickAction* find_quick_action(const std::string& key)
+{
+  for (const auto& action : manager_quick_actions())
+    if (action.key == key) return &action;
+  return nullptr;
 }
 }
 
@@ -56,6 +65,21 @@ const std::vector<ManagerPreferenceField>& manager_preference_fields()
   return fields;
 }
 
+const std::vector<ManagerQuickAction>& manager_quick_actions()
+{
+  static const std::vector<ManagerQuickAction> actions = {
+    {"import", "Import Cue Sheet", "import"},
+    {"cue_manager", "Open Cue Manager", "cue_manager"},
+    {"record_cue", "Record Current Cue", "record_cue"},
+    {"export_reports", "Export Reports", "export_reports"},
+    {"overlay_settings", "Video Overlays Tab", "open_overlay_manager"},
+    {"character_filter", "Character Filter", "character_filter"},
+    {"refresh_overlay", "Refresh Video Overlay", "refresh_overlay"},
+    {"validate", "Check Session", "validate_session"},
+  };
+  return actions;
+}
+
 const std::vector<std::string>& manager_quick_action_choices()
 {
   static const std::vector<std::string> choices = {
@@ -63,6 +87,28 @@ const std::vector<std::string>& manager_quick_action_choices()
     "overlay_settings", "character_filter", "refresh_overlay", "validate",
   };
   return choices;
+}
+
+ManagerQuickActionResult resolve_manager_quick_action(
+  const ManagerPreferences& preferences, std::size_t slot)
+{
+  ManagerQuickActionResult result;
+  if (slot < 1 || slot > preferences.quick_actions.size()) {
+    result.error = "Manager quick action slot must be between 1 and 4.";
+    return result;
+  }
+  const std::size_t index = slot - 1;
+  const ManagerQuickAction* action = find_quick_action(preferences.quick_actions[index]);
+  if (!action) {
+    action = find_quick_action(kQuickActionDefaults[index]);
+    result.used_default = true;
+  }
+  if (!action) {
+    result.error = "The Manager quick action default is invalid.";
+    return result;
+  }
+  result.quick_action = *action;
+  return result;
 }
 
 ManagerPreferencesLoadResult ManagerPreferencesRepository::load() const
@@ -141,7 +187,6 @@ ManagerPreferencesSaveResult ManagerPreferencesRepository::save(const ManagerPre
       global_written.emplace_back(key, previous);
     }
   }
-  // Persist overlay keys last; its repository has its own rollback.
   const auto overlay_saved = overlays.save(preferences.overlay);
   if (!overlay_saved) {
     for (auto it = global_written.rbegin(); it != global_written.rend(); ++it)
