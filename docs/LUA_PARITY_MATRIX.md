@@ -30,7 +30,7 @@ Until all seven gates pass, the Lua implementation remains the specification and
 
 | Lua reference | Current native state | Remaining parity gate(s) |
 | --- | --- | --- |
-| `ReaADR_App.lua` | Native foundation | Finish Manager/app parity audit and all remaining action routing. |
+| `ReaADR_App.lua` | Native foundation | Native Manager/application services now own substantial session, overlay, recording, import and quick-action behavior. Finish the remaining host/menu routing audit. |
 | `ReaADR_Character_Filter.lua` | Native routed/backend | REAPER smoke-test against Lua filtering, lane and visibility behavior. |
 | `ReaADR_Clean_Generated_Cues.lua` | Native routed/backend | Smoke-test preservation/ownership edge cases. |
 | `ReaADR_Core.lua` | Support module | Continue contract-by-contract migration; retain through the entire transition. |
@@ -47,9 +47,9 @@ Until all seven gates pass, the Lua implementation remains the specification and
 | `ReaADR_Export_Reports.lua` | Native backend/routed | Report-output parity audit and smoke test. |
 | `ReaADR_Generate_Cues.lua` | Native routed/backend | Marker/region parity smoke test; retain Lua reference. |
 | `ReaADR_Import_Cue_Sheet.lua` | Native routed/backend | Mapping/preview/XLSX/error-path parity audit and REAPER smoke test. |
-| `ReaADR_Import_Script.lua` | Lua wrapper/reference | Confirm equivalent native import routing before retirement. |
+| `ReaADR_Import_Script.lua` | Native backend / Lua alias retained | Lua `App.import_script()` is only an alias to `Import Cue Sheet`; no separate import algorithm exists. Native cue-sheet import is therefore the implementation target. Remaining: native action-entry exposure and REAPER smoke test before wrapper retirement. |
 | `ReaADR_Jump_To_Cue.lua` | Native backend/routed | Action-entry parity and smoke test. |
-| `ReaADR_Menu.lua` | Lua reference | Native command/menu routing audit. |
+| `ReaADR_Menu.lua` | Native foundation/backend | Native menu model now resolves fixed Open Manager plus four configurable quick-action entries with Lua-compatible fallback. Remaining: splice model into host menu/action registration and smoke test. |
 | `ReaADR_Next_Cue.lua` | Native backend/routed | Action-entry parity and wrap/filter smoke test. |
 | `ReaADR_Open_Manager.lua` | Native routed | Keep wrapper until native Manager is parity-approved. |
 | `ReaADR_Open_Manager_1.lua` | Lua wrapper/reference | Quick/alternate Manager-entry parity. |
@@ -59,19 +59,21 @@ Until all seven gates pass, the Lua implementation remains the specification and
 | `ReaADR_Overlay_Settings.lua` | Native backend/routed | Settings UI parity and smoke test. |
 | `ReaADR_Preferences.lua` | Native backend/routed | Preferences UI parity and smoke test. |
 | `ReaADR_Previous_Cue.lua` | Native backend/routed | Action-entry parity and wrap/filter smoke test. |
-| `ReaADR_Quick_Action_1.lua` | Native foundation/backend | Native slot catalog, persistence model, resolution and invalid-key fallback now exist. Remaining: native entry routing/host exposure and REAPER smoke test. |
-| `ReaADR_Quick_Action_2.lua` | Native foundation/backend | Native slot catalog, persistence model, resolution and invalid-key fallback now exist. Remaining: native entry routing/host exposure and REAPER smoke test. |
-| `ReaADR_Quick_Action_3.lua` | Native foundation/backend | Native slot catalog, persistence model, resolution and invalid-key fallback now exist. Remaining: native entry routing/host exposure and REAPER smoke test. |
-| `ReaADR_Quick_Action_4.lua` | Native foundation/backend | Native slot catalog, persistence model, resolution and invalid-key fallback now exist. Remaining: native entry routing/host exposure and REAPER smoke test. |
+| `ReaADR_Quick_Action_1.lua` | Native foundation/backend | Native catalog, persistence, slot resolution, invalid-key fallback, menu projection and semantic application dispatch exist. Remaining: host command routing/exposure and REAPER smoke test. |
+| `ReaADR_Quick_Action_2.lua` | Native foundation/backend | Native catalog, persistence, slot resolution, invalid-key fallback, menu projection and semantic application dispatch exist. Remaining: host command routing/exposure and REAPER smoke test. |
+| `ReaADR_Quick_Action_3.lua` | Native foundation/backend | Native catalog, persistence, slot resolution, invalid-key fallback, menu projection and semantic application dispatch exist. Remaining: host command routing/exposure and REAPER smoke test. |
+| `ReaADR_Quick_Action_4.lua` | Native foundation/backend | Native catalog, persistence, slot resolution, invalid-key fallback, menu projection and semantic application dispatch exist. Remaining: host command routing/exposure and REAPER smoke test. |
 | `ReaADR_Record_Arm.lua` | Native backend | Record-arm capture/isolation/restore exists; verify through full Record Cue smoke test. |
-| `ReaADR_Record_Cue.lua` | Native foundation/backend | Native workflow/window, Space transport shortcut, SMPTE timing display, real REAPER track-name display, Lua-style dialogue preview, floating geometry persistence and explicit external-stop lifecycle coverage exist. `CountTakes` and `GetSet_LoopTimeRange2` are now requested in native build preprocessing so those APIs load under `REAPERAPI_MINIMAL`. Remaining: true docker-state parity, Windows presentation, host/UI exposure and REAPER smoke tests. |
+| `ReaADR_Record_Cue.lua` | Native foundation/backend | Native workflow/window, Space transport shortcut, SMPTE timing display, real REAPER track-name display, Lua-style dialogue preview, floating geometry persistence and explicit external-stop lifecycle coverage exist. `CountTakes` and `GetSet_LoopTimeRange2` are requested in native build preprocessing so those APIs load under `REAPERAPI_MINIMAL`. Remaining: true docker-state parity, Windows presentation, host/UI exposure and REAPER smoke tests. |
 | `ReaADR_Set_Cue_Status.lua` | Native backend | Six-choice native presentation exists on Linux/macOS and Windows, with positional transactional update and overlay refresh. Remaining: host action registration and REAPER smoke testing. |
 
 ## Host registration audit
 
 The host action table currently contains a stale compatibility entry for `Scripts/ReaADRTools/scripts/ReaADR_Monitor_Markers.lua`, but that file is not present in the current `scripts/` tree. Treat this as host-registration cleanup, not as a migration target. Remove the stale registration when the host action table is next edited safely.
 
-`CountTakes` and `GetSet_LoopTimeRange2` are required by the native take-count and recording-loop services. Because the extension uses `REAPERAPI_MINIMAL`, the native Make/MSVC build paths now define `REAPERAPI_WANT_CountTakes` and `REAPERAPI_WANT_GetSet_LoopTimeRange2` before the host translation unit is preprocessed. Runtime smoke testing in REAPER is still required before parity approval.
+The current host still registers `Open Manager` plus `Quick Action 1` through `Quick Action 4` as Lua script actions. Its manual quick-action label resolver also omits `record_cue` and does not reproduce Lua's invalid-key default fallback. The native `build_manager_menu()` / `resolve_manager_quick_action()` path is now the parity target for the eventual host splice; keep the Lua actions registered in parallel until that splice has been smoke-tested.
+
+`CountTakes` and `GetSet_LoopTimeRange2` are required by the native take-count and recording-loop services. Because the extension uses `REAPERAPI_MINIMAL`, the native Make/MSVC build paths define `REAPERAPI_WANT_CountTakes` and `REAPERAPI_WANT_GetSet_LoopTimeRange2` before the host translation unit is preprocessed. Runtime smoke testing in REAPER is still required before parity approval.
 
 ## Record Cue parity checklist
 
