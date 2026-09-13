@@ -19,7 +19,7 @@ if not exist "%DIST_REAADR_DIR%\assets" mkdir "%DIST_REAADR_DIR%\assets"
 pushd "%~dp0"
 cl /nologo /EHsc /O2 /LD /std:c++17 ^
   /DREAPERAPI_WANT_CountTakes /DREAPERAPI_WANT_GetSet_LoopTimeRange2 ^
-  /I. /I"%REAPER_SDK%\sdk" /I"%WDL%" ^
+  /I. /I"%REAPER_SDK%\sdk" /I"%WDL%" /FIcommctrl.h ^
   reaper_reaadr.cpp ^
   reaadr_core\session_model.cpp reaadr_core\model_repository.cpp reaadr_core\domain_utils.cpp reaadr_core\cue_info.cpp ^
   reaadr_core\cue_import.cpp reaadr_core\marker_cue_generation.cpp reaadr_core\dialogue_cue_generation.cpp ^
@@ -47,7 +47,7 @@ cl /nologo /EHsc /O2 /LD /std:c++17 ^
   reaadr_ui\cue_info_controller.cpp reaadr_ui\cue_info_window.cpp reaadr_ui\cue_status_window.cpp ^
   reaadr_ui\recording_controller.cpp reaadr_ui\recording_window.cpp ^
   reaadr_ui\manager_view_model.cpp reaadr_ui\manager_navigation.cpp reaadr_ui\manager_ui_contract.cpp reaadr_ui\cue_manager_ui_contract.cpp ^
-  /Fe"%BUILD_DIR%\%TARGET%" /link user32.lib /DEF:reaper_reaadr.def
+  /Fe"%BUILD_DIR%\%TARGET%" /link user32.lib comctl32.lib /DEF:reaper_reaadr.def
 if errorlevel 1 ( popd & exit /b 1 )
 copy /Y "%BUILD_DIR%\%TARGET%" "%DIST_USERPLUGINS_DIR%\%TARGET%" >nul
 xcopy "%ROOT%\assets\*" "%DIST_REAADR_DIR%\assets\" /Y >nul
