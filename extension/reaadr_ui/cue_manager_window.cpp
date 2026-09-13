@@ -2,6 +2,15 @@
 #include "reaadr_ui.hpp"
 #include "cue_manager_ui_contract.hpp"
 #include "reaadr_core/domain_utils.hpp"
+#ifdef _WIN32
+// Common Controls depends on the core Win32 declarations. Keep both includes
+// local to the only translation unit that uses the native list-view API.
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#include <windows.h>
+#include <commctrl.h>
+#endif
 #include <reaper_plugin.h>
 #ifndef _WIN32
 #include <swell/swell-dlggen.h>
