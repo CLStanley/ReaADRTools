@@ -1,3 +1,6 @@
+#define REAPERAPI_MINIMAL
+#define REAPERAPI_WANT_Main_OnCommand
+
 #include "recording_window.hpp"
 
 #include "recording_controller.hpp"
@@ -7,6 +10,7 @@
 #include <string>
 
 #include <reaper_plugin.h>
+#include <reaper_plugin_functions.h>
 #ifndef _WIN32
 #include <swell/swell-dlggen.h>
 #endif
@@ -24,6 +28,7 @@ constexpr int kLoop = 48207;
 constexpr int kPreroll = 48208;
 constexpr int kStop = 48209;
 constexpr int kTimer = 1;
+constexpr int kTransportPlayStop = 40044;
 
 RecordingController* g_controller = nullptr;
 
@@ -96,6 +101,13 @@ INT_PTR recording_proc(HWND hwnd, UINT message, WPARAM wparam, LPARAM)
         update_window(hwnd);
       }
       return 1;
+
+    case WM_KEYDOWN:
+      if (wparam == VK_SPACE && Main_OnCommand) {
+        Main_OnCommand(kTransportPlayStop, 0);
+        return 1;
+      }
+      return 0;
 
     case WM_COMMAND: {
       const int command = LOWORD(wparam);
