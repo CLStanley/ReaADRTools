@@ -11,6 +11,7 @@ struct RecordingViewState {
   std::string character;
   std::string dialogue;
   std::string track_key;
+  std::string track_name;
   std::string cue_start_timecode;
   double cue_start = 0.0;
   double cue_end = 0.0;
