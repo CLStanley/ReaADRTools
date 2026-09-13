@@ -20,6 +20,7 @@ struct RecordingSetupApi {
 struct PreparedRecordingSetup {
   core::RecordingSetupPlan plan;
   MediaTrack* target_track = nullptr;
+  std::string target_track_name;
   std::string error;
 
   explicit operator bool() const { return error.empty(); }
