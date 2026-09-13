@@ -66,6 +66,11 @@ double RecordingCommandContext::current_timeline_position() const
     : native_cursor_position();
 }
 
+double RecordingCommandContext::frame_rate() const
+{
+  return native_project_frame_rate(project_);
+}
+
 bool RecordingCommandContext::refresh_overlay()
 {
   return static_cast<bool>(overlay_application_.refresh());
