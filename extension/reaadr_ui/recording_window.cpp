@@ -80,8 +80,8 @@ void restore_window_geometry(HWND hwnd)
   if (!GetWindowRect(hwnd, &current)) return;
   const int width = (std::max)(kMinWindowWidth, saved.width);
   const int height = (std::max)(kMinWindowHeight, saved.height);
-  const int x = saved.has_position ? saved.x : current.left;
-  const int y = saved.has_position ? saved.y : current.top;
+  const int x = saved.has_position ? saved.x : static_cast<int>(current.left);
+  const int y = saved.has_position ? saved.y : static_cast<int>(current.top);
   SetWindowPos(hwnd, nullptr, x, y, width, height, SWP_NOZORDER | SWP_NOACTIVATE);
 }
 
@@ -91,10 +91,10 @@ void save_window_geometry(HWND hwnd)
   RECT rect{};
   if (!GetWindowRect(hwnd, &rect)) return;
   reaper::RecordingWindowLayout layout;
-  layout.x = rect.left;
-  layout.y = rect.top;
-  layout.width = (std::max)(kMinWindowWidth, rect.right - rect.left);
-  layout.height = (std::max)(kMinWindowHeight, rect.bottom - rect.top);
+  layout.x = static_cast<int>(rect.left);
+  layout.y = static_cast<int>(rect.top);
+  layout.width = (std::max)(kMinWindowWidth, static_cast<int>(rect.right - rect.left));
+  layout.height = (std::max)(kMinWindowHeight, static_cast<int>(rect.bottom - rect.top));
   layout.dock = 0;
   layout.has_position = true;
   g_controller->save_window_layout(layout);
@@ -237,8 +237,8 @@ void layout_windows_controls(HWND hwnd)
 {
   RECT client{};
   if (!GetClientRect(hwnd, &client)) return;
-  const int width = client.right - client.left;
-  const int height = client.bottom - client.top;
+  const int width = static_cast<int>(client.right - client.left);
+  const int height = static_cast<int>(client.bottom - client.top);
   const int content_width = (std::max)(100, width - 40);
 
   SetWindowPos(GetDlgItem(hwnd, kCue), nullptr, 20, 16, content_width, 22, SWP_NOZORDER);
