@@ -31,6 +31,15 @@ struct CueInfoEditValues {
   std::string notes;
 };
 
+struct CueInfoWindowLayout {
+  int width = 1100;
+  int height = 740;
+  int dock = 0;
+  int x = 0;
+  int y = 0;
+  bool has_position = false;
+};
+
 class CueInfoController final {
 public:
   CueInfoController(reaper::CueInfoApplicationService& info,
@@ -38,11 +47,12 @@ public:
                     core::SessionModelRepository& sessions,
                     core::CueSelectionRepository& selections,
                     core::ManagerPreferencesRepository& preferences,
+                    core::ProjectStateStore& project_state,
                     reaper::CueNavigationApi navigation_api,
                     std::function<bool(std::string*)> refresh_overlay,
                     CueInfoControllerApi api)
     : info_(info), mutations_(mutations), sessions_(sessions), selections_(selections),
-      preferences_(preferences), navigation_api_(navigation_api),
+      preferences_(preferences), project_state_(project_state), navigation_api_(navigation_api),
       refresh_overlay_(std::move(refresh_overlay)), api_(api) {}
 
   bool refresh();
@@ -55,17 +65,21 @@ public:
   const std::string& error() const { return error_; }
   CueInfoEditValues edit_values() const;
   std::vector<std::string> character_choices() const;
+  CueInfoWindowLayout load_window_layout() const;
+  bool save_window_layout(const CueInfoWindowLayout& layout);
 
 private:
   bool navigate_relative(int delta);
   double timeline_position() const;
   double frame_rate() const;
+  bool remember_window_layout() const;
 
   reaper::CueInfoApplicationService& info_;
   reaper::CueManagerMutationService& mutations_;
   core::SessionModelRepository& sessions_;
   core::CueSelectionRepository& selections_;
   core::ManagerPreferencesRepository& preferences_;
+  core::ProjectStateStore& project_state_;
   reaper::CueNavigationApi navigation_api_;
   std::function<bool(std::string*)> refresh_overlay_;
   CueInfoControllerApi api_;
