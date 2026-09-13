@@ -39,3 +39,24 @@ jobs:
         run: |
           test ! -e dist/installers/ReaADRTools-windows.zip
           test ! -e dist/installers/ReaADRTools-macos.zip
+
+  native-windows:
+    runs-on: windows-2025
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - name: Fetch pinned REAPER SDK and WDL
+        shell: bash
+        run: extension/fetch-dependencies.sh
+      - name: Build native Windows extension with MSVC
+        shell: cmd
+        run: |
+          for /f "usebackq tokens=*" %%i in (`"%ProgramFiles(x86)%\Microsoft Visual Studio\Installer\vswhere.exe" -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath`) do set "VSINSTALL=%%i"
+          if not defined VSINSTALL exit /b 1
+          call "%VSINSTALL%\VC\Auxiliary\Build\vcvars64.bat"
+          call extension\build-windows-msvc.bat
+      - name: Verify Windows native payload
+        shell: pwsh
+        run: |
+          if (-not (Test-Path 'dist/UserPlugins/reaper_reaadr.dll')) { throw 'Missing Windows native extension DLL.' }
+          if (-not (Test-Path 'dist/Scripts/ReaADRTools/scripts/ReaADR_Record_Cue.lua')) { throw 'Lua parity/reference scripts were not retained in the Windows payload.' }
+          if (-not (Test-Path 'dist/Scripts/ReaADRTools/scripts/ReaADR_Cue_Info_Panel.lua')) { throw 'Cue Info Lua reference is missing from the Windows payload.' }
