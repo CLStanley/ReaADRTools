@@ -54,8 +54,8 @@ void update_window(HWND hwnd)
   const std::string timing = view.cue_start_timecode + "   " + number(duration) +
     "s cue  +  " + number(view.preroll_seconds) + "s preroll";
   SetDlgItemText(hwnd, kTiming, timing.c_str());
-  const std::string track = "Track: " + view.track_key + "   Lane " +
-    std::to_string(view.lane);
+  const std::string track_label = view.track_name.empty() ? view.track_key : view.track_name;
+  const std::string track = "Track: " + track_label;
   SetDlgItemText(hwnd, kTrack, track.c_str());
   SetDlgItemText(hwnd, kStatus, view.status_text.c_str());
   SetDlgItemText(hwnd, kLoop, view.loop_enabled ? "Loop: ON" : "Loop: OFF");
