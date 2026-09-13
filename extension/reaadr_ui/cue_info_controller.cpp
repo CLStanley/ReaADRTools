@@ -2,9 +2,30 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdlib>
 #include <set>
 
 namespace reaadr::ui {
+namespace {
+constexpr const char* kStateNamespace = "ReaADRTools";
+constexpr const char* kRememberLayoutKey = "ui.remember_window_layout";
+constexpr const char* kWindowWidthKey = "ui.window.cue_info.width";
+constexpr const char* kWindowHeightKey = "ui.window.cue_info.height";
+constexpr const char* kWindowDockKey = "ui.window.cue_info.dock";
+constexpr const char* kWindowXKey = "ui.window.cue_info.x";
+constexpr const char* kWindowYKey = "ui.window.cue_info.y";
+
+bool parse_int(const core::StateReadResult& value, int& output)
+{
+  if (!value || value.value.empty()) return false;
+  char* end = nullptr;
+  const long parsed = std::strtol(value.value.c_str(), &end, 10);
+  if (!end || *end != '\0') return false;
+  output = static_cast<int>(parsed);
+  return true;
+}
+
+} // namespace
 
 double CueInfoController::timeline_position() const
 {
@@ -21,6 +42,41 @@ double CueInfoController::frame_rate() const
   if (!api_.frame_rate) return 24.0;
   const double value = api_.frame_rate();
   return std::isfinite(value) && value > 0.0 ? value : 24.0;
+}
+
+bool CueInfoController::remember_window_layout() const
+{
+  const auto value = project_state_.read(kStateNamespace, kRememberLayoutKey);
+  if (!value) return false;
+  return value.value == "1" || value.value == "true" || value.value == "yes";
+}
+
+CueInfoWindowLayout CueInfoController::load_window_layout() const
+{
+  CueInfoWindowLayout layout;
+  if (!remember_window_layout()) return layout;
+
+  int value = 0;
+  if (parse_int(project_state_.read(kStateNamespace, kWindowWidthKey), value) && value > 0)
+    layout.width = (std::max)(820, value);
+  if (parse_int(project_state_.read(kStateNamespace, kWindowHeightKey), value) && value > 0)
+    layout.height = (std::max)(560, value);
+  if (parse_int(project_state_.read(kStateNamespace, kWindowDockKey), value))
+    layout.dock = value;
+  const bool has_x = parse_int(project_state_.read(kStateNamespace, kWindowXKey), layout.x);
+  const bool has_y = parse_int(project_state_.read(kStateNamespace, kWindowYKey), layout.y);
+  layout.has_position = has_x && has_y;
+  return layout;
+}
+
+bool CueInfoController::save_window_layout(const CueInfoWindowLayout& layout)
+{
+  if (!remember_window_layout()) return false;
+  return project_state_.write(kStateNamespace, kWindowDockKey, "0") &&
+    project_state_.write(kStateNamespace, kWindowXKey, std::to_string(layout.x)) &&
+    project_state_.write(kStateNamespace, kWindowYKey, std::to_string(layout.y)) &&
+    project_state_.write(kStateNamespace, kWindowWidthKey, std::to_string((std::max)(820, layout.width))) &&
+    project_state_.write(kStateNamespace, kWindowHeightKey, std::to_string((std::max)(560, layout.height)));
 }
 
 bool CueInfoController::refresh()
