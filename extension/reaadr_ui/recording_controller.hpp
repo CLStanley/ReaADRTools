@@ -11,6 +11,7 @@ struct RecordingViewState {
   std::string character;
   std::string dialogue;
   std::string track_key;
+  std::string cue_start_timecode;
   double cue_start = 0.0;
   double cue_end = 0.0;
   double preroll_seconds = 0.0;
@@ -23,8 +24,8 @@ struct RecordingViewState {
   std::string error;
 };
 
-// Presentation controller for the future SWELL Record Cue window. It contains
-// no recording rules: button/timer events are translated into semantic events
+// Presentation controller for the SWELL Record Cue window. It contains no
+// recording rules: button/timer events are translated into semantic events
 // for RecordingCommandContext, and display state is projected from the accepted
 // native workflow state.
 class RecordingController final {
