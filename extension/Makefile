@@ -24,6 +24,7 @@ CXX ?= g++
 CXXFLAGS ?= -std=c++17 -fPIC -O2 -Wall -Wextra
 CPPFLAGS += -I. -isystem $(REAPER_SDK)/sdk -isystem $(WDL)
 CPPFLAGS += -DSWELL_PROVIDED_BY_APP
+CPPFLAGS += -DREAPERAPI_WANT_CountTakes -DREAPERAPI_WANT_GetSet_LoopTimeRange2
 LDFLAGS += -shared -ldl
 CORE_SOURCES := reaadr_core/session_model.cpp reaadr_core/model_repository.cpp reaadr_core/domain_utils.cpp \
 	reaadr_core/cue_import.cpp reaadr_core/marker_cue_generation.cpp reaadr_core/dialogue_cue_generation.cpp reaadr_core/cue_info.cpp reaadr_core/session_builder.cpp reaadr_core/session_mutation.cpp \
