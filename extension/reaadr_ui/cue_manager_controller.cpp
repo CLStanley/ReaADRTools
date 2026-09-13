@@ -1,5 +1,6 @@
 #include "cue_manager_controller.hpp"
 #include "cue_manager_ui_contract.hpp"
+#include "reaadr_reaper/cue_info_command.hpp"
 #include "reaadr_reaper/dialogue_detection_command.hpp"
 #include "reaadr_reaper/marker_cue_generation_command.hpp"
 #include "reaadr_reaper/recording_command.hpp"
@@ -62,6 +63,13 @@ void CueManagerController::trigger_action(const std::string& action)
     const auto detected = reaper::run_dialogue_detection_command();
     if (!detected) view_.error = detected.error;
     else if (!detected.cancelled) reload();
+    return;
+  }
+  if (action == "cue_info") {
+    if (!reaper::run_native_cue_info_command())
+      view_.error = "The native Cue Info window could not be opened.";
+    else
+      reload();
     return;
   }
   if (action == "record_cue") {
