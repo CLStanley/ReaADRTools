@@ -12,6 +12,7 @@ MARKER_TEST_TARGET := $(BUILD_DIR)/marker_cue_generation_tests
 DIALOGUE_TEST_TARGET := $(BUILD_DIR)/dialogue_cue_generation_tests
 DIALOGUE_DETECTION_TEST_TARGET := $(BUILD_DIR)/dialogue_detection_adapter_tests
 RECORDING_TARGET_TEST_TARGET := $(BUILD_DIR)/recording_target_tests
+RECORDING_SHUTDOWN_TEST_TARGET := $(BUILD_DIR)/recording_shutdown_tests
 CUE_INFO_TEST_TARGET := $(BUILD_DIR)/cue_info_tests
 CUE_TAKE_COUNT_TEST_TARGET := $(BUILD_DIR)/cue_take_count_adapter_tests
 CUE_DIRECTION_EDIT_TEST_TARGET := $(BUILD_DIR)/cue_direction_edit_tests
@@ -99,6 +100,9 @@ $(DIALOGUE_DETECTION_TEST_TARGET): ../tests/dialogue_detection_adapter_tests.cpp
 $(RECORDING_TARGET_TEST_TARGET): ../tests/recording_target_tests.cpp reaadr_core/recording_target.cpp reaadr_core/cue_navigation.cpp reaadr_core/lane_assignment.cpp reaadr_core/character_filter.cpp reaadr_core/domain_utils.cpp reaadr_core/render_plan.cpp reaadr_core/session_model.cpp
 	@mkdir -p "$(BUILD_DIR)"
 	$(CXX) $(CPPFLAGS) $(CXXFLAGS) ../tests/recording_target_tests.cpp reaadr_core/recording_target.cpp reaadr_core/cue_navigation.cpp reaadr_core/lane_assignment.cpp reaadr_core/character_filter.cpp reaadr_core/domain_utils.cpp reaadr_core/render_plan.cpp reaadr_core/session_model.cpp -o $@
+$(RECORDING_SHUTDOWN_TEST_TARGET): ../tests/recording_shutdown_tests.cpp reaadr_core/recording_transport.cpp reaadr_core/recording_transport.hpp
+	@mkdir -p "$(BUILD_DIR)"
+	$(CXX) $(CPPFLAGS) $(CXXFLAGS) ../tests/recording_shutdown_tests.cpp reaadr_core/recording_transport.cpp -o $@
 $(CUE_INFO_TEST_TARGET): ../tests/cue_info_tests.cpp reaadr_core/cue_info.cpp reaadr_core/domain_utils.cpp reaadr_core/cue_info.hpp reaadr_core/domain_utils.hpp reaadr_core/session_model.hpp
 	@mkdir -p "$(BUILD_DIR)"
 	$(CXX) $(CPPFLAGS) $(CXXFLAGS) ../tests/cue_info_tests.cpp reaadr_core/cue_info.cpp reaadr_core/domain_utils.cpp -o $@
@@ -111,12 +115,13 @@ $(CUE_DIRECTION_EDIT_TEST_TARGET): ../tests/cue_direction_edit_tests.cpp reaadr_
 $(MANAGER_NAVIGATION_TEST_TARGET): ../tests/manager_navigation_tests.cpp reaadr_ui/manager_navigation.cpp reaadr_ui/manager_navigation.hpp reaadr_core/model_repository.hpp
 	@mkdir -p "$(BUILD_DIR)"
 	$(CXX) $(CPPFLAGS) $(CXXFLAGS) ../tests/manager_navigation_tests.cpp reaadr_ui/manager_navigation.cpp -o $@
-test: $(TEST_TARGET) $(MARKER_TEST_TARGET) $(DIALOGUE_TEST_TARGET) $(DIALOGUE_DETECTION_TEST_TARGET) $(RECORDING_TARGET_TEST_TARGET) $(CUE_INFO_TEST_TARGET) $(CUE_TAKE_COUNT_TEST_TARGET) $(CUE_DIRECTION_EDIT_TEST_TARGET) $(MANAGER_NAVIGATION_TEST_TARGET)
+test: $(TEST_TARGET) $(MARKER_TEST_TARGET) $(DIALOGUE_TEST_TARGET) $(DIALOGUE_DETECTION_TEST_TARGET) $(RECORDING_TARGET_TEST_TARGET) $(RECORDING_SHUTDOWN_TEST_TARGET) $(CUE_INFO_TEST_TARGET) $(CUE_TAKE_COUNT_TEST_TARGET) $(CUE_DIRECTION_EDIT_TEST_TARGET) $(MANAGER_NAVIGATION_TEST_TARGET)
 	$(TEST_TARGET)
 	$(MARKER_TEST_TARGET)
 	$(DIALOGUE_TEST_TARGET)
 	$(DIALOGUE_DETECTION_TEST_TARGET)
 	$(RECORDING_TARGET_TEST_TARGET)
+	$(RECORDING_SHUTDOWN_TEST_TARGET)
 	$(CUE_INFO_TEST_TARGET)
 	$(CUE_TAKE_COUNT_TEST_TARGET)
 	$(CUE_DIRECTION_EDIT_TEST_TARGET)
