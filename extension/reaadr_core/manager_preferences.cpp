@@ -111,6 +111,26 @@ ManagerQuickActionResult resolve_manager_quick_action(
   return result;
 }
 
+ManagerMenuResult build_manager_menu(const ManagerPreferences& preferences)
+{
+  ManagerMenuResult result;
+  result.entries.push_back({"Open Manager", "cue_manager", 0});
+  for (std::size_t slot = 1; slot <= preferences.quick_actions.size(); ++slot) {
+    const auto resolved = resolve_manager_quick_action(preferences, slot);
+    if (!resolved) {
+      result.entries.clear();
+      result.error = resolved.error;
+      return result;
+    }
+    result.entries.push_back({
+      resolved.quick_action.label,
+      resolved.quick_action.action,
+      static_cast<int>(slot),
+    });
+  }
+  return result;
+}
+
 ManagerPreferencesLoadResult ManagerPreferencesRepository::load() const
 {
   ManagerPreferencesLoadResult result;
