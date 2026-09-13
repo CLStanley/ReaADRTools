@@ -83,7 +83,7 @@ void test_counts_matching_overlaps_only()
       {{10.0, 1.0, 11}}},
   };
   const auto result = reaadr::reaper::count_recorded_takes_for_cue(nullptr, api(), cue());
-  check(result, "valid project should count takes");
+  check(static_cast<bool>(result), "valid project should count takes");
   check(result.take_count == 5, "only overlapping matching character-track takes should count");
 }
 
