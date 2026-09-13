@@ -38,7 +38,7 @@ Until all seven gates pass, the Lua implementation remains the specification and
 | `ReaADR_Core_Ownership.lua` | Support module / native foundation | Verify every owned artifact rule before retirement. |
 | `ReaADR_Core_Persistence.lua` | Support module / native foundation | Complete persistence/event/snapshot parity audit. |
 | `ReaADR_Core_Transactions.lua` | Support module / native foundation | Native project/model transactions exist; keep Lua until all callers migrate. |
-| `ReaADR_Cue_Info_Panel.lua` | Lua reference | Native live panel/view, take-count display, editing/navigation presentation, docking/window persistence and shortcuts. |
+| `ReaADR_Cue_Info_Panel.lua` | Native foundation/backend | Native live view, take counts, inline editing, character choices, filtered navigation and Space transport shortcut exist. Remaining: docking/window-state persistence, Windows presentation, launch-option parity, host/UI exposure and REAPER smoke testing. |
 | `ReaADR_Cue_Manager.lua` | Native routed/backend | Full native Manager parity smoke test. |
 | `ReaADR_Cue_Manager_Gfx.lua` | Lua reference / native Manager replacement in progress | Visual/interaction parity audit; keep as reference. |
 | `ReaADR_Cue_Manager_ImGui.lua` | Lua reference / native Manager replacement in progress | Visual/interaction parity audit; keep as reference. |
@@ -64,8 +64,14 @@ Until all seven gates pass, the Lua implementation remains the specification and
 | `ReaADR_Quick_Action_3.lua` | Lua wrapper/reference | Native configurable quick-action entry parity. |
 | `ReaADR_Quick_Action_4.lua` | Lua wrapper/reference | Native configurable quick-action entry parity. |
 | `ReaADR_Record_Arm.lua` | Native backend | Record-arm capture/isolation/restore exists; verify through full Record Cue smoke test. |
-| `ReaADR_Record_Cue.lua` | Native foundation/backend | Finish native window parity, Windows presentation, shortcuts, timecode/window-state parity, host routing and REAPER smoke tests. |
+| `ReaADR_Record_Cue.lua` | Native foundation/backend | Native workflow/window and Space transport shortcut exist. Remaining: Windows presentation, timecode/window-state parity, host/UI exposure and REAPER smoke tests. |
 | `ReaADR_Set_Cue_Status.lua` | Native backend | Add native choice presentation/host routing and smoke-test positional targeting. |
+
+## Host registration audit
+
+The host action table currently contains a stale compatibility entry for `Scripts/ReaADRTools/scripts/ReaADR_Monitor_Markers.lua`, but that file is not present in the current `scripts/` tree. Treat this as host-registration cleanup, not as a migration target. Remove the stale registration when the host action table is next edited safely.
+
+The native host service also now consumes `GetSet_LoopTimeRange2` and `CountTakes`. Because the extension uses `REAPERAPI_MINIMAL`, their `REAPERAPI_WANT_*` declarations must be added in the same translation unit as `REAPERAPI_IMPLEMENT` before runtime parity is approved. Do not treat a successful shared-object link alone as proof that those APIs will be loaded by REAPER.
 
 ## Record Cue parity checklist
 
