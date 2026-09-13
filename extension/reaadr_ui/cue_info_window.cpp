@@ -7,6 +7,7 @@
 #include "cue_manager_ui_contract.hpp"
 #include "reaadr_ui.hpp"
 
+#include <algorithm>
 #include <iomanip>
 #include <sstream>
 #include <string>
@@ -39,6 +40,8 @@ constexpr int kSave = 48316;
 constexpr int kError = 48317;
 constexpr int kTimer = 1;
 constexpr int kTransportPlayStop = 40044;
+constexpr int kMinWindowWidth = 820;
+constexpr int kMinWindowHeight = 560;
 
 CueInfoController* g_controller = nullptr;
 bool g_populating = false;
@@ -144,6 +147,41 @@ bool editor_has_focus(HWND hwnd)
   return false;
 }
 
+void restore_window_geometry(HWND hwnd)
+{
+  if (!g_controller) return;
+  const CueInfoWindowLayout saved = g_controller->load_window_layout();
+  RECT current{};
+  if (!GetWindowRect(hwnd, &current)) return;
+  const int width = (std::max)(kMinWindowWidth, saved.width);
+  const int height = (std::max)(kMinWindowHeight, saved.height);
+  const int x = saved.has_position ? saved.x : current.left;
+  const int y = saved.has_position ? saved.y : current.top;
+  MoveWindow(hwnd, x, y, width, height, TRUE);
+}
+
+void save_window_geometry(HWND hwnd)
+{
+  if (!g_controller) return;
+  RECT rect{};
+  if (!GetWindowRect(hwnd, &rect)) return;
+  CueInfoWindowLayout layout;
+  layout.x = rect.left;
+  layout.y = rect.top;
+  layout.width = (std::max)(kMinWindowWidth, rect.right - rect.left);
+  layout.height = (std::max)(kMinWindowHeight, rect.bottom - rect.top);
+  layout.dock = 0;
+  layout.has_position = true;
+  g_controller->save_window_layout(layout);
+}
+
+void close_window(HWND hwnd)
+{
+  save_window_geometry(hwnd);
+  KillTimer(hwnd, kTimer);
+  EndDialog(hwnd, 0);
+}
+
 #ifndef _WIN32
 INT_PTR cue_info_proc(HWND hwnd, UINT message, WPARAM wparam, LPARAM)
 {
@@ -157,6 +195,7 @@ INT_PTR cue_info_proc(HWND hwnd, UINT message, WPARAM wparam, LPARAM)
         SetDlgItemText(hwnd, kError, g_controller->error().c_str());
         return 1;
       }
+      restore_window_geometry(hwnd);
       populate_editors(hwnd);
       SetTimer(hwnd, kTimer, 100, nullptr);
       return 1;
@@ -211,23 +250,21 @@ INT_PTR cue_info_proc(HWND hwnd, UINT message, WPARAM wparam, LPARAM)
         return 1;
       }
       if (command == IDCANCEL) {
-        KillTimer(hwnd, kTimer);
-        EndDialog(hwnd, 0);
+        close_window(hwnd);
         return 1;
       }
       return 0;
     }
 
     case WM_CLOSE:
-      KillTimer(hwnd, kTimer);
-      EndDialog(hwnd, 0);
+      close_window(hwnd);
       return 1;
   }
   return 0;
 }
 
 SWELL_DEFINE_DIALOG_RESOURCE_BEGIN2(kDialog, SWELL_DLG_WS_FLIPPED,
-  "ReaADR Cue Information", 850, 650)
+  "ReaADR Cue Information", 1100, 740)
 BEGIN
   LTEXT "", kHeader, 18, 14, 800, 22
   LTEXT "", kLiveMetrics, 18, 40, 800, 20
