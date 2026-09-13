@@ -111,13 +111,13 @@ $(CUE_INFO_TEST_TARGET): ../tests/cue_info_tests.cpp reaadr_core/cue_info.cpp re
 $(CUE_TAKE_COUNT_TEST_TARGET): ../tests/cue_take_count_adapter_tests.cpp reaadr_reaper/cue_take_count_adapter.cpp reaadr_reaper/cue_take_count_adapter.hpp reaadr_core/session_model.hpp
 	@mkdir -p "$(BUILD_DIR)"
 	$(CXX) $(CPPFLAGS) $(CXXFLAGS) ../tests/cue_take_count_adapter_tests.cpp reaadr_reaper/cue_take_count_adapter.cpp -o $@
-$(CUE_DIRECTION_EDIT_TEST_TARGET): ../tests/cue_direction_edit_tests.cpp reaadr_core/cue_manager_model.cpp reaadr_core/domain_utils.cpp reaadr_core/session_model.cpp reaadr_core/cue_manager_model.hpp reaadr_core/domain_utils.hpp reaadr_core/session_model.hpp
+$(CUE_DIRECTION_EDIT_TEST_TARGET): ../tests/cue_direction_edit_tests.cpp reaadr_core/cue_manager_model.cpp reaadr_core/domain_utils.cpp reaadr_core/session_model.cpp reaadr_core/model_repository.cpp reaadr_ui/cue_manager_ui_contract.cpp reaadr_core/cue_manager_model.hpp reaadr_core/domain_utils.hpp reaadr_core/session_model.hpp reaadr_core/model_repository.hpp reaadr_ui/cue_manager_ui_contract.hpp
 	@mkdir -p "$(BUILD_DIR)"
-	$(CXX) $(CPPFLAGS) $(CXXFLAGS) ../tests/cue_direction_edit_tests.cpp reaadr_core/cue_manager_model.cpp reaadr_core/domain_utils.cpp reaadr_core/session_model.cpp -o $@
-$(MANAGER_NAVIGATION_TEST_TARGET): ../tests/manager_navigation_tests.cpp reaadr_ui/manager_navigation.cpp reaadr_ui/manager_navigation.hpp reaadr_core/model_repository.hpp
+	$(CXX) $(CPPFLAGS) $(CXXFLAGS) ../tests/cue_direction_edit_tests.cpp reaadr_core/cue_manager_model.cpp reaadr_core/domain_utils.cpp reaadr_core/session_model.cpp reaadr_core/model_repository.cpp reaadr_ui/cue_manager_ui_contract.cpp -o $@
+$(MANAGER_NAVIGATION_TEST_TARGET): ../tests/manager_navigation_tests.cpp reaadr_ui/manager_navigation.cpp reaadr_ui/manager_navigation.hpp reaadr_core/model_repository.hpp app/manager_window_slot_service.hpp
 	@mkdir -p "$(BUILD_DIR)"
 	$(CXX) $(CPPFLAGS) $(CXXFLAGS) ../tests/manager_navigation_tests.cpp reaadr_ui/manager_navigation.cpp -o $@
-$(QUICK_ACTION_TEST_TARGET): ../tests/quick_action_tests.cpp reaadr_core/manager_preferences.cpp reaadr_core/manager_preferences.hpp reaadr_core/overlay_settings.cpp reaadr_core/overlay_settings.hpp reaadr_core/model_repository.cpp reaadr_core/model_repository.hpp reaadr_core/session_model.cpp reaadr_core/session_model.hpp reaadr_core/domain_utils.cpp reaadr_core/domain_utils.hpp
+$(QUICK_ACTION_TEST_TARGET): ../tests/quick_action_tests.cpp reaadr_core/manager_preferences.cpp reaadr_core/manager_preferences.hpp reaadr_core/overlay_settings.cpp reaadr_core/overlay_settings.hpp reaadr_core/model_repository.cpp reaadr_core/model_repository.hpp reaadr_core/session_model.cpp reaadr_core/session_model.hpp reaadr_core/domain_utils.cpp reaadr_core/domain_utils.hpp app/quick_action_application_service.hpp
 	@mkdir -p "$(BUILD_DIR)"
 	$(CXX) $(CPPFLAGS) $(CXXFLAGS) ../tests/quick_action_tests.cpp reaadr_core/manager_preferences.cpp reaadr_core/overlay_settings.cpp reaadr_core/model_repository.cpp reaadr_core/session_model.cpp reaadr_core/domain_utils.cpp -o $@
 test: $(TEST_TARGET) $(MARKER_TEST_TARGET) $(DIALOGUE_TEST_TARGET) $(DIALOGUE_DETECTION_TEST_TARGET) $(RECORDING_TARGET_TEST_TARGET) $(RECORDING_SHUTDOWN_TEST_TARGET) $(CUE_INFO_TEST_TARGET) $(CUE_TAKE_COUNT_TEST_TARGET) $(CUE_DIRECTION_EDIT_TEST_TARGET) $(MANAGER_NAVIGATION_TEST_TARGET) $(QUICK_ACTION_TEST_TARGET)
