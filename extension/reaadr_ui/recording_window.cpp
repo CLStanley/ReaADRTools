@@ -32,10 +32,10 @@ constexpr int kTransportPlayStop = 40044;
 
 RecordingController* g_controller = nullptr;
 
-std::string number(double value)
+std::string number(double value, int precision = 1)
 {
   std::ostringstream output;
-  output << std::fixed << std::setprecision(3) << value;
+  output << std::fixed << std::setprecision(precision) << value;
   return output.str();
 }
 
@@ -48,8 +48,8 @@ void update_window(HWND hwnd)
   SetDlgItemText(hwnd, kDialogue,
                  view.dialogue.empty() ? "(no dialogue)" : view.dialogue.c_str());
   const double duration = view.cue_end - view.cue_start;
-  const std::string timing = "Start " + number(view.cue_start) + "s   Duration " +
-    number(duration) + "s   Preroll " + number(view.preroll_seconds) + "s";
+  const std::string timing = view.cue_start_timecode + "   " + number(duration) +
+    "s cue  +  " + number(view.preroll_seconds) + "s preroll";
   SetDlgItemText(hwnd, kTiming, timing.c_str());
   const std::string track = "Track: " + view.track_key + "   Lane " +
     std::to_string(view.lane);
