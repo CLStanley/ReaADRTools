@@ -46,6 +46,7 @@ constexpr int kMinWindowHeight = 560;
 CueInfoController* g_controller = nullptr;
 bool g_populating = false;
 bool g_dirty = false;
+bool g_close_on_save = false;
 std::string g_loaded_key;
 
 std::string control_text(HWND hwnd, int id)
@@ -186,8 +187,10 @@ void close_window(HWND hwnd)
 INT_PTR cue_info_proc(HWND hwnd, UINT message, WPARAM wparam, LPARAM)
 {
   switch (message) {
-    case WM_INITDIALOG:
+    case WM_INITDIALOG: {
       if (!g_controller) return 0;
+      const CueInfoLaunchOptions launch = g_controller->consume_launch_options();
+      g_close_on_save = launch.close_on_save;
       fill_combo(hwnd, kCharacter, g_controller->character_choices());
       fill_combo(hwnd, kStatus, core::cue_manager_status_choices());
       fill_combo(hwnd, kCueType, core::cue_manager_type_choices());
@@ -199,6 +202,7 @@ INT_PTR cue_info_proc(HWND hwnd, UINT message, WPARAM wparam, LPARAM)
       populate_editors(hwnd);
       SetTimer(hwnd, kTimer, 100, nullptr);
       return 1;
+    }
 
     case WM_TIMER:
       if (wparam == kTimer && g_controller && !g_dirty) {
@@ -231,6 +235,10 @@ INT_PTR cue_info_proc(HWND hwnd, UINT message, WPARAM wparam, LPARAM)
       if (!g_controller) return 0;
       if (command == kSave) {
         if (g_controller->save(read_editors(hwnd))) {
+          if (g_close_on_save) {
+            close_window(hwnd);
+            return 1;
+          }
           refresh_character_choices(hwnd);
           populate_editors(hwnd);
         } else {
@@ -311,9 +319,11 @@ bool show_cue_info_window(CueInfoController& controller)
   if (g_controller) return false;
   g_controller = &controller;
   g_dirty = false;
+  g_close_on_save = false;
   g_loaded_key.clear();
   const int result = DialogBoxParam(nullptr, MAKEINTRESOURCE(kDialog), nullptr, cue_info_proc, 0);
   g_controller = nullptr;
+  g_close_on_save = false;
   return result >= 0;
 #else
   (void)controller;
