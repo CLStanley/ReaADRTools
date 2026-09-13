@@ -42,6 +42,15 @@ public:
   bool retry_pending();
   bool shutdown();
 
+  reaper::RecordingWindowLayout load_window_layout() const
+  {
+    return context_.load_window_layout();
+  }
+  bool save_window_layout(const reaper::RecordingWindowLayout& layout)
+  {
+    return context_.save_window_layout(layout);
+  }
+
   const RecordingViewState& view() const { return view_; }
 
 private:
