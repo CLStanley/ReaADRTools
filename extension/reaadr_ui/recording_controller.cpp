@@ -68,6 +68,7 @@ bool RecordingController::begin()
   view_.cue_end = started.workflow.plan.cue_end;
   view_.preroll_seconds = started.target.preroll_seconds;
   view_.track_key = started.workflow.plan.expected_track_key;
+  view_.track_name = started.workflow.target_track_name;
   view_.cue_start_timecode = core::format_timecode(view_.cue_start, context_.frame_rate());
   sync_state();
   return true;
