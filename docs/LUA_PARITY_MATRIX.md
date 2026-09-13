@@ -65,7 +65,7 @@ Until all seven gates pass, the Lua implementation remains the specification and
 | `ReaADR_Quick_Action_4.lua` | Lua wrapper/reference | Native configurable quick-action entry parity. |
 | `ReaADR_Record_Arm.lua` | Native backend | Record-arm capture/isolation/restore exists; verify through full Record Cue smoke test. |
 | `ReaADR_Record_Cue.lua` | Native foundation/backend | Native workflow/window, Space transport shortcut, SMPTE timing display and floating geometry persistence exist. Remaining: true docker-state parity, Windows presentation, host/UI exposure and REAPER smoke tests. |
-| `ReaADR_Set_Cue_Status.lua` | Native backend | Add native choice presentation/host routing and smoke-test positional targeting. |
+| `ReaADR_Set_Cue_Status.lua` | Native backend | Six-choice native SWELL presentation and positional transactional update exist. Remaining: Windows presentation, host action registration and REAPER smoke testing. |
 
 ## Host registration audit
 
