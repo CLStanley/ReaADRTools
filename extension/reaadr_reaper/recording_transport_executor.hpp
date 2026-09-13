@@ -5,7 +5,7 @@
 
 #include <string>
 
-struct MediaTrack;
+class MediaTrack;
 
 namespace reaadr::reaper {
 

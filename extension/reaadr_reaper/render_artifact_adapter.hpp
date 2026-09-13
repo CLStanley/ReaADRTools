@@ -6,11 +6,11 @@
 
 #include <string>
 
-struct MediaItem;
-struct MediaItem_Take;
-struct MediaTrack;
+class MediaItem;
+class MediaItem_Take;
+class MediaTrack;
 struct PCM_source;
-struct ProjectMarker;
+class ProjectMarker;
 class ReaProject;
 
 namespace reaadr::reaper {

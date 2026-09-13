@@ -6,9 +6,9 @@
 #include <vector>
 
 class ReaProject;
-struct MediaItem;
-struct MediaItem_Take;
-struct AudioAccessor;
+class MediaItem;
+class MediaItem_Take;
+class AudioAccessor;
 
 namespace reaadr::reaper {
 
