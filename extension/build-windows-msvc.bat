@@ -19,7 +19,7 @@ if not exist "%DIST_REAADR_DIR%\assets" mkdir "%DIST_REAADR_DIR%\assets"
 pushd "%~dp0"
 cl /nologo /EHsc /O2 /LD /std:c++17 ^
   /DREAPERAPI_WANT_CountTakes /DREAPERAPI_WANT_GetSet_LoopTimeRange2 ^
-  /I"%REAPER_SDK%\sdk" /I"%WDL%" ^
+  /I. /I"%REAPER_SDK%\sdk" /I"%WDL%" ^
   reaper_reaadr.cpp ^
   reaadr_core\session_model.cpp reaadr_core\model_repository.cpp reaadr_core\domain_utils.cpp reaadr_core\cue_info.cpp ^
   reaadr_core\cue_import.cpp reaadr_core\marker_cue_generation.cpp reaadr_core\dialogue_cue_generation.cpp ^
