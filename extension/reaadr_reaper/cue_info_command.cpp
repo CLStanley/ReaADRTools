@@ -95,7 +95,7 @@ bool run_native_cue_info_command()
     GetPlayState, GetPlayPosition, GetCursorPosition, SetEditCurPos,
   };
   ui::CueInfoController controller(
-    info, mutations, sessions, selections, preferences, navigation_api,
+    info, mutations, sessions, selections, preferences, project_state, navigation_api,
     render_options.refresh_overlay,
     {native_play_state, native_play_position, native_cursor_position, command_frame_rate});
   return ui::show_cue_info_window(controller);
