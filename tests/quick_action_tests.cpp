@@ -1,7 +1,9 @@
+#include "app/quick_action_application_service.hpp"
 #include "reaadr_core/manager_preferences.hpp"
 
 #include <cstdlib>
 #include <iostream>
+#include <map>
 #include <string>
 
 namespace {
@@ -14,10 +16,60 @@ void require(bool condition, const char* message)
   }
 }
 
+class FakeProjectStateStore final : public reaadr::core::ProjectStateStore {
+public:
+  reaadr::core::StateReadResult read(const char* name_space, const char* key) const override
+  {
+    const std::string composite = std::string(name_space ? name_space : "") + "\n" +
+      std::string(key ? key : "");
+    const auto found = values.find(composite);
+    if (found == values.end()) return {{}, reaadr::core::StateReadError::not_found};
+    return {found->second, reaadr::core::StateReadError::none};
+  }
+
+  bool write(const char* name_space, const char* key, const std::string& value) override
+  {
+    const std::string composite = std::string(name_space ? name_space : "") + "\n" +
+      std::string(key ? key : "");
+    if (value.empty()) values.erase(composite);
+    else values[composite] = value;
+    return true;
+  }
+
+  std::map<std::string, std::string> values;
+};
+
+class FakeGlobalStateStore final : public reaadr::core::GlobalStateStore {
+public:
+  std::string read(const char* name_space, const char* key) const override
+  {
+    const std::string composite = std::string(name_space ? name_space : "") + "\n" +
+      std::string(key ? key : "");
+    const auto found = values.find(composite);
+    return found == values.end() ? std::string() : found->second;
+  }
+
+  bool write(const char* name_space, const char* key, const std::string& value) override
+  {
+    const std::string composite = std::string(name_space ? name_space : "") + "\n" +
+      std::string(key ? key : "");
+    values[composite] = value;
+    return true;
+  }
+
+  void set(const std::string& key, const std::string& value)
+  {
+    values[std::string(reaadr::core::SessionModelRepository::kNamespace) + "\n" + key] = value;
+  }
+
+  std::map<std::string, std::string> values;
+};
+
 } // namespace
 
 int main()
 {
+  using namespace reaadr;
   using namespace reaadr::core;
 
   ManagerPreferences preferences;
@@ -87,6 +139,55 @@ int main()
           "export reports should preserve Lua app-action routing");
   require(actions[4].action == "open_overlay_manager",
           "overlay settings should preserve Lua Manager-tab routing");
+
+  FakeProjectStateStore project;
+  FakeGlobalStateStore global;
+  ManagerPreferencesRepository repository(project, &global);
+  std::string dispatched_action;
+  reaper::QuickActionApplicationService service(
+    repository,
+    [&dispatched_action](const std::string& action, std::string*) {
+      dispatched_action = action;
+      return true;
+    });
+
+  global.set("quick_action_1", "record_cue");
+  auto application = service.run(1);
+  require(static_cast<bool>(application), "configured application quick action should run");
+  require(application.dispatched, "successful quick action should report dispatch");
+  require(!application.used_default, "known persisted application key should not use fallback");
+  require(application.quick_action.key == "record_cue", "application should return resolved key");
+  require(dispatched_action == "record_cue", "application should dispatch semantic record action");
+
+  global.set("quick_action_1", "invalid_saved_value");
+  dispatched_action.clear();
+  application = service.run(1);
+  require(static_cast<bool>(application), "application should apply Lua-compatible fallback");
+  require(application.used_default, "application fallback should be reported");
+  require(application.quick_action.key == "import", "application slot one fallback should be import");
+  require(dispatched_action == "import", "application should dispatch fallback semantic action");
+
+  application = service.run(5);
+  require(!application, "out-of-range application slot should fail");
+  require(!application.dispatched, "invalid application slot should not dispatch");
+
+  reaper::QuickActionApplicationService failing(
+    repository,
+    [](const std::string&, std::string* error) {
+      if (error) *error = "dispatch failed on purpose";
+      return false;
+    });
+  global.set("quick_action_2", "cue_manager");
+  application = failing.run(2);
+  require(!application, "dispatcher failure should fail the application request");
+  require(application.error == "dispatch failed on purpose",
+          "dispatcher error should propagate without being rewritten");
+
+  reaper::QuickActionApplicationService missing_dispatcher(repository, {});
+  application = missing_dispatcher.run(2);
+  require(!application, "missing dispatcher should fail cleanly");
+  require(application.error.find("dispatcher") != std::string::npos,
+          "missing dispatcher error should identify unavailable dispatcher");
 
   std::cout << "quick_action_tests: ok\n";
   return 0;
