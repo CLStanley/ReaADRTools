@@ -8,6 +8,7 @@
 #include <functional>
 #include <string>
 #include <utility>
+#include <vector>
 
 namespace reaadr::ui {
 
@@ -53,6 +54,7 @@ public:
   const core::CueInfoView& view() const { return current_.view; }
   const std::string& error() const { return error_; }
   CueInfoEditValues edit_values() const;
+  std::vector<std::string> character_choices() const;
 
 private:
   bool navigate_relative(int delta);
