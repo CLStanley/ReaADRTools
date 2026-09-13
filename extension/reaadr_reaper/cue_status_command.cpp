@@ -1,6 +1,7 @@
 #define REAPERAPI_MINIMAL
 #define REAPERAPI_WANT_GetProjExtState
 #define REAPERAPI_WANT_SetProjExtState
+#define REAPERAPI_WANT_ShowMessageBox
 
 #include "cue_status_command.hpp"
 
@@ -13,6 +14,7 @@
 #include "../reaadr_core/model_repository.hpp"
 #include "../reaadr_core/character_filter.hpp"
 #include "../reaadr_core/overlay_settings.hpp"
+#include "../reaadr_ui/cue_status_window.hpp"
 
 #include <reaper_plugin.h>
 #include <reaper_plugin_functions.h>
@@ -117,6 +119,30 @@ CueStatusCommandResult set_cue_status_at_current_position(
   result.changed = applied.status.update.changed;
   result.event_warning = applied.event_warning;
   return result;
+}
+
+bool run_native_set_cue_status_command(ReaProject* project)
+{
+  std::string status;
+  if (!ui::choose_cue_status(native_cue_status_choices(), status)) return false;
+
+  const CueStatusCommandResult result = set_cue_status_at_current_position(status, project);
+  if (!result) {
+    if (ShowMessageBox) {
+      const std::string message = "Cue status was not changed:\n\n" + result.error;
+      ShowMessageBox(message.c_str(), "Set ADR Cue Status", 0);
+    }
+    return false;
+  }
+
+  if (ShowMessageBox) {
+    std::string message = "Cue " + result.cue_key + " status set to " +
+      result.normalized_status + ".\n\nVideo overlay refreshed.";
+    if (!result.event_warning.empty())
+      message += "\n\nWarning: " + result.event_warning;
+    ShowMessageBox(message.c_str(), "Set ADR Cue Status", 0);
+  }
+  return true;
 }
 
 } // namespace reaadr::reaper
