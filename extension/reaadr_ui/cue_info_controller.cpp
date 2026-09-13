@@ -14,6 +14,8 @@ constexpr const char* kWindowHeightKey = "ui.window.cue_info.height";
 constexpr const char* kWindowDockKey = "ui.window.cue_info.dock";
 constexpr const char* kWindowXKey = "ui.window.cue_info.x";
 constexpr const char* kWindowYKey = "ui.window.cue_info.y";
+constexpr const char* kOpenEditKey = "cue_info_open_edit";
+constexpr const char* kCloseOnSaveKey = "cue_info_close_on_save";
 
 bool parse_int(const core::StateReadResult& value, int& output)
 {
@@ -77,6 +79,22 @@ bool CueInfoController::save_window_layout(const CueInfoWindowLayout& layout)
     project_state_.write(kStateNamespace, kWindowYKey, std::to_string(layout.y)) &&
     project_state_.write(kStateNamespace, kWindowWidthKey, std::to_string((std::max)(820, layout.width))) &&
     project_state_.write(kStateNamespace, kWindowHeightKey, std::to_string((std::max)(560, layout.height)));
+}
+
+CueInfoLaunchOptions CueInfoController::consume_launch_options()
+{
+  CueInfoLaunchOptions options;
+  const auto edit = project_state_.read(kStateNamespace, kOpenEditKey);
+  const auto close_on_save = project_state_.read(kStateNamespace, kCloseOnSaveKey);
+  options.open_edit = edit && edit.value == "1";
+  options.close_on_save = close_on_save && close_on_save.value == "1";
+
+  // Lua consumes both values exactly once even if only one option is used by
+  // the caller. Preserve that contract so stale launch state cannot leak into
+  // a later Cue Info window.
+  project_state_.write(kStateNamespace, kOpenEditKey, "");
+  project_state_.write(kStateNamespace, kCloseOnSaveKey, "");
+  return options;
 }
 
 bool CueInfoController::refresh()
