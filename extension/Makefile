@@ -31,6 +31,7 @@ CORE_SOURCES := reaadr_core/session_model.cpp reaadr_core/model_repository.cpp r
 	reaadr_core/recording_target.cpp reaadr_core/recording_transport.cpp reaadr_core/cue_status.cpp reaadr_core/recording_preferences.cpp \
 	reaadr_core/overlay_settings.cpp reaadr_core/overlay_eel.cpp reaadr_core/overlay_refresh.cpp
 UI_SOURCES := reaadr_ui/reaadr_ui.cpp reaadr_ui/cue_manager_controller.cpp reaadr_ui/cue_manager_window.cpp \
+	reaadr_ui/cue_info_controller.cpp reaadr_ui/cue_info_window.cpp \
 	reaadr_ui/recording_controller.cpp reaadr_ui/recording_window.cpp reaadr_ui/manager_view_model.cpp reaadr_ui/manager_navigation.cpp \
 	reaadr_ui/manager_ui_contract.cpp reaadr_ui/cue_manager_ui_contract.cpp
 UNAME_S := $(shell uname -s)
@@ -49,7 +50,7 @@ CORE_HEADERS := reaadr_core/session_model.hpp reaadr_core/model_repository.hpp r
 REAPER_SOURCES := reaadr_reaper/project_state.cpp reaadr_reaper/project_transaction.cpp reaadr_reaper/track_region_adapter.cpp \
 	reaadr_reaper/render_artifact_adapter.cpp reaadr_reaper/session_render_service.cpp reaadr_reaper/native_host_services.cpp \
 	reaadr_reaper/marker_snapshot_adapter.cpp reaadr_reaper/marker_cue_generation_command.cpp reaadr_reaper/dialogue_detection_adapter.cpp \
-	reaadr_reaper/dialogue_detection_command.cpp reaadr_reaper/cue_status_command.cpp reaadr_reaper/cue_take_count_adapter.cpp reaadr_reaper/character_filter_adapter.cpp \
+	reaadr_reaper/dialogue_detection_command.cpp reaadr_reaper/cue_status_command.cpp reaadr_reaper/cue_take_count_adapter.cpp reaadr_reaper/cue_info_command.cpp reaadr_reaper/character_filter_adapter.cpp \
 	reaadr_reaper/cue_navigation_service.cpp reaadr_reaper/record_arm_adapter.cpp reaadr_reaper/recording_setup_adapter.cpp \
 	reaadr_reaper/recording_transport_executor.cpp reaadr_reaper/recording_command_context.cpp reaadr_reaper/recording_command.cpp \
 	reaadr_reaper/overlay_refresh_adapter.cpp reaadr_reaper/cue_cleanup_adapter.cpp \
@@ -61,7 +62,7 @@ REAPER_SOURCES := reaadr_reaper/project_state.cpp reaadr_reaper/project_transact
 REAPER_HEADERS := reaadr_reaper/project_state.hpp reaadr_reaper/project_transaction.hpp reaadr_reaper/track_region_adapter.hpp \
 	reaadr_reaper/render_artifact_adapter.hpp reaadr_reaper/session_render_service.hpp reaadr_reaper/native_host_services.hpp \
 	reaadr_reaper/marker_snapshot_adapter.hpp reaadr_reaper/marker_cue_generation_command.hpp reaadr_reaper/dialogue_detection_adapter.hpp \
-	reaadr_reaper/dialogue_detection_command.hpp reaadr_reaper/cue_status_command.hpp reaadr_reaper/cue_take_count_adapter.hpp reaadr_reaper/character_filter_adapter.hpp \
+	reaadr_reaper/dialogue_detection_command.hpp reaadr_reaper/cue_status_command.hpp reaadr_reaper/cue_take_count_adapter.hpp reaadr_reaper/cue_info_command.hpp reaadr_reaper/character_filter_adapter.hpp \
 	reaadr_reaper/cue_navigation_service.hpp reaadr_reaper/record_arm_adapter.hpp reaadr_reaper/recording_setup_adapter.hpp \
 	reaadr_reaper/recording_transport_executor.hpp reaadr_reaper/recording_command_context.hpp reaadr_reaper/recording_command.hpp \
 	reaadr_reaper/overlay_refresh_adapter.hpp reaadr_reaper/cue_cleanup_adapter.hpp app/cue_info_application_service.hpp app/cue_status_application_service.hpp \
@@ -69,7 +70,8 @@ REAPER_HEADERS := reaadr_reaper/project_state.hpp reaadr_reaper/project_transact
 	app/recording_session_service.hpp app/overlay_application_service.hpp app/cue_import_application_service.hpp \
 	app/marker_cue_generation_application_service.hpp app/dialogue_cue_generation_application_service.hpp app/dialogue_detection_application_service.hpp \
 	app/cue_cleanup_application_service.hpp app/character_filter_application_service.hpp app/manager_view_application_service.hpp \
-	app/cue_manager_application_service.hpp app/session_refresh_application_service.hpp app/region_timing_application_service.hpp
+	app/cue_manager_application_service.hpp app/session_refresh_application_service.hpp app/region_timing_application_service.hpp \
+	reaadr_ui/cue_info_controller.hpp reaadr_ui/cue_info_window.hpp
 NATIVE_SOURCES := $(CORE_SOURCES) $(REAPER_SOURCES) $(UI_SOURCES)
 NATIVE_HEADERS := $(CORE_HEADERS) $(REAPER_HEADERS)
 EXTENSION_SOURCES := reaper_reaadr.cpp $(NATIVE_SOURCES)
