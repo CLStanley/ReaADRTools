@@ -34,6 +34,7 @@ const std::vector<ManagerAction>& manager_actions()
     {"import", "detect_dialogue", "Detect Dialogue From Selected Media", "Analyze selected media and create editable ADR cues."},
     {"import", "generate_cues", "Generate Cues from Markers/Regions", "Create ADR cues from existing markers or regions."},
     {"cues", "cue_manager", "Open Cue Manager", "Browse, edit, navigate, and refresh the active cue session."},
+    {"cues", "cue_info", "Cue Information", "Open the live native cue information and inline editor for the selected or current cue."},
     {"cues", "record_cue", "Record Cue", "Open the native recording workflow for the selected or current cue."},
     {"session", "validate_session", "Check Session", "Check timing, fields, metadata, and generated session items."},
     {"session", "refresh_session", "Refresh Session", "Repair generated tracks, regions, cue audio, and overlays."},
@@ -58,7 +59,7 @@ bool manager_action_is_native(const std::string& key)
   // These commands bind directly to native application services. Remaining
   // Manager actions stay explicit compatibility routes until their UI and host
   // wiring are cut over and smoke-tested inside REAPER.
-  return key == "detect_dialogue" || key == "generate_cues" || key == "record_cue" ||
+  return key == "detect_dialogue" || key == "generate_cues" || key == "cue_info" || key == "record_cue" ||
     key == "validate_session" || key == "refresh_session" || key == "sync_regions" ||
     key == "clear_character_cues" || key == "character_filter" || key == "preferences" || key == "refresh_overlay" ||
     key == "export_cue_sheet" ||
