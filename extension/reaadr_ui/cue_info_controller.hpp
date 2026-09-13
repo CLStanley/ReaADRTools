@@ -40,6 +40,11 @@ struct CueInfoWindowLayout {
   bool has_position = false;
 };
 
+struct CueInfoLaunchOptions {
+  bool open_edit = false;
+  bool close_on_save = false;
+};
+
 class CueInfoController final {
 public:
   CueInfoController(reaper::CueInfoApplicationService& info,
@@ -67,6 +72,7 @@ public:
   std::vector<std::string> character_choices() const;
   CueInfoWindowLayout load_window_layout() const;
   bool save_window_layout(const CueInfoWindowLayout& layout);
+  CueInfoLaunchOptions consume_launch_options();
 
 private:
   bool navigate_relative(int delta);
