@@ -30,6 +30,19 @@ struct ManagerQuickActionResult {
   explicit operator bool() const { return error.empty(); }
 };
 
+struct ManagerMenuEntry {
+  std::string label;
+  std::string action;
+  int quick_action_slot = 0;
+};
+
+struct ManagerMenuResult {
+  std::vector<ManagerMenuEntry> entries;
+  std::string error;
+
+  explicit operator bool() const { return error.empty(); }
+};
+
 const std::vector<ManagerQuickAction>& manager_quick_actions();
 
 // Serializable state shared by the native Manager Preferences view and its
@@ -95,6 +108,10 @@ private:
 // as ReaADR_App.lua: invalid persisted keys fall back to that slot's default.
 ManagerQuickActionResult resolve_manager_quick_action(
   const ManagerPreferences& preferences, std::size_t slot);
+
+// Build the top-level ReaADR Tools menu model used by the native host layer:
+// Open Manager first, followed by four resolved configurable quick actions.
+ManagerMenuResult build_manager_menu(const ManagerPreferences& preferences);
 
 // Apply one validated Manager preference update without mutating the input.
 ManagerPreferencesResult update_manager_preferences(
