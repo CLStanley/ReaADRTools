@@ -19,6 +19,15 @@ struct ReaProject;
 
 namespace reaadr::reaper {
 
+struct RecordingWindowLayout {
+  int width = 570;
+  int height = 300;
+  int dock = 0;
+  int x = 0;
+  int y = 0;
+  bool has_position = false;
+};
+
 // Owns the complete native Record Cue service graph for one REAPER project.
 // The UI never constructs repositories/adapters itself; it emits semantic
 // events into this context and reads immutable state/plan snapshots.
@@ -35,10 +44,13 @@ public:
   const core::RecordingTransportState& state() const { return session_.state(); }
   const core::RecordingSetupPlan& plan() const { return session_.plan(); }
   double frame_rate() const;
+  RecordingWindowLayout load_window_layout() const;
+  bool save_window_layout(const RecordingWindowLayout& layout);
 
 private:
   double current_timeline_position() const;
   bool refresh_overlay();
+  bool remember_window_layout() const;
 
   ReaProject* project_ = nullptr;
   ProjectStateStore project_state_;
