@@ -43,12 +43,38 @@ int main()
   require(static_cast<bool>(validate) && validate.quick_action.action == "validate_session",
           "validate quick action should preserve Lua app-action semantics");
 
+  const auto menu = build_manager_menu(preferences);
+  require(static_cast<bool>(menu), "configured native ReaADR menu should build");
+  require(menu.entries.size() == 5, "native ReaADR menu should contain Manager plus four quick actions");
+  require(menu.entries[0].label == "Open Manager" &&
+          menu.entries[0].action == "cue_manager" &&
+          menu.entries[0].quick_action_slot == 0,
+          "Open Manager should remain the first fixed native menu entry");
+  require(menu.entries[1].label == "Record Current Cue" &&
+          menu.entries[1].action == "record_cue" &&
+          menu.entries[1].quick_action_slot == 1,
+          "slot one should expose its configured record action");
+  require(menu.entries[2].label == "Character Filter" && menu.entries[2].quick_action_slot == 2,
+          "slot two should preserve configured ordering");
+  require(menu.entries[3].label == "Refresh Video Overlay" && menu.entries[3].quick_action_slot == 3,
+          "slot three should preserve configured ordering");
+  require(menu.entries[4].label == "Check Session" &&
+          menu.entries[4].action == "validate_session" &&
+          menu.entries[4].quick_action_slot == 4,
+          "slot four should preserve configured validation routing");
+
   preferences.quick_actions[0] = "not_a_real_action";
   const auto fallback = resolve_manager_quick_action(preferences, 1);
   require(static_cast<bool>(fallback), "invalid persisted key should fall back instead of failing");
   require(fallback.used_default, "invalid persisted key should report default fallback");
   require(fallback.quick_action.key == "import",
           "slot one invalid persisted key should fall back to Lua default import action");
+
+  const auto fallback_menu = build_manager_menu(preferences);
+  require(static_cast<bool>(fallback_menu), "menu should tolerate an invalid persisted quick-action key");
+  require(fallback_menu.entries[1].label == "Import Cue Sheet" &&
+          fallback_menu.entries[1].action == "import",
+          "menu should expose the slot default when persisted configuration is invalid");
 
   require(!resolve_manager_quick_action(preferences, 0), "slot zero should be rejected");
   require(!resolve_manager_quick_action(preferences, 5), "slot five should be rejected");
