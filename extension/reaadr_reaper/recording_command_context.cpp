@@ -7,11 +7,19 @@
 #include "native_host_services.hpp"
 #include "overlay_refresh_adapter.hpp"
 
+#include <cstdlib>
 #include <reaper_plugin.h>
 #include <reaper_plugin_functions.h>
 
 namespace reaadr::reaper {
 namespace {
+constexpr const char* kStateNamespace = "ReaADRTools";
+constexpr const char* kRememberLayoutKey = "ui.remember_window_layout";
+constexpr const char* kWindowWidthKey = "ui.window.record_cue.width";
+constexpr const char* kWindowHeightKey = "ui.window.record_cue.height";
+constexpr const char* kWindowDockKey = "ui.window.record_cue.dock";
+constexpr const char* kWindowXKey = "ui.window.record_cue.x";
+constexpr const char* kWindowYKey = "ui.window.record_cue.y";
 
 double command_frame_rate()
 {
@@ -31,6 +39,16 @@ bool command_refresh_overlay(const core::OverlayRefreshOptions& options,
     "ReaADR: refresh recording overlay");
   if (!refreshed && error) *error = refreshed.error;
   return static_cast<bool>(refreshed);
+}
+
+bool parse_int(const core::StateReadResult& value, int& output)
+{
+  if (!value || value.value.empty()) return false;
+  char* end = nullptr;
+  const long parsed = std::strtol(value.value.c_str(), &end, 10);
+  if (!end || *end != '\0') return false;
+  output = static_cast<int>(parsed);
+  return true;
 }
 
 } // namespace
@@ -69,6 +87,42 @@ double RecordingCommandContext::current_timeline_position() const
 double RecordingCommandContext::frame_rate() const
 {
   return native_project_frame_rate(project_);
+}
+
+bool RecordingCommandContext::remember_window_layout() const
+{
+  const auto value = project_state_.read(kStateNamespace, kRememberLayoutKey);
+  if (!value) return false;
+  return value.value == "1" || value.value == "true" || value.value == "yes";
+}
+
+RecordingWindowLayout RecordingCommandContext::load_window_layout() const
+{
+  RecordingWindowLayout layout;
+  if (!remember_window_layout()) return layout;
+
+  int value = 0;
+  if (parse_int(project_state_.read(kStateNamespace, kWindowWidthKey), value) && value > 0)
+    layout.width = value;
+  if (parse_int(project_state_.read(kStateNamespace, kWindowHeightKey), value) && value > 0)
+    layout.height = value;
+  if (parse_int(project_state_.read(kStateNamespace, kWindowDockKey), value))
+    layout.dock = value;
+
+  bool has_x = parse_int(project_state_.read(kStateNamespace, kWindowXKey), layout.x);
+  bool has_y = parse_int(project_state_.read(kStateNamespace, kWindowYKey), layout.y);
+  layout.has_position = has_x && has_y;
+  return layout;
+}
+
+bool RecordingCommandContext::save_window_layout(const RecordingWindowLayout& layout)
+{
+  if (!remember_window_layout()) return false;
+  return project_state_.write(kStateNamespace, kWindowDockKey, "0") &&
+    project_state_.write(kStateNamespace, kWindowXKey, std::to_string(layout.x)) &&
+    project_state_.write(kStateNamespace, kWindowYKey, std::to_string(layout.y)) &&
+    project_state_.write(kStateNamespace, kWindowWidthKey, std::to_string(layout.width)) &&
+    project_state_.write(kStateNamespace, kWindowHeightKey, std::to_string(layout.height));
 }
 
 bool RecordingCommandContext::refresh_overlay()
