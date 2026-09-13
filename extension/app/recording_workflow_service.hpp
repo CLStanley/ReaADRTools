@@ -21,6 +21,7 @@ struct RecordingWorkflowStartResult {
   core::RecordingTransportContext context;
   core::RecordingTransportState state;
   MediaTrack* target_track = nullptr;
+  std::string target_track_name;
   std::string error;
 
   explicit operator bool() const { return error.empty(); }
