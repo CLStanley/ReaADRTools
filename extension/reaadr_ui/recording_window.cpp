@@ -5,6 +5,7 @@
 
 #include "recording_controller.hpp"
 
+#include <algorithm>
 #include <iomanip>
 #include <sstream>
 #include <string>
@@ -29,6 +30,8 @@ constexpr int kPreroll = 48208;
 constexpr int kStop = 48209;
 constexpr int kTimer = 1;
 constexpr int kTransportPlayStop = 40044;
+constexpr int kMinWindowWidth = 530;
+constexpr int kMinWindowHeight = 260;
 
 RecordingController* g_controller = nullptr;
 
@@ -62,6 +65,34 @@ void update_window(HWND hwnd)
                view.mode == core::RecordingTransportMode::idle);
 }
 
+void restore_window_geometry(HWND hwnd)
+{
+  if (!g_controller) return;
+  const auto saved = g_controller->load_window_layout();
+  RECT current{};
+  if (!GetWindowRect(hwnd, &current)) return;
+  const int width = (std::max)(kMinWindowWidth, saved.width);
+  const int height = (std::max)(kMinWindowHeight, saved.height);
+  const int x = saved.has_position ? saved.x : current.left;
+  const int y = saved.has_position ? saved.y : current.top;
+  MoveWindow(hwnd, x, y, width, height, TRUE);
+}
+
+void save_window_geometry(HWND hwnd)
+{
+  if (!g_controller) return;
+  RECT rect{};
+  if (!GetWindowRect(hwnd, &rect)) return;
+  reaper::RecordingWindowLayout layout;
+  layout.x = rect.left;
+  layout.y = rect.top;
+  layout.width = (std::max)(kMinWindowWidth, rect.right - rect.left);
+  layout.height = (std::max)(kMinWindowHeight, rect.bottom - rect.top);
+  layout.dock = 0;
+  layout.has_position = true;
+  g_controller->save_window_layout(layout);
+}
+
 bool show_error(HWND hwnd)
 {
   if (!g_controller || g_controller->view().error.empty()) return false;
@@ -76,6 +107,7 @@ bool close_recording(HWND hwnd)
     update_window(hwnd);
     return false;
   }
+  save_window_geometry(hwnd);
   KillTimer(hwnd, kTimer);
   EndDialog(hwnd, 0);
   return true;
@@ -91,6 +123,7 @@ INT_PTR recording_proc(HWND hwnd, UINT message, WPARAM wparam, LPARAM)
         EndDialog(hwnd, -1);
         return 1;
       }
+      restore_window_geometry(hwnd);
       update_window(hwnd);
       SetTimer(hwnd, kTimer, 30, nullptr);
       return 1;
