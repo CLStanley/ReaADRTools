@@ -4,6 +4,7 @@
 
 #include <cmath>
 #include <cstddef>
+#include <cstdlib>
 #include <string>
 
 namespace reaadr::reaper {
