@@ -63,6 +63,14 @@ void fill_combo(HWND hwnd, int id, const std::vector<std::string>& values)
     SendMessage(combo, CB_ADDSTRING, 0, reinterpret_cast<LPARAM>(value.c_str()));
 }
 
+void refresh_character_choices(HWND hwnd)
+{
+  if (!g_controller) return;
+  const std::string current = control_text(hwnd, kCharacter);
+  fill_combo(hwnd, kCharacter, g_controller->character_choices());
+  SetDlgItemText(hwnd, kCharacter, current.c_str());
+}
+
 void update_live(HWND hwnd)
 {
   if (!g_controller) return;
@@ -123,6 +131,7 @@ INT_PTR cue_info_proc(HWND hwnd, UINT message, WPARAM wparam, LPARAM)
   switch (message) {
     case WM_INITDIALOG:
       if (!g_controller) return 0;
+      fill_combo(hwnd, kCharacter, g_controller->character_choices());
       fill_combo(hwnd, kStatus, core::cue_manager_status_choices());
       fill_combo(hwnd, kCueType, core::cue_manager_type_choices());
       if (!g_controller->refresh()) {
@@ -149,15 +158,19 @@ INT_PTR cue_info_proc(HWND hwnd, UINT message, WPARAM wparam, LPARAM)
       const int command = LOWORD(wparam);
       const int notification = HIWORD(wparam);
       if (!g_populating && editor_control(command) &&
-          (notification == EN_CHANGE || notification == CBN_SELCHANGE)) {
+          (notification == EN_CHANGE || notification == CBN_SELCHANGE || notification == CBN_EDITCHANGE)) {
         g_dirty = true;
         SetDlgItemText(hwnd, kError, "Unsaved edit - choose Save to apply changes.");
         return 1;
       }
       if (!g_controller) return 0;
       if (command == kSave) {
-        if (g_controller->save(read_editors(hwnd))) populate_editors(hwnd);
-        else SetDlgItemText(hwnd, kError, g_controller->error().c_str());
+        if (g_controller->save(read_editors(hwnd))) {
+          refresh_character_choices(hwnd);
+          populate_editors(hwnd);
+        } else {
+          SetDlgItemText(hwnd, kError, g_controller->error().c_str());
+        }
         return 1;
       }
       if (command == kPrevious || command == kNext) {
@@ -196,7 +209,7 @@ BEGIN
   LTEXT "Cue", -1, 18, 82, 42, 16
   EDITTEXT kCueId, 64, 78, 110, 22, ES_AUTOHSCROLL
   LTEXT "Character", -1, 190, 82, 70, 16
-  EDITTEXT kCharacter, 264, 78, 190, 22, ES_AUTOHSCROLL
+  COMBOBOX kCharacter, 264, 78, 190, 120, CBS_DROPDOWN | WS_VSCROLL
   LTEXT "Status", -1, 470, 82, 52, 16
   COMBOBOX kStatus, 526, 78, 140, 110, CBS_DROPDOWN | WS_VSCROLL
   LTEXT "Type", -1, 680, 82, 38, 16
