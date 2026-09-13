@@ -59,19 +59,19 @@ Until all seven gates pass, the Lua implementation remains the specification and
 | `ReaADR_Overlay_Settings.lua` | Native backend/routed | Settings UI parity and smoke test. |
 | `ReaADR_Preferences.lua` | Native backend/routed | Preferences UI parity and smoke test. |
 | `ReaADR_Previous_Cue.lua` | Native backend/routed | Action-entry parity and wrap/filter smoke test. |
-| `ReaADR_Quick_Action_1.lua` | Lua wrapper/reference | Native configurable quick-action entry parity. |
-| `ReaADR_Quick_Action_2.lua` | Lua wrapper/reference | Native configurable quick-action entry parity. |
-| `ReaADR_Quick_Action_3.lua` | Lua wrapper/reference | Native configurable quick-action entry parity. |
-| `ReaADR_Quick_Action_4.lua` | Lua wrapper/reference | Native configurable quick-action entry parity. |
+| `ReaADR_Quick_Action_1.lua` | Native foundation/backend | Native slot catalog, persistence model, resolution and invalid-key fallback now exist. Remaining: native entry routing/host exposure and REAPER smoke test. |
+| `ReaADR_Quick_Action_2.lua` | Native foundation/backend | Native slot catalog, persistence model, resolution and invalid-key fallback now exist. Remaining: native entry routing/host exposure and REAPER smoke test. |
+| `ReaADR_Quick_Action_3.lua` | Native foundation/backend | Native slot catalog, persistence model, resolution and invalid-key fallback now exist. Remaining: native entry routing/host exposure and REAPER smoke test. |
+| `ReaADR_Quick_Action_4.lua` | Native foundation/backend | Native slot catalog, persistence model, resolution and invalid-key fallback now exist. Remaining: native entry routing/host exposure and REAPER smoke test. |
 | `ReaADR_Record_Arm.lua` | Native backend | Record-arm capture/isolation/restore exists; verify through full Record Cue smoke test. |
-| `ReaADR_Record_Cue.lua` | Native foundation/backend | Native workflow/window, Space transport shortcut, SMPTE timing display and floating geometry persistence exist. Remaining: true docker-state parity, Windows presentation, host/UI exposure and REAPER smoke tests. |
-| `ReaADR_Set_Cue_Status.lua` | Native backend | Six-choice native SWELL presentation and positional transactional update exist. Remaining: Windows presentation, host action registration and REAPER smoke testing. |
+| `ReaADR_Record_Cue.lua` | Native foundation/backend | Native workflow/window, Space transport shortcut, SMPTE timing display, real REAPER track-name display, Lua-style dialogue preview, floating geometry persistence and explicit external-stop lifecycle coverage exist. `CountTakes` and `GetSet_LoopTimeRange2` are now requested in native build preprocessing so those APIs load under `REAPERAPI_MINIMAL`. Remaining: true docker-state parity, Windows presentation, host/UI exposure and REAPER smoke tests. |
+| `ReaADR_Set_Cue_Status.lua` | Native backend | Six-choice native presentation exists on Linux/macOS and Windows, with positional transactional update and overlay refresh. Remaining: host action registration and REAPER smoke testing. |
 
 ## Host registration audit
 
 The host action table currently contains a stale compatibility entry for `Scripts/ReaADRTools/scripts/ReaADR_Monitor_Markers.lua`, but that file is not present in the current `scripts/` tree. Treat this as host-registration cleanup, not as a migration target. Remove the stale registration when the host action table is next edited safely.
 
-The native host service also now consumes `GetSet_LoopTimeRange2` and `CountTakes`. Because the extension uses `REAPERAPI_MINIMAL`, their `REAPERAPI_WANT_*` declarations must be added in the same translation unit as `REAPERAPI_IMPLEMENT` before runtime parity is approved. Do not treat a successful shared-object link alone as proof that those APIs will be loaded by REAPER.
+`CountTakes` and `GetSet_LoopTimeRange2` are required by the native take-count and recording-loop services. Because the extension uses `REAPERAPI_MINIMAL`, the native Make/MSVC build paths now define `REAPERAPI_WANT_CountTakes` and `REAPERAPI_WANT_GetSet_LoopTimeRange2` before the host translation unit is preprocessed. Runtime smoke testing in REAPER is still required before parity approval.
 
 ## Record Cue parity checklist
 
