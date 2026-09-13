@@ -64,7 +64,7 @@ Until all seven gates pass, the Lua implementation remains the specification and
 | `ReaADR_Quick_Action_3.lua` | Lua wrapper/reference | Native configurable quick-action entry parity. |
 | `ReaADR_Quick_Action_4.lua` | Lua wrapper/reference | Native configurable quick-action entry parity. |
 | `ReaADR_Record_Arm.lua` | Native backend | Record-arm capture/isolation/restore exists; verify through full Record Cue smoke test. |
-| `ReaADR_Record_Cue.lua` | Native foundation/backend | Native workflow/window and Space transport shortcut exist. Remaining: Windows presentation, timecode/window-state parity, host/UI exposure and REAPER smoke tests. |
+| `ReaADR_Record_Cue.lua` | Native foundation/backend | Native workflow/window, Space transport shortcut, SMPTE timing display and floating geometry persistence exist. Remaining: true docker-state parity, Windows presentation, host/UI exposure and REAPER smoke tests. |
 | `ReaADR_Set_Cue_Status.lua` | Native backend | Add native choice presentation/host routing and smoke-test positional targeting. |
 
 ## Host registration audit
@@ -92,8 +92,9 @@ The Lua `ReaADR_Record_Cue.lua` remains authoritative until all of these are ver
 - external transport stop behavior;
 - Stop, Escape, close and error paths converge on safe cleanup;
 - transport keyboard shortcut parity;
-- timecode/status/display parity;
-- window size/dock persistence parity;
+- SMPTE timecode/status/display parity;
+- floating window size/position persistence parity;
+- true REAPER docker-state persistence parity;
 - Linux/macOS/Windows presentation support expected by the release.
 
 ## Migration discipline
