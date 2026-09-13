@@ -43,7 +43,6 @@ constexpr int kTransportPlayStop = 40044;
 CueInfoController* g_controller = nullptr;
 bool g_populating = false;
 bool g_dirty = false;
-bool g_editing = false;
 std::string g_loaded_key;
 
 std::string control_text(HWND hwnd, int id)
@@ -131,6 +130,20 @@ bool editor_control(int id)
     id == kStart || id == kEnd || id == kDirection || id == kDialogue || id == kNotes;
 }
 
+bool editor_has_focus(HWND hwnd)
+{
+  const HWND focus = GetFocus();
+  if (!focus) return false;
+  const int editors[] = {
+    kCueId, kCharacter, kStatus, kCueType, kStart, kEnd, kDirection, kDialogue, kNotes,
+  };
+  for (const int id : editors) {
+    const HWND control = GetDlgItem(hwnd, id);
+    if (control && (focus == control || IsChild(control, focus))) return true;
+  }
+  return false;
+}
+
 #ifndef _WIN32
 INT_PTR cue_info_proc(HWND hwnd, UINT message, WPARAM wparam, LPARAM)
 {
@@ -161,7 +174,7 @@ INT_PTR cue_info_proc(HWND hwnd, UINT message, WPARAM wparam, LPARAM)
       return 1;
 
     case WM_KEYDOWN:
-      if (wparam == VK_SPACE && !g_editing && Main_OnCommand) {
+      if (wparam == VK_SPACE && !editor_has_focus(hwnd) && Main_OnCommand) {
         Main_OnCommand(kTransportPlayStop, 0);
         return 1;
       }
@@ -170,10 +183,6 @@ INT_PTR cue_info_proc(HWND hwnd, UINT message, WPARAM wparam, LPARAM)
     case WM_COMMAND: {
       const int command = LOWORD(wparam);
       const int notification = HIWORD(wparam);
-      if (editor_control(command)) {
-        if (notification == EN_SETFOCUS || notification == CBN_SETFOCUS) g_editing = true;
-        if (notification == EN_KILLFOCUS || notification == CBN_KILLFOCUS) g_editing = false;
-      }
       if (!g_populating && editor_control(command) &&
           (notification == EN_CHANGE || notification == CBN_SELCHANGE || notification == CBN_EDITCHANGE)) {
         g_dirty = true;
@@ -265,7 +274,6 @@ bool show_cue_info_window(CueInfoController& controller)
   if (g_controller) return false;
   g_controller = &controller;
   g_dirty = false;
-  g_editing = false;
   g_loaded_key.clear();
   const int result = DialogBoxParam(nullptr, MAKEINTRESOURCE(kDialog), nullptr, cue_info_proc, 0);
   g_controller = nullptr;
