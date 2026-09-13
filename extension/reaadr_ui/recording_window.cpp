@@ -42,14 +42,21 @@ std::string number(double value, int precision = 1)
   return output.str();
 }
 
+std::string dialogue_preview(const std::string& dialogue)
+{
+  if (dialogue.empty()) return "(no dialogue)";
+  if (dialogue.size() <= 72) return dialogue;
+  return dialogue.substr(0, 69) + "...";
+}
+
 void update_window(HWND hwnd)
 {
   if (!g_controller) return;
   const auto& view = g_controller->view();
   const std::string cue = "Cue " + view.cue_key + " - " + view.character;
   SetDlgItemText(hwnd, kCue, cue.c_str());
-  SetDlgItemText(hwnd, kDialogue,
-                 view.dialogue.empty() ? "(no dialogue)" : view.dialogue.c_str());
+  const std::string dialogue = dialogue_preview(view.dialogue);
+  SetDlgItemText(hwnd, kDialogue, dialogue.c_str());
   const double duration = view.cue_end - view.cue_start;
   const std::string timing = view.cue_start_timecode + "   " + number(duration) +
     "s cue  +  " + number(view.preroll_seconds) + "s preroll";
