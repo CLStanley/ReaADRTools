@@ -181,8 +181,8 @@ void save_window_geometry(HWND hwnd)
   CueInfoWindowLayout layout;
   layout.x = rect.left;
   layout.y = rect.top;
-  layout.width = (std::max)(kMinWindowWidth, rect.right - rect.left);
-  layout.height = (std::max)(kMinWindowHeight, rect.bottom - rect.top);
+  layout.width = (std::max)(kMinWindowWidth, static_cast<int>(rect.right - rect.left));
+  layout.height = (std::max)(kMinWindowHeight, static_cast<int>(rect.bottom - rect.top));
   layout.dock = 0;
   layout.has_position = true;
   g_controller->save_window_layout(layout);
