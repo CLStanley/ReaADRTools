@@ -80,9 +80,37 @@ bool choose_cue_status(const std::vector<std::string>& statuses,
   g_selected_status = nullptr;
   return result == 1 && !selected_status.empty();
 #else
-  (void)statuses;
   selected_status.clear();
-  return false;
+  if (statuses.empty()) return false;
+
+  HMENU menu = CreatePopupMenu();
+  if (!menu) return false;
+
+  constexpr UINT kFirstStatusCommand = 1;
+  for (std::size_t index = 0; index < statuses.size(); ++index) {
+    AppendMenuA(menu, MF_STRING,
+                kFirstStatusCommand + static_cast<UINT>(index),
+                statuses[index].c_str());
+  }
+
+  POINT point{};
+  if (!GetCursorPos(&point)) {
+    DestroyMenu(menu);
+    return false;
+  }
+
+  HWND owner = GetForegroundWindow();
+  if (owner) SetForegroundWindow(owner);
+  const UINT command = TrackPopupMenu(
+    menu, TPM_RETURNCMD | TPM_NONOTIFY | TPM_LEFTALIGN | TPM_TOPALIGN,
+    point.x, point.y, 0, owner, nullptr);
+  DestroyMenu(menu);
+
+  if (command < kFirstStatusCommand) return false;
+  const std::size_t index = static_cast<std::size_t>(command - kFirstStatusCommand);
+  if (index >= statuses.size()) return false;
+  selected_status = statuses[index];
+  return true;
 #endif
 }
 
