@@ -32,7 +32,7 @@ cl /nologo /EHsc /O2 /LD /std:c++17 ^
   reaadr_reaper\project_state.cpp reaadr_reaper\project_transaction.cpp ^
   reaadr_reaper\track_region_adapter.cpp reaadr_reaper\render_artifact_adapter.cpp reaadr_reaper\session_render_service.cpp ^
   reaadr_reaper\native_host_services.cpp reaadr_reaper\marker_snapshot_adapter.cpp reaadr_reaper\marker_cue_generation_command.cpp ^
-  reaadr_reaper\dialogue_detection_adapter.cpp reaadr_reaper\dialogue_detection_command.cpp reaadr_reaper\cue_status_command.cpp reaadr_reaper\cue_take_count_adapter.cpp ^
+  reaadr_reaper\dialogue_detection_adapter.cpp reaadr_reaper\dialogue_detection_command.cpp reaadr_reaper\cue_status_command.cpp reaadr_reaper\cue_take_count_adapter.cpp reaadr_reaper\cue_info_command.cpp ^
   reaadr_reaper\character_filter_adapter.cpp reaadr_reaper\cue_navigation_service.cpp reaadr_reaper\record_arm_adapter.cpp ^
   reaadr_reaper\recording_setup_adapter.cpp reaadr_reaper\recording_transport_executor.cpp reaadr_reaper\recording_command_context.cpp reaadr_reaper\recording_command.cpp ^
   reaadr_reaper\overlay_refresh_adapter.cpp reaadr_reaper\cue_cleanup_adapter.cpp ^
@@ -43,6 +43,7 @@ cl /nologo /EHsc /O2 /LD /std:c++17 ^
   app\cue_cleanup_application_service.cpp app\character_filter_application_service.cpp ^
   app\manager_view_application_service.cpp app\cue_manager_application_service.cpp app\session_refresh_application_service.cpp app\region_timing_application_service.cpp ^
   reaadr_ui\reaadr_ui.cpp reaadr_ui\cue_manager_controller.cpp reaadr_ui\cue_manager_window.cpp ^
+  reaadr_ui\cue_info_controller.cpp reaadr_ui\cue_info_window.cpp ^
   reaadr_ui\recording_controller.cpp reaadr_ui\recording_window.cpp ^
   reaadr_ui\manager_view_model.cpp reaadr_ui\manager_navigation.cpp reaadr_ui\manager_ui_contract.cpp reaadr_ui\cue_manager_ui_contract.cpp ^
   /Fe"%BUILD_DIR%\%TARGET%" /link user32.lib /DEF:reaper_reaadr.def
