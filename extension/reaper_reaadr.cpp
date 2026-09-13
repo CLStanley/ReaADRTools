@@ -258,9 +258,10 @@ ScriptAction g_character_filter_action = {
 ScriptAction g_next_cue_action = {"Next Cue (Native)", nullptr, 0};
 ScriptAction g_previous_cue_action = {"Previous Cue (Native)", nullptr, 0};
 ScriptAction g_jump_to_cue_action = {"Jump To Cue (Native)", nullptr, 0};
-// Kept as one command/action internally so existing keyboard mappings remain
-// stable, while the menu exposes the complete native Manager shell directly.
-ScriptAction g_cue_manager_action = {"Open Manager (Native Preview)", nullptr, 0};
+// The stable native command now owns the public Manager launch. The Lua
+// launcher remains in the repository as a parity reference and upgrade target,
+// but is no longer registered as the active Open Manager action.
+ScriptAction g_cue_manager_action = {"Open Manager", nullptr, 0};
 ScriptAction g_import_cue_sheet_action = {"Import Cue Sheet (Native)", nullptr, 0};
 ScriptAction g_preferences_action = {"Preferences (Native Preview)", nullptr, 0};
 ScriptAction g_ui_test_action = {"Native UI Test Window (C++)", nullptr, 0};
@@ -383,7 +384,17 @@ void register_scripts()
     AddRemoveReaScript(false, kMainSection, script_path.c_str(), false);
   }
 
-  for (std::size_t i = 0; i < g_actions.size(); ++i) {
+  // Retire an existing Lua Open Manager registration without deleting its
+  // wrapper. The native command registered before this function is now the
+  // single public owner of that action and top-level menu entry.
+  const std::string old_manager_path =
+    join_path(old_root, g_actions.front().relative_path + 8);
+  const std::string manager_path =
+    join_path(root, g_actions.front().relative_path);
+  AddRemoveReaScript(false, kMainSection, old_manager_path.c_str(), false);
+  AddRemoveReaScript(false, kMainSection, manager_path.c_str(), false);
+
+  for (std::size_t i = 1; i < g_actions.size(); ++i) {
     const bool commit = i + 1 == g_actions.size();
     const std::string old_script_path = join_path(old_root, g_actions[i].relative_path + 8);
     AddRemoveReaScript(false, kMainSection, old_script_path.c_str(), false);
@@ -395,7 +406,7 @@ void register_scripts()
 
 void unregister_scripts()
 {
-  for (std::size_t i = 0; i < g_actions.size(); ++i) {
+  for (std::size_t i = 1; i < g_actions.size(); ++i) {
     const bool commit = i + 1 == g_actions.size();
     const std::string script_path = join_path(resource_directory(), g_actions[i].relative_path);
     AddRemoveReaScript(false, kMainSection, script_path.c_str(), commit);
@@ -2379,12 +2390,9 @@ void hook_custom_menu(const char* menu_id, void* menu, int flag)
   int position = existing_items > 0 ? existing_items : 0;
 
   if (existing_items <= 0) {
-    for (std::size_t i = 0; i < g_actions.size(); ++i) {
-      if (i == 0) {
-        add_menu_item(hmenu, position++, g_actions[i]);
-      } else {
-        add_menu_item_with_label(hmenu, position++, g_actions[i], quick_action_label(static_cast<int>(i)));
-      }
+    add_menu_item(hmenu, position++, g_cue_manager_action);
+    for (std::size_t i = 1; i < g_actions.size(); ++i) {
+      add_menu_item_with_label(hmenu, position++, g_actions[i], quick_action_label(static_cast<int>(i)));
     }
     add_menu_item(hmenu, position, g_validate_session_action);
     add_menu_item(hmenu, position + 1, g_refresh_overlay_action);
@@ -2395,12 +2403,13 @@ void hook_custom_menu(const char* menu_id, void* menu, int flag)
     add_menu_item(hmenu, position + 6, g_next_cue_action);
     add_menu_item(hmenu, position + 7, g_previous_cue_action);
     add_menu_item(hmenu, position + 8, g_jump_to_cue_action);
-    add_menu_item(hmenu, position + 9, g_cue_manager_action);
-    add_menu_item(hmenu, position + 10, g_import_cue_sheet_action);
-    add_menu_item(hmenu, position + 11, g_preferences_action);
+    add_menu_item(hmenu, position + 9, g_import_cue_sheet_action);
+    add_menu_item(hmenu, position + 10, g_preferences_action);
     log_line("Added top-level ReaADR Tools menu.");
     return;
   }
+
+  update_menu_item_label(hmenu, 0, g_cue_manager_action, g_cue_manager_action.label);
 
   for (std::size_t i = 1; i < g_actions.size(); ++i) {
     if (static_cast<int>(i) < existing_items) {
@@ -2472,25 +2481,19 @@ void hook_custom_menu(const char* menu_id, void* menu, int flag)
   } else {
     add_menu_item(hmenu, position + 8, g_jump_to_cue_action);
   }
-  const int manager_position = validation_position + 9;
-  if (manager_position < existing_items) {
-    update_menu_item_label(hmenu, manager_position, g_cue_manager_action, g_cue_manager_action.label);
-  } else {
-    add_menu_item(hmenu, position + 9, g_cue_manager_action);
-  }
-  const int import_position = validation_position + 10;
+  const int import_position = validation_position + 9;
   if (import_position < existing_items) {
     update_menu_item_label(hmenu, import_position, g_import_cue_sheet_action,
       g_import_cue_sheet_action.label);
   } else {
-    add_menu_item(hmenu, position + 10, g_import_cue_sheet_action);
+    add_menu_item(hmenu, position + 9, g_import_cue_sheet_action);
   }
-  const int preferences_position = validation_position + 11;
+  const int preferences_position = validation_position + 10;
   if (preferences_position < existing_items) {
     update_menu_item_label(hmenu, preferences_position, g_preferences_action,
       g_preferences_action.label);
   } else {
-    add_menu_item(hmenu, position + 11, g_preferences_action);
+    add_menu_item(hmenu, position + 10, g_preferences_action);
   }
   log_line("Updated top-level ReaADR quick-action labels.");
 }

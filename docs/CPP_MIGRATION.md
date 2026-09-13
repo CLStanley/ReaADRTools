@@ -453,6 +453,14 @@ multi-kilobyte dialogue/notes through canonical save, render, and rollback.
 The native dialogue/notes controls are still single-line editors; multiline
 editing presentation and in-REAPER long-text verification remain outstanding.
 
+The stable native Manager command now owns the public Open Manager Action List
+entry and the first item in the ReaADR Tools menu. Startup unregisters stale Lua
+Open Manager registrations from both historical install locations without
+deleting or modifying the Lua launcher, which remains a parity reference. The
+four transitional quick-action scripts remain registered independently until
+their native command cutover is complete. Native Manager launch behavior still
+requires an in-REAPER smoke test on each supported platform.
+
 ### Stage 4: native UI and Lua removal
 
 - Replace manager, cue editor, preferences, filter, overlay, and report windows
