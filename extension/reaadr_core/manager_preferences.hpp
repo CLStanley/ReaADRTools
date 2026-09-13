@@ -15,6 +15,23 @@ struct ManagerPreferenceField {
 
 const std::vector<ManagerPreferenceField>& manager_preference_fields();
 const std::vector<std::string>& manager_quick_action_choices();
+
+struct ManagerQuickAction {
+  std::string key;
+  std::string label;
+  std::string action;
+};
+
+struct ManagerQuickActionResult {
+  ManagerQuickAction quick_action;
+  bool used_default = false;
+  std::string error;
+
+  explicit operator bool() const { return error.empty(); }
+};
+
+const std::vector<ManagerQuickAction>& manager_quick_actions();
+
 // Serializable state shared by the native Manager Preferences view and its
 // compatibility bridge; overlay values remain owned by OverlaySettings.
 struct ManagerPreferences {
@@ -73,6 +90,11 @@ private:
   ProjectStateStore& store_;
   GlobalStateStore* global_ = nullptr;
 };
+
+// Resolve one 1-based quick-action slot using the same compatibility behavior
+// as ReaADR_App.lua: invalid persisted keys fall back to that slot's default.
+ManagerQuickActionResult resolve_manager_quick_action(
+  const ManagerPreferences& preferences, std::size_t slot);
 
 // Apply one validated Manager preference update without mutating the input.
 ManagerPreferencesResult update_manager_preferences(
