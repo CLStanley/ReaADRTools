@@ -40,6 +40,9 @@ constexpr int kSave = 48316;
 constexpr int kError = 48317;
 constexpr int kTimer = 1;
 constexpr int kTransportPlayStop = 40044;
+// Swell's VK set omits the alphanumeric range; the R key arrives as its ASCII
+// code on every platform, which matches Windows' VK_R value.
+constexpr int kVkR = 0x52;
 constexpr int kMinWindowWidth = 820;
 constexpr int kMinWindowHeight = 560;
 #ifdef _WIN32
@@ -211,6 +214,22 @@ void refresh_live_state(HWND hwnd)
   }
 }
 
+// Keyboard parity with the Lua Cue Info panel: Left/Right move through visible
+// cues exactly like the Previous/Next buttons, Ctrl+R forces a controller
+// refresh even when editors are dirty. Returns true when the key was consumed.
+bool handle_nav_key(HWND hwnd, int key)
+{
+  if (!g_controller || editor_has_focus(hwnd)) return false;
+  const bool is_refresh = key == kVkR && (GetAsyncKeyState(VK_CONTROL) & 0x8000);
+  if (key != VK_LEFT && key != VK_RIGHT && !is_refresh) return false;
+  const bool ok = key == VK_LEFT ? g_controller->previous()
+                   : key == VK_RIGHT ? g_controller->next()
+                   : g_controller->refresh();
+  if (ok) populate_editors(hwnd);
+  else SetDlgItemText(hwnd, kError, g_controller->error().c_str());
+  return true;
+}
+
 bool handle_cue_info_command(HWND hwnd, int command, int notification)
 {
   if (!g_populating && editor_control(command) &&
@@ -277,9 +296,12 @@ INT_PTR cue_info_proc(HWND hwnd, UINT message, WPARAM wparam, LPARAM)
       return 1;
 
     case WM_KEYDOWN:
-      if (wparam == VK_SPACE && !editor_has_focus(hwnd) && Main_OnCommand) {
-        Main_OnCommand(kTransportPlayStop, 0);
-        return 1;
+      if (!editor_has_focus(hwnd)) {
+        if (wparam == VK_SPACE && Main_OnCommand) {
+          Main_OnCommand(kTransportPlayStop, 0);
+          return 1;
+        }
+        if (handle_nav_key(hwnd, static_cast<int>(wparam))) return 1;
       }
       return 0;
 
@@ -527,10 +549,15 @@ bool show_cue_info_window(CueInfoController& controller)
 
   MSG message{};
   while (IsWindow(hwnd) && GetMessage(&message, nullptr, 0, 0) > 0) {
-    if (message.message == WM_KEYDOWN && message.wParam == VK_SPACE &&
-        !editor_has_focus(hwnd) && Main_OnCommand) {
-      Main_OnCommand(kTransportPlayStop, 0);
-      continue;
+    if (message.message == WM_KEYDOWN && !editor_has_focus(hwnd)) {
+      const int key = static_cast<int>(message.wParam);
+      if (key == VK_SPACE && Main_OnCommand) {
+        Main_OnCommand(kTransportPlayStop, 0);
+        continue;
+      }
+      // VK_ESCAPE is deliberately not consumed here so IsDialogMessage keeps
+      // closing open combo dropdowns before it maps to IDCANCEL/close.
+      if (handle_nav_key(hwnd, key)) continue;
     }
     if (!IsDialogMessage(hwnd, &message)) {
       TranslateMessage(&message);
