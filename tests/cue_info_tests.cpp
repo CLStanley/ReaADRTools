@@ -31,7 +31,7 @@ reaadr::core::Fields sample_cue()
 void test_projection()
 {
   const auto view = reaadr::core::build_cue_info_view(sample_cue(), {8.5, 24.0, 3});
-  check(view, "valid cue should project");
+  check(static_cast<bool>(view), "valid cue should project");
   check(view.cue_key == "A12", "cue ID should project");
   check(view.character == "Actor", "character should project");
   check(view.status == "Needs Review", "status should normalize");
@@ -50,7 +50,7 @@ void test_projection()
 void test_countdown_clamps_after_start()
 {
   const auto view = reaadr::core::build_cue_info_view(sample_cue(), {11.0, 24.0, 0});
-  check(view, "active cue should project");
+  check(static_cast<bool>(view), "active cue should project");
   check(view.countdown == 0.0, "countdown should not go negative");
 }
 
@@ -60,7 +60,7 @@ void test_dialogue_fallback()
   cue.erase("line");
   cue["dialogue"] = "Fallback dialogue";
   const auto view = reaadr::core::build_cue_info_view(cue, {0.0, 30.0, 0});
-  check(view, "cue with dialogue field should project");
+  check(static_cast<bool>(view), "cue with dialogue field should project");
   check(view.dialogue == "Fallback dialogue", "legacy dialogue field should be supported");
 }
 
