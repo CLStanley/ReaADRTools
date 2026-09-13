@@ -34,6 +34,7 @@ public:
   bool active() const { return session_.active(); }
   const core::RecordingTransportState& state() const { return session_.state(); }
   const core::RecordingSetupPlan& plan() const { return session_.plan(); }
+  double frame_rate() const;
 
 private:
   double current_timeline_position() const;
