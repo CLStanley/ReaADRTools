@@ -4,7 +4,7 @@
 #include "../reaadr_core/cue_info.hpp"
 #include "../reaadr_reaper/cue_take_count_adapter.hpp"
 
-struct ReaProject;
+class ReaProject;
 
 namespace reaadr::reaper {
 

@@ -12,7 +12,7 @@
 
 #include <string>
 
-struct ReaProject;
+class ReaProject;
 
 namespace reaadr::reaper {
 

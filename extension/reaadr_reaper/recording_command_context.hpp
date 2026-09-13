@@ -15,7 +15,7 @@
 #include "recording_setup_adapter.hpp"
 #include "recording_transport_executor.hpp"
 
-struct ReaProject;
+class ReaProject;
 
 namespace reaadr::reaper {
 

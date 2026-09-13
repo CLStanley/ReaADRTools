@@ -11,7 +11,7 @@
 #include <string>
 #include <vector>
 
-struct ReaProject;
+class ReaProject;
 
 namespace reaadr::reaper {
 

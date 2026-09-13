@@ -5,7 +5,7 @@
 #include <string>
 #include <vector>
 
-struct ReaProject;
+class ReaProject;
 struct MediaItem;
 struct MediaItem_Take;
 struct AudioAccessor;

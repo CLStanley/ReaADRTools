@@ -11,7 +11,7 @@ struct MediaItem_Take;
 struct MediaTrack;
 struct PCM_source;
 struct ProjectMarker;
-struct ReaProject;
+class ReaProject;
 
 namespace reaadr::reaper {
 

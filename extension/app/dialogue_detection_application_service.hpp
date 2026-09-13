@@ -3,7 +3,7 @@
 #include "dialogue_cue_generation_application_service.hpp"
 #include "../reaadr_reaper/dialogue_detection_adapter.hpp"
 
-struct ReaProject;
+class ReaProject;
 
 namespace reaadr::reaper {
 

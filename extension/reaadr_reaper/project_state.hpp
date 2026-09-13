@@ -5,7 +5,7 @@
 
 #include <cstddef>
 
-struct ReaProject;
+class ReaProject;
 
 namespace reaadr::reaper {
 

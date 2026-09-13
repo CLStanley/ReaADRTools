@@ -5,7 +5,7 @@
 #include <cstddef>
 #include <string>
 
-struct ReaProject;
+class ReaProject;
 struct MediaTrack;
 struct MediaItem;
 

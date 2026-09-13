@@ -6,7 +6,7 @@
 #include <string>
 
 struct MediaTrack;
-struct ReaProject;
+class ReaProject;
 
 namespace reaadr::reaper {
 

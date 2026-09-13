@@ -47,7 +47,7 @@ cl /nologo /EHsc /O2 /LD /std:c++17 ^
   reaadr_ui\cue_info_controller.cpp reaadr_ui\cue_info_window.cpp reaadr_ui\cue_status_window.cpp ^
   reaadr_ui\recording_controller.cpp reaadr_ui\recording_window.cpp ^
   reaadr_ui\manager_view_model.cpp reaadr_ui\manager_navigation.cpp reaadr_ui\manager_ui_contract.cpp reaadr_ui\cue_manager_ui_contract.cpp ^
-  /Fe"%BUILD_DIR%\%TARGET%" /link user32.lib comctl32.lib /DEF:reaper_reaadr.def
+  /Fe"%BUILD_DIR%\%TARGET%" /link user32.lib gdi32.lib comctl32.lib /DEF:reaper_reaadr.def
 if errorlevel 1 ( popd & exit /b 1 )
 copy /Y "%BUILD_DIR%\%TARGET%" "%DIST_USERPLUGINS_DIR%\%TARGET%" >nul
 xcopy "%ROOT%\assets\*" "%DIST_REAADR_DIR%\assets\" /Y >nul
