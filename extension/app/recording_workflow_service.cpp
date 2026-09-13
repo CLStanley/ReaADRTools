@@ -40,6 +40,7 @@ RecordingWorkflowStartResult RecordingWorkflowService::start(
   result.context = context_;
   result.state = state_;
   result.target_track = target_track_;
+  result.target_track_name = prepared.target_track_name;
   return result;
 }
 
@@ -120,18 +121,17 @@ RecordingWorkflowDispatchResult RecordingWorkflowService::retry_pending()
     result.error = "No recording workflow is active.";
     return result;
   }
-  if (!has_pending(pending_)) return result;
   return apply_pending();
 }
 
 void RecordingWorkflowService::release()
 {
-  application_options_ = {};
   plan_ = {};
   context_ = {};
   state_ = {};
   target_track_ = nullptr;
   pending_ = {};
+  application_options_ = {};
   active_ = false;
 }
 
@@ -147,26 +147,29 @@ RecordingWorkflowDispatchResult RecordingWorkflowService::shutdown(
     return result;
   }
 
-  // Never discard retryable canonical work just because the window is closing.
-  // This mirrors the Lua flow's single finalize path while preserving the
-  // native application's explicit retry contract.
   if (has_pending(pending_)) {
-    result = retry_pending();
-    if (!result) return result;
+    RecordingWorkflowDispatchResult retried = retry_pending();
+    if (!retried) return retried;
+    if (has_pending(pending_)) {
+      retried.error = "Recording application work is still pending; the workflow cannot close safely.";
+      return retried;
+    }
   }
 
-  result = dispatch(core::RecordingTransportEvent::abort, play_state, play_position);
-  if (!result) return result;
+  RecordingWorkflowDispatchResult aborted = dispatch(
+    core::RecordingTransportEvent::abort, play_state, play_position);
+  if (!aborted) return aborted;
   if (has_pending(pending_)) {
-    result = retry_pending();
-    if (!result) return result;
+    aborted.error = "Recording cleanup is still pending; retry before closing the workflow.";
+    return aborted;
   }
 
+  const core::RecordingTransportState closed_state = state_;
   release();
-  result.state = {};
-  result.pending = {};
-  result.workflow_closed = true;
-  return result;
+  aborted.state = closed_state;
+  aborted.pending = {};
+  aborted.workflow_closed = true;
+  return aborted;
 }
 
 } // namespace reaadr::reaper
