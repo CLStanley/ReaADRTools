@@ -18,18 +18,12 @@ std::string RecordingController::status_text(
 {
   switch (state.mode) {
     case core::RecordingTransportMode::preroll:
-<<<<<<< HEAD
-      return "\xE2\x96\xB8 Pre-roll\xE2\x80\xA6";
-    case core::RecordingTransportMode::recording:
-      return "\xE2\x97\x8F Recording take " + std::to_string(state.take_count) +
-        "\xE2\x80\xA6";
-=======
       // Mirror the Lua Record Cue status glyphs and ellipsis as UTF-8; the
       // window renders these as Unicode on both platforms.
       return "\xE2\x96\xB8 Pre-roll\xE2\x80\xA6";
     case core::RecordingTransportMode::recording:
-      return "\xE2\x97\x8F Recording take " + std::to_string(state.take_count) + "\xE2\x80\xA6";
->>>>>>> 23aa2b5 (Complete native Record Cue presentation parity)
+      return "\xE2\x97\x8F Recording take " + std::to_string(state.take_count) +
+        "\xE2\x80\xA6";
     case core::RecordingTransportMode::loop_wait:
       return "\xE2\x86\xBA Looping\xE2\x80\xA6";
     case core::RecordingTransportMode::idle:
