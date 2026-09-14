@@ -5,7 +5,7 @@ namespace reaadr::core {
 const ManagerUiContract& manager_ui_contract()
 {
   static const ManagerUiContract contract = {
-    default_manager_window_layout(),
+    {1180, 820, -1, 0, 0, false},
     {24, 20, 992, 78},
     {24, 108, 992, 42},
     {24, 162, 420, 402},
