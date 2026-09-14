@@ -24,10 +24,9 @@ struct CueManagerSessionCallbacks {
   std::function<void(const std::string&)> trigger_action;
 };
 
-// Host dependencies that are still owned by reaper_reaadr.cpp. Keeping these
-// callbacks at the boundary lets the persistent Manager graph move out of the
-// monolithic plug-in entrypoint without duplicating command registration or
-// legacy action routing during the migration.
+// Host dependencies still owned by reaper_reaadr.cpp. Overlay, navigation,
+// mutation timing, and cue-audio defaults are resolved from native_host_services
+// when omitted, keeping the final entrypoint handoff intentionally small.
 struct CueManagerSessionConfig {
   ReaProject* project = nullptr;
   ProjectStateApi project_state_api;
@@ -55,6 +54,9 @@ public:
   const ui::CueManagerController& controller() const { return controller_; }
 
 private:
+  static OverlayApplicationApi resolve_overlay_api(OverlayApplicationApi api);
+  static CueNavigationApi resolve_navigation_api(CueNavigationApi api);
+  static CueManagerApplicationApi resolve_mutation_api(CueManagerApplicationApi api);
   static SessionRenderOptions make_render_options(
     OverlayApplicationService& overlay,
     const std::string& cue_audio_path);
@@ -67,10 +69,13 @@ private:
   core::CharacterFilterRepository character_filter_;
   core::OverlaySettingsRepository overlay_settings_;
   core::CueSelectionRepository cue_selection_;
+  OverlayApplicationApi overlay_api_;
   OverlayApplicationService overlay_application_;
   SessionRenderService renderer_;
   SessionRenderOptions render_options_;
+  CueManagerApplicationApi mutation_api_;
   CueManagerApplicationService mutations_;
+  CueNavigationApi navigation_api_;
   ui::CueManagerController controller_;
   double (*frame_rate_)() = nullptr;
 };
