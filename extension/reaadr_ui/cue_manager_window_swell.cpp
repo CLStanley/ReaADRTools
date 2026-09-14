@@ -26,6 +26,8 @@ constexpr const char* kSwellDockIdentifier = "reaadr.cue_manager";
 constexpr const char* kSwellWindowTitle = "ReaADR Tools - Cue Manager";
 constexpr int kSwellMinWidth = 1094;
 constexpr int kSwellMinHeight = 750;
+constexpr UINT_PTR kSwellRevisionTimer = 1;
+constexpr UINT kSwellRevisionPollMs = 250;
 
 HWND lifecycle_window()
 {
@@ -68,9 +70,23 @@ void save_swell_manager_layout(HWND hwnd)
   g_controller->save_window_layout(layout);
 }
 
+void refresh_swell_manager_if_changed(HWND hwnd)
+{
+  if (!g_controller || !hwnd) return;
+  bool changed = false;
+  if (!g_controller->reload_if_revision_changed(changed) || !changed) return;
+  refresh_rows(hwnd);
+  apply_tab_visibility(hwnd, g_controller->view().active_tab);
+  update_tab_details(hwnd);
+  update_overlay_controls(hwnd);
+  update_quick_action_controls(hwnd);
+  update_preference_controls(hwnd);
+}
+
 void close_swell_manager(HWND hwnd)
 {
   if (!hwnd) return;
+  KillTimer(hwnd, kSwellRevisionTimer);
   save_swell_manager_layout(hwnd);
   const auto dock = reaper::inspect_window_dock_state(hwnd);
   if (dock.docked()) reaper::remove_window_from_docker(hwnd);
@@ -102,6 +118,9 @@ bool show_cue_manager(CueManagerController& controller, double frame_rate)
         refresh_rows(existing);
         apply_tab_visibility(existing, g_controller->view().active_tab);
         update_tab_details(existing);
+        update_overlay_controls(existing);
+        update_quick_action_controls(existing);
+        update_preference_controls(existing);
       }
       ShowWindow(existing, SW_SHOW);
       reaper::activate_docked_window(existing);
@@ -132,10 +151,16 @@ bool show_cue_manager(CueManagerController& controller, double frame_rate)
   if (reaper::inspect_window_dock_state(window).docked())
     reaper::activate_docked_window(window);
   UpdateWindow(window);
+  SetTimer(window, kSwellRevisionTimer, kSwellRevisionPollMs, nullptr);
 
   MSG message{};
   while (lifecycle.is_open() && IsWindow(window) &&
          GetMessage(&message, nullptr, 0, 0) > 0) {
+    if (message.hwnd == window && message.message == WM_TIMER &&
+        message.wParam == kSwellRevisionTimer) {
+      refresh_swell_manager_if_changed(window);
+      continue;
+    }
     if (message.hwnd == window && message.message == WM_CLOSE) {
       close_swell_manager(window);
       continue;
