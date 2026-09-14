@@ -10,6 +10,9 @@
 #include <utility>
 
 namespace reaadr::ui {
+namespace {
+constexpr const char* kManagerLaunchTabKey = "ui.manager.launch_tab";
+}
 
 CueManagerController::CueManagerController(reaper::ManagerViewApplicationService& service,
                                            reaper::CueManagerMutationService& mutations,
@@ -24,6 +27,21 @@ CueManagerController::CueManagerController(reaper::ManagerViewApplicationService
 
 bool CueManagerController::reload()
 {
+  // Compatibility launchers can request a native startup tab through one
+  // project-scoped, one-shot hint. Consume it before the first view load so
+  // historical quick actions keep their direct-to-module behavior without
+  // making the native Manager depend on Lua's multi-window slot lifecycle.
+  const auto launch_tab = project_state_.read(
+    core::SessionModelRepository::kNamespace, kManagerLaunchTabKey);
+  if (launch_tab && !launch_tab.value.empty() && core::is_manager_tab(launch_tab.value)) {
+    if (!project_state_.write(core::SessionModelRepository::kNamespace,
+                              kManagerLaunchTabKey, "")) {
+      view_.error = "Could not consume the pending Manager launch tab.";
+      return false;
+    }
+    requested_tab_ = launch_tab.value;
+  }
+
   options_.selected_cue_key = selected_key_;
   const auto loaded = service_.load(options_, requested_tab_);
   if (!loaded) { view_.error = loaded.error; return false; }
