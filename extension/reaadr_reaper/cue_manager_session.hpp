@@ -50,6 +50,7 @@ public:
   CueManagerSession& operator=(const CueManagerSession&) = delete;
 
   bool reload() { return controller_.reload(); }
+  bool show();
   ui::CueManagerController& controller() { return controller_; }
   const ui::CueManagerController& controller() const { return controller_; }
 
@@ -71,6 +72,7 @@ private:
   SessionRenderOptions render_options_;
   CueManagerApplicationService mutations_;
   ui::CueManagerController controller_;
+  double (*frame_rate_)() = nullptr;
 };
 
 } // namespace reaadr::reaper
