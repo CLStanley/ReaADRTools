@@ -8,6 +8,7 @@
 
 #include "cue_manager_window.hpp"
 #include "cue_manager_ui_contract.hpp"
+#include "cue_manager_lifecycle.hpp"
 #include "reaadr_core/domain_utils.hpp"
 #include "reaadr_reaper/window_docking.hpp"
 
@@ -27,6 +28,7 @@ constexpr const char* kDockIdentifier = "reaadr.cue_manager";
 constexpr const char* kWindowTitle = "ReaADR Tools - Cue Manager";
 constexpr int kMinWindowWidth = 1094;
 constexpr int kMinWindowHeight = 750;
+constexpr UINT kRefreshExistingWindow = WM_APP + 73;
 constexpr int kRows = 48300;
 constexpr int kSearch = 48301;
 constexpr int kCharacter = 48302;
@@ -65,6 +67,11 @@ constexpr int kModuleHelp = 48333;
 CueManagerController* g_controller = nullptr;
 double g_frame_rate = 24.0;
 bool g_refreshing_rows = false;
+
+CueManagerLifecycle::WindowHandle window_handle(HWND hwnd)
+{
+  return reinterpret_cast<CueManagerLifecycle::WindowHandle>(hwnd);
+}
 
 HWND control(HWND hwnd, int id)
 {
@@ -145,6 +152,7 @@ void close_manager_window(HWND hwnd)
   save_window_layout(hwnd);
   const auto dock = reaper::inspect_window_dock_state(hwnd);
   if (dock.docked()) reaper::remove_window_from_docker(hwnd);
+  cue_manager_lifecycle().closed(window_handle(hwnd));
   DestroyWindow(hwnd);
 }
 
@@ -442,6 +450,9 @@ LRESULT CALLBACK cue_manager_wnd_proc(HWND hwnd, UINT message, WPARAM wparam, LP
       create_window_controls(hwnd);
       refresh_rows(hwnd);
       return 0;
+    case kRefreshExistingWindow:
+      reload_and_refresh(hwnd);
+      return 0;
     case WM_NOTIFY: {
       if (!g_controller || g_refreshing_rows) break;
       const auto* header = reinterpret_cast<const NMHDR*>(lparam);
@@ -544,6 +555,9 @@ LRESULT CALLBACK cue_manager_wnd_proc(HWND hwnd, UINT message, WPARAM wparam, LP
     case WM_CLOSE:
       close_manager_window(hwnd);
       return 0;
+    case WM_NCDESTROY:
+      cue_manager_lifecycle().closed(window_handle(hwnd));
+      break;
   }
   return DefWindowProcA(hwnd, message, wparam, lparam);
 }
@@ -552,6 +566,19 @@ LRESULT CALLBACK cue_manager_wnd_proc(HWND hwnd, UINT message, WPARAM wparam, LP
 
 bool show_cue_manager(CueManagerController& controller, double frame_rate)
 {
+  auto& lifecycle = cue_manager_lifecycle();
+  if (lifecycle.is_open()) {
+    HWND existing = reinterpret_cast<HWND>(lifecycle.window());
+    if (existing && IsWindow(existing)) {
+      PostMessage(existing, kRefreshExistingWindow, 0, 0);
+      ShowWindow(existing, SW_SHOW);
+      reaper::activate_docked_window(existing);
+      SetForegroundWindow(existing);
+      return true;
+    }
+    lifecycle.closed(lifecycle.window());
+  }
+
   INITCOMMONCONTROLSEX common_controls{sizeof(INITCOMMONCONTROLSEX), ICC_LISTVIEW_CLASSES};
   InitCommonControlsEx(&common_controls);
 
@@ -568,7 +595,7 @@ bool show_cue_manager(CueManagerController& controller, double frame_rate)
   g_controller = &controller;
   g_frame_rate = frame_rate;
   HWND owner = GetForegroundWindow();
-  HWND window = CreateWindowExA(WS_EX_DLGMODALFRAME, kWindowClass,
+  HWND window = CreateWindowExA(0, kWindowClass,
     kWindowTitle, WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX | WS_THICKFRAME,
     CW_USEDEFAULT, CW_USEDEFAULT, kMinWindowWidth, kMinWindowHeight,
     owner, nullptr, instance, nullptr);
@@ -576,13 +603,22 @@ bool show_cue_manager(CueManagerController& controller, double frame_rate)
     g_controller = nullptr;
     return false;
   }
+  if (!lifecycle.begin_open(window_handle(window))) {
+    DestroyWindow(window);
+    g_controller = nullptr;
+    return false;
+  }
 
   restore_window_layout(window);
-  const bool docked = reaper::inspect_window_dock_state(window).docked();
-  if (owner && !docked) EnableWindow(owner, FALSE);
   ShowWindow(window, SW_SHOW);
-  if (docked) reaper::activate_docked_window(window);
+  if (reaper::inspect_window_dock_state(window).docked())
+    reaper::activate_docked_window(window);
   UpdateWindow(window);
+
+  // Keep the original controller/service graph alive while pumping the full
+  // REAPER thread message queue. The REAPER owner remains enabled, so the
+  // Manager behaves modelessly from the user's perspective even though this
+  // compatibility bridge still returns only after the Manager closes.
   MSG message{};
   while (IsWindow(window) && GetMessage(&message, nullptr, 0, 0) > 0) {
     if (!IsDialogMessage(window, &message)) {
@@ -590,10 +626,7 @@ bool show_cue_manager(CueManagerController& controller, double frame_rate)
       DispatchMessage(&message);
     }
   }
-  if (owner && !docked) {
-    EnableWindow(owner, TRUE);
-    SetForegroundWindow(owner);
-  }
+  lifecycle.closed(window_handle(window));
   g_controller = nullptr;
   return true;
 }
