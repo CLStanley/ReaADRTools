@@ -38,7 +38,9 @@ const std::vector<ManagerAction>& manager_actions()
     {"session", "sync_regions", "Update Cues From Regions", "Save region timing back to the canonical cue session."},
     {"session", "clear_character_cues", "Clear Character Cues", "Remove owned generated character cues while preserving takes."},
     {"session", "character_filter", "Character Filter", "Mute inactive character lanes and optionally hide their regions."},
-    {"reports", "export_cue_sheet", "Export Cue Sheet CSV", "Export regions and cues to a flexible CSV."},
+    {"reports", "export_cue_sheet", "Export Cue Sheet CSV", "Export canonical cue data to a flexible CSV."},
+    {"reports", "export_timing_report", "Export Timing Report", "Export cue timing, duration, character, and status data."},
+    {"reports", "export_session_metadata", "Export Session Metadata", "Export canonical ADR session metadata for review and interchange."},
     {"overlay", "refresh_overlay", "Refresh Video Overlay", "Rebuild video overlay effects from canonical cue data."},
     {"preferences", "preferences", "Open Preferences", "Inspect and configure overlay and Manager preferences."},
     {"help", "search_help", "Search Help", "Search the built-in guide by action or workflow."},
@@ -56,7 +58,7 @@ bool manager_action_is_native(const std::string& key)
   return key == "detect_dialogue" || key == "generate_cues" || key == "cue_info" || key == "record_cue" ||
     key == "validate_session" || key == "refresh_session" || key == "sync_regions" ||
     key == "clear_character_cues" || key == "character_filter" || key == "preferences" || key == "refresh_overlay" ||
-    key == "export_cue_sheet" ||
+    key == "export_cue_sheet" || key == "export_timing_report" || key == "export_session_metadata" ||
     key == "next_cue" || key == "previous_cue" || key == "jump_to_cue";
 }
 
