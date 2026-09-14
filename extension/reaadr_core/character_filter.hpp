@@ -24,6 +24,28 @@ struct CharacterFilterLoadResult {
   explicit operator bool() const { return error.empty(); }
 };
 
+struct CharacterFilterTarget {
+  std::string key;
+  std::string character;
+  int lane = 1;
+  bool active = true;
+};
+
+struct CharacterFilterGroup {
+  std::string character;
+  std::vector<CharacterFilterTarget> targets;
+  bool all_active = true;
+  bool partially_active = false;
+};
+
+struct CharacterFilterCatalogResult {
+  std::vector<CharacterFilterGroup> groups;
+  bool show_all = true;
+  std::string error;
+
+  explicit operator bool() const { return error.empty(); }
+};
+
 std::string character_filter_key(const std::string& character);
 std::string character_filter_target_key(const std::string& character, int lane);
 std::string encode_character_filter_tokens(std::vector<std::string> tokens);
@@ -32,6 +54,10 @@ CharacterFilterState parse_character_filter_state(const std::string& encoded_sel
 bool character_lane_is_active(const CharacterFilterState& state,
                               const std::string& character,
                               int lane);
+CharacterFilterCatalogResult build_character_filter_catalog(
+  const SessionModel& model,
+  const CharacterFilterState& state,
+  double preroll_seconds = 3.0);
 
 // Project-local filter settings are UI state, not an alternative cue model.
 // Saving them is intentionally separate from revision/event publication so an
