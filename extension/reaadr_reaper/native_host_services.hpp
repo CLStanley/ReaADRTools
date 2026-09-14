@@ -1,6 +1,7 @@
 #pragma once
 
 #include "app/overlay_application_service.hpp"
+#include "cue_navigation_service.hpp"
 #include "cue_take_count_adapter.hpp"
 #include "dialogue_detection_adapter.hpp"
 #include "marker_snapshot_adapter.hpp"
@@ -27,6 +28,7 @@ TransactionApi native_transaction_api();
 MarkerSnapshotApi native_marker_snapshot_api();
 DialogueDetectionApi native_dialogue_detection_api();
 CueTakeCountApi native_cue_take_count_api();
+CueNavigationApi native_cue_navigation_api();
 OverlayRefreshApi native_overlay_refresh_api();
 OverlayApplicationApi native_overlay_application_api();
 OverlaySelectionInput native_overlay_selection();
@@ -40,6 +42,7 @@ RecordingTransportApi native_recording_transport_api();
 int native_play_state();
 double native_play_position();
 double native_cursor_position();
+void native_set_edit_cursor_position(double position, bool move_view, bool seek_play);
 double native_current_project_frame_rate();
 double native_project_frame_rate(ReaProject* project = nullptr);
 std::string native_project_cue_audio_path(ReaProject* project = nullptr);
