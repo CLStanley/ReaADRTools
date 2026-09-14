@@ -90,7 +90,7 @@ void test_manager_window_slots()
         "third native Manager window should claim slot 3 while earlier slots are live");
   const auto full = slots.claim();
   check(!full && full.error.find("Three ReaADR manager windows") != std::string::npos,
-        "fourth Manager launch should preserve Lua's three-window limit");
+        "fourth Manager launch should preserve the three-window limit");
 
   current_time = 13.0;
   auto reclaimed = slots.claim();
@@ -102,7 +102,7 @@ void test_manager_window_slots()
           state.get("ui.manager_slot.1.heartbeat").empty() &&
           state.get("ui.manager_slot.1.launching").empty() &&
           state.get("ui.manager_slot.1.launch_tab").empty(),
-        "releasing Manager slot should clear all Lua-compatible slot state");
+        "releasing Manager slot should clear all slot state");
 }
 } // namespace
 
@@ -110,32 +110,30 @@ int main()
 {
   const auto& actions = reaadr::core::manager_actions();
 
-  check(actions.size() == 18,
-        "Manager action catalog must retain its established 18-action presentation contract");
+  check(actions.size() == 20,
+        "Manager action catalog must expose the complete native cue workflow presentation contract");
   check(!actions.empty() && actions.front().key == "import_cue_sheet",
         "Manager action catalog must retain Import Cue Sheet as its first action");
-  check(actions.size() > 4 && actions[4].key == "validate_session",
-        "Manager action ordering must not shift when native-only routes are added");
+  check(actions.size() > 5 && actions[4].key == "record_cue" && actions[5].key == "cue_info",
+        "Cue Management must expose Record Cue and Cue Info as first-class native actions");
+  check(actions.size() > 6 && actions[6].key == "validate_session",
+        "Session actions must follow the native Cue Management workflows");
   check(!actions.empty() && actions.back().key == "help_quick_actions",
         "Manager action catalog must retain Quick Actions Help as its final action");
 
   bool cue_info_in_catalog = false;
+  bool record_cue_in_catalog = false;
   for (const auto& action : actions) {
-    if (action.key == "cue_info") {
-      cue_info_in_catalog = true;
-      break;
-    }
+    if (action.key == "cue_info") cue_info_in_catalog = true;
+    if (action.key == "record_cue") record_cue_in_catalog = true;
   }
-  check(!cue_info_in_catalog,
-        "Cue Info must not enter the Manager presentation catalog before the UI contract is deliberately updated");
-  check(reaadr::core::manager_action_is_native("cue_info"),
-        "Cue Info must remain classified as a native controller route");
-  check(reaadr::core::manager_action_is_native("record_cue") &&
+  check(cue_info_in_catalog && record_cue_in_catalog,
+        "native Cue Info and Record Cue workflows must be present in the Manager presentation catalog");
+  check(reaadr::core::manager_action_is_native("cue_info") &&
+          reaadr::core::manager_action_is_native("record_cue") &&
           reaadr::core::manager_action_is_native("generate_cues") &&
           reaadr::core::manager_action_is_native("detect_dialogue"),
         "migrated workflow routes must remain classified as native");
-  check(!reaadr::core::manager_action_is_native("import_cue_sheet"),
-        "Import Cue Sheet must retain its current compatibility classification until its routing contract changes");
 
   test_manager_window_slots();
 
