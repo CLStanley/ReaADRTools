@@ -1,5 +1,6 @@
 #include "cue_manager_controller.hpp"
 #include "cue_manager_ui_contract.hpp"
+#include "character_filter_window.hpp"
 #include "reaadr_reaper/character_filter_command.hpp"
 #include "reaadr_reaper/cue_info_command.hpp"
 #include "reaadr_reaper/dialogue_detection_command.hpp"
@@ -28,10 +29,6 @@ CueManagerController::CueManagerController(reaper::ManagerViewApplicationService
 
 bool CueManagerController::reload()
 {
-  // Compatibility launchers can request a native startup tab through one
-  // project-scoped, one-shot hint. Consume it before the first view load so
-  // historical quick actions keep their direct-to-module behavior without
-  // making the native Manager depend on Lua's multi-window slot lifecycle.
   const auto launch_tab = project_state_.read(
     core::SessionModelRepository::kNamespace, kManagerLaunchTabKey);
   if (launch_tab && !launch_tab.value.empty() && core::is_manager_tab(launch_tab.value)) {
@@ -98,6 +95,12 @@ void CueManagerController::trigger_action(const std::string& action)
       reload();
     return;
   }
+  if (action == "character_filter") {
+    if (show_character_filter_window(*this)) {
+      reload();
+      return;
+    }
+  }
   if (trigger_action_) trigger_action_(action);
 }
 
@@ -120,6 +123,12 @@ bool CueManagerController::set_filters(const std::string& query,
 core::CharacterFilterCatalogResult CueManagerController::character_filter_catalog() const
 {
   return reaper::load_native_character_filter_catalog();
+}
+
+core::CharacterFilterLoadResult CueManagerController::character_filter_state() const
+{
+  core::CharacterFilterRepository filters(project_state_);
+  return filters.load();
 }
 
 bool CueManagerController::apply_character_filter(const std::vector<std::string>& tokens,
@@ -227,8 +236,6 @@ bool CueManagerController::navigate_displayed_row(bool next)
   core::SessionModelRepository sessions(project_state_);
   core::CueSelectionRepository selections(project_state_);
   reaper::CueNavigationService navigation(sessions, selections, navigation_api_, refresh_overlay_);
-  // Resolve canonical timing and persist both selection keys before moving the
-  // cursor. Unlike explicit Jump, stepping through the table retains filters.
   const auto result = navigation.navigate_to_id(target_key);
   if (!result) { view_.error = result.error; return false; }
   selected_key_ = result.cue.cue_key;
@@ -244,8 +251,6 @@ bool CueManagerController::navigate_to_id(const std::string& cue_id, std::string
   const auto result = navigation.navigate_to_id(cue_id);
   if (!result) { error = result.error; return false; }
   selected_key_ = result.cue.cue_key;
-  // An explicit jump must reveal its target even if the previous filter would
-  // otherwise hide it from the list.
   options_.query.clear();
   options_.character.clear();
   options_.status.clear();
