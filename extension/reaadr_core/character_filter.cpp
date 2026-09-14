@@ -6,6 +6,7 @@
 
 #include <algorithm>
 #include <cstdlib>
+#include <map>
 #include <sstream>
 
 namespace reaadr::core {
@@ -73,6 +74,7 @@ std::string encode_character_filter_tokens(std::vector<std::string> tokens)
   tokens.erase(std::remove_if(tokens.begin(), tokens.end(),
     [](const std::string& token) { return token.empty(); }), tokens.end());
   std::sort(tokens.begin(), tokens.end());
+  tokens.erase(std::unique(tokens.begin(), tokens.end()), tokens.end());
   std::ostringstream output;
   for (std::size_t index = 0; index < tokens.size(); ++index) {
     if (index != 0) output << ',';
@@ -105,6 +107,47 @@ bool character_lane_is_active(const CharacterFilterState& state,
   if (!state.enabled()) return true;
   return state.active_tokens.count(character_filter_target_key(character, lane)) != 0 ||
     state.active_tokens.count(character_filter_key(character)) != 0;
+}
+
+CharacterFilterCatalogResult build_character_filter_catalog(
+  const SessionModel& model,
+  const CharacterFilterState& state,
+  double preroll_seconds)
+{
+  CharacterFilterCatalogResult result;
+  result.show_all = !state.enabled();
+  const LaneAssignmentResult lanes = assign_character_lanes(model.cues, preroll_seconds);
+  if (!lanes) {
+    result.error = lanes.error;
+    return result;
+  }
+
+  std::map<std::string, std::set<int>> lanes_by_character;
+  for (std::size_t index = 0; index < model.cues.size(); ++index) {
+    const std::string character = render_character_name(model.cues[index]);
+    if (character.empty()) continue;
+    lanes_by_character[character].insert(lanes.lanes[index]);
+  }
+
+  for (const auto& entry : lanes_by_character) {
+    CharacterFilterGroup group;
+    group.character = entry.first;
+    std::size_t active_count = 0;
+    for (const int lane : entry.second) {
+      CharacterFilterTarget target;
+      target.character = entry.first;
+      target.lane = lane;
+      target.key = character_filter_target_key(entry.first, lane);
+      target.active = character_lane_is_active(state, entry.first, lane);
+      if (target.active) ++active_count;
+      group.targets.push_back(std::move(target));
+    }
+    group.all_active = !group.targets.empty() && active_count == group.targets.size();
+    group.partially_active = active_count > 0 && active_count < group.targets.size();
+    result.groups.push_back(std::move(group));
+  }
+
+  return result;
 }
 
 CharacterFilterLoadResult CharacterFilterRepository::load() const
