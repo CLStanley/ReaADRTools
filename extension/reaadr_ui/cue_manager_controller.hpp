@@ -32,6 +32,7 @@ public:
 
   // Native project filter used by the Cue Manager's grouped character/lane UI.
   core::CharacterFilterCatalogResult character_filter_catalog() const;
+  core::CharacterFilterLoadResult character_filter_state() const;
   bool apply_character_filter(const std::vector<std::string>& tokens,
                               bool hide_inactive_regions,
                               std::string& error);
