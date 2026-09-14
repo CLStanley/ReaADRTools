@@ -22,6 +22,10 @@ public:
                        std::function<void(const std::string&)> trigger_action = {},
                        std::function<bool(std::string*)> refresh_overlay = {});
   bool reload();
+  // Cheap polling boundary for modeless windows. Reads only the canonical
+  // session revision and rebuilds the Manager view when another workflow has
+  // changed the project since the last successful load.
+  bool reload_if_revision_changed(bool& changed);
   bool set_tab(const std::string& tab);
   void trigger_import(const std::string& mapping = {}, bool preview = false,
                       const std::string& mode = "all", const std::string& characters = {});
