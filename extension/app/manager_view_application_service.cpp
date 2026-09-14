@@ -12,10 +12,6 @@ ManagerViewLoadResult ManagerViewApplicationService::load(
   core::ManagerPreferencesRepository preferences(project_state_, global_state_);
   const auto loaded_preferences = preferences.load();
   if (!loaded_preferences) { result.error = loaded_preferences.error; return result; }
-  core::ManagerWindowLayoutRepository layouts(project_state_);
-  const auto loaded_layout = layouts.load(loaded_preferences.preferences.remember_layout);
-  if (!loaded_layout) { result.error = loaded_layout.error; return result; }
-  result.layout = loaded_layout.layout;
   const auto revision = sessions.revision();
   if (!revision) { result.error = revision.error; return result; }
   core::CueManagerViewOptions effective_options = options;
