@@ -54,6 +54,20 @@ bool CueManagerController::reload()
   return true;
 }
 
+bool CueManagerController::reload_if_revision_changed(bool& changed)
+{
+  changed = false;
+  core::SessionModelRepository sessions(project_state_);
+  const auto revision = sessions.revision();
+  if (!revision) {
+    view_.error = revision.error;
+    return false;
+  }
+  if (view_.revision == std::to_string(revision.revision)) return true;
+  changed = true;
+  return reload();
+}
+
 void CueManagerController::trigger_import(const std::string& mapping, bool preview,
                                           const std::string& mode, const std::string& characters)
 {
