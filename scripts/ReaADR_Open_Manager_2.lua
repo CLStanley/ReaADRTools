@@ -1,3 +1,41 @@
+-- Compatibility launcher for the second historical Lua Manager slot.
+-- Prefer the native Manager while preserving the requested startup tab.
+
+local SLOT = 2
+local NAMESPACE = "ReaADRTools"
+local NATIVE_COMMAND = "_ReaADRShowCueManagerNative"
+local NATIVE_LAUNCH_TAB_KEY = "ui.manager.launch_tab"
+
+local function slot_key(suffix)
+  return ("ui.manager_slot.%d.%s"):format(SLOT, suffix)
+end
+
+local function consume_launch_tab()
+  local _, tab = reaper.GetProjExtState(0, NAMESPACE, slot_key("launch_tab"))
+  reaper.SetProjExtState(0, NAMESPACE, slot_key("launch_tab"), "")
+  return tab ~= "" and tab or nil
+end
+
+local function release_legacy_slot()
+  reaper.SetProjExtState(0, NAMESPACE, slot_key("active"), "")
+  reaper.SetProjExtState(0, NAMESPACE, slot_key("heartbeat"), "")
+  reaper.SetProjExtState(0, NAMESPACE, slot_key("launching"), "")
+end
+
+local launch_tab = consume_launch_tab()
+if type(reaper.NamedCommandLookup) == "function" and
+   type(reaper.Main_OnCommand) == "function" then
+  local command_id = reaper.NamedCommandLookup(NATIVE_COMMAND)
+  if command_id and command_id ~= 0 then
+    if launch_tab then
+      reaper.SetProjExtState(0, NAMESPACE, NATIVE_LAUNCH_TAB_KEY, launch_tab)
+    end
+    release_legacy_slot()
+    reaper.Main_OnCommand(command_id, 0)
+    return
+  end
+end
+
 local function script_dir()
   local info = debug.getinfo(1, "S").source
   local path = info:sub(1, 1) == "@" and info:sub(2) or info
@@ -5,4 +43,4 @@ local function script_dir()
 end
 
 local App = dofile(script_dir() .. "/ReaADR_App.lua")
-App.open_manager(App.consume_manager_launch_tab(2), 2)
+App.open_manager(launch_tab, SLOT)
