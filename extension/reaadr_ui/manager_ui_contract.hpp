@@ -1,6 +1,7 @@
 #pragma once
 
 #include "manager_navigation.hpp"
+#include "reaadr_core/window_layout.hpp"
 
 #include <string>
 #include <vector>
@@ -16,7 +17,7 @@ struct ManagerUiSection {
 };
 
 struct ManagerUiContract {
-  ManagerWindowLayout window;
+  WindowLayout window;
   ManagerUiRect header;
   ManagerUiRect tab_bar;
   ManagerUiRect quick_actions;
