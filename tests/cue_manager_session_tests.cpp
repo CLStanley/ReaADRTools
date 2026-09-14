@@ -1,6 +1,7 @@
 #include "reaadr_reaper/cue_manager_session.hpp"
 
 #include <iostream>
+#include <string>
 #include <type_traits>
 
 int main()
@@ -17,6 +18,16 @@ int main()
   reaadr::reaper::CueManagerSessionHost host;
   if (host.has_session() || host.session() != nullptr) {
     std::cerr << "FAIL: persistent Cue Manager host must start empty.\n";
+    return 1;
+  }
+
+  std::string shutdown_error = "stale";
+  if (!host.shutdown(&shutdown_error) || !shutdown_error.empty() || host.has_session()) {
+    std::cerr << "FAIL: shutting down an empty Manager host must be safe and idempotent.\n";
+    return 1;
+  }
+  if (!host.shutdown()) {
+    std::cerr << "FAIL: repeated empty Manager shutdown must remain safe.\n";
     return 1;
   }
 
