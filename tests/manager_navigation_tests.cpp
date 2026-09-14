@@ -1,4 +1,5 @@
 #include "app/manager_window_slot_service.hpp"
+#include "reaadr_core/window_layout.hpp"
 #include "reaadr_ui/cue_manager_lifecycle.hpp"
 #include "reaadr_ui/manager_navigation.hpp"
 
@@ -129,6 +130,43 @@ void test_native_manager_lifecycle()
         "Manager lifecycle should permit reopening after the prior window closes");
   lifecycle.closed(303);
 }
+
+void test_window_layout_repository()
+{
+  FakeProjectStateStore state;
+  reaadr::core::WindowLayoutRepository layouts(state, "cue_manager", 1094, 750);
+
+  const auto defaults = layouts.load();
+  check(static_cast<bool>(defaults) && !defaults.remembered,
+        "window layout should use defaults while remember-layout is disabled");
+  check(defaults.layout.width == 1094 && defaults.layout.height == 750 &&
+          defaults.layout.dock == -1 && !defaults.layout.has_position,
+        "default window layout should be floating with no persisted position");
+
+  state.set("ui.remember_window_layout", "1");
+  reaadr::core::WindowLayout saved;
+  saved.width = 1280;
+  saved.height = 820;
+  saved.dock = 2;
+  saved.x = 120;
+  saved.y = 80;
+  saved.has_position = true;
+  check(layouts.save(saved), "remembered Manager layout should persist successfully");
+  check(state.get("ui.window.cue_manager.dock") == "2" &&
+          state.get("ui.window.cue_manager.width") == "1280" &&
+          state.get("ui.window.cue_manager.height") == "820" &&
+          state.get("ui.window.cue_manager.x") == "120" &&
+          state.get("ui.window.cue_manager.y") == "80",
+        "Manager layout should use the shared project-scoped persistence keys");
+
+  const auto restored = layouts.load();
+  check(static_cast<bool>(restored) && restored.remembered,
+        "remembered Manager layout should report persisted state");
+  check(restored.layout.width == 1280 && restored.layout.height == 820 &&
+          restored.layout.dock == 2 && restored.layout.has_position &&
+          restored.layout.x == 120 && restored.layout.y == 80,
+        "remembered Manager geometry and docker index should round-trip exactly");
+}
 } // namespace
 
 int main()
@@ -162,6 +200,7 @@ int main()
 
   test_manager_window_slots();
   test_native_manager_lifecycle();
+  test_window_layout_repository();
 
   if (failures != 0) {
     std::cerr << failures << " manager navigation test(s) failed.\n";
