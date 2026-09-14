@@ -1,0 +1,429 @@
+#ifdef _WIN32
+
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#include <windows.h>
+#include <commctrl.h>
+
+#include "cue_manager_window.hpp"
+#include "cue_manager_ui_contract.hpp"
+#include "reaadr_core/domain_utils.hpp"
+
+#include <reaper_plugin.h>
+
+#include <cstring>
+#include <string>
+
+namespace reaadr::ui {
+namespace {
+
+constexpr const char* kWindowClass = "ReaADRCueManagerWindow";
+constexpr int kRows = 48300;
+constexpr int kSearch = 48301;
+constexpr int kCharacter = 48302;
+constexpr int kStatus = 48303;
+constexpr int kApplyFilter = 48304;
+constexpr int kResetFilter = 48305;
+constexpr int kRecord = 48306;
+constexpr int kCueInfo = 48307;
+constexpr int kCharacterFilter = 48308;
+constexpr int kRefresh = 48309;
+constexpr int kSync = 48310;
+constexpr int kNewCue = 48311;
+constexpr int kAddCue = 48312;
+constexpr int kRemoveCue = 48313;
+constexpr int kDetails = 48314;
+constexpr int kEditCueId = 48315;
+constexpr int kEditCharacter = 48316;
+constexpr int kEditDialogue = 48317;
+constexpr int kEditNotes = 48318;
+constexpr int kEditType = 48319;
+constexpr int kEditStart = 48320;
+constexpr int kEditEnd = 48321;
+constexpr int kEditStatus = 48322;
+constexpr int kApplyEdit = 48323;
+constexpr int kPrevious = 48324;
+constexpr int kNext = 48325;
+constexpr int kClose = 48326;
+
+CueManagerController* g_controller = nullptr;
+double g_frame_rate = 24.0;
+bool g_refreshing_rows = false;
+
+HWND control(HWND hwnd, int id)
+{
+  return GetDlgItem(hwnd, id);
+}
+
+std::string control_text(HWND hwnd, int id)
+{
+  HWND child = control(hwnd, id);
+  const int length = child ? GetWindowTextLengthA(child) : 0;
+  std::string value(static_cast<std::size_t>(length), '\0');
+  if (length > 0) GetWindowTextA(child, value.data(), length + 1);
+  return value;
+}
+
+void create_child(HWND parent, const char* class_name, const char* text,
+                  DWORD style, int x, int y, int width, int height, int id)
+{
+  CreateWindowExA(0, class_name, text, WS_CHILD | WS_VISIBLE | style,
+                  x, y, width, height, parent,
+                  reinterpret_cast<HMENU>(static_cast<INT_PTR>(id)),
+                  GetModuleHandle(nullptr), nullptr);
+}
+
+std::string display_timecode(const std::string& value)
+{
+  const auto parsed = core::parse_timecode(value, g_frame_rate);
+  return parsed ? core::format_timecode(*parsed.seconds, g_frame_rate) : value;
+}
+
+void populate_editor(HWND hwnd)
+{
+  const core::CueManagerRow* row = g_controller ? g_controller->selected_row() : nullptr;
+  SetDlgItemTextA(hwnd, kEditCueId, row ? row->cue_key.c_str() : "");
+  SetDlgItemTextA(hwnd, kEditCharacter, row ? row->character.c_str() : "");
+  SetDlgItemTextA(hwnd, kEditDialogue, row ? row->dialogue.c_str() : "");
+  SetDlgItemTextA(hwnd, kEditNotes, row ? row->notes.c_str() : "");
+  SetDlgItemTextA(hwnd, kEditType, row ? row->cue_type.c_str() : "");
+  SetDlgItemTextA(hwnd, kEditStart, row ? row->start_time.c_str() : "");
+  SetDlgItemTextA(hwnd, kEditEnd, row ? row->end_time.c_str() : "");
+  SetDlgItemTextA(hwnd, kEditStatus, row ? row->status.c_str() : "");
+}
+
+void update_details(HWND hwnd)
+{
+  const auto* row = g_controller ? g_controller->selected_row() : nullptr;
+  const std::string text = row
+    ? "Selected: " + row->cue_key + " | " + row->character + " | " + row->status + " | " + row->dialogue
+    : "Selected: (none)";
+  SetDlgItemTextA(hwnd, kDetails, text.c_str());
+  populate_editor(hwnd);
+}
+
+void refresh_rows(HWND hwnd)
+{
+  if (!g_controller) return;
+  HWND table = control(hwnd, kRows);
+  if (!table) return;
+  g_refreshing_rows = true;
+  ListView_DeleteAllItems(table);
+  const auto& rows = g_controller->view().cues.rows;
+  int selected = -1;
+  for (std::size_t index = 0; index < rows.size(); ++index) {
+    const auto& row = rows[index];
+    const std::string cells[] = {
+      row.cue_key, row.character, display_timecode(row.start_time),
+      display_timecode(row.end_time), row.status, row.cue_type,
+      row.dialogue, row.notes,
+    };
+    LVITEMA item{};
+    item.mask = LVIF_TEXT;
+    item.iItem = static_cast<int>(index);
+    item.pszText = const_cast<char*>(cells[0].c_str());
+    ListView_InsertItemA(table, &item);
+    for (int column_index = 1; column_index < 8; ++column_index)
+      ListView_SetItemTextA(table, item.iItem, column_index,
+                            const_cast<char*>(cells[column_index].c_str()));
+    if (row.selected) selected = static_cast<int>(index);
+  }
+  if (selected >= 0) {
+    ListView_SetItemState(table, selected, LVIS_SELECTED | LVIS_FOCUSED,
+                          LVIS_SELECTED | LVIS_FOCUSED);
+    ListView_EnsureVisible(table, selected, FALSE);
+  }
+  g_refreshing_rows = false;
+  update_details(hwnd);
+}
+
+void show_error(HWND hwnd)
+{
+  if (g_controller && !g_controller->view().error.empty())
+    MessageBoxA(hwnd, g_controller->view().error.c_str(), "ReaADR Cue Manager", MB_OK | MB_ICONERROR);
+}
+
+void reload_and_refresh(HWND hwnd)
+{
+  if (!g_controller) return;
+  if (g_controller->reload()) refresh_rows(hwnd);
+  else show_error(hwnd);
+}
+
+void populate_new_cue(HWND hwnd)
+{
+  if (!g_controller) return;
+  const auto cue = g_controller->default_add_options();
+  SetDlgItemTextA(hwnd, kEditCueId, cue.cue_key.c_str());
+  SetDlgItemTextA(hwnd, kEditCharacter, cue.character.c_str());
+  SetDlgItemTextA(hwnd, kEditDialogue, cue.dialogue.c_str());
+  SetDlgItemTextA(hwnd, kEditNotes, cue.notes.c_str());
+  SetDlgItemTextA(hwnd, kEditType, cue.cue_type.c_str());
+  SetDlgItemTextA(hwnd, kEditStart, cue.start_time.c_str());
+  SetDlgItemTextA(hwnd, kEditEnd, cue.end_time.c_str());
+  SetDlgItemTextA(hwnd, kEditStatus, cue.status.c_str());
+  SetDlgItemTextA(hwnd, kDetails, "New cue: edit the fields and choose Add Cue.");
+}
+
+void create_window_controls(HWND hwnd)
+{
+  create_child(hwnd, "STATIC", "ReaADR Cue Manager - Native Windows Preview", 0, 16, 12, 360, 20, -1);
+
+  create_child(hwnd, "STATIC", "Search", 0, 16, 42, 48, 18, -1);
+  create_child(hwnd, "EDIT", "", WS_BORDER | ES_AUTOHSCROLL | WS_TABSTOP, 66, 38, 210, 24, kSearch);
+  create_child(hwnd, "STATIC", "Character", 0, 288, 42, 66, 18, -1);
+  create_child(hwnd, "EDIT", "", WS_BORDER | ES_AUTOHSCROLL | WS_TABSTOP, 356, 38, 160, 24, kCharacter);
+  create_child(hwnd, "STATIC", "Status", 0, 528, 42, 48, 18, -1);
+  create_child(hwnd, "COMBOBOX", "", CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP, 578, 38, 150, 180, kStatus);
+  create_child(hwnd, "BUTTON", "Apply", BS_PUSHBUTTON | WS_TABSTOP, 740, 38, 62, 24, kApplyFilter);
+  create_child(hwnd, "BUTTON", "Reset", BS_PUSHBUTTON | WS_TABSTOP, 808, 38, 62, 24, kResetFilter);
+
+  create_child(hwnd, "BUTTON", "Record Current Cue", BS_PUSHBUTTON | WS_TABSTOP, 16, 72, 130, 26, kRecord);
+  create_child(hwnd, "BUTTON", "Cue Info", BS_PUSHBUTTON | WS_TABSTOP, 152, 72, 82, 26, kCueInfo);
+  create_child(hwnd, "BUTTON", "Character Filter", BS_PUSHBUTTON | WS_TABSTOP, 240, 72, 110, 26, kCharacterFilter);
+  create_child(hwnd, "BUTTON", "Refresh Session", BS_PUSHBUTTON | WS_TABSTOP, 356, 72, 112, 26, kRefresh);
+  create_child(hwnd, "BUTTON", "Update From Regions", BS_PUSHBUTTON | WS_TABSTOP, 474, 72, 138, 26, kSync);
+  create_child(hwnd, "BUTTON", "New Cue", BS_PUSHBUTTON | WS_TABSTOP, 624, 72, 74, 26, kNewCue);
+  create_child(hwnd, "BUTTON", "Add Cue", BS_PUSHBUTTON | WS_TABSTOP, 704, 72, 74, 26, kAddCue);
+  create_child(hwnd, "BUTTON", "Remove Cue", BS_PUSHBUTTON | WS_TABSTOP, 784, 72, 88, 26, kRemoveCue);
+
+  create_child(hwnd, WC_LISTVIEWA, "", LVS_REPORT | LVS_SINGLESEL | LVS_SHOWSELALWAYS |
+               WS_BORDER | WS_TABSTOP, 16, 108, 1040, 460, kRows);
+  HWND table = control(hwnd, kRows);
+  ListView_SetExtendedListViewStyleEx(table, 0, LVS_EX_FULLROWSELECT | LVS_EX_GRIDLINES);
+  const auto& columns = core::cue_manager_columns();
+  for (std::size_t index = 0; index < columns.size(); ++index) {
+    LVCOLUMNA column{};
+    column.mask = LVCF_TEXT | LVCF_WIDTH;
+    column.pszText = const_cast<char*>(columns[index].label.c_str());
+    column.cx = columns[index].width;
+    ListView_InsertColumnA(table, static_cast<int>(index), &column);
+  }
+
+  create_child(hwnd, "EDIT", "", WS_BORDER | ES_AUTOHSCROLL | ES_READONLY, 16, 576, 1040, 24, kDetails);
+
+  create_child(hwnd, "STATIC", "Cue ID", 0, 16, 610, 52, 18, -1);
+  create_child(hwnd, "EDIT", "", WS_BORDER | ES_AUTOHSCROLL | WS_TABSTOP, 70, 606, 118, 24, kEditCueId);
+  create_child(hwnd, "STATIC", "Character", 0, 198, 610, 68, 18, -1);
+  create_child(hwnd, "EDIT", "", WS_BORDER | ES_AUTOHSCROLL | WS_TABSTOP, 270, 606, 220, 24, kEditCharacter);
+  create_child(hwnd, "STATIC", "Type", 0, 502, 610, 38, 18, -1);
+  create_child(hwnd, "COMBOBOX", "", CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP, 544, 606, 140, 160, kEditType);
+  create_child(hwnd, "STATIC", "Status", 0, 696, 610, 44, 18, -1);
+  create_child(hwnd, "COMBOBOX", "", CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP, 744, 606, 180, 180, kEditStatus);
+
+  create_child(hwnd, "STATIC", "Dialogue", 0, 16, 642, 58, 18, -1);
+  create_child(hwnd, "EDIT", "", WS_BORDER | ES_AUTOHSCROLL | WS_TABSTOP, 78, 638, 412, 24, kEditDialogue);
+  create_child(hwnd, "STATIC", "Notes", 0, 502, 642, 44, 18, -1);
+  create_child(hwnd, "EDIT", "", WS_BORDER | ES_AUTOHSCROLL | WS_TABSTOP, 550, 638, 374, 24, kEditNotes);
+
+  create_child(hwnd, "STATIC", "Start", 0, 16, 674, 42, 18, -1);
+  create_child(hwnd, "EDIT", "", WS_BORDER | ES_AUTOHSCROLL | WS_TABSTOP, 62, 670, 126, 24, kEditStart);
+  create_child(hwnd, "STATIC", "End", 0, 198, 674, 34, 18, -1);
+  create_child(hwnd, "EDIT", "", WS_BORDER | ES_AUTOHSCROLL | WS_TABSTOP, 236, 670, 126, 24, kEditEnd);
+  create_child(hwnd, "BUTTON", "Apply Edit", BS_PUSHBUTTON | WS_TABSTOP, 376, 668, 94, 28, kApplyEdit);
+  create_child(hwnd, "BUTTON", "Previous", BS_PUSHBUTTON | WS_TABSTOP, 708, 668, 84, 28, kPrevious);
+  create_child(hwnd, "BUTTON", "Next", BS_PUSHBUTTON | WS_TABSTOP, 798, 668, 74, 28, kNext);
+  create_child(hwnd, "BUTTON", "Close", BS_DEFPUSHBUTTON | WS_TABSTOP, 976, 668, 80, 28, kClose);
+
+  SendDlgItemMessageA(hwnd, kStatus, CB_ADDSTRING, 0, reinterpret_cast<LPARAM>("Any"));
+  for (const auto& status : core::cue_manager_status_choices()) {
+    SendDlgItemMessageA(hwnd, kStatus, CB_ADDSTRING, 0, reinterpret_cast<LPARAM>(status.c_str()));
+    SendDlgItemMessageA(hwnd, kEditStatus, CB_ADDSTRING, 0, reinterpret_cast<LPARAM>(status.c_str()));
+  }
+  for (const auto& type : core::cue_manager_type_choices())
+    SendDlgItemMessageA(hwnd, kEditType, CB_ADDSTRING, 0, reinterpret_cast<LPARAM>(type.c_str()));
+  SetDlgItemTextA(hwnd, kStatus, "Any");
+}
+
+void apply_table_filters(HWND hwnd)
+{
+  if (!g_controller) return;
+  std::string status = control_text(hwnd, kStatus);
+  if (status == "Any") status.clear();
+  if (g_controller->set_filters(control_text(hwnd, kSearch),
+                                control_text(hwnd, kCharacter), status))
+    refresh_rows(hwnd);
+  else
+    show_error(hwnd);
+}
+
+void add_cue(HWND hwnd)
+{
+  if (!g_controller) return;
+  core::CueManagerAddOptions cue;
+  cue.cue_key = control_text(hwnd, kEditCueId);
+  cue.character = control_text(hwnd, kEditCharacter);
+  cue.dialogue = control_text(hwnd, kEditDialogue);
+  cue.notes = control_text(hwnd, kEditNotes);
+  cue.cue_type = control_text(hwnd, kEditType);
+  cue.start_time = control_text(hwnd, kEditStart);
+  cue.end_time = control_text(hwnd, kEditEnd);
+  cue.status = control_text(hwnd, kEditStatus);
+  std::string error;
+  if (g_controller->add_cue(cue, error)) refresh_rows(hwnd);
+  else if (!error.empty()) MessageBoxA(hwnd, error.c_str(), "ReaADR Cue Manager", MB_OK | MB_ICONERROR);
+}
+
+void apply_edit(HWND hwnd)
+{
+  if (!g_controller) return;
+  core::CueManagerEditOptions edit;
+  edit.new_cue_key = control_text(hwnd, kEditCueId);
+  edit.new_character = control_text(hwnd, kEditCharacter);
+  edit.dialogue = control_text(hwnd, kEditDialogue);
+  edit.dialogue_set = true;
+  edit.notes = control_text(hwnd, kEditNotes);
+  edit.notes_set = true;
+  edit.cue_type = control_text(hwnd, kEditType);
+  edit.start_time = control_text(hwnd, kEditStart);
+  edit.end_time = control_text(hwnd, kEditEnd);
+  edit.status = control_text(hwnd, kEditStatus);
+  std::string error;
+  if (g_controller->edit_selected(edit, error)) refresh_rows(hwnd);
+  else if (!error.empty()) MessageBoxA(hwnd, error.c_str(), "ReaADR Cue Manager", MB_OK | MB_ICONERROR);
+}
+
+LRESULT CALLBACK cue_manager_wnd_proc(HWND hwnd, UINT message, WPARAM wparam, LPARAM lparam)
+{
+  switch (message) {
+    case WM_CREATE:
+      create_window_controls(hwnd);
+      refresh_rows(hwnd);
+      return 0;
+    case WM_NOTIFY: {
+      if (!g_controller || g_refreshing_rows) break;
+      const auto* header = reinterpret_cast<const NMHDR*>(lparam);
+      if (!header || header->idFrom != kRows) break;
+      const auto* change = reinterpret_cast<const NMLISTVIEW*>(lparam);
+      if (header->code == LVN_COLUMNCLICK) {
+        const auto& columns = core::cue_manager_columns();
+        if (change->iSubItem >= 0 && static_cast<std::size_t>(change->iSubItem) < columns.size() &&
+            g_controller->sort_by(columns[change->iSubItem].key))
+          refresh_rows(hwnd);
+        return 0;
+      }
+      if (header->code == LVN_ITEMCHANGED && (change->uNewState & LVIS_SELECTED)) {
+        if (g_controller->select_index(change->iItem)) update_details(hwnd);
+        else { refresh_rows(hwnd); show_error(hwnd); }
+        return 0;
+      }
+      if (header->code == NM_DBLCLK) {
+        const auto* row = g_controller->selected_row();
+        if (row) {
+          std::string error;
+          if (!g_controller->navigate_to_id(row->cue_key, error) && !error.empty())
+            MessageBoxA(hwnd, error.c_str(), "ReaADR Cue Manager", MB_OK | MB_ICONERROR);
+          refresh_rows(hwnd);
+        }
+        return 0;
+      }
+      break;
+    }
+    case WM_COMMAND: {
+      const int command = LOWORD(wparam);
+      if (command == kApplyFilter) { apply_table_filters(hwnd); return 0; }
+      if (command == kResetFilter) {
+        SetDlgItemTextA(hwnd, kSearch, "");
+        SetDlgItemTextA(hwnd, kCharacter, "");
+        SetDlgItemTextA(hwnd, kStatus, "Any");
+        if (g_controller && g_controller->set_filters({}, {}, {})) refresh_rows(hwnd);
+        return 0;
+      }
+      if (command == kRecord || command == kCueInfo || command == kCharacterFilter ||
+          command == kRefresh || command == kSync) {
+        if (!g_controller) return 0;
+        const char* action = command == kRecord ? "record_cue" :
+          command == kCueInfo ? "cue_info" :
+          command == kCharacterFilter ? "character_filter" :
+          command == kRefresh ? "refresh_session" : "sync_regions";
+        g_controller->trigger_action(action);
+        reload_and_refresh(hwnd);
+        return 0;
+      }
+      if (command == kNewCue) { populate_new_cue(hwnd); return 0; }
+      if (command == kAddCue) { add_cue(hwnd); return 0; }
+      if (command == kRemoveCue) {
+        const auto* row = g_controller ? g_controller->selected_row() : nullptr;
+        if (!row) {
+          MessageBoxA(hwnd, "Select a cue before removing it.", "ReaADR Cue Manager", MB_OK | MB_ICONINFORMATION);
+          return 0;
+        }
+        const std::string prompt = "Remove cue " + row->cue_key + " (" + row->character + ")?";
+        if (MessageBoxA(hwnd, prompt.c_str(), "ReaADR Cue Manager", MB_YESNO | MB_ICONWARNING) == IDYES) {
+          std::string error;
+          if (g_controller->remove_selected(error)) refresh_rows(hwnd);
+          else if (!error.empty()) MessageBoxA(hwnd, error.c_str(), "ReaADR Cue Manager", MB_OK | MB_ICONERROR);
+        }
+        return 0;
+      }
+      if (command == kApplyEdit) { apply_edit(hwnd); return 0; }
+      if (command == kPrevious || command == kNext) {
+        if (g_controller) {
+          const bool moved = command == kNext ? g_controller->navigate_next() : g_controller->navigate_previous();
+          if (moved) refresh_rows(hwnd); else show_error(hwnd);
+        }
+        return 0;
+      }
+      if (command == kClose || command == IDCANCEL) {
+        DestroyWindow(hwnd);
+        return 0;
+      }
+      break;
+    }
+    case WM_CLOSE:
+      DestroyWindow(hwnd);
+      return 0;
+  }
+  return DefWindowProcA(hwnd, message, wparam, lparam);
+}
+
+} // namespace
+
+bool show_cue_manager(CueManagerController& controller, double frame_rate)
+{
+  INITCOMMONCONTROLSEX common_controls{sizeof(INITCOMMONCONTROLSEX), ICC_LISTVIEW_CLASSES};
+  InitCommonControlsEx(&common_controls);
+
+  HINSTANCE instance = GetModuleHandle(nullptr);
+  WNDCLASSA window_class{};
+  window_class.lpfnWndProc = cue_manager_wnd_proc;
+  window_class.hInstance = instance;
+  window_class.hCursor = LoadCursor(nullptr, IDC_ARROW);
+  window_class.hbrBackground = reinterpret_cast<HBRUSH>(COLOR_BTNFACE + 1);
+  window_class.lpszClassName = kWindowClass;
+  if (!RegisterClassA(&window_class) && GetLastError() != ERROR_CLASS_ALREADY_EXISTS)
+    return false;
+
+  g_controller = &controller;
+  g_frame_rate = frame_rate;
+  HWND owner = GetForegroundWindow();
+  HWND window = CreateWindowExA(WS_EX_DLGMODALFRAME, kWindowClass,
+    "ReaADR Tools - Cue Manager", WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX,
+    CW_USEDEFAULT, CW_USEDEFAULT, 1094, 750, owner, nullptr, instance, nullptr);
+  if (!window) {
+    g_controller = nullptr;
+    return false;
+  }
+
+  if (owner) EnableWindow(owner, FALSE);
+  ShowWindow(window, SW_SHOW);
+  UpdateWindow(window);
+  MSG message{};
+  while (IsWindow(window) && GetMessage(&message, nullptr, 0, 0) > 0) {
+    if (!IsDialogMessage(window, &message)) {
+      TranslateMessage(&message);
+      DispatchMessage(&message);
+    }
+  }
+  if (owner) {
+    EnableWindow(owner, TRUE);
+    SetForegroundWindow(owner);
+  }
+  g_controller = nullptr;
+  return true;
+}
+
+} // namespace reaadr::ui
+
+#endif
