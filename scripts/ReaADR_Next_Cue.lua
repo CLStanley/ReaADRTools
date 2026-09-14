@@ -1,4 +1,28 @@
 -- Move the edit cursor to the next ADR cue.
+--
+-- Navigation is owned by the native C++ service. Keep the historical Lua path
+-- only as a compatibility fallback for installs that predate the native action.
+
+local NATIVE_COMMAND = "_ReaADRNextCueNative"
+
+local function run_native()
+  if type(reaper.NamedCommandLookup) ~= "function" or
+     type(reaper.Main_OnCommand) ~= "function" then
+    return false
+  end
+
+  local command_id = reaper.NamedCommandLookup(NATIVE_COMMAND)
+  if not command_id or command_id == 0 then
+    return false
+  end
+
+  reaper.Main_OnCommand(command_id, 0)
+  return true
+end
+
+if run_native() then
+  return
+end
 
 local function script_dir()
   local info = debug.getinfo(1, "S").source
