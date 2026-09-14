@@ -13,20 +13,27 @@ local function run_native_command(name)
   return true
 end
 
+local function open_native_manager_tab(tab)
+  if type(reaper.SetProjExtState) ~= "function" then return false end
+  reaper.SetProjExtState(0, NAMESPACE, "ui.manager.launch_tab", tab)
+  if run_native_command("_ReaADRShowCueManagerNative") then return true end
+  reaper.SetProjExtState(0, NAMESPACE, "ui.manager.launch_tab", "")
+  return false
+end
+
 local action = type(reaper.GetExtState) == "function"
   and reaper.GetExtState(NAMESPACE, "quick_action_" .. SLOT) or ""
 if action == "" then action = DEFAULT_ACTION end
 
+if action == "import" and run_native_command("_ReaADRImportCueSheetNative") then return end
 if action == "cue_manager" and run_native_command("_ReaADRShowCueManagerNative") then return end
+if action == "character_filter" and run_native_command("_ReaADRApplyCharacterFilterNative") then return end
 if action == "refresh_overlay" and run_native_command("_ReaADRRefreshVideoOverlayNative") then return end
-if action == "overlay_settings" and type(reaper.SetProjExtState) == "function" then
-  reaper.SetProjExtState(0, NAMESPACE, "ui.manager.launch_tab", "overlay")
-  if run_native_command("_ReaADRShowCueManagerNative") then return end
-  reaper.SetProjExtState(0, NAMESPACE, "ui.manager.launch_tab", "")
-end
+if action == "export_reports" and open_native_manager_tab("reports") then return end
+if action == "overlay_settings" and open_native_manager_tab("overlay") then return end
 
--- Import, reports, Record Cue, Character Filter, and older extension builds
--- still use the compatibility App path until their native presentation is at parity.
+-- Record Cue and older extension builds still use the compatibility App path
+-- until a stable standalone native Record Cue command is registered.
 local function script_dir()
   local info = debug.getinfo(1, "S").source
   local path = info:sub(1, 1) == "@" and info:sub(2) or info
