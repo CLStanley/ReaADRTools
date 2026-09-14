@@ -43,7 +43,7 @@ cl /nologo /EHsc /O2 /LD /std:c++17 ^
   app\dialogue_cue_generation_application_service.cpp app\dialogue_detection_application_service.cpp ^
   app\cue_cleanup_application_service.cpp app\character_filter_application_service.cpp ^
   app\manager_view_application_service.cpp app\cue_manager_application_service.cpp app\session_refresh_application_service.cpp app\region_timing_application_service.cpp ^
-  reaadr_ui\reaadr_ui.cpp reaadr_ui\cue_manager_controller.cpp reaadr_ui\cue_manager_window.cpp reaadr_ui\character_filter_window.cpp ^
+  reaadr_ui\reaadr_ui.cpp reaadr_ui\cue_manager_controller.cpp reaadr_ui\cue_manager_window_win32.cpp reaadr_ui\character_filter_window.cpp ^
   reaadr_ui\cue_info_controller.cpp reaadr_ui\cue_info_window.cpp reaadr_ui\cue_status_window.cpp ^
   reaadr_ui\recording_controller.cpp reaadr_ui\recording_window.cpp ^
   reaadr_ui\manager_view_model.cpp reaadr_ui\manager_navigation.cpp reaadr_ui\manager_ui_contract.cpp reaadr_ui\cue_manager_ui_contract.cpp ^
