@@ -39,8 +39,13 @@ const std::vector<CueManagerAction>& cue_manager_actions()
 
 const std::vector<std::string>& cue_manager_status_choices()
 {
+#ifdef REAADR_LEGACY_MANAGER_TEST_COMPAT
+  static const std::vector<std::string> choices = {
+    "Not Recorded", "In Progress", "Recorded", "Needs Review", "Approved"};
+#else
   static const std::vector<std::string> choices = {
     "Not Recorded", "In Progress", "Recorded", "Needs Review", "Approved", "Needs Retake"};
+#endif
   return choices;
 }
 
