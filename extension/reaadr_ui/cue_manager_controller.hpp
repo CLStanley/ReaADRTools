@@ -4,6 +4,7 @@
 #include "app/cue_manager_application_service.hpp"
 #include "app/manager_view_application_service.hpp"
 #include "reaadr_core/character_filter.hpp"
+#include "reaadr_core/window_layout.hpp"
 #include "reaadr_reaper/cue_navigation_service.hpp"
 
 #include <functional>
@@ -29,6 +30,9 @@ public:
   bool set_filters(const std::string& query,
                    const std::string& character,
                    const std::string& status);
+
+  core::WindowLayout load_window_layout() const;
+  bool save_window_layout(const core::WindowLayout& layout);
 
   // Native project filter used by the Cue Manager's grouped character/lane UI.
   core::CharacterFilterCatalogResult character_filter_catalog() const;
