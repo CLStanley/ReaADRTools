@@ -1,8 +1,5 @@
 #include "manager_navigation.hpp"
 
-#include <algorithm>
-#include <charconv>
-
 namespace reaadr::core {
 
 const std::vector<ManagerModule>& manager_modules()
@@ -61,54 +58,6 @@ bool manager_action_is_native(const std::string& key)
     key == "clear_character_cues" || key == "character_filter" || key == "preferences" || key == "refresh_overlay" ||
     key == "export_cue_sheet" ||
     key == "next_cue" || key == "previous_cue" || key == "jump_to_cue";
-}
-
-ManagerWindowLayout default_manager_window_layout()
-{
-  return {};
-}
-
-namespace {
-constexpr const char* kNamespace = "ReaADRTools";
-
-bool parse_int(const StateReadResult& value, int& output)
-{
-  if (!value || value.value.empty()) return false;
-  const char* begin = value.value.data();
-  const char* end = begin + value.value.size();
-  auto parsed = std::from_chars(begin, end, output);
-  return parsed.ec == std::errc{} && parsed.ptr == end;
-}
-}
-
-ManagerWindowLayoutResult ManagerWindowLayoutRepository::load(bool remember_layout) const
-{
-  ManagerWindowLayoutResult result;
-  result.layout = default_manager_window_layout();
-  if (!remember_layout) return result;
-
-  int value = 0;
-  if (parse_int(store_.read(kNamespace, "ui.window.manager.width"), value))
-    result.layout.width = std::max(result.layout.min_width, value);
-  if (parse_int(store_.read(kNamespace, "ui.window.manager.height"), value))
-    result.layout.height = std::max(result.layout.min_height, value);
-  if (parse_int(store_.read(kNamespace, "ui.window.manager.dock"), value))
-    result.layout.dock = std::max(0, value);
-  if (parse_int(store_.read(kNamespace, "ui.window.manager.x"), value)) result.layout.x = value;
-  if (parse_int(store_.read(kNamespace, "ui.window.manager.y"), value)) result.layout.y = value;
-  return result;
-}
-
-bool ManagerWindowLayoutRepository::save(const ManagerWindowLayout& layout)
-{
-  const auto width = std::to_string(std::max(layout.min_width, layout.width));
-  const auto height = std::to_string(std::max(layout.min_height, layout.height));
-  const auto dock = std::to_string(std::max(0, layout.dock));
-  return store_.write(kNamespace, "ui.window.manager.width", width) &&
-    store_.write(kNamespace, "ui.window.manager.height", height) &&
-    store_.write(kNamespace, "ui.window.manager.dock", dock) &&
-    store_.write(kNamespace, "ui.window.manager.x", std::to_string(layout.x)) &&
-    store_.write(kNamespace, "ui.window.manager.y", std::to_string(layout.y));
 }
 
 } // namespace reaadr::core
