@@ -3,6 +3,7 @@
 #include "model_repository.hpp"
 
 #include <string>
+#include <utility>
 
 namespace reaadr::core {
 
