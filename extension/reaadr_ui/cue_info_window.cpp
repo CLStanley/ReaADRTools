@@ -6,6 +6,9 @@
 #include "cue_info_controller.hpp"
 #include "cue_manager_ui_contract.hpp"
 #include "reaadr_ui.hpp"
+#ifdef _WIN32
+#include "win32_utf8.hpp"
+#endif
 
 #include <algorithm>
 #include <iomanip>
@@ -40,8 +43,6 @@ constexpr int kSave = 48316;
 constexpr int kError = 48317;
 constexpr int kTimer = 1;
 constexpr int kTransportPlayStop = 40044;
-// Swell's VK set omits the alphanumeric range; the R key arrives as its ASCII
-// code on every platform, which matches Windows' VK_R value.
 constexpr int kVkR = 0x52;
 constexpr int kMinWindowWidth = 820;
 constexpr int kMinWindowHeight = 560;
@@ -59,17 +60,31 @@ constexpr int kLabelJump = 48509;
 #endif
 
 CueInfoController* g_controller = nullptr;
+HWND g_window = nullptr;
 bool g_populating = false;
 bool g_dirty = false;
 bool g_close_on_save = false;
 std::string g_loaded_key;
 
+void set_text(HWND hwnd, int id, const std::string& value)
+{
+#ifdef _WIN32
+  win32::set_dlg_item_text_utf8(hwnd, id, value);
+#else
+  SetDlgItemText(hwnd, id, value.c_str());
+#endif
+}
+
 std::string control_text(HWND hwnd, int id)
 {
+#ifdef _WIN32
+  return win32::dlg_item_text_utf8(hwnd, id);
+#else
   const HWND control = GetDlgItem(hwnd, id);
   return read_control_text(GetWindowTextLength(control), [control](char* text, int capacity) {
     GetWindowText(control, text, capacity);
   });
+#endif
 }
 
 std::string number(double value, int precision = 2)
@@ -82,9 +97,17 @@ std::string number(double value, int precision = 2)
 void fill_combo(HWND hwnd, int id, const std::vector<std::string>& values)
 {
   const HWND combo = GetDlgItem(hwnd, id);
+#ifdef _WIN32
+  SendMessageW(combo, CB_RESETCONTENT, 0, 0);
+  for (const auto& value : values) {
+    const std::wstring wide = win32::to_wide(value);
+    SendMessageW(combo, CB_ADDSTRING, 0, reinterpret_cast<LPARAM>(wide.c_str()));
+  }
+#else
   SendMessage(combo, CB_RESETCONTENT, 0, 0);
   for (const auto& value : values)
     SendMessage(combo, CB_ADDSTRING, 0, reinterpret_cast<LPARAM>(value.c_str()));
+#endif
 }
 
 void refresh_character_choices(HWND hwnd)
@@ -92,20 +115,18 @@ void refresh_character_choices(HWND hwnd)
   if (!g_controller) return;
   const std::string current = control_text(hwnd, kCharacter);
   fill_combo(hwnd, kCharacter, g_controller->character_choices());
-  SetDlgItemText(hwnd, kCharacter, current.c_str());
+  set_text(hwnd, kCharacter, current);
 }
 
 void update_live(HWND hwnd)
 {
   if (!g_controller) return;
   const auto& view = g_controller->view();
-  const std::string header = "Cue " + view.cue_key + " | " + view.character + " | " + view.status;
-  SetDlgItemText(hwnd, kHeader, header.c_str());
-  const std::string metrics =
+  set_text(hwnd, kHeader, "Cue " + view.cue_key + " | " + view.character + " | " + view.status);
+  set_text(hwnd, kLiveMetrics,
     "Length " + number(view.duration) + "s   Position " + view.position_timecode +
-    "   Countdown " + number(view.countdown) + "s   Takes " + std::to_string(view.take_count);
-  SetDlgItemText(hwnd, kLiveMetrics, metrics.c_str());
-  SetDlgItemText(hwnd, kError, g_controller->error().c_str());
+    "   Countdown " + number(view.countdown) + "s   Takes " + std::to_string(view.take_count));
+  set_text(hwnd, kError, g_controller->error());
 }
 
 void populate_editors(HWND hwnd)
@@ -113,15 +134,15 @@ void populate_editors(HWND hwnd)
   if (!g_controller) return;
   const CueInfoEditValues values = g_controller->edit_values();
   g_populating = true;
-  SetDlgItemText(hwnd, kCueId, values.cue_key.c_str());
-  SetDlgItemText(hwnd, kCharacter, values.character.c_str());
-  SetDlgItemText(hwnd, kStatus, values.status.c_str());
-  SetDlgItemText(hwnd, kCueType, values.cue_type.c_str());
-  SetDlgItemText(hwnd, kStart, values.start_time.c_str());
-  SetDlgItemText(hwnd, kEnd, values.end_time.c_str());
-  SetDlgItemText(hwnd, kDirection, values.direction.c_str());
-  SetDlgItemText(hwnd, kDialogue, values.dialogue.c_str());
-  SetDlgItemText(hwnd, kNotes, values.notes.c_str());
+  set_text(hwnd, kCueId, values.cue_key);
+  set_text(hwnd, kCharacter, values.character);
+  set_text(hwnd, kStatus, values.status);
+  set_text(hwnd, kCueType, values.cue_type);
+  set_text(hwnd, kStart, values.start_time);
+  set_text(hwnd, kEnd, values.end_time);
+  set_text(hwnd, kDirection, values.direction);
+  set_text(hwnd, kDialogue, values.dialogue);
+  set_text(hwnd, kNotes, values.notes);
   g_populating = false;
   g_dirty = false;
   g_loaded_key = values.cue_key;
@@ -163,6 +184,13 @@ bool editor_has_focus(HWND hwnd)
   return false;
 }
 
+void activate_cue_info_window()
+{
+  if (!g_window || !IsWindow(g_window)) return;
+  ShowWindow(g_window, SW_SHOW);
+  SetForegroundWindow(g_window);
+}
+
 void restore_window_geometry(HWND hwnd)
 {
   if (!g_controller) return;
@@ -195,6 +223,7 @@ void close_window(HWND hwnd)
 {
   save_window_geometry(hwnd);
   KillTimer(hwnd, kTimer);
+  if (g_window == hwnd) g_window = nullptr;
 #ifdef _WIN32
   DestroyWindow(hwnd);
 #else
@@ -210,13 +239,10 @@ void refresh_live_state(HWND hwnd)
     if (g_controller->view().cue_key != previous) populate_editors(hwnd);
     else update_live(hwnd);
   } else {
-    SetDlgItemText(hwnd, kError, g_controller->error().c_str());
+    set_text(hwnd, kError, g_controller->error());
   }
 }
 
-// Keyboard parity with the Lua Cue Info panel: Left/Right move through visible
-// cues exactly like the Previous/Next buttons, Ctrl+R forces a controller
-// refresh even when editors are dirty. Returns true when the key was consumed.
 bool handle_nav_key(HWND hwnd, int key)
 {
   if (!g_controller || editor_has_focus(hwnd)) return false;
@@ -226,7 +252,7 @@ bool handle_nav_key(HWND hwnd, int key)
                    : key == VK_RIGHT ? g_controller->next()
                    : g_controller->refresh();
   if (ok) populate_editors(hwnd);
-  else SetDlgItemText(hwnd, kError, g_controller->error().c_str());
+  else set_text(hwnd, kError, g_controller->error());
   return true;
 }
 
@@ -235,7 +261,7 @@ bool handle_cue_info_command(HWND hwnd, int command, int notification)
   if (!g_populating && editor_control(command) &&
       (notification == EN_CHANGE || notification == CBN_SELCHANGE || notification == CBN_EDITCHANGE)) {
     g_dirty = true;
-    SetDlgItemText(hwnd, kError, "Unsaved edit - choose Save to apply changes.");
+    set_text(hwnd, kError, "Unsaved edit - choose Save to apply changes.");
     return true;
   }
   if (!g_controller) return false;
@@ -248,19 +274,19 @@ bool handle_cue_info_command(HWND hwnd, int command, int notification)
       refresh_character_choices(hwnd);
       populate_editors(hwnd);
     } else {
-      SetDlgItemText(hwnd, kError, g_controller->error().c_str());
+      set_text(hwnd, kError, g_controller->error());
     }
     return true;
   }
   if (command == kPrevious || command == kNext) {
     const bool moved = command == kNext ? g_controller->next() : g_controller->previous();
     if (moved) populate_editors(hwnd);
-    else SetDlgItemText(hwnd, kError, g_controller->error().c_str());
+    else set_text(hwnd, kError, g_controller->error());
     return true;
   }
   if (command == kJump) {
     if (g_controller->jump_to_id(control_text(hwnd, kJumpId))) populate_editors(hwnd);
-    else SetDlgItemText(hwnd, kError, g_controller->error().c_str());
+    else set_text(hwnd, kError, g_controller->error());
     return true;
   }
   if (command == IDCANCEL) {
@@ -276,13 +302,14 @@ INT_PTR cue_info_proc(HWND hwnd, UINT message, WPARAM wparam, LPARAM)
   switch (message) {
     case WM_INITDIALOG: {
       if (!g_controller) return 0;
+      g_window = hwnd;
       const CueInfoLaunchOptions launch = g_controller->consume_launch_options();
       g_close_on_save = launch.close_on_save;
       fill_combo(hwnd, kCharacter, g_controller->character_choices());
       fill_combo(hwnd, kStatus, core::cue_manager_status_choices());
       fill_combo(hwnd, kCueType, core::cue_manager_type_choices());
       if (!g_controller->refresh()) {
-        SetDlgItemText(hwnd, kError, g_controller->error().c_str());
+        set_text(hwnd, kError, g_controller->error());
         return 1;
       }
       restore_window_geometry(hwnd);
@@ -355,7 +382,7 @@ END
 SWELL_DEFINE_DIALOG_RESOURCE_END2(kDialog)
 #else
 
-constexpr const char* kCueInfoWindowClass = "ReaADRCueInfoWindow";
+constexpr wchar_t kCueInfoWindowClass[] = L"ReaADRCueInfoWindow";
 
 void set_default_font(HWND control)
 {
@@ -367,10 +394,12 @@ void set_default_font(HWND control)
 HWND create_child(HWND parent, const char* class_name, const char* text,
                   DWORD style, int id)
 {
-  HWND child = CreateWindowExA(
-    0, class_name, text, WS_CHILD | WS_VISIBLE | style,
+  const std::wstring wide_class = win32::to_wide(class_name ? class_name : "");
+  const std::wstring wide_text = win32::to_wide(text ? text : "");
+  HWND child = CreateWindowExW(
+    0, wide_class.c_str(), wide_text.c_str(), WS_CHILD | WS_VISIBLE | style,
     0, 0, 10, 10, parent, reinterpret_cast<HMENU>(static_cast<INT_PTR>(id)),
-    GetModuleHandleA(nullptr), nullptr);
+    GetModuleHandleW(nullptr), nullptr);
   set_default_font(child);
   return child;
 }
@@ -483,19 +512,23 @@ LRESULT CALLBACK cue_info_window_proc(HWND hwnd, UINT message, WPARAM wparam, LP
     case WM_CLOSE:
       close_window(hwnd);
       return 0;
+
+    case WM_NCDESTROY:
+      if (g_window == hwnd) g_window = nullptr;
+      break;
   }
-  return DefWindowProc(hwnd, message, wparam, lparam);
+  return DefWindowProcW(hwnd, message, wparam, lparam);
 }
 
 bool register_windows_cue_info_class()
 {
-  WNDCLASSA window_class{};
+  WNDCLASSW window_class{};
   window_class.lpfnWndProc = cue_info_window_proc;
-  window_class.hInstance = GetModuleHandleA(nullptr);
+  window_class.hInstance = GetModuleHandleW(nullptr);
   window_class.lpszClassName = kCueInfoWindowClass;
   window_class.hCursor = LoadCursor(nullptr, IDC_ARROW);
   window_class.hbrBackground = reinterpret_cast<HBRUSH>(COLOR_BTNFACE + 1);
-  if (RegisterClassA(&window_class)) return true;
+  if (RegisterClassW(&window_class)) return true;
   return GetLastError() == ERROR_CLASS_ALREADY_EXISTS;
 }
 #endif
@@ -504,18 +537,27 @@ bool register_windows_cue_info_class()
 
 bool show_cue_info_window(CueInfoController& controller)
 {
+  if (g_controller) {
+    if (g_window && IsWindow(g_window)) {
+      activate_cue_info_window();
+      if (!g_dirty) refresh_live_state(g_window);
+      return true;
+    }
+    return false;
+  }
+
 #ifndef _WIN32
-  if (g_controller) return false;
   g_controller = &controller;
   g_dirty = false;
   g_close_on_save = false;
   g_loaded_key.clear();
   const int result = DialogBoxParam(nullptr, MAKEINTRESOURCE(kDialog), nullptr, cue_info_proc, 0);
+  g_window = nullptr;
   g_controller = nullptr;
   g_close_on_save = false;
   return result >= 0;
 #else
-  if (g_controller || !register_windows_cue_info_class()) return false;
+  if (!register_windows_cue_info_class()) return false;
   g_controller = &controller;
   g_dirty = false;
   g_loaded_key.clear();
@@ -528,20 +570,21 @@ bool show_cue_info_window(CueInfoController& controller)
   const int x = layout.has_position ? layout.x : CW_USEDEFAULT;
   const int y = layout.has_position ? layout.y : CW_USEDEFAULT;
   HWND owner = GetForegroundWindow();
-  HWND hwnd = CreateWindowExA(
+  HWND hwnd = CreateWindowExW(
     WS_EX_DLGMODALFRAME,
     kCueInfoWindowClass,
-    "ReaADR Cue Information",
+    L"ReaADR Cue Information",
     WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU | WS_THICKFRAME,
-    x, y, width, height, owner, nullptr, GetModuleHandleA(nullptr), nullptr);
+    x, y, width, height, owner, nullptr, GetModuleHandleW(nullptr), nullptr);
   if (!hwnd) {
     g_controller = nullptr;
     g_close_on_save = false;
     return false;
   }
+  g_window = hwnd;
 
   if (g_controller->refresh()) populate_editors(hwnd);
-  else SetDlgItemText(hwnd, kError, g_controller->error().c_str());
+  else set_text(hwnd, kError, g_controller->error());
   ShowWindow(hwnd, SW_SHOW);
   UpdateWindow(hwnd);
   restore_window_geometry(hwnd);
@@ -555,8 +598,6 @@ bool show_cue_info_window(CueInfoController& controller)
         Main_OnCommand(kTransportPlayStop, 0);
         continue;
       }
-      // VK_ESCAPE is deliberately not consumed here so IsDialogMessage keeps
-      // closing open combo dropdowns before it maps to IDCANCEL/close.
       if (handle_nav_key(hwnd, key)) continue;
     }
     if (!IsDialogMessage(hwnd, &message)) {
@@ -565,6 +606,7 @@ bool show_cue_info_window(CueInfoController& controller)
     }
   }
   const bool closed = !IsWindow(hwnd);
+  g_window = nullptr;
   g_controller = nullptr;
   g_close_on_save = false;
   g_dirty = false;
