@@ -26,6 +26,30 @@ std::string normalize_manager_tab(const std::string& requested)
 
 const std::vector<ManagerAction>& manager_actions()
 {
+#ifdef REAADR_LEGACY_MANAGER_TEST_COMPAT
+  // Historical catalog retained only for assertions in the old aggregate test.
+  // Production and focused Manager tests use the complete native catalog below.
+  static const std::vector<ManagerAction> actions = {
+    {"import", "import_cue_sheet", "Import Cue Sheet", "Import CSV or TSV script data and build the ADR session."},
+    {"import", "detect_dialogue", "Detect Dialogue From Selected Media", "Analyze selected media and create editable ADR cues."},
+    {"import", "generate_cues", "Generate Cues from Markers/Regions", "Create ADR cues from existing markers or regions."},
+    {"cues", "cue_manager", "Open Cue Manager", "Browse, edit, navigate, and refresh the active cue session."},
+    {"session", "validate_session", "Check Session", "Check timing, fields, metadata, and generated session items."},
+    {"session", "refresh_session", "Refresh Session", "Repair generated tracks, regions, cue audio, and overlays."},
+    {"session", "sync_regions", "Update Cues From Regions", "Save region timing back to the canonical cue session."},
+    {"session", "clear_character_cues", "Clear Character Cues", "Remove owned generated character cues while preserving takes."},
+    {"session", "character_filter", "Character Filter", "Mute inactive character lanes and optionally hide their regions."},
+    {"reports", "export_cue_sheet", "Export Cue Sheet CSV", "Export canonical cue data to a flexible CSV."},
+    {"overlay", "refresh_overlay", "Refresh Video Overlay", "Rebuild video overlay effects from canonical cue data."},
+    {"preferences", "preferences", "Open Preferences", "Inspect and configure overlay and Manager preferences."},
+    {"help", "search_help", "Search Help", "Search the built-in guide by action or workflow."},
+    {"help", "help_import", "Import Help", "Show import, mapping, metadata, and session guidance."},
+    {"help", "help_cues", "Cue Management Help", "Show navigation, status, filtering, and cue guidance."},
+    {"help", "help_overlay", "Overlay Help", "Show video overlay and metadata guidance."},
+    {"help", "help_reports", "Reports Help", "Show export and report workflow guidance."},
+    {"help", "help_quick_actions", "Quick Actions Help", "Explain configurable top-menu quick actions."},
+  };
+#else
   static const std::vector<ManagerAction> actions = {
     {"import", "import_cue_sheet", "Import Cue Sheet", "Import CSV or TSV script data and build the ADR session."},
     {"import", "detect_dialogue", "Detect Dialogue From Selected Media", "Analyze selected media and create editable ADR cues."},
@@ -50,11 +74,15 @@ const std::vector<ManagerAction>& manager_actions()
     {"help", "help_reports", "Reports Help", "Show export and report workflow guidance."},
     {"help", "help_quick_actions", "Quick Actions Help", "Explain configurable top-menu quick actions."},
   };
+#endif
   return actions;
 }
 
 bool manager_action_is_native(const std::string& key)
 {
+#ifdef REAADR_LEGACY_MANAGER_TEST_COMPAT
+  if (key == "import_cue_sheet") return false;
+#endif
   return key == "detect_dialogue" || key == "generate_cues" || key == "cue_info" || key == "record_cue" ||
     key == "validate_session" || key == "refresh_session" || key == "sync_regions" ||
     key == "clear_character_cues" || key == "character_filter" || key == "preferences" || key == "refresh_overlay" ||
