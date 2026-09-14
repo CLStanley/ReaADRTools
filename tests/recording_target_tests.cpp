@@ -110,6 +110,12 @@ int main()
             "single active lane should produce a partial character selection");
     require(!catalog.groups[0].targets[0].active && catalog.groups[0].targets[1].active,
             "lane 2 selection should be reflected in the native catalog");
+
+    const auto group_tokens = toggle_character_filter_group(catalog, "Alice");
+    require(group_tokens.size() == 2,
+            "clicking a partially selected character should enable every lane in that group");
+    const auto lane_tokens = toggle_character_filter_target(catalog, character_filter_target_key("Alice", 2));
+    require(lane_tokens.empty(), "clicking the only active lane should disable that lane");
   }
 
   {
@@ -119,6 +125,13 @@ int main()
     require(catalog.groups.size() == 2, "catalog should group unique characters");
     require(catalog.groups[0].all_active && catalog.groups[1].all_active,
             "Show All should mark every character group active");
+
+    const auto disable_alice = toggle_character_filter_group(catalog, "Alice");
+    require(disable_alice.size() == 1 && disable_alice[0] == character_filter_target_key("Bob", 1),
+            "unchecking Alice from Show All should retain every non-Alice lane");
+    const auto disable_bob_lane = toggle_character_filter_target(catalog, character_filter_target_key("Bob", 1));
+    require(disable_bob_lane.size() == 1 && disable_bob_lane[0] == character_filter_target_key("Alice", 1),
+            "unchecking one lane from Show All should materialize and retain the other lanes");
   }
 
   {
