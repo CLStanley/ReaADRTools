@@ -16,9 +16,10 @@ struct ManagerWindowSlotClaim {
   explicit operator bool() const { return error.empty() && slot > 0; }
 };
 
-// Native compatibility service for the three Lua Manager instance slots.
-// Slots are project-scoped and considered live while either an active heartbeat
-// or an in-progress launch timestamp is no more than two seconds old.
+// Legacy Lua compatibility service for the historical three-Manager slot
+// protocol. The native C++ Manager is intentionally single-instance and uses
+// reaadr::ui::CueManagerLifecycle instead. Keep this service only while Lua
+// launchers/parity references still understand ui.manager_slot.N.* state.
 class ManagerWindowSlotService final {
 public:
   static constexpr int kMaxSlots = 3;
