@@ -19,6 +19,10 @@ if not exist "%DIST_REAADR_DIR%\assets" mkdir "%DIST_REAADR_DIR%\assets"
 pushd "%~dp0"
 cl /nologo /EHsc /O2 /LD /std:c++17 ^
   /DREAPERAPI_WANT_CountTakes /DREAPERAPI_WANT_GetSet_LoopTimeRange2 ^
+  /DREAPERAPI_WANT_DockIsChildOfDock /DREAPERAPI_WANT_DockWindowActivate ^
+  /DREAPERAPI_WANT_DockWindowAdd /DREAPERAPI_WANT_DockWindowAddEx ^
+  /DREAPERAPI_WANT_DockWindowRefreshForHWND /DREAPERAPI_WANT_DockWindowRemove ^
+  /DREAPERAPI_WANT_Dock_UpdateDockID ^
   /I. /I"%REAPER_SDK%\sdk" /I"%WDL%" ^
   reaper_reaadr.cpp ^
   reaadr_core\session_model.cpp reaadr_core\model_repository.cpp reaadr_core\domain_utils.cpp reaadr_core\cue_info.cpp ^
