@@ -50,29 +50,18 @@ std::string dialogue_preview(const std::string& dialogue)
 }
 
 #ifdef _WIN32
-<<<<<<< HEAD
-=======
 // The Windows path builds ANSI controls, but the status line carries UTF-8
 // state glyphs; convert for the wide status control so both platforms render
 // the same characters.
->>>>>>> 23aa2b5 (Complete native Record Cue presentation parity)
 std::wstring to_wide(const std::string& utf8)
 {
   if (utf8.empty()) return std::wstring();
   const int length = MultiByteToWideChar(
     CP_UTF8, 0, utf8.c_str(), static_cast<int>(utf8.size()), nullptr, 0);
-<<<<<<< HEAD
   if (length <= 0) return std::wstring();
   std::wstring wide(static_cast<std::size_t>(length), L'\0');
   MultiByteToWideChar(CP_UTF8, 0, utf8.c_str(), static_cast<int>(utf8.size()),
                       &wide[0], length);
-=======
-  std::wstring wide(static_cast<size_t>(length), L'\0');
-  if (length > 0) {
-    MultiByteToWideChar(CP_UTF8, 0, utf8.c_str(), static_cast<int>(utf8.size()),
-                        &wide[0], length);
-  }
->>>>>>> 23aa2b5 (Complete native Record Cue presentation parity)
   return wide;
 }
 #endif
@@ -297,11 +286,8 @@ LRESULT CALLBACK recording_window_proc(HWND hwnd, UINT message, WPARAM wparam, L
       create_child(hwnd, "STATIC", "", SS_LEFT, kTiming);
       create_child(hwnd, "STATIC", "", SS_LEFT, kTrack);
       {
-<<<<<<< HEAD
-=======
         // The status control is wide because its text contains UTF-8 glyphs
         // converted for Windows rendering.
->>>>>>> 23aa2b5 (Complete native Record Cue presentation parity)
         HWND status = CreateWindowExW(
           0, L"STATIC", L"", WS_CHILD | WS_VISIBLE | SS_LEFT,
           0, 0, 10, 10, hwnd,
