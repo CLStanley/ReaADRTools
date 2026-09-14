@@ -58,7 +58,7 @@ public:
   std::map<std::string, std::string> values;
 };
 
-void test_manager_window_slots()
+void test_legacy_manager_window_slots()
 {
   FakeProjectStateStore state;
   reaadr::reaper::ManagerWindowSlotService slots(state, now_seconds);
@@ -66,45 +66,45 @@ void test_manager_window_slots()
   current_time = 10.0;
   auto first = slots.claim();
   check(static_cast<bool>(first) && first.slot == 1,
-        "first native Manager window should claim slot 1");
+        "legacy Lua Manager compatibility should claim slot 1 first");
   check(state.get("ui.manager_slot.1.active") == "1",
-        "claimed Manager slot should be marked active");
+        "legacy compatibility slot should be marked active");
   check(!state.get("ui.manager_slot.1.launching").empty(),
-        "claimed Manager slot should carry a launch timestamp until heartbeat");
+        "legacy compatibility slot should carry a launch timestamp until heartbeat");
 
   check(slots.set_launch_tab(1, "overlay"),
-        "claimed Manager slot should accept a launch-tab handoff");
+        "legacy compatibility slot should accept a launch-tab handoff");
   check(slots.consume_launch_tab(1) == "overlay",
-        "Manager launch tab should be consumed once");
+        "legacy compatibility launch tab should be consumed once");
   check(slots.consume_launch_tab(1).empty(),
-        "Manager launch tab should be cleared after consumption");
+        "legacy compatibility launch tab should clear after consumption");
 
   current_time = 10.5;
-  check(slots.heartbeat(1), "active Manager should refresh its heartbeat");
+  check(slots.heartbeat(1), "legacy compatibility slot should refresh its heartbeat");
   check(state.get("ui.manager_slot.1.launching").empty(),
-        "first heartbeat should clear the launching marker");
+        "legacy first heartbeat should clear the launching marker");
 
   auto second = slots.claim();
   check(static_cast<bool>(second) && second.slot == 2,
-        "second native Manager window should claim slot 2 while slot 1 is live");
+        "legacy Lua compatibility should preserve slot 2 behavior");
   auto third = slots.claim();
   check(static_cast<bool>(third) && third.slot == 3,
-        "third native Manager window should claim slot 3 while earlier slots are live");
+        "legacy Lua compatibility should preserve slot 3 behavior");
   const auto full = slots.claim();
   check(!full && full.error.find("Three ReaADR manager windows") != std::string::npos,
-        "fourth Manager launch should preserve the three-window limit");
+        "legacy Lua compatibility should preserve the historical three-slot limit");
 
   current_time = 13.0;
   auto reclaimed = slots.claim();
   check(static_cast<bool>(reclaimed) && reclaimed.slot == 1,
-        "stale heartbeat should make slot 1 reclaimable after two seconds");
+        "stale legacy heartbeat should make slot 1 reclaimable after two seconds");
 
-  check(slots.release(1), "releasing Manager slot should succeed");
+  check(slots.release(1), "releasing legacy Manager slot should succeed");
   check(state.get("ui.manager_slot.1.active").empty() &&
           state.get("ui.manager_slot.1.heartbeat").empty() &&
           state.get("ui.manager_slot.1.launching").empty() &&
           state.get("ui.manager_slot.1.launch_tab").empty(),
-        "releasing Manager slot should clear all slot state");
+        "releasing legacy Manager slot should clear all compatibility state");
 }
 
 void test_native_manager_lifecycle()
@@ -198,7 +198,9 @@ int main()
           reaadr::core::manager_action_is_native("detect_dialogue"),
         "migrated workflow routes must remain classified as native");
 
-  test_manager_window_slots();
+  // The legacy three-slot protocol remains covered only as a Lua migration
+  // compatibility contract. Native lifecycle behavior is tested separately.
+  test_legacy_manager_window_slots();
   test_native_manager_lifecycle();
   test_window_layout_repository();
 
