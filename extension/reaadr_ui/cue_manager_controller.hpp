@@ -3,9 +3,11 @@
 #include "manager_view_model.hpp"
 #include "app/cue_manager_application_service.hpp"
 #include "app/manager_view_application_service.hpp"
+#include "reaadr_core/character_filter.hpp"
 #include "reaadr_reaper/cue_navigation_service.hpp"
 
 #include <functional>
+#include <vector>
 
 namespace reaadr::ui {
 
@@ -27,6 +29,13 @@ public:
   bool set_filters(const std::string& query,
                    const std::string& character,
                    const std::string& status);
+
+  // Native project filter used by the Cue Manager's grouped character/lane UI.
+  core::CharacterFilterCatalogResult character_filter_catalog() const;
+  bool apply_character_filter(const std::vector<std::string>& tokens,
+                              bool hide_inactive_regions,
+                              std::string& error);
+
   // Header clicks toggle direction while selection follows the canonical cue key.
   bool sort_by(const std::string& key);
   bool select_index(int index);
