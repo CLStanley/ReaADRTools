@@ -10,6 +10,7 @@
 #include "../reaadr_core/model_repository.hpp"
 #include "../reaadr_core/overlay_settings.hpp"
 #include "../reaadr_core/recording_preferences.hpp"
+#include "../reaadr_core/window_layout.hpp"
 #include "project_state.hpp"
 #include "record_arm_adapter.hpp"
 #include "recording_setup_adapter.hpp"
@@ -19,14 +20,7 @@ class ReaProject;
 
 namespace reaadr::reaper {
 
-struct RecordingWindowLayout {
-  int width = 570;
-  int height = 300;
-  int dock = 0;
-  int x = 0;
-  int y = 0;
-  bool has_position = false;
-};
+using RecordingWindowLayout = core::WindowLayout;
 
 // Owns the complete native Record Cue service graph for one REAPER project.
 // The UI never constructs repositories/adapters itself; it emits semantic
@@ -50,7 +44,6 @@ public:
 private:
   double current_timeline_position() const;
   bool refresh_overlay();
-  bool remember_window_layout() const;
 
   ReaProject* project_ = nullptr;
   ProjectStateStore project_state_;
