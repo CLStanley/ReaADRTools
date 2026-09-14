@@ -9,7 +9,6 @@ namespace reaadr::reaper {
 
 struct ManagerViewLoadResult {
   core::ManagerViewModel view;
-  core::ManagerWindowLayout layout;
   std::string error;
   explicit operator bool() const { return error.empty() && static_cast<bool>(view); }
 };
