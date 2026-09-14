@@ -5,6 +5,8 @@
 #define REAPERAPI_WANT_DockWindowAddEx
 #define REAPERAPI_WANT_DockWindowRefreshForHWND
 #define REAPERAPI_WANT_DockWindowRemove
+#define REAPERAPI_WANT_Dock_UpdateDockID
+#define REAPERAPI_WANT_GetConfigWantsDock
 
 #include "window_docking.hpp"
 
@@ -18,13 +20,19 @@ bool add_window_to_docker(HWND hwnd, const std::string& title,
                           int preferred_dock)
 {
   if (!hwnd) return false;
+
+  if (preferred_dock >= 0 && Dock_UpdateDockID)
+    Dock_UpdateDockID(identifier.c_str(), preferred_dock);
+
   if (DockWindowAddEx) {
     DockWindowAddEx(hwnd, title.c_str(), identifier.c_str(), true);
-  } else if (DockWindowAdd && preferred_dock >= 0) {
-    DockWindowAdd(hwnd, title.c_str(), preferred_dock, true);
+  } else if (DockWindowAdd) {
+    const int target = preferred_dock >= 0 ? preferred_dock : 0;
+    DockWindowAdd(hwnd, title.c_str(), target, true);
   } else {
     return false;
   }
+
   if (DockWindowRefreshForHWND) DockWindowRefreshForHWND(hwnd);
   if (DockWindowActivate) DockWindowActivate(hwnd);
   return true;
