@@ -1,7 +1,9 @@
 #include "cue_status_window.hpp"
 
 #include <reaper_plugin.h>
-#ifndef _WIN32
+#ifdef _WIN32
+#include "win32_utf8.hpp"
+#else
 #include <swell/swell-dlggen.h>
 #endif
 
@@ -88,9 +90,10 @@ bool choose_cue_status(const std::vector<std::string>& statuses,
 
   constexpr UINT kFirstStatusCommand = 1;
   for (std::size_t index = 0; index < statuses.size(); ++index) {
-    AppendMenuA(menu, MF_STRING,
+    const std::wstring wide = win32::to_wide(statuses[index]);
+    AppendMenuW(menu, MF_STRING,
                 kFirstStatusCommand + static_cast<UINT>(index),
-                statuses[index].c_str());
+                wide.c_str());
   }
 
   POINT point{};
