@@ -4,6 +4,7 @@
 #include "recording_window.hpp"
 
 #include "recording_controller.hpp"
+#include "reaadr_reaper/window_docking.hpp"
 
 #include <algorithm>
 #include <iomanip>
@@ -32,6 +33,8 @@ constexpr int kTimer = 1;
 constexpr int kTransportPlayStop = 40044;
 constexpr int kMinWindowWidth = 530;
 constexpr int kMinWindowHeight = 260;
+constexpr const char* kDockIdentifier = "reaadr.record_cue";
+constexpr const char* kWindowTitle = "ReaADR Record Cue";
 
 RecordingController* g_controller = nullptr;
 
@@ -50,9 +53,6 @@ std::string dialogue_preview(const std::string& dialogue)
 }
 
 #ifdef _WIN32
-// The Windows path builds ANSI controls, but the status line carries UTF-8
-// state glyphs; convert for the wide status control so both platforms render
-// the same characters.
 std::wstring to_wide(const std::string& utf8)
 {
   if (utf8.empty()) return std::wstring();
@@ -106,6 +106,14 @@ void restore_window_geometry(HWND hwnd)
   SetWindowPos(hwnd, nullptr, x, y, width, height, SWP_NOZORDER | SWP_NOACTIVATE);
 }
 
+void restore_window_docking(HWND hwnd)
+{
+  if (!g_controller) return;
+  const auto saved = g_controller->load_window_layout();
+  if (saved.dock >= 0)
+    reaper::add_window_to_docker(hwnd, kWindowTitle, kDockIdentifier, saved.dock);
+}
+
 void save_window_geometry(HWND hwnd)
 {
   if (!g_controller) return;
@@ -116,7 +124,7 @@ void save_window_geometry(HWND hwnd)
   layout.y = static_cast<int>(rect.top);
   layout.width = (std::max)(kMinWindowWidth, static_cast<int>(rect.right - rect.left));
   layout.height = (std::max)(kMinWindowHeight, static_cast<int>(rect.bottom - rect.top));
-  layout.dock = 0;
+  layout.dock = reaper::inspect_window_dock_state(hwnd).dock_index;
   layout.has_position = true;
   g_controller->save_window_layout(layout);
 }
@@ -136,6 +144,8 @@ bool close_recording(HWND hwnd)
     return false;
   }
   save_window_geometry(hwnd);
+  const auto dock = reaper::inspect_window_dock_state(hwnd);
+  if (dock.docked()) reaper::remove_window_from_docker(hwnd);
   KillTimer(hwnd, kTimer);
 #ifdef _WIN32
   DestroyWindow(hwnd);
@@ -189,6 +199,7 @@ INT_PTR recording_proc(HWND hwnd, UINT message, WPARAM wparam, LPARAM)
         return 1;
       }
       restore_window_geometry(hwnd);
+      restore_window_docking(hwnd);
       update_window(hwnd);
       SetTimer(hwnd, kTimer, 30, nullptr);
       return 1;
@@ -286,8 +297,6 @@ LRESULT CALLBACK recording_window_proc(HWND hwnd, UINT message, WPARAM wparam, L
       create_child(hwnd, "STATIC", "", SS_LEFT, kTiming);
       create_child(hwnd, "STATIC", "", SS_LEFT, kTrack);
       {
-        // The status control is wide because its text contains UTF-8 glyphs
-        // converted for Windows rendering.
         HWND status = CreateWindowExW(
           0, L"STATIC", L"", WS_CHILD | WS_VISIBLE | SS_LEFT,
           0, 0, 10, 10, hwnd,
@@ -376,7 +385,7 @@ bool show_recording_window(RecordingController& controller)
   HWND hwnd = CreateWindowExA(
     WS_EX_DLGMODALFRAME,
     kRecordingWindowClass,
-    "ReaADR Record Cue",
+    kWindowTitle,
     WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU | WS_THICKFRAME,
     x, y, width, height, owner, nullptr, GetModuleHandleA(nullptr), nullptr);
   if (!hwnd) {
@@ -385,9 +394,12 @@ bool show_recording_window(RecordingController& controller)
     return false;
   }
 
-  ShowWindow(hwnd, SW_SHOW);
-  UpdateWindow(hwnd);
   restore_window_geometry(hwnd);
+  restore_window_docking(hwnd);
+  ShowWindow(hwnd, SW_SHOW);
+  if (reaper::inspect_window_dock_state(hwnd).docked())
+    reaper::activate_docked_window(hwnd);
+  UpdateWindow(hwnd);
   update_window(hwnd);
   SetTimer(hwnd, kTimer, 30, nullptr);
 
