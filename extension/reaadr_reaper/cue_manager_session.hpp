@@ -13,6 +13,7 @@
 #include "reaadr_ui/cue_manager_controller.hpp"
 
 #include <functional>
+#include <memory>
 #include <string>
 
 class ReaProject;
@@ -79,5 +80,21 @@ private:
   ui::CueManagerController controller_;
   double (*frame_rate_)() = nullptr;
 };
+
+// Persistent plug-in-level owner. Re-entrant Open Manager commands reuse the
+// same dependency graph while the native window is alive; once the original
+// modeless compatibility loop exits after close, the graph is released.
+class CueManagerSessionHost final {
+public:
+  bool open_or_activate(CueManagerSessionConfig config, std::string& error);
+  bool has_session() const { return static_cast<bool>(session_); }
+  CueManagerSession* session() { return session_.get(); }
+  const CueManagerSession* session() const { return session_.get(); }
+
+private:
+  std::unique_ptr<CueManagerSession> session_;
+};
+
+CueManagerSessionHost& cue_manager_session_host();
 
 } // namespace reaadr::reaper
