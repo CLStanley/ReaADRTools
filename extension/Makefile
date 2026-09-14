@@ -34,7 +34,7 @@ CORE_SOURCES := reaadr_core/session_model.cpp reaadr_core/model_repository.cpp r
 	reaadr_core/region_timing_sync.cpp reaadr_core/cue_navigation.cpp reaadr_core/record_arm.cpp reaadr_core/recording_setup.cpp \
 	reaadr_core/recording_target.cpp reaadr_core/recording_transport.cpp reaadr_core/cue_status.cpp reaadr_core/recording_preferences.cpp \
 	reaadr_core/overlay_settings.cpp reaadr_core/overlay_eel.cpp reaadr_core/overlay_refresh.cpp
-UI_SOURCES := reaadr_ui/reaadr_ui.cpp reaadr_ui/cue_manager_controller.cpp reaadr_ui/cue_manager_window.cpp \
+UI_SOURCES := reaadr_ui/reaadr_ui.cpp reaadr_ui/cue_manager_controller.cpp reaadr_ui/cue_manager_window_swell.cpp \
 	reaadr_ui/character_filter_window.cpp reaadr_ui/cue_info_controller.cpp reaadr_ui/cue_info_window.cpp reaadr_ui/cue_status_window.cpp \
 	reaadr_ui/recording_controller.cpp reaadr_ui/recording_window.cpp reaadr_ui/manager_view_model.cpp reaadr_ui/manager_navigation.cpp \
 	reaadr_ui/manager_ui_contract.cpp reaadr_ui/cue_manager_ui_contract.cpp
