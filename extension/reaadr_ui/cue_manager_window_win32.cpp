@@ -82,8 +82,10 @@ std::string control_text(HWND hwnd, int id)
 {
   HWND child = control(hwnd, id);
   const int length = child ? GetWindowTextLengthA(child) : 0;
-  std::string value(static_cast<std::size_t>(length), '\0');
-  if (length > 0) GetWindowTextA(child, value.data(), length + 1);
+  if (length <= 0) return {};
+  std::string value(static_cast<std::size_t>(length) + 1, '\0');
+  const int copied = GetWindowTextA(child, value.data(), length + 1);
+  value.resize(copied > 0 ? static_cast<std::size_t>(copied) : 0);
   return value;
 }
 
@@ -450,6 +452,14 @@ LRESULT CALLBACK cue_manager_wnd_proc(HWND hwnd, UINT message, WPARAM wparam, LP
       create_window_controls(hwnd);
       refresh_rows(hwnd);
       return 0;
+    case WM_GETMINMAXINFO: {
+      auto* info = reinterpret_cast<MINMAXINFO*>(lparam);
+      if (info) {
+        info->ptMinTrackSize.x = kMinWindowWidth;
+        info->ptMinTrackSize.y = kMinWindowHeight;
+      }
+      return 0;
+    }
     case kRefreshExistingWindow:
       reload_and_refresh(hwnd);
       return 0;
