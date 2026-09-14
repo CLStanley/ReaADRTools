@@ -1,4 +1,5 @@
 #include "reaadr_core/cue_info.hpp"
+#include "reaadr_ui/cue_info_controller.hpp"
 
 #include <cstdlib>
 #include <iostream>
@@ -80,6 +81,15 @@ void test_invalid_values()
         "non-positive frame rate should fail");
 }
 
+void test_window_layout_defaults_to_floating()
+{
+  const reaadr::ui::CueInfoWindowLayout layout;
+  check(layout.dock == -1, "Cue Info should default to a floating REAPER window");
+  check(layout.width == 1100 && layout.height == 740,
+        "Cue Info should retain its native default window size");
+  check(!layout.has_position, "Cue Info should not invent a persisted position");
+}
+
 } // namespace
 
 int main()
@@ -88,6 +98,7 @@ int main()
   test_countdown_clamps_after_start();
   test_dialogue_fallback();
   test_invalid_values();
+  test_window_layout_defaults_to_floating();
   std::cout << "cue_info_tests passed\n";
   return 0;
 }
