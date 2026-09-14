@@ -34,7 +34,7 @@ struct CueInfoEditValues {
 struct CueInfoWindowLayout {
   int width = 1100;
   int height = 740;
-  int dock = 0;
+  int dock = -1;
   int x = 0;
   int y = 0;
   bool has_position = false;
