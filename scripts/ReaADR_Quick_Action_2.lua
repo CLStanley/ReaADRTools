@@ -13,6 +13,10 @@ local function run_native_command(name)
   return true
 end
 
+-- New extension builds own quick-action preference resolution and dispatch in
+-- C++. Keep the Lua body below only as an upgrade fallback for older builds.
+if run_native_command("_ReaADRQuickAction" .. SLOT .. "Native") then return end
+
 local function open_native_manager_tab(tab)
   if type(reaper.SetProjExtState) ~= "function" then return false end
   reaper.SetProjExtState(0, NAMESPACE, "ui.manager.launch_tab", tab)
@@ -33,8 +37,6 @@ if action == "refresh_overlay" and run_native_command("_ReaADRRefreshVideoOverla
 if action == "export_reports" and open_native_manager_tab("reports") then return end
 if action == "overlay_settings" and open_native_manager_tab("overlay") then return end
 
--- Older extension builds retain the compatibility App fallback until every
--- native command above is registered by the loaded extension.
 local function script_dir()
   local info = debug.getinfo(1, "S").source
   local path = info:sub(1, 1) == "@" and info:sub(2) or info
