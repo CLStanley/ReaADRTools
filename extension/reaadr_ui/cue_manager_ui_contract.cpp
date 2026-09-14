@@ -51,6 +51,28 @@ const std::vector<std::string>& cue_manager_type_choices()
   return choices;
 }
 
+std::vector<CueManagerCharacterFilterItem> cue_manager_character_filter_items(
+  const CharacterFilterCatalogResult& catalog)
+{
+  std::vector<CueManagerCharacterFilterItem> items;
+  if (!catalog) return items;
+
+  items.push_back({CueManagerCharacterFilterItem::Kind::show_all,
+                   "Show All Character Cues", {}, {}, catalog.show_all, false});
+  for (const auto& group : catalog.groups) {
+    items.push_back({CueManagerCharacterFilterItem::Kind::character,
+                     group.character, group.character, {}, group.all_active,
+                     group.partially_active});
+    if (group.targets.size() <= 1) continue;
+    for (const auto& target : group.targets) {
+      items.push_back({CueManagerCharacterFilterItem::Kind::lane,
+                       "Lane " + std::to_string(target.lane), target.character,
+                       target.key, target.active, false});
+    }
+  }
+  return items;
+}
+
 bool is_cue_manager_sort_key(const std::string& key)
 {
   return key == "id" || key == "character" || key == "start_time" || key == "end_time" ||
