@@ -87,6 +87,7 @@ private:
 class CueManagerSessionHost final {
 public:
   bool open_or_activate(CueManagerSessionConfig config, std::string& error);
+  bool shutdown(std::string* error = nullptr);
   bool has_session() const { return static_cast<bool>(session_); }
   CueManagerSession* session() { return session_.get(); }
   const CueManagerSession* session() const { return session_.get(); }
