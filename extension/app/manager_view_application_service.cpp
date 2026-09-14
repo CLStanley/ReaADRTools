@@ -23,6 +23,11 @@ ManagerViewLoadResult ManagerViewApplicationService::load(
   result.view = core::build_manager_view_model(
     session.model, loaded_preferences.preferences, effective_options,
     std::to_string(revision.revision), requested_tab);
+#ifdef REAADR_LEGACY_MANAGER_TEST_COMPAT
+  core::ManagerWindowLayoutRepository legacy_layout(project_state_);
+  const auto loaded_layout = legacy_layout.load(true);
+  if (loaded_layout) result.layout = loaded_layout.layout;
+#endif
   result.error = result.view.error;
   return result;
 }
