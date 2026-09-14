@@ -35,6 +35,13 @@ public:
   bool apply_character_filter(const std::vector<std::string>& tokens,
                               bool hide_inactive_regions,
                               std::string& error);
+  bool show_all_character_filter(bool hide_inactive_regions, std::string& error);
+  bool toggle_character_filter_group(const std::string& character,
+                                     bool hide_inactive_regions,
+                                     std::string& error);
+  bool toggle_character_filter_target(const std::string& target_key,
+                                      bool hide_inactive_regions,
+                                      std::string& error);
 
   // Header clicks toggle direction while selection follows the canonical cue key.
   bool sort_by(const std::string& key);
