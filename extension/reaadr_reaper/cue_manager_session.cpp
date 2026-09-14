@@ -1,6 +1,7 @@
 #include "cue_manager_session.hpp"
 
 #include "native_host_services.hpp"
+#include "reaadr_ui/cue_manager_window.hpp"
 
 #include <utility>
 
@@ -41,8 +42,15 @@ CueManagerSession::CueManagerSession(CueManagerSessionConfig config)
     controller_(view_service_, mutations_, project_state_, config.navigation_api,
                 std::move(config.callbacks.trigger_import),
                 std::move(config.callbacks.trigger_action),
-                render_options_.refresh_overlay)
+                render_options_.refresh_overlay),
+    frame_rate_(config.overlay_api.frame_rate)
 {
+}
+
+bool CueManagerSession::show()
+{
+  const double frame_rate = frame_rate_ ? frame_rate_() : 24.0;
+  return ui::show_cue_manager(controller_, frame_rate);
 }
 
 } // namespace reaadr::reaper
