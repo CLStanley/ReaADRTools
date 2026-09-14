@@ -33,7 +33,7 @@ cl /nologo /EHsc /O2 /LD /std:c++17 ^
   reaadr_reaper\project_state.cpp reaadr_reaper\project_transaction.cpp ^
   reaadr_reaper\track_region_adapter.cpp reaadr_reaper\render_artifact_adapter.cpp reaadr_reaper\session_render_service.cpp ^
   reaadr_reaper\native_host_services.cpp reaadr_reaper\cue_manager_session.cpp reaadr_reaper\marker_snapshot_adapter.cpp reaadr_reaper\marker_cue_generation_command.cpp ^
-  reaadr_reaper\dialogue_detection_adapter.cpp reaadr_reaper\dialogue_detection_command.cpp reaadr_reaper\cue_status_command.cpp reaadr_reaper\cue_take_count_adapter.cpp reaadr_reaper\cue_info_command.cpp ^
+  reaadr_reaper\dialogue_detection_adapter.cpp reaadr_reaper\dialogue_detection_command.cpp reaadr_reaper\cue_status_command.cpp reaadr_reaper\cue_take_count_adapter.cpp reaadr_reaper\cue_info_command.cpp reaadr_reaper\cue_info_action.cpp ^
   reaadr_reaper\character_filter_adapter.cpp reaadr_reaper\character_filter_command.cpp reaadr_reaper\cue_navigation_service.cpp reaadr_reaper\record_arm_adapter.cpp ^
   reaadr_reaper\recording_setup_adapter.cpp reaadr_reaper\recording_transport_executor.cpp reaadr_reaper\recording_command_context.cpp reaadr_reaper\recording_command.cpp reaadr_reaper\recording_action.cpp ^
   reaadr_reaper\overlay_refresh_adapter.cpp reaadr_reaper\cue_cleanup_adapter.cpp ^
