@@ -29,6 +29,7 @@
 #define REAPERAPI_WANT_GetMediaItemInfo_Value
 #define REAPERAPI_WANT_GetMediaSourceLength
 #define REAPERAPI_WANT_GetMediaTrackInfo_Value
+#define REAPERAPI_WANT_GetNumRegionsOrMarkers
 #define REAPERAPI_WANT_GetPlayPosition
 #define REAPERAPI_WANT_GetPlayState
 #define REAPERAPI_WANT_GetProjectPathEx
@@ -138,6 +139,37 @@ bool run_main_command(int command)
   return true;
 }
 
+std::string selected_overlay_cue_key_from_regions()
+{
+  if (!GetNumRegionsOrMarkers || !EnumProjectMarkers3 || !GetRegionOrMarker ||
+      !GetRegionOrMarkerInfo_Value)
+    return {};
+
+  const int count = GetNumRegionsOrMarkers(nullptr);
+  for (int index = 0; index < count; ++index) {
+    bool is_region = false;
+    const char* name = nullptr;
+    if (!EnumProjectMarkers3(nullptr, index, &is_region, nullptr, nullptr,
+                             &name, nullptr, nullptr) ||
+        !is_region || !name)
+      continue;
+
+    ProjectMarker* marker = GetRegionOrMarker(nullptr, index, "");
+    if (!marker || GetRegionOrMarkerInfo_Value(nullptr, marker, "B_UISEL") == 0.0)
+      continue;
+
+    const std::string text(name);
+    const std::string marker_prefix = "[ReaADR]:id=";
+    const std::size_t begin = text.find(marker_prefix);
+    if (begin == std::string::npos) continue;
+    const std::size_t value_begin = begin + marker_prefix.size();
+    const std::size_t value_end = text.find_first_of(" \t\r\n", value_begin);
+    return text.substr(value_begin,
+      value_end == std::string::npos ? std::string::npos : value_end - value_begin);
+  }
+  return {};
+}
+
 } // namespace
 
 TrackRegionApi native_track_region_api()
@@ -232,6 +264,48 @@ OverlayRefreshApi native_overlay_refresh_api()
   };
 }
 
+OverlaySelectionInput native_overlay_selection()
+{
+  OverlaySelectionInput selection;
+  selection.selected_region_cue_key = selected_overlay_cue_key_from_regions();
+
+  if (CountSelectedMediaItems && GetSelectedMediaItem && GetSetMediaItemInfo_String) {
+    const int count = CountSelectedMediaItems(nullptr);
+    std::array<char, 4096> value = {};
+    for (int index = 0; index < count; ++index) {
+      value[0] = '\0';
+      MediaItem* item = GetSelectedMediaItem(nullptr, index);
+      if (item && GetSetMediaItemInfo_String(
+            item, "P_EXT:ReaADR.cue_key", value.data(), false) &&
+          value[0] != '\0') {
+        selection.selected_item_cue_key = value.data();
+        break;
+      }
+    }
+  }
+  return selection;
+}
+
+bool native_overlay_refresh_callback(
+  const core::OverlayRefreshOptions& options,
+  std::string* error)
+{
+  const auto applied = refresh_generated_overlay_transactionally(
+    nullptr, native_overlay_refresh_api(), native_transaction_api(), options,
+    "ReaADR: refresh video overlay");
+  if (!applied && error) *error = applied.error;
+  return static_cast<bool>(applied);
+}
+
+OverlayApplicationApi native_overlay_application_api()
+{
+  return {
+    native_current_project_frame_rate,
+    native_overlay_selection,
+    native_overlay_refresh_callback,
+  };
+}
+
 RecordArmApi native_record_arm_api()
 {
   return {
@@ -322,6 +396,11 @@ double native_cursor_position()
 {
   const double position = GetCursorPosition ? GetCursorPosition() : 0.0;
   return std::isfinite(position) ? position : 0.0;
+}
+
+double native_current_project_frame_rate()
+{
+  return native_project_frame_rate(nullptr);
 }
 
 double native_project_frame_rate(ReaProject* project)
