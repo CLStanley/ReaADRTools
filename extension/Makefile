@@ -76,7 +76,7 @@ REAPER_HEADERS := reaadr_reaper/project_state.hpp reaadr_reaper/project_transact
 	app/marker_cue_generation_application_service.hpp app/dialogue_cue_generation_application_service.hpp app/dialogue_detection_application_service.hpp \
 	app/cue_cleanup_application_service.hpp app/character_filter_application_service.hpp app/manager_view_application_service.hpp \
 	app/cue_manager_application_service.hpp app/session_refresh_application_service.hpp app/region_timing_application_service.hpp \
-	reaadr_ui/character_filter_window.hpp reaadr_ui/cue_info_controller.hpp reaadr_ui/cue_info_window.hpp reaadr_ui/cue_status_window.hpp
+	reaadr_ui/character_filter_window.hpp reaadr_ui/cue_info_controller.hpp reaadr_ui/cue_info_window.hpp reaadr_ui/cue_status_window.hpp reaadr_ui/win32_utf8.hpp
 NATIVE_SOURCES := $(CORE_SOURCES) $(REAPER_SOURCES) $(UI_SOURCES)
 NATIVE_HEADERS := $(CORE_HEADERS) $(REAPER_HEADERS)
 EXTENSION_SOURCES := reaper_reaadr.cpp $(NATIVE_SOURCES)
