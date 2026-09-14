@@ -40,7 +40,7 @@ const std::vector<CueManagerAction>& cue_manager_actions()
 const std::vector<std::string>& cue_manager_status_choices()
 {
   static const std::vector<std::string> choices = {
-    "Not Recorded", "In Progress", "Recorded", "Needs Review", "Approved"};
+    "Not Recorded", "In Progress", "Recorded", "Needs Review", "Approved", "Needs Retake"};
   return choices;
 }
 
