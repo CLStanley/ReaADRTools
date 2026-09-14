@@ -74,7 +74,7 @@ CueInfoWindowLayout CueInfoController::load_window_layout() const
 bool CueInfoController::save_window_layout(const CueInfoWindowLayout& layout)
 {
   if (!remember_window_layout()) return false;
-  return project_state_.write(kStateNamespace, kWindowDockKey, "0") &&
+  return project_state_.write(kStateNamespace, kWindowDockKey, std::to_string(layout.dock)) &&
     project_state_.write(kStateNamespace, kWindowXKey, std::to_string(layout.x)) &&
     project_state_.write(kStateNamespace, kWindowYKey, std::to_string(layout.y)) &&
     project_state_.write(kStateNamespace, kWindowWidthKey, std::to_string((std::max)(820, layout.width))) &&
@@ -89,9 +89,6 @@ CueInfoLaunchOptions CueInfoController::consume_launch_options()
   options.open_edit = edit && edit.value == "1";
   options.close_on_save = close_on_save && close_on_save.value == "1";
 
-  // Lua consumes both values exactly once even if only one option is used by
-  // the caller. Preserve that contract so stale launch state cannot leak into
-  // a later Cue Info window.
   project_state_.write(kStateNamespace, kOpenEditKey, "");
   project_state_.write(kStateNamespace, kCloseOnSaveKey, "");
   return options;
