@@ -10,6 +10,7 @@
 #define NOMINMAX
 #endif
 #include <windows.h>
+#include "win32_utf8.hpp"
 #else
 #include <swell/swell-dlggen.h>
 #endif
@@ -37,7 +38,31 @@ bool hide_inactive_regions(HWND hwnd)
 
 void set_status(HWND hwnd, const std::string& value)
 {
+#ifdef _WIN32
+  win32::set_dlg_item_text_utf8(hwnd, kStatus, value);
+#else
   SetDlgItemText(hwnd, kStatus, value.c_str());
+#endif
+}
+
+void show_error(HWND hwnd, const std::string& value)
+{
+  if (value.empty()) return;
+#ifdef _WIN32
+  win32::message_box_utf8(hwnd, value, "ReaADR Character Filter", MB_OK | MB_ICONERROR);
+#else
+  MessageBox(hwnd, value.c_str(), "ReaADR Character Filter", 0);
+#endif
+}
+
+void add_filter_item(HWND hwnd, const std::string& label)
+{
+#ifdef _WIN32
+  win32::listbox_add_utf8(GetDlgItem(hwnd, kItems), label);
+#else
+  SendDlgItemMessage(hwnd, kItems, LB_ADDSTRING, 0,
+                     reinterpret_cast<LPARAM>(label.c_str()));
+#endif
 }
 
 void refresh_filter_items(HWND hwnd)
@@ -60,8 +85,7 @@ void refresh_filter_items(HWND hwnd)
     const char* marker = item.partial ? "[-] " : item.checked ? "[x] " : "[ ] ";
     label += marker;
     label += item.label;
-    SendDlgItemMessage(hwnd, kItems, LB_ADDSTRING, 0,
-                       reinterpret_cast<LPARAM>(label.c_str()));
+    add_filter_item(hwnd, label);
   }
   set_status(hwnd, catalog.show_all
     ? "All character lanes are active."
@@ -86,7 +110,7 @@ void apply_selected_toggle(HWND hwnd)
       item.target_key, hide_inactive_regions(hwnd), error);
   }
   if (!changed) {
-    if (!error.empty()) MessageBox(hwnd, error.c_str(), "ReaADR Character Filter", 0);
+    show_error(hwnd, error);
     return;
   }
   refresh_filter_items(hwnd);
@@ -97,8 +121,7 @@ void apply_region_visibility_toggle(HWND hwnd)
   if (!g_controller) return;
   const auto catalog = g_controller->character_filter_catalog();
   if (!catalog) {
-    if (!catalog.error.empty())
-      MessageBox(hwnd, catalog.error.c_str(), "ReaADR Character Filter", 0);
+    show_error(hwnd, catalog.error);
     return;
   }
   std::vector<std::string> tokens;
@@ -108,9 +131,8 @@ void apply_region_visibility_toggle(HWND hwnd)
         if (target.active) tokens.push_back(target.key);
   }
   std::string error;
-  if (!g_controller->apply_character_filter(tokens, hide_inactive_regions(hwnd), error) &&
-      !error.empty())
-    MessageBox(hwnd, error.c_str(), "ReaADR Character Filter", 0);
+  if (!g_controller->apply_character_filter(tokens, hide_inactive_regions(hwnd), error))
+    show_error(hwnd, error);
   refresh_filter_items(hwnd);
 }
 
@@ -134,8 +156,8 @@ INT_PTR character_filter_proc(HWND hwnd, UINT message, WPARAM wparam, LPARAM)
       std::string error;
       if (g_controller->show_all_character_filter(hide_inactive_regions(hwnd), error))
         refresh_filter_items(hwnd);
-      else if (!error.empty())
-        MessageBox(hwnd, error.c_str(), "ReaADR Character Filter", 0);
+      else
+        show_error(hwnd, error);
     }
     return 1;
   }
@@ -174,12 +196,14 @@ END
 SWELL_DEFINE_DIALOG_RESOURCE_END2(kDialog)
 #else
 
-constexpr const char* kWindowClass = "ReaADRCharacterFilterWindow";
+constexpr wchar_t kWindowClass[] = L"ReaADRCharacterFilterWindow";
 
 void create_child(HWND parent, const char* class_name, const char* text,
                   DWORD style, int x, int y, int width, int height, int id)
 {
-  CreateWindowExA(0, class_name, text, WS_CHILD | WS_VISIBLE | style,
+  const std::wstring wide_class = win32::to_wide(class_name ? class_name : "");
+  const std::wstring wide_text = win32::to_wide(text ? text : "");
+  CreateWindowExW(0, wide_class.c_str(), wide_text.c_str(), WS_CHILD | WS_VISIBLE | style,
                   x, y, width, height, parent,
                   reinterpret_cast<HMENU>(static_cast<INT_PTR>(id)),
                   GetModuleHandle(nullptr), nullptr);
@@ -207,8 +231,8 @@ LRESULT CALLBACK character_filter_wnd_proc(HWND hwnd, UINT message, WPARAM wpara
       if (g_controller) {
         const auto state = g_controller->character_filter_state();
         if (state)
-          SendDlgItemMessage(hwnd, kHideInactiveRegions, BM_SETCHECK,
-                             state.state.hide_inactive_regions ? BST_CHECKED : BST_UNCHECKED, 0);
+          SendDlgItemMessageW(hwnd, kHideInactiveRegions, BM_SETCHECK,
+                              state.state.hide_inactive_regions ? BST_CHECKED : BST_UNCHECKED, 0);
         else if (!state.error.empty())
           set_status(hwnd, state.error);
       }
@@ -221,8 +245,8 @@ LRESULT CALLBACK character_filter_wnd_proc(HWND hwnd, UINT message, WPARAM wpara
         std::string error;
         if (g_controller->show_all_character_filter(hide_inactive_regions(hwnd), error))
           refresh_filter_items(hwnd);
-        else if (!error.empty())
-          MessageBox(hwnd, error.c_str(), "ReaADR Character Filter", 0);
+        else
+          show_error(hwnd, error);
         return 0;
       }
       if (command == kToggle || (command == kItems && HIWORD(wparam) == LBN_DBLCLK)) {
@@ -243,24 +267,24 @@ LRESULT CALLBACK character_filter_wnd_proc(HWND hwnd, UINT message, WPARAM wpara
       DestroyWindow(hwnd);
       return 0;
   }
-  return DefWindowProc(hwnd, message, wparam, lparam);
+  return DefWindowProcW(hwnd, message, wparam, lparam);
 }
 
 bool show_win32_character_filter_window()
 {
   HINSTANCE instance = GetModuleHandle(nullptr);
-  WNDCLASSA window_class{};
+  WNDCLASSW window_class{};
   window_class.lpfnWndProc = character_filter_wnd_proc;
   window_class.hInstance = instance;
   window_class.hCursor = LoadCursor(nullptr, IDC_ARROW);
   window_class.hbrBackground = reinterpret_cast<HBRUSH>(COLOR_BTNFACE + 1);
   window_class.lpszClassName = kWindowClass;
-  if (!RegisterClassA(&window_class) && GetLastError() != ERROR_CLASS_ALREADY_EXISTS)
+  if (!RegisterClassW(&window_class) && GetLastError() != ERROR_CLASS_ALREADY_EXISTS)
     return false;
 
   HWND owner = GetForegroundWindow();
-  HWND window = CreateWindowExA(WS_EX_DLGMODALFRAME, kWindowClass,
-    "ReaADR Character Filter", WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU,
+  HWND window = CreateWindowExW(WS_EX_DLGMODALFRAME, kWindowClass,
+    L"ReaADR Character Filter", WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU,
     CW_USEDEFAULT, CW_USEDEFAULT, 548, 500, owner, nullptr, instance, nullptr);
   if (!window) return false;
 
