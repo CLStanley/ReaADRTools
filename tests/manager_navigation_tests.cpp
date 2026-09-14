@@ -1,4 +1,5 @@
 #include "app/manager_window_slot_service.hpp"
+#include "reaadr_ui/cue_manager_lifecycle.hpp"
 #include "reaadr_ui/manager_navigation.hpp"
 
 #include <iostream>
@@ -104,6 +105,30 @@ void test_manager_window_slots()
           state.get("ui.manager_slot.1.launch_tab").empty(),
         "releasing Manager slot should clear all slot state");
 }
+
+void test_native_manager_lifecycle()
+{
+  reaadr::ui::CueManagerLifecycle lifecycle;
+  check(!lifecycle.is_open() && lifecycle.window() == 0,
+        "native Manager lifecycle should start closed");
+  check(!lifecycle.begin_open(0),
+        "native Manager lifecycle must reject a null window handle");
+  check(lifecycle.begin_open(101),
+        "first native Manager window should become the active lifecycle owner");
+  check(lifecycle.is_open() && lifecycle.window() == 101,
+        "active native Manager window handle should be retained");
+  check(!lifecycle.begin_open(202),
+        "second native Manager launch must not replace an existing window");
+  lifecycle.closed(202);
+  check(lifecycle.is_open() && lifecycle.window() == 101,
+        "closing a non-owner handle must not clear the active Manager");
+  lifecycle.closed(101);
+  check(!lifecycle.is_open() && lifecycle.window() == 0,
+        "closing the active Manager must clear lifecycle ownership");
+  check(lifecycle.begin_open(303),
+        "Manager lifecycle should permit reopening after the prior window closes");
+  lifecycle.closed(303);
+}
 } // namespace
 
 int main()
@@ -136,6 +161,7 @@ int main()
         "migrated workflow routes must remain classified as native");
 
   test_manager_window_slots();
+  test_native_manager_lifecycle();
 
   if (failures != 0) {
     std::cerr << failures << " manager navigation test(s) failed.\n";
