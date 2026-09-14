@@ -20,8 +20,16 @@ public:
                                     TransactionApi transaction_api,
                                     CharacterFilterApplicationApi api)
     : sessions_(sessions), filters_(filters), transaction_api_(transaction_api), api_(api) {}
+
+  // Convenience path used by the standalone character filter command. Each
+  // character activates all of that character's lanes.
   CharacterFilterApplicationResult apply(const std::vector<std::string>& characters,
                                          bool hide_regions);
+
+  // Native Manager path. Tokens may be either character keys (all lanes) or
+  // exact character.laneN target keys, matching CharacterFilterState.
+  CharacterFilterApplicationResult apply_tokens(const std::vector<std::string>& tokens,
+                                                bool hide_regions);
 private:
   core::SessionModelRepository& sessions_;
   core::CharacterFilterRepository& filters_;
