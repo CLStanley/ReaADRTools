@@ -25,6 +25,11 @@ inline std::wstring to_wide(const std::string& value)
   return wide;
 }
 
+inline std::wstring utf8_to_wide(const std::string& value)
+{
+  return to_wide(value);
+}
+
 inline std::string to_utf8(const std::wstring& value)
 {
   if (value.empty()) return {};
@@ -52,6 +57,11 @@ inline bool set_dlg_item_text_utf8(HWND hwnd, int id, const std::string& value)
   return SetDlgItemTextW(hwnd, id, wide.c_str()) != FALSE;
 }
 
+inline bool set_control_text_utf8(HWND hwnd, int id, const std::string& value)
+{
+  return set_dlg_item_text_utf8(hwnd, id, value);
+}
+
 inline std::string window_text_utf8(HWND hwnd)
 {
   if (!hwnd) return {};
@@ -61,6 +71,11 @@ inline std::string window_text_utf8(HWND hwnd)
   const int copied = GetWindowTextW(hwnd, wide.data(), length + 1);
   wide.resize(copied > 0 ? static_cast<std::size_t>(copied) : 0);
   return to_utf8(wide);
+}
+
+inline std::string get_window_text_utf8(HWND hwnd)
+{
+  return window_text_utf8(hwnd);
 }
 
 inline std::string dlg_item_text_utf8(HWND hwnd, int id)
