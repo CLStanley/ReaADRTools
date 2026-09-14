@@ -116,6 +116,24 @@ bool CueManagerSessionHost::open_or_activate(
   return true;
 }
 
+bool CueManagerSessionHost::shutdown(std::string* error)
+{
+  if (error) error->clear();
+  if (!session_) return true;
+
+  if (ui::cue_manager_lifecycle().is_open() && !ui::request_close_cue_manager()) {
+    if (error) *error = "The native Cue Manager window could not be closed safely.";
+    return false;
+  }
+  if (ui::cue_manager_lifecycle().is_open()) {
+    if (error) *error = "The native Cue Manager window is still active.";
+    return false;
+  }
+
+  session_.reset();
+  return true;
+}
+
 CueManagerSessionHost& cue_manager_session_host()
 {
   static CueManagerSessionHost host;
