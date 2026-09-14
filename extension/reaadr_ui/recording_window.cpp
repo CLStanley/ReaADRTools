@@ -49,6 +49,20 @@ std::string dialogue_preview(const std::string& dialogue)
   return dialogue.substr(0, 69) + "...";
 }
 
+#ifdef _WIN32
+std::wstring to_wide(const std::string& utf8)
+{
+  if (utf8.empty()) return std::wstring();
+  const int length = MultiByteToWideChar(
+    CP_UTF8, 0, utf8.c_str(), static_cast<int>(utf8.size()), nullptr, 0);
+  if (length <= 0) return std::wstring();
+  std::wstring wide(static_cast<std::size_t>(length), L'\0');
+  MultiByteToWideChar(CP_UTF8, 0, utf8.c_str(), static_cast<int>(utf8.size()),
+                      &wide[0], length);
+  return wide;
+}
+#endif
+
 void update_window(HWND hwnd)
 {
   if (!g_controller) return;
@@ -64,7 +78,11 @@ void update_window(HWND hwnd)
   const std::string track_label = view.track_name.empty() ? view.track_key : view.track_name;
   const std::string track = "Track: " + track_label;
   SetDlgItemText(hwnd, kTrack, track.c_str());
+#ifdef _WIN32
+  SetDlgItemTextW(hwnd, kStatus, to_wide(view.status_text).c_str());
+#else
   SetDlgItemText(hwnd, kStatus, view.status_text.c_str());
+#endif
   SetDlgItemText(hwnd, kLoop, view.loop_enabled ? "Loop: ON" : "Loop: OFF");
   SetDlgItemText(hwnd, kPreroll,
                  view.include_preroll_each_loop ? "Pre-roll Each Loop" : "Default Repeat");
@@ -203,7 +221,7 @@ BEGIN
   LTEXT "", kDialogue, 20, 50, 520, 38
   LTEXT "", kTiming, 20, 96, 520, 20
   LTEXT "", kTrack, 20, 124, 520, 20
-  LTEXT "Ready", kStatus, 20, 158, 520, 24
+  LTEXT "", kStatus, 20, 158, 520, 24
   PUSHBUTTON "Record", kRecord, 20, 220, 105, 32
   PUSHBUTTON "Loop: OFF", kLoop, 137, 220, 105, 32
   PUSHBUTTON "Pre-roll Each Loop", kPreroll, 254, 220, 145, 32
@@ -264,7 +282,14 @@ LRESULT CALLBACK recording_window_proc(HWND hwnd, UINT message, WPARAM wparam, L
       create_child(hwnd, "STATIC", "", SS_LEFT, kDialogue);
       create_child(hwnd, "STATIC", "", SS_LEFT, kTiming);
       create_child(hwnd, "STATIC", "", SS_LEFT, kTrack);
-      create_child(hwnd, "STATIC", "Ready", SS_LEFT, kStatus);
+      {
+        HWND status = CreateWindowExW(
+          0, L"STATIC", L"", WS_CHILD | WS_VISIBLE | SS_LEFT,
+          0, 0, 10, 10, hwnd,
+          reinterpret_cast<HMENU>(static_cast<INT_PTR>(kStatus)),
+          GetModuleHandleW(nullptr), nullptr);
+        set_default_font(status);
+      }
       create_child(hwnd, "BUTTON", "Record", WS_TABSTOP | BS_PUSHBUTTON, kRecord);
       create_child(hwnd, "BUTTON", "Loop: OFF", WS_TABSTOP | BS_PUSHBUTTON, kLoop);
       create_child(hwnd, "BUTTON", "Pre-roll Each Loop", WS_TABSTOP | BS_PUSHBUTTON, kPreroll);

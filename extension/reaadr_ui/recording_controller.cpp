@@ -18,18 +18,19 @@ std::string RecordingController::status_text(
 {
   switch (state.mode) {
     case core::RecordingTransportMode::preroll:
-      return "Pre-roll...";
+      return "\xE2\x96\xB8 Pre-roll\xE2\x80\xA6";
     case core::RecordingTransportMode::recording:
-      return "Recording take " + std::to_string(state.take_count) + "...";
+      return "\xE2\x97\x8F Recording take " + std::to_string(state.take_count) +
+        "\xE2\x80\xA6";
     case core::RecordingTransportMode::loop_wait:
-      return "Looping...";
+      return "\xE2\x86\xBA Looping\xE2\x80\xA6";
     case core::RecordingTransportMode::idle:
       if (state.take_count > 0)
         return std::to_string(state.take_count) +
           (state.take_count == 1 ? " take recorded." : " takes recorded.");
-      return "Ready";
+      return "";
   }
-  return "Ready";
+  return "";
 }
 
 void RecordingController::set_error(const std::string& error)
