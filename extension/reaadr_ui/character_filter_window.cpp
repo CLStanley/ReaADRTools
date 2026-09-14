@@ -186,7 +186,7 @@ BEGIN
   LTEXT "Active Characters and Lanes", -1, 16, 14, 220, 18
   LTEXT "Choose the characters or overlapping lanes that should stay active for this recording pass.",
         -1, 16, 36, 460, 32
-  LISTBOX kItems, 16, 74, 468, 252, LBS_NOTIFY | WS_VSCROLL | WS_BORDER | WS_TABSTOP
+  LISTBOX kItems, 16, 74, 468, 252, WS_VSCROLL | WS_BORDER | WS_TABSTOP
   CHECKBOX "Hide regions for inactive character lanes", kHideInactiveRegions, 16, 338, 280, 20
   PUSHBUTTON "Show All", kShowAll, 304, 334, 82, 24
   PUSHBUTTON "Toggle Selected", kToggle, 392, 334, 92, 24
