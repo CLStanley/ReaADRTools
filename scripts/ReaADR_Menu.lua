@@ -1,5 +1,26 @@
--- Compatibility entry point for older installs.
--- New installations should use ReaADR_Open_Manager.lua.
+-- Compatibility entry point for older installs and shortcuts.
+-- New installations use the native C++ Manager command directly.
+
+local NATIVE_COMMAND = "_ReaADRShowCueManagerNative"
+
+local function run_native()
+  if type(reaper.NamedCommandLookup) ~= "function" or
+     type(reaper.Main_OnCommand) ~= "function" then
+    return false
+  end
+
+  local command_id = reaper.NamedCommandLookup(NATIVE_COMMAND)
+  if not command_id or command_id == 0 then
+    return false
+  end
+
+  reaper.Main_OnCommand(command_id, 0)
+  return true
+end
+
+if run_native() then
+  return
+end
 
 local function script_dir()
   local info = debug.getinfo(1, "S").source
