@@ -6,6 +6,7 @@
 #include "cue_info_controller.hpp"
 #include "cue_manager_ui_contract.hpp"
 #include "reaadr_ui.hpp"
+#include "reaadr_reaper/window_docking.hpp"
 #ifdef _WIN32
 #include "win32_utf8.hpp"
 #endif
@@ -46,6 +47,8 @@ constexpr int kTransportPlayStop = 40044;
 constexpr int kVkR = 0x52;
 constexpr int kMinWindowWidth = 820;
 constexpr int kMinWindowHeight = 560;
+constexpr const char* kDockIdentifier = "reaadr.cue_info";
+constexpr const char* kWindowTitle = "ReaADR Cue Information";
 #ifdef _WIN32
 constexpr int kLabelCue = 48500;
 constexpr int kLabelCharacter = 48501;
@@ -188,6 +191,7 @@ void activate_cue_info_window()
 {
   if (!g_window || !IsWindow(g_window)) return;
   ShowWindow(g_window, SW_SHOW);
+  reaper::activate_docked_window(g_window);
   SetForegroundWindow(g_window);
 }
 
@@ -204,6 +208,14 @@ void restore_window_geometry(HWND hwnd)
   SetWindowPos(hwnd, nullptr, x, y, width, height, SWP_NOZORDER | SWP_NOACTIVATE);
 }
 
+void restore_window_docking(HWND hwnd)
+{
+  if (!g_controller) return;
+  const CueInfoWindowLayout saved = g_controller->load_window_layout();
+  if (saved.dock >= 0)
+    reaper::add_window_to_docker(hwnd, kWindowTitle, kDockIdentifier, saved.dock);
+}
+
 void save_window_geometry(HWND hwnd)
 {
   if (!g_controller) return;
@@ -214,7 +226,7 @@ void save_window_geometry(HWND hwnd)
   layout.y = rect.top;
   layout.width = (std::max)(kMinWindowWidth, static_cast<int>(rect.right - rect.left));
   layout.height = (std::max)(kMinWindowHeight, static_cast<int>(rect.bottom - rect.top));
-  layout.dock = 0;
+  layout.dock = reaper::inspect_window_dock_state(hwnd).dock_index;
   layout.has_position = true;
   g_controller->save_window_layout(layout);
 }
@@ -222,6 +234,8 @@ void save_window_geometry(HWND hwnd)
 void close_window(HWND hwnd)
 {
   save_window_geometry(hwnd);
+  const auto dock = reaper::inspect_window_dock_state(hwnd);
+  if (dock.docked()) reaper::remove_window_from_docker(hwnd);
   KillTimer(hwnd, kTimer);
   if (g_window == hwnd) g_window = nullptr;
 #ifdef _WIN32
@@ -313,6 +327,7 @@ INT_PTR cue_info_proc(HWND hwnd, UINT message, WPARAM wparam, LPARAM)
         return 1;
       }
       restore_window_geometry(hwnd);
+      restore_window_docking(hwnd);
       populate_editors(hwnd);
       SetTimer(hwnd, kTimer, 100, nullptr);
       return 1;
@@ -585,9 +600,12 @@ bool show_cue_info_window(CueInfoController& controller)
 
   if (g_controller->refresh()) populate_editors(hwnd);
   else set_text(hwnd, kError, g_controller->error());
-  ShowWindow(hwnd, SW_SHOW);
-  UpdateWindow(hwnd);
   restore_window_geometry(hwnd);
+  restore_window_docking(hwnd);
+  ShowWindow(hwnd, SW_SHOW);
+  if (reaper::inspect_window_dock_state(hwnd).docked())
+    reaper::activate_docked_window(hwnd);
+  UpdateWindow(hwnd);
   SetTimer(hwnd, kTimer, 100, nullptr);
 
   MSG message{};
