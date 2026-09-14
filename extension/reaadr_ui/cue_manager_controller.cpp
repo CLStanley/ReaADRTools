@@ -120,6 +120,24 @@ bool CueManagerController::set_filters(const std::string& query,
   return reload();
 }
 
+core::WindowLayout CueManagerController::load_window_layout() const
+{
+  core::WindowLayoutRepository layouts(
+    const_cast<core::ProjectStateStore&>(project_state_), "cue_manager", 1180, 820);
+  const auto loaded = layouts.load();
+  core::WindowLayout layout = loaded ? loaded.layout
+                                     : core::WindowLayout{1180, 820, -1, 0, 0, false};
+  if (loaded && !loaded.remembered && view_.preferences.cue_manager_auto_dock)
+    layout.dock = 0;
+  return layout;
+}
+
+bool CueManagerController::save_window_layout(const core::WindowLayout& layout)
+{
+  core::WindowLayoutRepository layouts(project_state_, "cue_manager", 1180, 820);
+  return layouts.save(layout);
+}
+
 core::CharacterFilterCatalogResult CueManagerController::character_filter_catalog() const
 {
   return reaper::load_native_character_filter_catalog();
