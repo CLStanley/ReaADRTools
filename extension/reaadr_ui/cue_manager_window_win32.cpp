@@ -9,9 +9,11 @@
 #include "cue_manager_window.hpp"
 #include "cue_manager_ui_contract.hpp"
 #include "reaadr_core/domain_utils.hpp"
+#include "reaadr_reaper/window_docking.hpp"
 
 #include <reaper_plugin.h>
 
+#include <algorithm>
 #include <cstring>
 #include <map>
 #include <set>
@@ -21,6 +23,10 @@ namespace reaadr::ui {
 namespace {
 
 constexpr const char* kWindowClass = "ReaADRCueManagerWindow";
+constexpr const char* kDockIdentifier = "reaadr.cue_manager";
+constexpr const char* kWindowTitle = "ReaADR Tools - Cue Manager";
+constexpr int kMinWindowWidth = 1094;
+constexpr int kMinWindowHeight = 750;
 constexpr int kRows = 48300;
 constexpr int kSearch = 48301;
 constexpr int kCharacter = 48302;
@@ -87,6 +93,59 @@ std::string display_timecode(const std::string& value)
 {
   const auto parsed = core::parse_timecode(value, g_frame_rate);
   return parsed ? core::format_timecode(*parsed.seconds, g_frame_rate) : value;
+}
+
+void restore_window_layout(HWND hwnd)
+{
+  if (!g_controller) return;
+  const auto layout = g_controller->load_window_layout();
+  const int width = (std::max)(kMinWindowWidth, layout.width);
+  const int height = (std::max)(kMinWindowHeight, layout.height);
+  UINT flags = SWP_NOZORDER | SWP_NOACTIVATE;
+  int x = 0;
+  int y = 0;
+  if (layout.has_position) {
+    x = layout.x;
+    y = layout.y;
+  } else {
+    RECT current{};
+    if (GetWindowRect(hwnd, &current)) {
+      x = static_cast<int>(current.left);
+      y = static_cast<int>(current.top);
+    } else {
+      flags |= SWP_NOMOVE;
+    }
+  }
+  SetWindowPos(hwnd, nullptr, x, y, width, height, flags);
+
+  if (layout.dock >= 0)
+    reaper::add_window_to_docker(hwnd, kWindowTitle, kDockIdentifier, layout.dock);
+}
+
+void save_window_layout(HWND hwnd)
+{
+  if (!g_controller || !hwnd) return;
+  core::WindowLayout layout = g_controller->load_window_layout();
+  const auto dock = reaper::inspect_window_dock_state(hwnd);
+  layout.dock = dock.dock_index;
+
+  RECT rect{};
+  if (GetWindowRect(hwnd, &rect)) {
+    layout.x = static_cast<int>(rect.left);
+    layout.y = static_cast<int>(rect.top);
+    layout.width = (std::max)(kMinWindowWidth, static_cast<int>(rect.right - rect.left));
+    layout.height = (std::max)(kMinWindowHeight, static_cast<int>(rect.bottom - rect.top));
+    layout.has_position = true;
+  }
+  g_controller->save_window_layout(layout);
+}
+
+void close_manager_window(HWND hwnd)
+{
+  save_window_layout(hwnd);
+  const auto dock = reaper::inspect_window_dock_state(hwnd);
+  if (dock.docked()) reaper::remove_window_from_docker(hwnd);
+  DestroyWindow(hwnd);
 }
 
 void populate_editor(HWND hwnd)
@@ -477,13 +536,13 @@ LRESULT CALLBACK cue_manager_wnd_proc(HWND hwnd, UINT message, WPARAM wparam, LP
         return 0;
       }
       if (command == kClose || command == IDCANCEL) {
-        DestroyWindow(hwnd);
+        close_manager_window(hwnd);
         return 0;
       }
       break;
     }
     case WM_CLOSE:
-      DestroyWindow(hwnd);
+      close_manager_window(hwnd);
       return 0;
   }
   return DefWindowProcA(hwnd, message, wparam, lparam);
@@ -510,15 +569,19 @@ bool show_cue_manager(CueManagerController& controller, double frame_rate)
   g_frame_rate = frame_rate;
   HWND owner = GetForegroundWindow();
   HWND window = CreateWindowExA(WS_EX_DLGMODALFRAME, kWindowClass,
-    "ReaADR Tools - Cue Manager", WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX,
-    CW_USEDEFAULT, CW_USEDEFAULT, 1094, 750, owner, nullptr, instance, nullptr);
+    kWindowTitle, WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX | WS_THICKFRAME,
+    CW_USEDEFAULT, CW_USEDEFAULT, kMinWindowWidth, kMinWindowHeight,
+    owner, nullptr, instance, nullptr);
   if (!window) {
     g_controller = nullptr;
     return false;
   }
 
-  if (owner) EnableWindow(owner, FALSE);
+  restore_window_layout(window);
+  const bool docked = reaper::inspect_window_dock_state(window).docked();
+  if (owner && !docked) EnableWindow(owner, FALSE);
   ShowWindow(window, SW_SHOW);
+  if (docked) reaper::activate_docked_window(window);
   UpdateWindow(window);
   MSG message{};
   while (IsWindow(window) && GetMessage(&message, nullptr, 0, 0) > 0) {
@@ -527,7 +590,7 @@ bool show_cue_manager(CueManagerController& controller, double frame_rate)
       DispatchMessage(&message);
     }
   }
-  if (owner) {
+  if (owner && !docked) {
     EnableWindow(owner, TRUE);
     SetForegroundWindow(owner);
   }
