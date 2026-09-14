@@ -5,7 +5,12 @@
 
 #include <reaper_plugin.h>
 
-#ifndef _WIN32
+#ifdef _WIN32
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#include <windows.h>
+#else
 #include <swell/swell-dlggen.h>
 #endif
 
@@ -15,7 +20,6 @@
 namespace reaadr::ui {
 namespace {
 
-#ifndef _WIN32
 constexpr int kDialog = 48200;
 constexpr int kItems = 48201;
 constexpr int kShowAll = 48202;
@@ -28,7 +32,7 @@ std::vector<core::CueManagerCharacterFilterItem> g_items;
 
 bool hide_inactive_regions(HWND hwnd)
 {
-  return IsDlgButtonChecked(hwnd, kHideInactiveRegions) == BST_CHECKED;
+  return SendDlgItemMessage(hwnd, kHideInactiveRegions, BM_GETCHECK, 0, 0) == BST_CHECKED;
 }
 
 void set_status(HWND hwnd, const std::string& value)
@@ -88,6 +92,29 @@ void apply_selected_toggle(HWND hwnd)
   refresh_filter_items(hwnd);
 }
 
+void apply_region_visibility_toggle(HWND hwnd)
+{
+  if (!g_controller) return;
+  const auto catalog = g_controller->character_filter_catalog();
+  if (!catalog) {
+    if (!catalog.error.empty())
+      MessageBox(hwnd, catalog.error.c_str(), "ReaADR Character Filter", 0);
+    return;
+  }
+  std::vector<std::string> tokens;
+  if (!catalog.show_all) {
+    for (const auto& group : catalog.groups)
+      for (const auto& target : group.targets)
+        if (target.active) tokens.push_back(target.key);
+  }
+  std::string error;
+  if (!g_controller->apply_character_filter(tokens, hide_inactive_regions(hwnd), error) &&
+      !error.empty())
+    MessageBox(hwnd, error.c_str(), "ReaADR Character Filter", 0);
+  refresh_filter_items(hwnd);
+}
+
+#ifndef _WIN32
 INT_PTR character_filter_proc(HWND hwnd, UINT message, WPARAM wparam, LPARAM)
 {
   if (message == WM_INITDIALOG) {
@@ -121,23 +148,7 @@ INT_PTR character_filter_proc(HWND hwnd, UINT message, WPARAM wparam, LPARAM)
     return 1;
   }
   if (message == WM_COMMAND && LOWORD(wparam) == kHideInactiveRegions) {
-    if (!g_controller) return 1;
-    const auto catalog = g_controller->character_filter_catalog();
-    if (!catalog) {
-      if (!catalog.error.empty()) MessageBox(hwnd, catalog.error.c_str(), "ReaADR Character Filter", 0);
-      return 1;
-    }
-    std::vector<std::string> tokens;
-    if (!catalog.show_all) {
-      for (const auto& group : catalog.groups)
-        for (const auto& target : group.targets)
-          if (target.active) tokens.push_back(target.key);
-    }
-    std::string error;
-    if (!g_controller->apply_character_filter(tokens, hide_inactive_regions(hwnd), error) &&
-        !error.empty())
-      MessageBox(hwnd, error.c_str(), "ReaADR Character Filter", 0);
-    refresh_filter_items(hwnd);
+    apply_region_visibility_toggle(hwnd);
     return 1;
   }
   if (message == WM_COMMAND && (LOWORD(wparam) == IDOK || LOWORD(wparam) == IDCANCEL)) {
@@ -161,24 +172,132 @@ BEGIN
   DEFPUSHBUTTON "Close", IDCANCEL, 404, 390, 80, 24
 END
 SWELL_DEFINE_DIALOG_RESOURCE_END2(kDialog)
+#else
+
+constexpr const char* kWindowClass = "ReaADRCharacterFilterWindow";
+
+void create_child(HWND parent, const char* class_name, const char* text,
+                  DWORD style, int x, int y, int width, int height, int id)
+{
+  CreateWindowExA(0, class_name, text, WS_CHILD | WS_VISIBLE | style,
+                  x, y, width, height, parent,
+                  reinterpret_cast<HMENU>(static_cast<INT_PTR>(id)),
+                  GetModuleHandle(nullptr), nullptr);
+}
+
+LRESULT CALLBACK character_filter_wnd_proc(HWND hwnd, UINT message, WPARAM wparam, LPARAM lparam)
+{
+  switch (message) {
+    case WM_CREATE: {
+      create_child(hwnd, "STATIC", "Active Characters and Lanes", 0, 16, 14, 280, 20, -1);
+      create_child(hwnd, "STATIC",
+        "Choose the characters or overlapping lanes that should stay active for this recording pass.",
+        0, 16, 38, 490, 34, -1);
+      create_child(hwnd, "LISTBOX", "", LBS_NOTIFY | WS_VSCROLL | WS_BORDER | WS_TABSTOP,
+                   16, 78, 492, 270, kItems);
+      create_child(hwnd, "BUTTON", "Hide regions for inactive character lanes",
+                   BS_AUTOCHECKBOX | WS_TABSTOP, 16, 360, 292, 24, kHideInactiveRegions);
+      create_child(hwnd, "BUTTON", "Show All", BS_PUSHBUTTON | WS_TABSTOP,
+                   314, 358, 88, 28, kShowAll);
+      create_child(hwnd, "BUTTON", "Toggle Selected", BS_PUSHBUTTON | WS_TABSTOP,
+                   408, 358, 100, 28, kToggle);
+      create_child(hwnd, "STATIC", "", 0, 16, 394, 492, 20, kStatus);
+      create_child(hwnd, "BUTTON", "Close", BS_DEFPUSHBUTTON | WS_TABSTOP,
+                   428, 420, 80, 28, IDCANCEL);
+      if (g_controller) {
+        const auto state = g_controller->character_filter_state();
+        if (state)
+          SendDlgItemMessage(hwnd, kHideInactiveRegions, BM_SETCHECK,
+                             state.state.hide_inactive_regions ? BST_CHECKED : BST_UNCHECKED, 0);
+        else if (!state.error.empty())
+          set_status(hwnd, state.error);
+      }
+      refresh_filter_items(hwnd);
+      return 0;
+    }
+    case WM_COMMAND: {
+      const int command = LOWORD(wparam);
+      if (command == kShowAll && g_controller) {
+        std::string error;
+        if (g_controller->show_all_character_filter(hide_inactive_regions(hwnd), error))
+          refresh_filter_items(hwnd);
+        else if (!error.empty())
+          MessageBox(hwnd, error.c_str(), "ReaADR Character Filter", 0);
+        return 0;
+      }
+      if (command == kToggle || (command == kItems && HIWORD(wparam) == LBN_DBLCLK)) {
+        apply_selected_toggle(hwnd);
+        return 0;
+      }
+      if (command == kHideInactiveRegions) {
+        apply_region_visibility_toggle(hwnd);
+        return 0;
+      }
+      if (command == IDCANCEL || command == IDOK) {
+        DestroyWindow(hwnd);
+        return 0;
+      }
+      break;
+    }
+    case WM_CLOSE:
+      DestroyWindow(hwnd);
+      return 0;
+  }
+  return DefWindowProc(hwnd, message, wparam, lparam);
+}
+
+bool show_win32_character_filter_window()
+{
+  HINSTANCE instance = GetModuleHandle(nullptr);
+  WNDCLASSA window_class{};
+  window_class.lpfnWndProc = character_filter_wnd_proc;
+  window_class.hInstance = instance;
+  window_class.hCursor = LoadCursor(nullptr, IDC_ARROW);
+  window_class.hbrBackground = reinterpret_cast<HBRUSH>(COLOR_BTNFACE + 1);
+  window_class.lpszClassName = kWindowClass;
+  if (!RegisterClassA(&window_class) && GetLastError() != ERROR_CLASS_ALREADY_EXISTS)
+    return false;
+
+  HWND owner = GetForegroundWindow();
+  HWND window = CreateWindowExA(WS_EX_DLGMODALFRAME, kWindowClass,
+    "ReaADR Character Filter", WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU,
+    CW_USEDEFAULT, CW_USEDEFAULT, 548, 500, owner, nullptr, instance, nullptr);
+  if (!window) return false;
+
+  if (owner) EnableWindow(owner, FALSE);
+  ShowWindow(window, SW_SHOW);
+  UpdateWindow(window);
+  MSG message{};
+  while (IsWindow(window) && GetMessage(&message, nullptr, 0, 0) > 0) {
+    if (!IsDialogMessage(window, &message)) {
+      TranslateMessage(&message);
+      DispatchMessage(&message);
+    }
+  }
+  if (owner) {
+    EnableWindow(owner, TRUE);
+    SetForegroundWindow(owner);
+  }
+  return true;
+}
 #endif
 
 } // namespace
 
 bool show_character_filter_window(CueManagerController& controller)
 {
-#ifndef _WIN32
   g_controller = &controller;
   g_items.clear();
+#ifndef _WIN32
   const int result = DialogBoxParam(nullptr, MAKEINTRESOURCE(kDialog), nullptr,
                                     character_filter_proc, 0);
+  const bool shown = result >= 0;
+#else
+  const bool shown = show_win32_character_filter_window();
+#endif
   g_items.clear();
   g_controller = nullptr;
-  return result >= 0;
-#else
-  (void)controller;
-  return false;
-#endif
+  return shown;
 }
 
 } // namespace reaadr::ui
