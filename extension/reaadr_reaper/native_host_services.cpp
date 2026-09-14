@@ -245,6 +245,16 @@ CueTakeCountApi native_cue_take_count_api()
   };
 }
 
+CueNavigationApi native_cue_navigation_api()
+{
+  return {
+    native_play_state,
+    native_play_position,
+    native_cursor_position,
+    native_set_edit_cursor_position,
+  };
+}
+
 OverlayRefreshApi native_overlay_refresh_api()
 {
   return {
@@ -396,6 +406,12 @@ double native_cursor_position()
 {
   const double position = GetCursorPosition ? GetCursorPosition() : 0.0;
   return std::isfinite(position) ? position : 0.0;
+}
+
+void native_set_edit_cursor_position(double position, bool move_view, bool seek_play)
+{
+  if (!SetEditCurPos || !std::isfinite(position)) return;
+  SetEditCurPos(position, move_view, seek_play);
 }
 
 double native_current_project_frame_rate()
