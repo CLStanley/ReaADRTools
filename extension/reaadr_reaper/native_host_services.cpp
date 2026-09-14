@@ -13,6 +13,13 @@
 #define REAPERAPI_WANT_DeleteProjectMarker
 #define REAPERAPI_WANT_DeleteTrackMediaItem
 #define REAPERAPI_WANT_DestroyAudioAccessor
+#define REAPERAPI_WANT_DockIsChildOfDock
+#define REAPERAPI_WANT_DockWindowActivate
+#define REAPERAPI_WANT_DockWindowAdd
+#define REAPERAPI_WANT_DockWindowAddEx
+#define REAPERAPI_WANT_DockWindowRefreshForHWND
+#define REAPERAPI_WANT_DockWindowRemove
+#define REAPERAPI_WANT_Dock_UpdateDockID
 #define REAPERAPI_WANT_EnumProjectMarkers3
 #define REAPERAPI_WANT_GetActiveTake
 #define REAPERAPI_WANT_GetAudioAccessorEndTime
@@ -66,6 +73,7 @@
 #define REAPERAPI_WANT_ValidatePtr2
 
 #include "native_host_services.hpp"
+#include "window_docking.hpp"
 
 #include <array>
 #include <cmath>
@@ -253,6 +261,50 @@ RecordingTransportApi native_recording_transport_api()
     set_edit_cursor_position,
     run_main_command,
   };
+}
+
+bool add_window_to_docker(HWND hwnd, const std::string& title,
+                          const std::string& identifier,
+                          int preferred_dock)
+{
+  if (!hwnd) return false;
+  if (preferred_dock >= 0 && Dock_UpdateDockID)
+    Dock_UpdateDockID(identifier.c_str(), preferred_dock);
+
+  if (DockWindowAddEx) {
+    DockWindowAddEx(hwnd, title.c_str(), identifier.c_str(), true);
+  } else if (DockWindowAdd) {
+    DockWindowAdd(hwnd, title.c_str(), preferred_dock >= 0 ? preferred_dock : 0, true);
+  } else {
+    return false;
+  }
+
+  if (DockWindowRefreshForHWND) DockWindowRefreshForHWND(hwnd);
+  if (DockWindowActivate) DockWindowActivate(hwnd);
+  return true;
+}
+
+bool remove_window_from_docker(HWND hwnd)
+{
+  if (!hwnd || !DockWindowRemove) return false;
+  DockWindowRemove(hwnd);
+  if (DockWindowRefreshForHWND) DockWindowRefreshForHWND(hwnd);
+  return true;
+}
+
+void activate_docked_window(HWND hwnd)
+{
+  if (hwnd && DockWindowActivate) DockWindowActivate(hwnd);
+}
+
+WindowDockState inspect_window_dock_state(HWND hwnd)
+{
+  WindowDockState state;
+  if (!hwnd || !DockIsChildOfDock) return state;
+  bool floating = false;
+  state.dock_index = DockIsChildOfDock(hwnd, &floating);
+  state.floating_docker = floating;
+  return state;
 }
 
 int native_play_state()
