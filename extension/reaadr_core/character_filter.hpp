@@ -59,6 +59,18 @@ CharacterFilterCatalogResult build_character_filter_catalog(
   const CharacterFilterState& state,
   double preroll_seconds = 3.0);
 
+// UI interaction helpers operate on the expanded catalog so the special empty
+// selection ("show all") can be materialized into exact lane tokens before an
+// individual character or lane is disabled. Returned tokens are deterministic.
+std::vector<std::string> active_character_filter_tokens(
+  const CharacterFilterCatalogResult& catalog);
+std::vector<std::string> toggle_character_filter_group(
+  const CharacterFilterCatalogResult& catalog,
+  const std::string& character);
+std::vector<std::string> toggle_character_filter_target(
+  const CharacterFilterCatalogResult& catalog,
+  const std::string& target_key);
+
 // Project-local filter settings are UI state, not an alternative cue model.
 // Saving them is intentionally separate from revision/event publication so an
 // application service can coordinate those writes with visible REAPER changes.
