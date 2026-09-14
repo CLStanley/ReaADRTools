@@ -145,6 +145,40 @@ bool CueManagerController::apply_character_filter(const std::vector<std::string>
   return reload();
 }
 
+bool CueManagerController::show_all_character_filter(bool hide_inactive_regions,
+                                                     std::string& error)
+{
+  return apply_character_filter({}, hide_inactive_regions, error);
+}
+
+bool CueManagerController::toggle_character_filter_group(const std::string& character,
+                                                         bool hide_inactive_regions,
+                                                         std::string& error)
+{
+  const auto catalog = character_filter_catalog();
+  if (!catalog) {
+    error = catalog.error;
+    view_.error = error;
+    return false;
+  }
+  return apply_character_filter(
+    core::toggle_character_filter_group(catalog, character), hide_inactive_regions, error);
+}
+
+bool CueManagerController::toggle_character_filter_target(const std::string& target_key,
+                                                          bool hide_inactive_regions,
+                                                          std::string& error)
+{
+  const auto catalog = character_filter_catalog();
+  if (!catalog) {
+    error = catalog.error;
+    view_.error = error;
+    return false;
+  }
+  return apply_character_filter(
+    core::toggle_character_filter_target(catalog, target_key), hide_inactive_regions, error);
+}
+
 bool CueManagerController::sort_by(const std::string& key)
 {
   if (!core::is_cue_manager_sort_key(key)) return false;
