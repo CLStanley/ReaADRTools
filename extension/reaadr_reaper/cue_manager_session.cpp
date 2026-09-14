@@ -1,6 +1,7 @@
 #include "cue_manager_session.hpp"
 
 #include "native_host_services.hpp"
+#include "reaadr_ui/cue_manager_lifecycle.hpp"
 #include "reaadr_ui/cue_manager_window.hpp"
 
 #include <utility>
@@ -86,6 +87,39 @@ bool CueManagerSession::show()
 {
   const double frame_rate = frame_rate_ ? frame_rate_() : 24.0;
   return ui::show_cue_manager(controller_, frame_rate);
+}
+
+bool CueManagerSessionHost::open_or_activate(
+  CueManagerSessionConfig config,
+  std::string& error)
+{
+  error.clear();
+  if (!session_)
+    session_ = std::make_unique<CueManagerSession>(std::move(config));
+
+  if (!session_->reload()) {
+    error = session_->controller().view().error;
+    if (!ui::cue_manager_lifecycle().is_open()) session_.reset();
+    return false;
+  }
+
+  if (!session_->show()) {
+    error = "The native Cue Manager window could not be opened.";
+    if (!ui::cue_manager_lifecycle().is_open()) session_.reset();
+    return false;
+  }
+
+  // The first launch's compatibility message loop exits only after the window
+  // closes. Re-entrant launches return earlier while lifecycle remains open and
+  // therefore retain the same graph for the original window.
+  if (!ui::cue_manager_lifecycle().is_open()) session_.reset();
+  return true;
+}
+
+CueManagerSessionHost& cue_manager_session_host()
+{
+  static CueManagerSessionHost host;
+  return host;
 }
 
 } // namespace reaadr::reaper
