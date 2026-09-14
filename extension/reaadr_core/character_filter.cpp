@@ -57,6 +57,17 @@ bool read_optional(ProjectStateStore& store, const char* key, std::string& value
   return false;
 }
 
+std::vector<std::string> normalized_active_tokens(const CharacterFilterCatalogResult& catalog)
+{
+  std::vector<std::string> tokens;
+  for (const auto& group : catalog.groups)
+    for (const auto& target : group.targets)
+      if (target.active) tokens.push_back(target.key);
+  std::sort(tokens.begin(), tokens.end());
+  tokens.erase(std::unique(tokens.begin(), tokens.end()), tokens.end());
+  return tokens;
+}
+
 } // namespace
 
 std::string character_filter_key(const std::string& character)
@@ -148,6 +159,49 @@ CharacterFilterCatalogResult build_character_filter_catalog(
   }
 
   return result;
+}
+
+std::vector<std::string> active_character_filter_tokens(
+  const CharacterFilterCatalogResult& catalog)
+{
+  if (!catalog) return {};
+  return normalized_active_tokens(catalog);
+}
+
+std::vector<std::string> toggle_character_filter_group(
+  const CharacterFilterCatalogResult& catalog,
+  const std::string& character)
+{
+  if (!catalog) return {};
+  std::vector<std::string> tokens = normalized_active_tokens(catalog);
+  const auto group = std::find_if(catalog.groups.begin(), catalog.groups.end(),
+    [&](const CharacterFilterGroup& value) { return value.character == character; });
+  if (group == catalog.groups.end()) return tokens;
+
+  const bool disable_group = group->all_active;
+  for (const auto& target : group->targets) {
+    const auto found = std::find(tokens.begin(), tokens.end(), target.key);
+    if (disable_group) {
+      if (found != tokens.end()) tokens.erase(found);
+    } else if (found == tokens.end()) {
+      tokens.push_back(target.key);
+    }
+  }
+  std::sort(tokens.begin(), tokens.end());
+  return tokens;
+}
+
+std::vector<std::string> toggle_character_filter_target(
+  const CharacterFilterCatalogResult& catalog,
+  const std::string& target_key)
+{
+  if (!catalog) return {};
+  std::vector<std::string> tokens = normalized_active_tokens(catalog);
+  const auto found = std::find(tokens.begin(), tokens.end(), target_key);
+  if (found == tokens.end()) tokens.push_back(target_key);
+  else tokens.erase(found);
+  std::sort(tokens.begin(), tokens.end());
+  return tokens;
 }
 
 CharacterFilterLoadResult CharacterFilterRepository::load() const
