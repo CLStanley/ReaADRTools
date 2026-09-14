@@ -5,6 +5,9 @@
 
 #include "recording_controller.hpp"
 #include "reaadr_reaper/window_docking.hpp"
+#ifdef _WIN32
+#include "win32_utf8.hpp"
+#endif
 
 #include <algorithm>
 #include <iomanip>
@@ -37,6 +40,7 @@ constexpr const char* kDockIdentifier = "reaadr.record_cue";
 constexpr const char* kWindowTitle = "ReaADR Record Cue";
 
 RecordingController* g_controller = nullptr;
+HWND g_window = nullptr;
 
 std::string number(double value, int precision = 1)
 {
@@ -52,45 +56,50 @@ std::string dialogue_preview(const std::string& dialogue)
   return dialogue.substr(0, 69) + "...";
 }
 
-#ifdef _WIN32
-std::wstring to_wide(const std::string& utf8)
+void set_text(HWND hwnd, int id, const std::string& value)
 {
-  if (utf8.empty()) return std::wstring();
-  const int length = MultiByteToWideChar(
-    CP_UTF8, 0, utf8.c_str(), static_cast<int>(utf8.size()), nullptr, 0);
-  if (length <= 0) return std::wstring();
-  std::wstring wide(static_cast<std::size_t>(length), L'\0');
-  MultiByteToWideChar(CP_UTF8, 0, utf8.c_str(), static_cast<int>(utf8.size()),
-                      &wide[0], length);
-  return wide;
-}
+#ifdef _WIN32
+  win32::set_dlg_item_text_utf8(hwnd, id, value);
+#else
+  SetDlgItemText(hwnd, id, value.c_str());
 #endif
+}
+
+int show_message(HWND hwnd, const std::string& message,
+                 const std::string& title, UINT type)
+{
+#ifdef _WIN32
+  return win32::message_box_utf8(hwnd, message, title, type);
+#else
+  return MessageBox(hwnd, message.c_str(), title.c_str(), type);
+#endif
+}
 
 void update_window(HWND hwnd)
 {
   if (!g_controller) return;
   const auto& view = g_controller->view();
-  const std::string cue = "Cue " + view.cue_key + " - " + view.character;
-  SetDlgItemText(hwnd, kCue, cue.c_str());
-  const std::string dialogue = dialogue_preview(view.dialogue);
-  SetDlgItemText(hwnd, kDialogue, dialogue.c_str());
+  set_text(hwnd, kCue, "Cue " + view.cue_key + " - " + view.character);
+  set_text(hwnd, kDialogue, dialogue_preview(view.dialogue));
   const double duration = view.cue_end - view.cue_start;
-  const std::string timing = view.cue_start_timecode + "   " + number(duration) +
-    "s cue  +  " + number(view.preroll_seconds) + "s preroll";
-  SetDlgItemText(hwnd, kTiming, timing.c_str());
+  set_text(hwnd, kTiming, view.cue_start_timecode + "   " + number(duration) +
+    "s cue  +  " + number(view.preroll_seconds) + "s preroll");
   const std::string track_label = view.track_name.empty() ? view.track_key : view.track_name;
-  const std::string track = "Track: " + track_label;
-  SetDlgItemText(hwnd, kTrack, track.c_str());
-#ifdef _WIN32
-  SetDlgItemTextW(hwnd, kStatus, to_wide(view.status_text).c_str());
-#else
-  SetDlgItemText(hwnd, kStatus, view.status_text.c_str());
-#endif
-  SetDlgItemText(hwnd, kLoop, view.loop_enabled ? "Loop: ON" : "Loop: OFF");
-  SetDlgItemText(hwnd, kPreroll,
-                 view.include_preroll_each_loop ? "Pre-roll Each Loop" : "Default Repeat");
+  set_text(hwnd, kTrack, "Track: " + track_label);
+  set_text(hwnd, kStatus, view.status_text);
+  set_text(hwnd, kLoop, view.loop_enabled ? "Loop: ON" : "Loop: OFF");
+  set_text(hwnd, kPreroll,
+           view.include_preroll_each_loop ? "Pre-roll Each Loop" : "Default Repeat");
   EnableWindow(GetDlgItem(hwnd, kRecord),
                view.mode == core::RecordingTransportMode::idle);
+}
+
+void activate_recording_window()
+{
+  if (!g_window || !IsWindow(g_window)) return;
+  ShowWindow(g_window, SW_SHOW);
+  reaper::activate_docked_window(g_window);
+  SetForegroundWindow(g_window);
 }
 
 void restore_window_geometry(HWND hwnd)
@@ -132,7 +141,7 @@ void save_window_geometry(HWND hwnd)
 bool show_error(HWND hwnd)
 {
   if (!g_controller || g_controller->view().error.empty()) return false;
-  MessageBox(hwnd, g_controller->view().error.c_str(), "ReaADR Record Cue", MB_OK);
+  show_message(hwnd, g_controller->view().error, "ReaADR Record Cue", MB_OK | MB_ICONERROR);
   return true;
 }
 
@@ -147,6 +156,7 @@ bool close_recording(HWND hwnd)
   const auto dock = reaper::inspect_window_dock_state(hwnd);
   if (dock.docked()) reaper::remove_window_from_docker(hwnd);
   KillTimer(hwnd, kTimer);
+  if (g_window == hwnd) g_window = nullptr;
 #ifdef _WIN32
   DestroyWindow(hwnd);
 #else
@@ -167,13 +177,13 @@ bool handle_recording_command(HWND hwnd, int command)
     changed = g_controller->toggle_preroll_each_loop();
   } else if (command == kLoop) {
     if (!g_controller->view().loop_enabled) {
-      const int answer = MessageBox(
+      const int answer = show_message(
         hwnd,
         "Loop recording should create new takes or lanes for each pass.\n\n"
         "If REAPER is configured to replace or trim overlapping recordings, prior passes can be overwritten.\n\n"
         "Check Options > New recording that overlaps existing media items before continuing.\n\n"
         "Enable loop recording?",
-        "ReaADR Loop Recording", MB_YESNO);
+        "ReaADR Loop Recording", MB_YESNO | MB_ICONWARNING);
       if (answer != IDYES) return true;
     }
     changed = g_controller->toggle_loop();
@@ -198,6 +208,7 @@ INT_PTR recording_proc(HWND hwnd, UINT message, WPARAM wparam, LPARAM)
         EndDialog(hwnd, -1);
         return 1;
       }
+      g_window = hwnd;
       restore_window_geometry(hwnd);
       restore_window_docking(hwnd);
       update_window(hwnd);
@@ -245,7 +256,7 @@ END
 SWELL_DEFINE_DIALOG_RESOURCE_END2(kDialog)
 #else
 
-constexpr const char* kRecordingWindowClass = "ReaADRRecordingWindow";
+constexpr wchar_t kRecordingWindowClass[] = L"ReaADRRecordingWindow";
 
 void set_default_font(HWND control)
 {
@@ -257,10 +268,12 @@ void set_default_font(HWND control)
 HWND create_child(HWND parent, const char* class_name, const char* text,
                   DWORD style, int id)
 {
-  HWND child = CreateWindowExA(
-    0, class_name, text, WS_CHILD | WS_VISIBLE | style,
+  const std::wstring wide_class = win32::to_wide(class_name ? class_name : "");
+  const std::wstring wide_text = win32::to_wide(text ? text : "");
+  HWND child = CreateWindowExW(
+    0, wide_class.c_str(), wide_text.c_str(), WS_CHILD | WS_VISIBLE | style,
     0, 0, 10, 10, parent, reinterpret_cast<HMENU>(static_cast<INT_PTR>(id)),
-    GetModuleHandleA(nullptr), nullptr);
+    GetModuleHandleW(nullptr), nullptr);
   set_default_font(child);
   return child;
 }
@@ -296,14 +309,7 @@ LRESULT CALLBACK recording_window_proc(HWND hwnd, UINT message, WPARAM wparam, L
       create_child(hwnd, "STATIC", "", SS_LEFT, kDialogue);
       create_child(hwnd, "STATIC", "", SS_LEFT, kTiming);
       create_child(hwnd, "STATIC", "", SS_LEFT, kTrack);
-      {
-        HWND status = CreateWindowExW(
-          0, L"STATIC", L"", WS_CHILD | WS_VISIBLE | SS_LEFT,
-          0, 0, 10, 10, hwnd,
-          reinterpret_cast<HMENU>(static_cast<INT_PTR>(kStatus)),
-          GetModuleHandleW(nullptr), nullptr);
-        set_default_font(status);
-      }
+      create_child(hwnd, "STATIC", "", SS_LEFT, kStatus);
       create_child(hwnd, "BUTTON", "Record", WS_TABSTOP | BS_PUSHBUTTON, kRecord);
       create_child(hwnd, "BUTTON", "Loop: OFF", WS_TABSTOP | BS_PUSHBUTTON, kLoop);
       create_child(hwnd, "BUTTON", "Pre-roll Each Loop", WS_TABSTOP | BS_PUSHBUTTON, kPreroll);
@@ -339,19 +345,23 @@ LRESULT CALLBACK recording_window_proc(HWND hwnd, UINT message, WPARAM wparam, L
     case WM_CLOSE:
       close_recording(hwnd);
       return 0;
+
+    case WM_NCDESTROY:
+      if (g_window == hwnd) g_window = nullptr;
+      break;
   }
-  return DefWindowProc(hwnd, message, wparam, lparam);
+  return DefWindowProcW(hwnd, message, wparam, lparam);
 }
 
 bool register_windows_recording_class()
 {
-  WNDCLASSA window_class{};
+  WNDCLASSW window_class{};
   window_class.lpfnWndProc = recording_window_proc;
-  window_class.hInstance = GetModuleHandleA(nullptr);
+  window_class.hInstance = GetModuleHandleW(nullptr);
   window_class.lpszClassName = kRecordingWindowClass;
   window_class.hCursor = LoadCursor(nullptr, IDC_ARROW);
   window_class.hbrBackground = reinterpret_cast<HBRUSH>(COLOR_BTNFACE + 1);
-  if (RegisterClassA(&window_class)) return true;
+  if (RegisterClassW(&window_class)) return true;
   return GetLastError() == ERROR_CLASS_ALREADY_EXISTS;
 }
 #endif
@@ -360,15 +370,24 @@ bool register_windows_recording_class()
 
 bool show_recording_window(RecordingController& controller)
 {
+  if (g_controller) {
+    if (g_window && IsWindow(g_window)) {
+      activate_recording_window();
+      update_window(g_window);
+      return true;
+    }
+    return false;
+  }
+
 #ifndef _WIN32
-  if (g_controller) return false;
   g_controller = &controller;
   const int result = DialogBoxParam(
     nullptr, MAKEINTRESOURCE(kDialog), nullptr, recording_proc, 0);
+  g_window = nullptr;
   g_controller = nullptr;
   return result >= 0;
 #else
-  if (g_controller || !register_windows_recording_class()) return false;
+  if (!register_windows_recording_class()) return false;
   g_controller = &controller;
   if (!g_controller->begin()) {
     show_error(nullptr);
@@ -382,17 +401,18 @@ bool show_recording_window(RecordingController& controller)
   const int x = layout.has_position ? layout.x : CW_USEDEFAULT;
   const int y = layout.has_position ? layout.y : CW_USEDEFAULT;
   HWND owner = GetForegroundWindow();
-  HWND hwnd = CreateWindowExA(
+  HWND hwnd = CreateWindowExW(
     WS_EX_DLGMODALFRAME,
     kRecordingWindowClass,
-    kWindowTitle,
+    L"ReaADR Record Cue",
     WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU | WS_THICKFRAME,
-    x, y, width, height, owner, nullptr, GetModuleHandleA(nullptr), nullptr);
+    x, y, width, height, owner, nullptr, GetModuleHandleW(nullptr), nullptr);
   if (!hwnd) {
     g_controller->shutdown();
     g_controller = nullptr;
     return false;
   }
+  g_window = hwnd;
 
   restore_window_geometry(hwnd);
   restore_window_docking(hwnd);
@@ -415,6 +435,7 @@ bool show_recording_window(RecordingController& controller)
     }
   }
   const bool closed = !IsWindow(hwnd);
+  g_window = nullptr;
   g_controller = nullptr;
   return closed;
 #endif
