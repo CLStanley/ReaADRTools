@@ -101,6 +101,30 @@ int main()
     require(static_cast<bool>(result), "lane-filtered overlap cue should resolve");
     require(result.cue.cue_key == "11", "lane 2 filter should select the second overlapping cue");
     require(result.lane == 2, "resolved overlap cue should retain lane 2");
+
+    const auto catalog = build_character_filter_catalog(overlap, filter, 0.0);
+    require(static_cast<bool>(catalog), "character filter catalog should build for overlapping cues");
+    require(catalog.groups.size() == 1, "overlapping Alice cues should form one character group");
+    require(catalog.groups[0].targets.size() == 2, "overlapping Alice cues should expose two lane targets");
+    require(!catalog.groups[0].all_active && catalog.groups[0].partially_active,
+            "single active lane should produce a partial character selection");
+    require(!catalog.groups[0].targets[0].active && catalog.groups[0].targets[1].active,
+            "lane 2 selection should be reflected in the native catalog");
+  }
+
+  {
+    const auto catalog = build_character_filter_catalog(model(), {}, 0.0);
+    require(static_cast<bool>(catalog), "unfiltered character catalog should build");
+    require(catalog.show_all, "empty filter must represent Show All");
+    require(catalog.groups.size() == 2, "catalog should group unique characters");
+    require(catalog.groups[0].all_active && catalog.groups[1].all_active,
+            "Show All should mark every character group active");
+  }
+
+  {
+    const std::string encoded = encode_character_filter_tokens({"bob.lane1", "alice.lane1", "bob.lane1"});
+    require(encoded == "alice.lane1,bob.lane1",
+            "character filter encoding should be deterministic and deduplicate tokens");
   }
 
   {
