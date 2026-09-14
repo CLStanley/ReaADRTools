@@ -29,6 +29,8 @@ constexpr const char* kWindowTitle = "ReaADR Tools - Cue Manager";
 constexpr int kMinWindowWidth = 1094;
 constexpr int kMinWindowHeight = 750;
 constexpr UINT kRefreshExistingWindow = WM_APP + 73;
+constexpr UINT_PTR kRevisionTimer = 1;
+constexpr UINT kRevisionPollMs = 250;
 constexpr int kRows = 48300;
 constexpr int kSearch = 48301;
 constexpr int kCharacter = 48302;
@@ -151,6 +153,7 @@ void save_window_layout(HWND hwnd)
 
 void close_manager_window(HWND hwnd)
 {
+  KillTimer(hwnd, kRevisionTimer);
   save_window_layout(hwnd);
   const auto dock = reaper::inspect_window_dock_state(hwnd);
   if (dock.docked()) reaper::remove_window_from_docker(hwnd);
@@ -227,6 +230,14 @@ void reload_and_refresh(HWND hwnd)
   if (!g_controller) return;
   if (g_controller->reload()) refresh_rows(hwnd);
   else show_error(hwnd);
+}
+
+void poll_external_changes(HWND hwnd)
+{
+  if (!g_controller) return;
+  bool changed = false;
+  if (g_controller->reload_if_revision_changed(changed) && changed)
+    refresh_rows(hwnd);
 }
 
 void populate_new_cue(HWND hwnd)
@@ -460,6 +471,9 @@ LRESULT CALLBACK cue_manager_wnd_proc(HWND hwnd, UINT message, WPARAM wparam, LP
       }
       return 0;
     }
+    case WM_TIMER:
+      if (wparam == kRevisionTimer) poll_external_changes(hwnd);
+      return 0;
     case kRefreshExistingWindow:
       reload_and_refresh(hwnd);
       return 0;
@@ -566,6 +580,7 @@ LRESULT CALLBACK cue_manager_wnd_proc(HWND hwnd, UINT message, WPARAM wparam, LP
       close_manager_window(hwnd);
       return 0;
     case WM_NCDESTROY:
+      KillTimer(hwnd, kRevisionTimer);
       cue_manager_lifecycle().closed(window_handle(hwnd));
       break;
   }
@@ -624,6 +639,7 @@ bool show_cue_manager(CueManagerController& controller, double frame_rate)
   if (reaper::inspect_window_dock_state(window).docked())
     reaper::activate_docked_window(window);
   UpdateWindow(window);
+  SetTimer(window, kRevisionTimer, kRevisionPollMs, nullptr);
 
   // Keep the original controller/service graph alive while pumping the full
   // REAPER thread message queue. The REAPER owner remains enabled, so the
