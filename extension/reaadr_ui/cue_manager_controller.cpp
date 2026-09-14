@@ -1,5 +1,6 @@
 #include "cue_manager_controller.hpp"
 #include "cue_manager_ui_contract.hpp"
+#include "reaadr_reaper/character_filter_command.hpp"
 #include "reaadr_reaper/cue_info_command.hpp"
 #include "reaadr_reaper/dialogue_detection_command.hpp"
 #include "reaadr_reaper/marker_cue_generation_command.hpp"
@@ -113,6 +114,34 @@ bool CueManagerController::set_filters(const std::string& query,
   options_.query = query;
   options_.character = character;
   options_.status = status;
+  return reload();
+}
+
+core::CharacterFilterCatalogResult CueManagerController::character_filter_catalog() const
+{
+  return reaper::load_native_character_filter_catalog();
+}
+
+bool CueManagerController::apply_character_filter(const std::vector<std::string>& tokens,
+                                                  bool hide_inactive_regions,
+                                                  std::string& error)
+{
+  error.clear();
+  const auto result = reaper::apply_native_character_filter_tokens(tokens, hide_inactive_regions);
+  if (!result) {
+    error = result.error;
+    view_.error = result.error;
+    return false;
+  }
+  if (refresh_overlay_) {
+    std::string overlay_error;
+    if (!refresh_overlay_(&overlay_error)) {
+      error = overlay_error.empty() ? "The character filter was applied, but the overlay could not be refreshed."
+                                    : overlay_error;
+      view_.error = error;
+      return false;
+    }
+  }
   return reload();
 }
 
