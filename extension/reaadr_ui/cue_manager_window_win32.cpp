@@ -13,6 +13,8 @@
 #include <reaper_plugin.h>
 
 #include <cstring>
+#include <map>
+#include <set>
 #include <string>
 
 namespace reaadr::ui {
@@ -46,6 +48,13 @@ constexpr int kApplyEdit = 48323;
 constexpr int kPrevious = 48324;
 constexpr int kNext = 48325;
 constexpr int kClose = 48326;
+constexpr int kModuleCues = 48327;
+constexpr int kModuleImport = 48328;
+constexpr int kModuleSession = 48329;
+constexpr int kModuleReports = 48330;
+constexpr int kModuleOverlay = 48331;
+constexpr int kModulePreferences = 48332;
+constexpr int kModuleHelp = 48333;
 
 CueManagerController* g_controller = nullptr;
 double g_frame_rate = 24.0;
@@ -166,30 +175,113 @@ void populate_new_cue(HWND hwnd)
   SetDlgItemTextA(hwnd, kDetails, "New cue: edit the fields and choose Add Cue.");
 }
 
+void show_session_summary(HWND hwnd)
+{
+  if (!g_controller) return;
+  const auto& view = g_controller->view();
+  std::string summary = "Session: " + view.session_name +
+    "\nRevision: " + view.revision +
+    "\nTotal cues: " + std::to_string(view.total_cues) +
+    "\nVisible cues: " + std::to_string(view.cues.rows.size());
+  std::map<std::string, int> characters;
+  std::map<std::string, int> statuses;
+  for (const auto& row : view.cues.rows) {
+    ++characters[row.character];
+    ++statuses[row.status];
+  }
+  summary += "\n\nCharacters:";
+  for (const auto& entry : characters)
+    summary += "\n  " + entry.first + ": " + std::to_string(entry.second);
+  summary += "\n\nStatuses:";
+  for (const auto& entry : statuses)
+    summary += "\n  " + entry.first + ": " + std::to_string(entry.second);
+  MessageBoxA(hwnd, summary.c_str(), "ReaADR Session Summary", MB_OK | MB_ICONINFORMATION);
+}
+
+void show_session_tools(HWND hwnd)
+{
+  if (!g_controller) return;
+  const int choice = MessageBoxA(hwnd,
+    "Yes: Validate the canonical ADR session.\n"
+    "No: Refresh/rebuild generated session artifacts.\n"
+    "Cancel: Return without changes.",
+    "ReaADR Session Tools", MB_YESNOCANCEL | MB_ICONQUESTION);
+  if (choice == IDYES) g_controller->trigger_action("validate_session");
+  else if (choice == IDNO) g_controller->trigger_action("refresh_session");
+  else return;
+  reload_and_refresh(hwnd);
+}
+
+void show_reports_tools(HWND hwnd)
+{
+  if (!g_controller) return;
+  const int choice = MessageBoxA(hwnd,
+    "Yes: Export Cue Sheet CSV.\n"
+    "No: Export Timing Report.\n"
+    "Cancel: Open the session summary instead.",
+    "ReaADR Reports", MB_YESNOCANCEL | MB_ICONQUESTION);
+  if (choice == IDYES) g_controller->trigger_action("export_cue_sheet");
+  else if (choice == IDNO) g_controller->trigger_action("export_timing_report");
+  else show_session_summary(hwnd);
+}
+
+void show_overlay_tools(HWND hwnd)
+{
+  if (!g_controller) return;
+  const int choice = MessageBoxA(hwnd,
+    "Yes: Refresh the video overlay.\n"
+    "No: Switch to the Actor overlay profile.\n"
+    "Cancel: Return without changes.",
+    "ReaADR Overlay", MB_YESNOCANCEL | MB_ICONQUESTION);
+  if (choice == IDYES) g_controller->trigger_action("refresh_overlay");
+  else if (choice == IDNO) g_controller->trigger_action("overlay_profile:actor");
+  else return;
+  reload_and_refresh(hwnd);
+}
+
+void show_help(HWND hwnd)
+{
+  MessageBoxA(hwnd,
+    "Cues: browse, filter, edit, navigate, record, and inspect canonical cues.\n\n"
+    "Import: choose a cue sheet and run the native transactional importer.\n\n"
+    "Session: validate or refresh generated tracks, regions, cue audio, filters, and overlays.\n\n"
+    "Reports: export cue/timing data or inspect a native session summary.\n\n"
+    "Overlay: refresh native video overlay output and profiles.\n\n"
+    "Preferences: edit native Manager and overlay preferences.",
+    "ReaADR Manager Help", MB_OK | MB_ICONINFORMATION);
+}
+
 void create_window_controls(HWND hwnd)
 {
-  create_child(hwnd, "STATIC", "ReaADR Cue Manager - Native Windows Preview", 0, 16, 12, 360, 20, -1);
+  create_child(hwnd, "STATIC", "ReaADR Cue Manager", 0, 16, 12, 210, 20, -1);
+  create_child(hwnd, "BUTTON", "Cues", BS_PUSHBUTTON | WS_TABSTOP, 240, 8, 72, 26, kModuleCues);
+  create_child(hwnd, "BUTTON", "Import", BS_PUSHBUTTON | WS_TABSTOP, 318, 8, 72, 26, kModuleImport);
+  create_child(hwnd, "BUTTON", "Session", BS_PUSHBUTTON | WS_TABSTOP, 396, 8, 76, 26, kModuleSession);
+  create_child(hwnd, "BUTTON", "Reports", BS_PUSHBUTTON | WS_TABSTOP, 478, 8, 76, 26, kModuleReports);
+  create_child(hwnd, "BUTTON", "Overlay", BS_PUSHBUTTON | WS_TABSTOP, 560, 8, 76, 26, kModuleOverlay);
+  create_child(hwnd, "BUTTON", "Preferences", BS_PUSHBUTTON | WS_TABSTOP, 642, 8, 96, 26, kModulePreferences);
+  create_child(hwnd, "BUTTON", "Help", BS_PUSHBUTTON | WS_TABSTOP, 744, 8, 68, 26, kModuleHelp);
 
-  create_child(hwnd, "STATIC", "Search", 0, 16, 42, 48, 18, -1);
-  create_child(hwnd, "EDIT", "", WS_BORDER | ES_AUTOHSCROLL | WS_TABSTOP, 66, 38, 210, 24, kSearch);
-  create_child(hwnd, "STATIC", "Character", 0, 288, 42, 66, 18, -1);
-  create_child(hwnd, "EDIT", "", WS_BORDER | ES_AUTOHSCROLL | WS_TABSTOP, 356, 38, 160, 24, kCharacter);
-  create_child(hwnd, "STATIC", "Status", 0, 528, 42, 48, 18, -1);
-  create_child(hwnd, "COMBOBOX", "", CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP, 578, 38, 150, 180, kStatus);
-  create_child(hwnd, "BUTTON", "Apply", BS_PUSHBUTTON | WS_TABSTOP, 740, 38, 62, 24, kApplyFilter);
-  create_child(hwnd, "BUTTON", "Reset", BS_PUSHBUTTON | WS_TABSTOP, 808, 38, 62, 24, kResetFilter);
+  create_child(hwnd, "STATIC", "Search", 0, 16, 50, 48, 18, -1);
+  create_child(hwnd, "EDIT", "", WS_BORDER | ES_AUTOHSCROLL | WS_TABSTOP, 66, 46, 210, 24, kSearch);
+  create_child(hwnd, "STATIC", "Character", 0, 288, 50, 66, 18, -1);
+  create_child(hwnd, "EDIT", "", WS_BORDER | ES_AUTOHSCROLL | WS_TABSTOP, 356, 46, 160, 24, kCharacter);
+  create_child(hwnd, "STATIC", "Status", 0, 528, 50, 48, 18, -1);
+  create_child(hwnd, "COMBOBOX", "", CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP, 578, 46, 150, 180, kStatus);
+  create_child(hwnd, "BUTTON", "Apply", BS_PUSHBUTTON | WS_TABSTOP, 740, 46, 62, 24, kApplyFilter);
+  create_child(hwnd, "BUTTON", "Reset", BS_PUSHBUTTON | WS_TABSTOP, 808, 46, 62, 24, kResetFilter);
 
-  create_child(hwnd, "BUTTON", "Record Current Cue", BS_PUSHBUTTON | WS_TABSTOP, 16, 72, 130, 26, kRecord);
-  create_child(hwnd, "BUTTON", "Cue Info", BS_PUSHBUTTON | WS_TABSTOP, 152, 72, 82, 26, kCueInfo);
-  create_child(hwnd, "BUTTON", "Character Filter", BS_PUSHBUTTON | WS_TABSTOP, 240, 72, 110, 26, kCharacterFilter);
-  create_child(hwnd, "BUTTON", "Refresh Session", BS_PUSHBUTTON | WS_TABSTOP, 356, 72, 112, 26, kRefresh);
-  create_child(hwnd, "BUTTON", "Update From Regions", BS_PUSHBUTTON | WS_TABSTOP, 474, 72, 138, 26, kSync);
-  create_child(hwnd, "BUTTON", "New Cue", BS_PUSHBUTTON | WS_TABSTOP, 624, 72, 74, 26, kNewCue);
-  create_child(hwnd, "BUTTON", "Add Cue", BS_PUSHBUTTON | WS_TABSTOP, 704, 72, 74, 26, kAddCue);
-  create_child(hwnd, "BUTTON", "Remove Cue", BS_PUSHBUTTON | WS_TABSTOP, 784, 72, 88, 26, kRemoveCue);
+  create_child(hwnd, "BUTTON", "Record Current Cue", BS_PUSHBUTTON | WS_TABSTOP, 16, 80, 130, 26, kRecord);
+  create_child(hwnd, "BUTTON", "Cue Info", BS_PUSHBUTTON | WS_TABSTOP, 152, 80, 82, 26, kCueInfo);
+  create_child(hwnd, "BUTTON", "Character Filter", BS_PUSHBUTTON | WS_TABSTOP, 240, 80, 110, 26, kCharacterFilter);
+  create_child(hwnd, "BUTTON", "Refresh Session", BS_PUSHBUTTON | WS_TABSTOP, 356, 80, 112, 26, kRefresh);
+  create_child(hwnd, "BUTTON", "Update From Regions", BS_PUSHBUTTON | WS_TABSTOP, 474, 80, 138, 26, kSync);
+  create_child(hwnd, "BUTTON", "New Cue", BS_PUSHBUTTON | WS_TABSTOP, 624, 80, 74, 26, kNewCue);
+  create_child(hwnd, "BUTTON", "Add Cue", BS_PUSHBUTTON | WS_TABSTOP, 704, 80, 74, 26, kAddCue);
+  create_child(hwnd, "BUTTON", "Remove Cue", BS_PUSHBUTTON | WS_TABSTOP, 784, 80, 88, 26, kRemoveCue);
 
   create_child(hwnd, WC_LISTVIEWA, "", LVS_REPORT | LVS_SINGLESEL | LVS_SHOWSELALWAYS |
-               WS_BORDER | WS_TABSTOP, 16, 108, 1040, 460, kRows);
+               WS_BORDER | WS_TABSTOP, 16, 116, 1040, 452, kRows);
   HWND table = control(hwnd, kRows);
   ListView_SetExtendedListViewStyleEx(table, 0, LVS_EX_FULLROWSELECT | LVS_EX_GRIDLINES);
   const auto& columns = core::cue_manager_columns();
@@ -322,6 +414,25 @@ LRESULT CALLBACK cue_manager_wnd_proc(HWND hwnd, UINT message, WPARAM wparam, LP
     }
     case WM_COMMAND: {
       const int command = LOWORD(wparam);
+      if (command == kModuleCues) { reload_and_refresh(hwnd); return 0; }
+      if (command == kModuleImport) {
+        if (g_controller) {
+          g_controller->trigger_import({}, false, "all", {});
+          reload_and_refresh(hwnd);
+        }
+        return 0;
+      }
+      if (command == kModuleSession) { show_session_tools(hwnd); return 0; }
+      if (command == kModuleReports) { show_reports_tools(hwnd); return 0; }
+      if (command == kModuleOverlay) { show_overlay_tools(hwnd); return 0; }
+      if (command == kModulePreferences) {
+        if (g_controller) {
+          g_controller->trigger_action("preferences");
+          reload_and_refresh(hwnd);
+        }
+        return 0;
+      }
+      if (command == kModuleHelp) { show_help(hwnd); return 0; }
       if (command == kApplyFilter) { apply_table_filters(hwnd); return 0; }
       if (command == kResetFilter) {
         SetDlgItemTextA(hwnd, kSearch, "");
