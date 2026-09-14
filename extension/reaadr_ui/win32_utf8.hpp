@@ -6,6 +6,7 @@
 #define NOMINMAX
 #endif
 #include <windows.h>
+#include <commctrl.h>
 
 #include <string>
 #include <vector>
@@ -98,6 +99,44 @@ inline LRESULT listbox_add_utf8(HWND listbox, const std::string& value)
                       reinterpret_cast<LPARAM>(wide.c_str()));
 }
 
+inline int list_view_insert_item_w(HWND list, LVITEMW* item)
+{
+  return static_cast<int>(SendMessageW(
+    list, LVM_INSERTITEMW, 0, reinterpret_cast<LPARAM>(item)));
+}
+
+inline bool list_view_set_item_text_w(HWND list, int item_index, int subitem,
+                                      wchar_t* text)
+{
+  LVITEMW item{};
+  item.iSubItem = subitem;
+  item.pszText = text;
+  return SendMessageW(list, LVM_SETITEMTEXTW, static_cast<WPARAM>(item_index),
+                      reinterpret_cast<LPARAM>(&item)) != FALSE;
+}
+
+inline int list_view_insert_column_w(HWND list, int column_index, LVCOLUMNW* column)
+{
+  return static_cast<int>(SendMessageW(
+    list, LVM_INSERTCOLUMNW, static_cast<WPARAM>(column_index),
+    reinterpret_cast<LPARAM>(column)));
+}
+
 } // namespace reaadr::ui::win32
+
+#ifndef ListView_InsertItemW
+#define ListView_InsertItemW(hwnd, item) \
+  ::reaadr::ui::win32::list_view_insert_item_w((hwnd), (item))
+#endif
+
+#ifndef ListView_SetItemTextW
+#define ListView_SetItemTextW(hwnd, item, subitem, text) \
+  ::reaadr::ui::win32::list_view_set_item_text_w((hwnd), (item), (subitem), (text))
+#endif
+
+#ifndef ListView_InsertColumnW
+#define ListView_InsertColumnW(hwnd, index, column) \
+  ::reaadr::ui::win32::list_view_insert_column_w((hwnd), (index), (column))
+#endif
 
 #endif
