@@ -57,7 +57,7 @@ CORE_HEADERS := reaadr_core/session_model.hpp reaadr_core/model_repository.hpp r
 	reaadr_core/recording_target.hpp reaadr_core/recording_transport.hpp reaadr_core/cue_status.hpp reaadr_core/recording_preferences.hpp \
 	reaadr_core/overlay_settings.hpp reaadr_core/overlay_eel.hpp reaadr_core/overlay_refresh.hpp
 REAPER_SOURCES := reaadr_reaper/project_state.cpp reaadr_reaper/project_transaction.cpp reaadr_reaper/track_region_adapter.cpp \
-	reaadr_reaper/render_artifact_adapter.cpp reaadr_reaper/session_render_service.cpp reaadr_reaper/native_host_services.cpp reaadr_reaper/cue_manager_session.cpp \
+	reaadr_reaper/render_artifact_adapter.cpp reaadr_reaper/session_render_service.cpp reaadr_reaper/native_host_services.cpp reaadr_reaper/native_action_registry.cpp reaadr_reaper/cue_manager_session.cpp \
 	reaadr_reaper/marker_snapshot_adapter.cpp reaadr_reaper/marker_cue_generation_command.cpp reaadr_reaper/dialogue_detection_adapter.cpp \
 	reaadr_reaper/dialogue_detection_command.cpp reaadr_reaper/cue_status_command.cpp reaadr_reaper/cue_take_count_adapter.cpp reaadr_reaper/cue_info_command.cpp reaadr_reaper/cue_info_action.cpp reaadr_reaper/character_filter_adapter.cpp reaadr_reaper/character_filter_command.cpp \
 	reaadr_reaper/cue_navigation_service.cpp reaadr_reaper/record_arm_adapter.cpp reaadr_reaper/recording_setup_adapter.cpp \
@@ -69,7 +69,7 @@ REAPER_SOURCES := reaadr_reaper/project_state.cpp reaadr_reaper/project_transact
 	app/cue_cleanup_application_service.cpp app/character_filter_application_service.cpp app/manager_view_application_service.cpp \
 	app/cue_manager_application_service.cpp app/session_refresh_application_service.cpp app/region_timing_application_service.cpp
 REAPER_HEADERS := reaadr_reaper/project_state.hpp reaadr_reaper/project_transaction.hpp reaadr_reaper/track_region_adapter.hpp \
-	reaadr_reaper/render_artifact_adapter.hpp reaadr_reaper/session_render_service.hpp reaadr_reaper/native_host_services.hpp reaadr_reaper/cue_manager_session.hpp \
+	reaadr_reaper/render_artifact_adapter.hpp reaadr_reaper/session_render_service.hpp reaadr_reaper/native_host_services.hpp reaadr_reaper/native_action_registry.hpp reaadr_reaper/cue_manager_session.hpp \
 	reaadr_reaper/marker_snapshot_adapter.hpp reaadr_reaper/marker_cue_generation_command.hpp reaadr_reaper/dialogue_detection_adapter.hpp \
 	reaadr_reaper/dialogue_detection_command.hpp reaadr_reaper/cue_status_command.hpp reaadr_reaper/cue_take_count_adapter.hpp reaadr_reaper/cue_info_command.hpp reaadr_reaper/cue_info_action.hpp reaadr_reaper/character_filter_adapter.hpp reaadr_reaper/character_filter_command.hpp \
 	reaadr_reaper/cue_navigation_service.hpp reaadr_reaper/record_arm_adapter.hpp reaadr_reaper/recording_setup_adapter.hpp \
