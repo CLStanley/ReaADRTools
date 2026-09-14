@@ -173,8 +173,8 @@ int main()
 {
   const auto& actions = reaadr::core::manager_actions();
 
-  check(actions.size() == 20,
-        "Manager action catalog must expose the complete native cue workflow presentation contract");
+  check(actions.size() == 22,
+        "Manager action catalog must expose the complete native workflow presentation contract");
   check(!actions.empty() && actions.front().key == "import_cue_sheet",
         "Manager action catalog must retain Import Cue Sheet as its first action");
   check(actions.size() > 5 && actions[4].key == "record_cue" && actions[5].key == "cue_info",
@@ -186,16 +186,25 @@ int main()
 
   bool cue_info_in_catalog = false;
   bool record_cue_in_catalog = false;
+  bool timing_report_in_catalog = false;
+  bool session_metadata_in_catalog = false;
   for (const auto& action : actions) {
     if (action.key == "cue_info") cue_info_in_catalog = true;
     if (action.key == "record_cue") record_cue_in_catalog = true;
+    if (action.key == "export_timing_report") timing_report_in_catalog = true;
+    if (action.key == "export_session_metadata") session_metadata_in_catalog = true;
   }
   check(cue_info_in_catalog && record_cue_in_catalog,
         "native Cue Info and Record Cue workflows must be present in the Manager presentation catalog");
+  check(timing_report_in_catalog && session_metadata_in_catalog,
+        "native timing and session-metadata reports must be first-class Manager actions");
   check(reaadr::core::manager_action_is_native("cue_info") &&
           reaadr::core::manager_action_is_native("record_cue") &&
           reaadr::core::manager_action_is_native("generate_cues") &&
-          reaadr::core::manager_action_is_native("detect_dialogue"),
+          reaadr::core::manager_action_is_native("detect_dialogue") &&
+          reaadr::core::manager_action_is_native("export_cue_sheet") &&
+          reaadr::core::manager_action_is_native("export_timing_report") &&
+          reaadr::core::manager_action_is_native("export_session_metadata"),
         "migrated workflow routes must remain classified as native");
 
   // The legacy three-slot protocol remains covered only as a Lua migration
