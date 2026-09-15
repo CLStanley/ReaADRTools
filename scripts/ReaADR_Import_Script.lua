@@ -1,4 +1,18 @@
--- Import an ADR script/cue sheet through the ReaADR application framework.
+-- Import an ADR script/cue sheet through the native extension when available.
+-- Keep the Lua application path only as an upgrade fallback for older builds.
+
+local function run_native_command(name)
+  if type(reaper.NamedCommandLookup) ~= "function" or
+     type(reaper.Main_OnCommand) ~= "function" then
+    return false
+  end
+  local command_id = reaper.NamedCommandLookup(name)
+  if not command_id or command_id == 0 then return false end
+  reaper.Main_OnCommand(command_id, 0)
+  return true
+end
+
+if run_native_command("_ReaADRImportCueSheetNative") then return end
 
 local function script_dir()
   local info = debug.getinfo(1, "S").source
