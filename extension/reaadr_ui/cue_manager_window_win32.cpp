@@ -591,6 +591,7 @@ LRESULT CALLBACK cue_manager_wnd_proc(HWND hwnd, UINT message, WPARAM wparam, LP
     case WM_NCDESTROY:
       KillTimer(hwnd, kRevisionTimer);
       cue_manager_lifecycle().closed(window_handle(hwnd));
+      g_controller = nullptr;
       break;
   }
   return DefWindowProcW(hwnd, message, wparam, lparam);
@@ -650,19 +651,9 @@ bool show_cue_manager(CueManagerController& controller, double frame_rate)
   UpdateWindow(window);
   SetTimer(window, kRevisionTimer, kRevisionPollMs, nullptr);
 
-  // Keep the original controller/service graph alive while pumping the full
-  // REAPER thread message queue. The REAPER owner remains enabled, so the
-  // Manager behaves modelessly from the user's perspective even though this
-  // compatibility bridge still returns only after the Manager closes.
-  MSG message{};
-  while (IsWindow(window) && GetMessageW(&message, nullptr, 0, 0) > 0) {
-    if (!IsDialogMessageW(window, &message)) {
-      TranslateMessage(&message);
-      DispatchMessageW(&message);
-    }
-  }
-  lifecycle.closed(window_handle(window));
-  g_controller = nullptr;
+  // CueManagerSessionHost now owns the controller/service graph for the full
+  // window lifetime. Return immediately and let REAPER's host message loop
+  // dispatch this window normally; WM_NCDESTROY clears the borrowed pointer.
   return true;
 }
 
