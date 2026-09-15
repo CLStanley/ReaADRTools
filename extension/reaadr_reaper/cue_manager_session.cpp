@@ -52,7 +52,8 @@ SessionRenderOptions CueManagerSession::make_render_options(
 }
 
 CueManagerSession::CueManagerSession(CueManagerSessionConfig config)
-  : project_state_(config.project, config.project_state_api),
+  : project_(config.project),
+    project_state_(config.project, config.project_state_api),
     global_state_(config.global_state_api),
     repository_(project_state_),
     view_service_(project_state_, &global_state_),
@@ -94,6 +95,14 @@ bool CueManagerSessionHost::open_or_activate(
   std::string& error)
 {
   error.clear();
+
+  // A persistent Manager graph is project-bound. If REAPER changes projects
+  // while the Manager is alive, close the old window before releasing its
+  // repositories/controller and construct a fresh graph for the new project.
+  if (session_ && session_->project() != config.project) {
+    if (!shutdown(&error)) return false;
+  }
+
   if (!session_)
     session_ = std::make_unique<CueManagerSession>(std::move(config));
 
