@@ -51,6 +51,7 @@ public:
 
   bool reload() { return controller_.reload(); }
   bool show();
+  ReaProject* project() const { return project_; }
   ui::CueManagerController& controller() { return controller_; }
   const ui::CueManagerController& controller() const { return controller_; }
 
@@ -62,6 +63,7 @@ private:
     OverlayApplicationService& overlay,
     const std::string& cue_audio_path);
 
+  ReaProject* project_ = nullptr;
   ProjectStateStore project_state_;
   GlobalStateStore global_state_;
   core::SessionModelRepository repository_;
@@ -82,8 +84,9 @@ private:
 };
 
 // Persistent plug-in-level owner. Re-entrant Open Manager commands reuse the
-// same dependency graph while the native window is alive; once the original
-// modeless compatibility loop exits after close, the graph is released.
+// same dependency graph while the native window is alive. A command issued for
+// another REAPER project closes the old window/session before rebinding so a
+// persistent Manager can never mutate the wrong project's canonical model.
 class CueManagerSessionHost final {
 public:
   bool open_or_activate(CueManagerSessionConfig config, std::string& error);
