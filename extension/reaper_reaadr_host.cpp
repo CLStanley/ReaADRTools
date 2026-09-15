@@ -6,7 +6,7 @@
 #undef REAPER_PLUGIN_ENTRYPOINT
 #define REAPER_PLUGIN_ENTRYPOINT REAPER_PLUGIN_ENTRYPOINT_LEGACY
 #define hook_native_command hook_native_command_legacy
-#include "reaper_reaadr.cpp"
+#include "reaper_reaadr_legacy.cpp"
 #undef hook_native_command
 #undef REAPER_PLUGIN_ENTRYPOINT
 
