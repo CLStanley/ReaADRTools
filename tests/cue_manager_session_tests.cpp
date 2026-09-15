@@ -1,4 +1,4 @@
-#include "reaadr_reaper/cue_manager_session.hpp"
+#include "reaadr_reaper/native_runtime.hpp"
 
 #include <iostream>
 #include <string>
@@ -10,6 +10,8 @@ int main()
   using Host = reaadr::reaper::CueManagerSessionHost;
   using ShutdownSignature = bool (Host::*)(std::string*);
   using ProjectSignature = ReaProject* (Session::*)() const;
+  using RuntimeInitSignature = bool (*)(reaper_plugin_info_t*, std::string*);
+  using RuntimeShutdownSignature = bool (*)(reaper_plugin_info_t*, std::string*);
 
   static_assert(!std::is_copy_constructible_v<Session>,
                 "CueManagerSession must uniquely own its service graph");
@@ -23,6 +25,10 @@ int main()
                 "CueManagerSessionHost must expose an unload-safe shutdown contract");
   static_assert(std::is_same_v<decltype(&Session::project), ProjectSignature>,
                 "CueManagerSession must expose its bound REAPER project for safe rebinding");
+  static_assert(std::is_same_v<decltype(&reaadr::reaper::initialize_native_runtime), RuntimeInitSignature>,
+                "Native runtime initialization must stay a small plug-in host handoff");
+  static_assert(std::is_same_v<decltype(&reaadr::reaper::shutdown_native_runtime), RuntimeShutdownSignature>,
+                "Native runtime shutdown must close Manager ownership before unregistering actions");
 
   Host host;
   if (host.has_session() || host.session() != nullptr) {
