@@ -6,12 +6,14 @@
 
 int main()
 {
+  using Session = reaadr::reaper::CueManagerSession;
   using Host = reaadr::reaper::CueManagerSessionHost;
   using ShutdownSignature = bool (Host::*)(std::string*);
+  using ProjectSignature = ReaProject* (Session::*)() const;
 
-  static_assert(!std::is_copy_constructible_v<reaadr::reaper::CueManagerSession>,
+  static_assert(!std::is_copy_constructible_v<Session>,
                 "CueManagerSession must uniquely own its service graph");
-  static_assert(!std::is_copy_assignable_v<reaadr::reaper::CueManagerSession>,
+  static_assert(!std::is_copy_assignable_v<Session>,
                 "CueManagerSession must not duplicate controller/service references");
   static_assert(std::is_default_constructible_v<reaadr::reaper::CueManagerSessionConfig>,
                 "CueManagerSessionConfig should remain a lightweight host handoff");
@@ -19,6 +21,8 @@ int main()
                 "CueManagerSessionHost should be constructible before REAPER opens the Manager");
   static_assert(std::is_same_v<decltype(&Host::shutdown), ShutdownSignature>,
                 "CueManagerSessionHost must expose an unload-safe shutdown contract");
+  static_assert(std::is_same_v<decltype(&Session::project), ProjectSignature>,
+                "CueManagerSession must expose its bound REAPER project for safe rebinding");
 
   Host host;
   if (host.has_session() || host.session() != nullptr) {
