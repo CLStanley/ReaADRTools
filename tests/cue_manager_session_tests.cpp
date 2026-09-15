@@ -1,8 +1,11 @@
-#include "reaadr_reaper/native_runtime.hpp"
-
 #include <iostream>
 #include <string>
 #include <type_traits>
+
+// WDL/SWELL intentionally provides Win32-compatible min/max macros on
+// non-Windows hosts. Pull the C++ standard-library headers in first so those
+// macros cannot rewrite std::min/std::max inside libstdc++ headers.
+#include "reaadr_reaper/native_runtime.hpp"
 
 int main()
 {
