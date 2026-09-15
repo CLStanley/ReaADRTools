@@ -118,10 +118,11 @@ bool CueManagerSessionHost::open_or_activate(
     return false;
   }
 
-  // The first launch's compatibility message loop exits only after the window
-  // closes. Re-entrant launches return earlier while lifecycle remains open and
-  // therefore retain the same graph for the original window.
-  if (!ui::cue_manager_lifecycle().is_open()) session_.reset();
+  // Session ownership is deliberately independent of show()'s return value.
+  // The presentation may be modal today or modeless tomorrow; either way the
+  // host keeps the controller/service graph alive until an explicit shutdown
+  // or project rebind. This prevents a modeless HWND from retaining a dangling
+  // controller pointer when show() returns immediately.
   return true;
 }
 
