@@ -1,5 +1,5 @@
--- Open the native Cue Manager Reports surface.
--- Keep the Lua application path only as an upgrade fallback for older builds.
+-- ReaADR_Export_Reports.lua
+-- Compatibility launcher for the native Cue Manager Reports surface.
 
 local NAMESPACE = "ReaADRTools"
 
@@ -20,11 +20,9 @@ if type(reaper.SetProjExtState) == "function" then
   reaper.SetProjExtState(0, NAMESPACE, "ui.manager.launch_tab", "")
 end
 
-local function script_dir()
-  local info = debug.getinfo(1, "S").source
-  local path = info:sub(1, 1) == "@" and info:sub(2) or info
-  return path:match("^(.*)[/\\]") or "."
-end
-
-local App = dofile(script_dir() .. "/ReaADR_App.lua")
-App.export_reports()
+reaper.ShowMessageBox(
+  "The native ReaADR Reports surface is unavailable.\n\n" ..
+  "Install or update the ReaADR Tools extension to export reports.",
+  "ReaADR Tools",
+  0
+)
