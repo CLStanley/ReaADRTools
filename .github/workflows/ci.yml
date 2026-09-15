@@ -51,7 +51,11 @@ jobs:
         run: make test CXX="c++ -framework Cocoa"
       - name: Build native macOS extension
         working-directory: extension
-        run: make clean && make LDFLAGS="-shared -framework Cocoa"
+        run: make clean && make TARGET=reaper_reaadr.dylib LDFLAGS="-shared -framework Cocoa"
+      - name: Verify macOS native binary
+        run: |
+          test -f build/extension/reaper_reaadr.dylib
+          file build/extension/reaper_reaadr.dylib
 
   native-windows:
     runs-on: windows-2025
