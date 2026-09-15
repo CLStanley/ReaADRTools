@@ -2,7 +2,11 @@
 // while replacing its entrypoint and command hook with the persistent native
 // runtime. This lets migration complete without duplicating or partially
 // rewriting the 100KB legacy host; cleanup can split that host after parity.
-#include <reaper_plugin.h>
+//
+// Important on SWELL platforms: include the C++ standard-library-heavy legacy
+// implementation before reaper_plugin.h defines the Win32-compatible min/max
+// macros. The legacy source already includes the REAPER SDK in its established
+// order, so a second early SDK include here only pollutes <algorithm>/<limits>.
 #undef REAPER_PLUGIN_ENTRYPOINT
 #define REAPER_PLUGIN_ENTRYPOINT REAPER_PLUGIN_ENTRYPOINT_LEGACY
 #define hook_native_command hook_native_command_legacy
