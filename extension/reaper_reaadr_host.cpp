@@ -2,6 +2,8 @@
 // while replacing its entrypoint and command hook with the persistent native
 // runtime. This lets migration complete without duplicating or partially
 // rewriting the 100KB legacy host; cleanup can split that host after parity.
+#include <reaper_plugin.h>
+#undef REAPER_PLUGIN_ENTRYPOINT
 #define REAPER_PLUGIN_ENTRYPOINT REAPER_PLUGIN_ENTRYPOINT_LEGACY
 #define hook_native_command hook_native_command_legacy
 #include "reaper_reaadr.cpp"
@@ -107,7 +109,7 @@ void deactivate_native_runtime(reaper_plugin_info_t* plugin)
 
 } // namespace
 
-extern "C" REAPER_PLUGIN_DLL_EXPORT int REAPER_PLUGIN_ENTRYPOINT(
+extern "C" REAPER_PLUGIN_DLL_EXPORT int ReaperPluginEntry(
   REAPER_PLUGIN_HINSTANCE instance,
   reaper_plugin_info_t* plugin)
 {
