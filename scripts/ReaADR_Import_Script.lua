@@ -1,5 +1,5 @@
--- Import an ADR script/cue sheet through the native extension when available.
--- Keep the Lua application path only as an upgrade fallback for older builds.
+-- ReaADR_Import_Script.lua
+-- Compatibility launcher for the native ADR script/cue-sheet importer.
 
 local function run_native_command(name)
   if type(reaper.NamedCommandLookup) ~= "function" or
@@ -14,11 +14,9 @@ end
 
 if run_native_command("_ReaADRImportCueSheetNative") then return end
 
-local function script_dir()
-  local info = debug.getinfo(1, "S").source
-  local path = info:sub(1, 1) == "@" and info:sub(2) or info
-  return path:match("^(.*)[/\\]") or "."
-end
-
-local App = dofile(script_dir() .. "/ReaADR_App.lua")
-App.import_script()
+reaper.ShowMessageBox(
+  "The native ReaADR script importer is unavailable.\n\n" ..
+  "Install or update the ReaADR Tools extension to import ADR scripts.",
+  "ReaADR Tools",
+  0
+)
