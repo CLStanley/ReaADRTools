@@ -40,6 +40,19 @@ jobs:
           test ! -e dist/installers/ReaADRTools-windows.zip
           test ! -e dist/installers/ReaADRTools-macos.zip
 
+  native-macos:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - name: Fetch pinned REAPER SDK and WDL
+        run: extension/fetch-dependencies.sh
+      - name: Native tests
+        working-directory: extension
+        run: make test
+      - name: Build native macOS extension
+        working-directory: extension
+        run: make clean && make
+
   native-windows:
     runs-on: windows-2025
     steps:
