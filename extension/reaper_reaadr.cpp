@@ -83,6 +83,46 @@ void run_persistent_native_cue_manager_action()
     ShowMessageBox(error.c_str(), "ReaADR Cue Manager", 0);
 }
 
+bool promote_native_quick_actions(reaper_plugin_info_t* plugin)
+{
+  if (!plugin || !plugin->GetFunc || !AddRemoveReaScript) return false;
+  using NamedCommandLookupFn = int (*)(const char*);
+  auto named_command_lookup =
+    reinterpret_cast<NamedCommandLookupFn>(plugin->GetFunc("NamedCommandLookup"));
+  if (!named_command_lookup) return false;
+
+  constexpr std::array<const char*, 4> command_names = {{
+    "_ReaADRQuickAction1Native",
+    "_ReaADRQuickAction2Native",
+    "_ReaADRQuickAction3Native",
+    "_ReaADRQuickAction4Native",
+  }};
+  std::array<int, 4> command_ids = {};
+  for (std::size_t index = 0; index < command_names.size(); ++index) {
+    command_ids[index] = named_command_lookup(command_names[index]);
+    if (!command_ids[index]) {
+      log_line(std::string("Native Quick Action command unavailable: ") + command_names[index]);
+      return false;
+    }
+  }
+
+  const std::string root = resource_directory();
+  const std::string old_root = plugin_directory();
+  for (std::size_t index = 0; index < command_ids.size(); ++index) {
+    const std::size_t action_index = index + 1;
+    const bool commit = index + 1 == command_ids.size();
+    const std::string old_script_path =
+      join_path(old_root, g_actions[action_index].relative_path + 8);
+    const std::string script_path =
+      join_path(root, g_actions[action_index].relative_path);
+    AddRemoveReaScript(false, kMainSection, old_script_path.c_str(), false);
+    AddRemoveReaScript(false, kMainSection, script_path.c_str(), commit);
+    g_actions[action_index].command_id = command_ids[index];
+  }
+  log_line("Promoted all four Quick Actions to native command registrations.");
+  return true;
+}
+
 bool runtime_host_hook(int command, int flag)
 {
   if (command == g_cue_manager_command_id && command != 0) {
@@ -110,6 +150,13 @@ bool activate_native_runtime(reaper_plugin_info_t* plugin)
   std::string error;
   if (!reaadr::reaper::initialize_native_runtime(plugin, &error)) {
     if (!error.empty()) log_line(error);
+    plugin->Register("-hookcommand", reinterpret_cast<void*>(runtime_host_hook));
+    g_runtime_host_hook_registered = false;
+    return false;
+  }
+  if (!promote_native_quick_actions(plugin)) {
+    log_line("Could not promote Quick Actions to native registrations.");
+    reaadr::reaper::shutdown_native_runtime(plugin, nullptr);
     plugin->Register("-hookcommand", reinterpret_cast<void*>(runtime_host_hook));
     g_runtime_host_hook_registered = false;
     return false;
