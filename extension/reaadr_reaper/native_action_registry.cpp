@@ -1,7 +1,7 @@
 #include "native_action_registry.hpp"
 
 #include "cue_info_action.hpp"
-#include "cue_status_action.hpp"
+#include "cue_status_command.hpp"
 #include "recording_action.hpp"
 
 #include <array>
@@ -13,6 +13,8 @@
 namespace reaadr::reaper {
 namespace {
 constexpr const char* kNamespace = "ReaADRTools";
+constexpr const char* kCueStatusCommandName = "ReaADRSetCueStatusNative";
+constexpr const char* kCueStatusActionLabel = "ReaADR: Set Cue Status (Native)";
 constexpr std::array<const char*, 4> kQuickCommandNames = {{
   "ReaADRQuickAction1Native",
   "ReaADRQuickAction2Native",
@@ -35,6 +37,9 @@ using GetExtStateFn = const char* (*)(const char* section, const char* key);
 using SetProjExtStateFn = int (*)(ReaProject* project, const char* section,
                                   const char* key, const char* value);
 
+int g_cue_status_command_id = 0;
+gaccel_register_t g_cue_status_accel = {};
+bool g_cue_status_hook_registered = false;
 std::array<int, 4> g_quick_command_ids = {};
 std::array<gaccel_register_t, 4> g_quick_accels = {};
 bool g_quick_hook_registered = false;
@@ -42,6 +47,53 @@ NamedCommandLookupFn g_named_command_lookup = nullptr;
 MainOnCommandFn g_main_on_command = nullptr;
 GetExtStateFn g_get_ext_state = nullptr;
 SetProjExtStateFn g_set_proj_ext_state = nullptr;
+
+bool hook_cue_status_command(int command, int)
+{
+  if (command != 0 && command == g_cue_status_command_id) {
+    run_native_set_cue_status_command();
+    return true;
+  }
+  return false;
+}
+
+void unregister_cue_status_action(reaper_plugin_info_t* plugin)
+{
+  if (!plugin) return;
+  if (g_cue_status_hook_registered) {
+    plugin->Register("-hookcommand", reinterpret_cast<void*>(hook_cue_status_command));
+    g_cue_status_hook_registered = false;
+  }
+  if (g_cue_status_command_id != 0) {
+    plugin->Register("-gaccel", reinterpret_cast<void*>(&g_cue_status_accel));
+    g_cue_status_command_id = 0;
+    g_cue_status_accel = {};
+  }
+}
+
+bool register_cue_status_action(reaper_plugin_info_t* plugin)
+{
+  if (!plugin) return false;
+  if (g_cue_status_command_id != 0) return true;
+  g_cue_status_command_id = plugin->Register(
+    "command_id", reinterpret_cast<void*>(const_cast<char*>(kCueStatusCommandName)));
+  if (!g_cue_status_command_id) return false;
+  g_cue_status_accel.accel.cmd = static_cast<WORD>(g_cue_status_command_id);
+  g_cue_status_accel.desc = kCueStatusActionLabel;
+  if (!plugin->Register("gaccel", reinterpret_cast<void*>(&g_cue_status_accel))) {
+    g_cue_status_command_id = 0;
+    g_cue_status_accel = {};
+    return false;
+  }
+  if (!plugin->Register("hookcommand", reinterpret_cast<void*>(hook_cue_status_command))) {
+    plugin->Register("-gaccel", reinterpret_cast<void*>(&g_cue_status_accel));
+    g_cue_status_command_id = 0;
+    g_cue_status_accel = {};
+    return false;
+  }
+  g_cue_status_hook_registered = true;
+  return true;
+}
 
 void clear_quick_runtime_api()
 {
@@ -75,9 +127,7 @@ std::string configured_quick_action(std::size_t index)
   if (!g_get_ext_state) return kQuickDefaults[index];
   const std::string key = "quick_action_" + std::to_string(index + 1);
   const char* configured = g_get_ext_state(kNamespace, key.c_str());
-  return configured && *configured
-    ? std::string(configured)
-    : std::string(kQuickDefaults[index]);
+  return configured && *configured ? std::string(configured) : std::string(kQuickDefaults[index]);
 }
 
 bool dispatch_quick_action(const std::string& action)
@@ -125,9 +175,7 @@ bool register_quick_action_actions(reaper_plugin_info_t* plugin)
 {
   if (!plugin || !plugin->GetFunc) return false;
   if (g_quick_command_ids[0] != 0) return true;
-
-  g_named_command_lookup = reinterpret_cast<NamedCommandLookupFn>(
-    plugin->GetFunc("NamedCommandLookup"));
+  g_named_command_lookup = reinterpret_cast<NamedCommandLookupFn>(plugin->GetFunc("NamedCommandLookup"));
   g_main_on_command = reinterpret_cast<MainOnCommandFn>(plugin->GetFunc("Main_OnCommand"));
   g_get_ext_state = reinterpret_cast<GetExtStateFn>(plugin->GetFunc("GetExtState"));
   g_set_proj_ext_state = reinterpret_cast<SetProjExtStateFn>(plugin->GetFunc("SetProjExtState"));
@@ -135,7 +183,6 @@ bool register_quick_action_actions(reaper_plugin_info_t* plugin)
     clear_quick_runtime_api();
     return false;
   }
-
   for (std::size_t index = 0; index < g_quick_command_ids.size(); ++index) {
     g_quick_command_ids[index] = plugin->Register(
       "command_id", reinterpret_cast<void*>(const_cast<char*>(kQuickCommandNames[index])));
@@ -151,7 +198,6 @@ bool register_quick_action_actions(reaper_plugin_info_t* plugin)
       return false;
     }
   }
-
   if (!plugin->Register("hookcommand", reinterpret_cast<void*>(hook_quick_action_command))) {
     unregister_quick_action_actions(plugin);
     return false;
@@ -186,8 +232,6 @@ bool register_native_workflow_actions(reaper_plugin_info_t* plugin)
 void unregister_native_workflow_actions(reaper_plugin_info_t* plugin)
 {
   if (!plugin) return;
-  // Unregister in reverse order so partial registration and future additions
-  // retain a predictable teardown sequence.
   unregister_quick_action_actions(plugin);
   unregister_cue_status_action(plugin);
   unregister_cue_info_action(plugin);
