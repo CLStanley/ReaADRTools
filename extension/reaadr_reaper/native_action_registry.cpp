@@ -3,11 +3,11 @@
 #include "cue_info_action.hpp"
 #include "recording_action.hpp"
 
-#include <reaper_plugin.h>
-
 #include <array>
 #include <cstddef>
 #include <string>
+
+#include <reaper_plugin.h>
 
 namespace reaadr::reaper {
 namespace {
