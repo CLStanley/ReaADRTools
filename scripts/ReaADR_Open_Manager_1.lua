@@ -1,9 +1,8 @@
--- Compatibility launcher for the first historical Lua Manager slot.
--- Prefer the native Manager while preserving the requested startup tab.
+-- ReaADR_Open_Manager_1.lua
+-- Compatibility launcher for the first historical Manager slot.
 
 local SLOT = 1
 local NAMESPACE = "ReaADRTools"
-local NATIVE_COMMAND = "_ReaADRShowCueManagerNative"
 local NATIVE_LAUNCH_TAB_KEY = "ui.manager.launch_tab"
 
 local function slot_key(suffix)
@@ -23,24 +22,15 @@ local function release_legacy_slot()
 end
 
 local launch_tab = consume_launch_tab()
-if type(reaper.NamedCommandLookup) == "function" and
-   type(reaper.Main_OnCommand) == "function" then
-  local command_id = reaper.NamedCommandLookup(NATIVE_COMMAND)
+if type(reaper.NamedCommandLookup) == "function" and type(reaper.Main_OnCommand) == "function" then
+  local command_id = reaper.NamedCommandLookup("_ReaADRShowCueManagerNative")
   if command_id and command_id ~= 0 then
-    if launch_tab then
-      reaper.SetProjExtState(0, NAMESPACE, NATIVE_LAUNCH_TAB_KEY, launch_tab)
-    end
+    if launch_tab then reaper.SetProjExtState(0, NAMESPACE, NATIVE_LAUNCH_TAB_KEY, launch_tab) end
     release_legacy_slot()
     reaper.Main_OnCommand(command_id, 0)
     return
   end
 end
 
-local function script_dir()
-  local info = debug.getinfo(1, "S").source
-  local path = info:sub(1, 1) == "@" and info:sub(2) or info
-  return path:match("^(.*)[/\\]") or "."
-end
-
-local App = dofile(script_dir() .. "/ReaADR_App.lua")
-App.open_manager(launch_tab, SLOT)
+release_legacy_slot()
+reaper.ShowMessageBox("The native ReaADR Cue Manager is unavailable.\n\nInstall or update the ReaADR Tools extension to open the Cue Manager.", "ReaADR Tools", 0)
