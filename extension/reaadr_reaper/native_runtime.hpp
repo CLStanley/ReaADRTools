@@ -1,12 +1,16 @@
 #pragma once
 
+// Keep the C++ standard library ahead of REAPER/WDL headers. SWELL intentionally
+// provides Win32-compatible min/max macros on non-Windows hosts; including the
+// standard library first prevents those macros from rewriting std::min/std::max
+// in libstdc++ when this header is the first include in a translation unit.
+#include <string>
+#include <utility>
+
 #include "cue_manager_session.hpp"
 #include "native_action_registry.hpp"
 
 #include <reaper_plugin.h>
-
-#include <string>
-#include <utility>
 
 namespace reaadr::reaper {
 
