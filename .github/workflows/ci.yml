@@ -46,6 +46,9 @@ jobs:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
       - name: Fetch pinned REAPER SDK and WDL
         run: extension/fetch-dependencies.sh
+      - name: Native tests
+        working-directory: extension
+        run: make test LDFLAGS="-framework Cocoa"
       - name: Build native macOS extension
         working-directory: extension
         run: make clean && make LDFLAGS="-shared -framework Cocoa"
