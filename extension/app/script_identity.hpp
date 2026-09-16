@@ -14,6 +14,7 @@ namespace reaadr::reaper {
 struct ScriptIdentity {
   std::string script_id;
   std::string script_name;
+  std::string script_revision;
 };
 
 inline std::string script_path_basename(const std::string& path)
@@ -83,13 +84,38 @@ inline std::string native_script_hash(const std::string& value)
   return output.str();
 }
 
-inline ScriptIdentity derive_native_script_identity(const std::string& source_path)
+inline std::string imported_metadata_value(const core::Fields& cue, const char* key)
+{
+  const auto direct = cue.find(key);
+  if (direct != cue.end() && !direct->second.empty()) return direct->second;
+
+  const auto serialized = cue.find("metadata");
+  if (serialized == cue.end() || serialized->second.empty()) return {};
+  const core::Fields metadata = core::parse_metadata(serialized->second);
+  const auto found = metadata.find(key);
+  return found == metadata.end() ? std::string{} : found->second;
+}
+
+inline ScriptIdentity derive_native_script_identity(const std::string& source_path,
+                                                     const std::vector<core::Fields>& cues = {})
 {
   ScriptIdentity identity;
   identity.script_name = script_name_from_path(source_path);
-  std::string stable = normalized_script_identity_text(identity.script_name);
-  if (stable.empty()) stable = normalized_script_identity_text(script_path_basename(source_path));
-  identity.script_id = "script_" + native_script_hash(stable);
+
+  if (!cues.empty()) {
+    const std::string explicit_id = imported_metadata_value(cues.front(), "script_id");
+    const std::string explicit_name = imported_metadata_value(cues.front(), "script_name");
+    const std::string explicit_revision = imported_metadata_value(cues.front(), "revision_number");
+    if (!explicit_id.empty()) identity.script_id = explicit_id;
+    if (!explicit_name.empty()) identity.script_name = explicit_name;
+    identity.script_revision = explicit_revision;
+  }
+
+  if (identity.script_id.empty()) {
+    std::string stable = normalized_script_identity_text(identity.script_name);
+    if (stable.empty()) stable = normalized_script_identity_text(script_path_basename(source_path));
+    identity.script_id = "script_" + native_script_hash(stable);
+  }
   return identity;
 }
 
@@ -98,6 +124,7 @@ inline void annotate_imported_cues(std::vector<core::Fields>& cues, const Script
   for (auto& cue : cues) {
     cue["script_id"] = identity.script_id;
     cue["script_name"] = identity.script_name;
+    if (!identity.script_revision.empty()) cue["script_revision"] = identity.script_revision;
   }
 }
 
