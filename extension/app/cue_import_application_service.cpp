@@ -1,4 +1,5 @@
 #include "cue_import_application_service.hpp"
+#include "script_identity.hpp"
 
 #include <algorithm>
 #include <cctype>
@@ -49,6 +50,10 @@ CueImportApplicationResult CueImportApplicationService::import_content(
     result.error = result.imported.message;
     return result;
   }
+
+  const ScriptIdentity script = derive_native_script_identity(source_path);
+  annotate_imported_cues(result.imported.cues, script);
+
   const std::string normalized_mode = normalize_import_mode(mode.empty() ? "all" : mode);
   if (normalized_mode == "selected") {
     if (!repository_) {
@@ -73,11 +78,19 @@ CueImportApplicationResult CueImportApplicationService::import_content(
       return result;
     }
 
-    // Selected-character import is additive. The Lua reference preserved the
-    // existing session and refused to silently duplicate already-imported
-    // material; replacing the canonical session with only the selected rows
-    // would discard unrelated cues. Preserve the existing model and reject a
-    // cue-key collision so an explicit update import is required instead.
+    // Selected-character import is additive, but a character already imported
+    // from this script must be updated explicitly. This preserves unrelated
+    // scripts while matching the reference workflow's duplicate protection.
+    for (const auto& existing : loaded.model.cues) {
+      if (cue_field(existing, "script_id") != script.script_id) continue;
+      const std::string existing_character = cue_field(existing, "character");
+      if (std::find(characters.begin(), characters.end(), existing_character) != characters.end()) {
+        result.error = "Character " + existing_character +
+          " is already imported from this script. Use Update Existing Import instead.";
+        return result;
+      }
+    }
+
     std::vector<core::Fields> merged = loaded.model.cues;
     std::set<std::string> existing_keys;
     for (const auto& cue : merged) existing_keys.insert(core::render_cue_key(cue));
@@ -107,10 +120,6 @@ CueImportApplicationResult CueImportApplicationService::import_content(
       return result;
     }
 
-    // The reference workflow updates only the characters chosen by the user.
-    // Require an explicit selection and filter the incoming revision before
-    // merging so an empty selection can never become an accidental all-sheet
-    // update and unrelated characters cannot be added or replaced.
     std::vector<core::Fields> incoming_cues;
     for (const auto& cue : result.imported.cues) {
       const auto found = cue.find("character");
@@ -124,15 +133,19 @@ CueImportApplicationResult CueImportApplicationService::import_content(
       return result;
     }
 
-    std::vector<core::Fields> merged = loaded.model.cues;
-    for (const auto& incoming : incoming_cues) {
-      const std::string key = core::render_cue_key(incoming);
-      auto existing = std::find_if(merged.begin(), merged.end(), [&key](const core::Fields& cue) {
-        return core::render_cue_key(cue) == key;
-      });
-      if (existing == merged.end()) merged.push_back(incoming);
-      else *existing = incoming;
+    // Update Existing Import replaces the selected characters for this script,
+    // rather than merging only matching cue keys. That removes stale cues from
+    // an older revision while leaving other scripts and characters untouched.
+    std::vector<core::Fields> merged;
+    merged.reserve(loaded.model.cues.size() + incoming_cues.size());
+    for (const auto& existing : loaded.model.cues) {
+      const bool same_script = cue_field(existing, "script_id") == script.script_id;
+      const std::string existing_character = cue_field(existing, "character");
+      const bool selected_character =
+        std::find(characters.begin(), characters.end(), existing_character) != characters.end();
+      if (!(same_script && selected_character)) merged.push_back(existing);
     }
+    merged.insert(merged.end(), incoming_cues.begin(), incoming_cues.end());
     result.imported.cues = std::move(merged);
   } else if (normalized_mode != "all") {
     result.error = "Unsupported native import mode: " + mode;
