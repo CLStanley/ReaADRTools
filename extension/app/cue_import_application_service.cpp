@@ -97,6 +97,10 @@ CueImportApplicationResult CueImportApplicationService::import_content(
       result.error = "Native update import requires a canonical session repository.";
       return result;
     }
+    if (characters.empty()) {
+      result.error = "Native update import requires at least one selected character.";
+      return result;
+    }
     const auto loaded = repository_->load();
     if (!loaded) {
       result.error = core::session_load_error_message(loaded);
@@ -104,18 +108,15 @@ CueImportApplicationResult CueImportApplicationService::import_content(
     }
 
     // The reference workflow updates only the characters chosen by the user.
-    // Filter the incoming revision before merging so unrelated characters in
-    // the imported sheet cannot be added or replaced as a side effect.
+    // Require an explicit selection and filter the incoming revision before
+    // merging so an empty selection can never become an accidental all-sheet
+    // update and unrelated characters cannot be added or replaced.
     std::vector<core::Fields> incoming_cues;
-    if (characters.empty()) {
-      incoming_cues = result.imported.cues;
-    } else {
-      for (const auto& cue : result.imported.cues) {
-        const auto found = cue.find("character");
-        if (found != cue.end() &&
-            std::find(characters.begin(), characters.end(), found->second) != characters.end()) {
-          incoming_cues.push_back(cue);
-        }
+    for (const auto& cue : result.imported.cues) {
+      const auto found = cue.find("character");
+      if (found != cue.end() &&
+          std::find(characters.begin(), characters.end(), found->second) != characters.end()) {
+        incoming_cues.push_back(cue);
       }
     }
     if (incoming_cues.empty()) {
