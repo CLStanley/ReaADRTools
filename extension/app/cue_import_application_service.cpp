@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cctype>
+#include <set>
 
 namespace {
 
@@ -50,13 +51,47 @@ CueImportApplicationResult CueImportApplicationService::import_content(
   }
   const std::string normalized_mode = normalize_import_mode(mode.empty() ? "all" : mode);
   if (normalized_mode == "selected") {
-    std::vector<core::Fields> filtered;
+    if (!repository_) {
+      result.error = "Native selected import requires a canonical session repository.";
+      return result;
+    }
+
+    std::vector<core::Fields> selected;
     for (const auto& cue : result.imported.cues) {
       const auto found = cue.find("character");
       if (found != cue.end() && std::find(characters.begin(), characters.end(), found->second) != characters.end())
-        filtered.push_back(cue);
+        selected.push_back(cue);
     }
-    result.imported.cues = std::move(filtered);
+    if (selected.empty()) {
+      result.error = "No cues remain after applying the native import selection.";
+      return result;
+    }
+
+    const auto loaded = repository_->load();
+    if (!loaded) {
+      result.error = core::session_load_error_message(loaded);
+      return result;
+    }
+
+    // Selected-character import is additive. The Lua reference preserved the
+    // existing session and refused to silently duplicate already-imported
+    // material; replacing the canonical session with only the selected rows
+    // would discard unrelated cues. Preserve the existing model and reject a
+    // cue-key collision so an explicit update import is required instead.
+    std::vector<core::Fields> merged = loaded.model.cues;
+    std::set<std::string> existing_keys;
+    for (const auto& cue : merged) existing_keys.insert(core::render_cue_key(cue));
+    for (const auto& incoming : selected) {
+      const std::string key = core::render_cue_key(incoming);
+      if (existing_keys.count(key) != 0) {
+        result.error = "Cue " + key +
+          " already exists in the canonical session. Use Update Existing Import to replace imported cue data.";
+        return result;
+      }
+      merged.push_back(incoming);
+      existing_keys.insert(key);
+    }
+    result.imported.cues = std::move(merged);
   } else if (normalized_mode == "update") {
     if (!repository_) {
       result.error = "Native update import requires a canonical session repository.";
