@@ -1,8 +1,6 @@
 #define REAPERAPI_MINIMAL
 #define REAPERAPI_WANT_GetProjExtState
-#define REAPERAPI_WANT_GetToggleCommandState
 #define REAPERAPI_WANT_GetUserInputs
-#define REAPERAPI_WANT_Main_OnCommand
 #define REAPERAPI_WANT_SetProjExtState
 #define REAPERAPI_WANT_ShowMessageBox
 
@@ -30,8 +28,6 @@
 namespace reaadr::reaper {
 namespace {
 
-constexpr int kShowVideoWindowCommand = 50125;
-
 double command_frame_rate()
 {
   return native_project_frame_rate(nullptr);
@@ -50,13 +46,6 @@ bool command_refresh_overlay(const core::OverlayRefreshOptions& options,
     "ReaADR: refresh video overlay");
   if (!refreshed && error) *error = refreshed.error;
   return static_cast<bool>(refreshed);
-}
-
-void ensure_video_window_visible()
-{
-  if (!GetToggleCommandState || !Main_OnCommand) return;
-  if (GetToggleCommandState(kShowVideoWindowCommand) != 1)
-    Main_OnCommand(kShowVideoWindowCommand, 0);
 }
 
 std::vector<std::string> split_csv(const std::string& text)
@@ -225,8 +214,6 @@ DialogueDetectionCommandResult run_dialogue_detection_command(ReaProject* projec
     ShowMessageBox(command.error.c_str(), "ReaADR Detect Dialogue", 0);
     return command;
   }
-
-  ensure_video_window_visible();
 
   std::ostringstream summary;
   summary << "Generated " << generated.cues.size() << " detected dialogue cue(s).\n\n"
