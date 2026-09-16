@@ -46,7 +46,7 @@ Until all seven gates pass, substantive Lua implementations remain the specifica
 | `ReaADR_Cue_Manager.lua` | Native routed/backend | Current modeless `CueManagerController`/`CueManagerSession` architecture owns the Manager. Remaining: Windows responsive child-control layout, report-tool presentation parity, and full cross-platform REAPER smoke testing. |
 | `ReaADR_Cue_Manager_Gfx.lua` | Lua visual/interaction reference | Native Manager replacement is active; retain for final visual/interaction parity audit. |
 | `ReaADR_Cue_Manager_ImGui.lua` | Lua visual/interaction reference | Native Manager replacement is active; retain for final visual/interaction parity audit. |
-| `ReaADR_Detect_Dialogue.lua` | Compatibility launcher / native routed | Delegates to `_ReaADRDetectDialogueNative`; Lua audio-scan fallback has been removed. Audit final result/UI parity (including video-window behavior) and smoke-test in REAPER. |
+| `ReaADR_Detect_Dialogue.lua` | Compatibility launcher / native routed | Delegates to `_ReaADRDetectDialogueNative`; Lua audio-scan fallback has been removed. Native success now preserves the Lua behavior of ensuring REAPER's Video window is visible after generated cues/overlay refresh. Remaining: cross-platform REAPER smoke test. |
 | `ReaADR_Export_Cue_Sheet.lua` | Native backend/routed | Export-format parity audit and smoke test. |
 | `ReaADR_Export_Reports.lua` | Native backend/routed | Report-output parity audit and smoke test; Windows Manager report presentation still needs Metadata export exposure. |
 | `ReaADR_Generate_Cues.lua` | Native routed/backend | Native generation includes markers and regions by default. Remaining: marker/region REAPER parity smoke test. |
