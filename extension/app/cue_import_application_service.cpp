@@ -102,8 +102,29 @@ CueImportApplicationResult CueImportApplicationService::import_content(
       result.error = core::session_load_error_message(loaded);
       return result;
     }
+
+    // The reference workflow updates only the characters chosen by the user.
+    // Filter the incoming revision before merging so unrelated characters in
+    // the imported sheet cannot be added or replaced as a side effect.
+    std::vector<core::Fields> incoming_cues;
+    if (characters.empty()) {
+      incoming_cues = result.imported.cues;
+    } else {
+      for (const auto& cue : result.imported.cues) {
+        const auto found = cue.find("character");
+        if (found != cue.end() &&
+            std::find(characters.begin(), characters.end(), found->second) != characters.end()) {
+          incoming_cues.push_back(cue);
+        }
+      }
+    }
+    if (incoming_cues.empty()) {
+      result.error = "No cues remain after applying the native update selection.";
+      return result;
+    }
+
     std::vector<core::Fields> merged = loaded.model.cues;
-    for (const auto& incoming : result.imported.cues) {
+    for (const auto& incoming : incoming_cues) {
       const std::string key = core::render_cue_key(incoming);
       auto existing = std::find_if(merged.begin(), merged.end(), [&key](const core::Fields& cue) {
         return core::render_cue_key(cue) == key;
