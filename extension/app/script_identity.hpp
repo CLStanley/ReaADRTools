@@ -34,9 +34,6 @@ inline std::string script_name_from_path(const std::string& path)
     return static_cast<char>(std::tolower(ch));
   });
 
-  // Keep revisions of the same source script under one stable identity. This
-  // mirrors the Lua reference's normalized-script-name fallback when studio
-  // metadata does not provide an explicit script ID.
   const std::string markers[] = {"_revision", "-revision", " revision", "_rev", "-rev", " rev"};
   for (const auto& marker : markers) {
     const std::size_t pos = lowered.rfind(marker);
@@ -91,9 +88,35 @@ inline std::string imported_metadata_value(const core::Fields& cue, const char* 
 
   const auto serialized = cue.find("metadata");
   if (serialized == cue.end() || serialized->second.empty()) return {};
-  const core::Fields metadata = core::parse_metadata(serialized->second);
-  const auto found = metadata.find(key);
-  return found == metadata.end() ? std::string{} : found->second;
+
+  // Imported cue metadata uses the canonical session field codec: key=value
+  // pairs separated by tabs with backslash escaping. Decode just enough here
+  // to recover script identity without introducing a second public parser.
+  std::string field;
+  bool escaped = false;
+  const std::string prefix = std::string(key) + "=";
+  for (std::size_t index = 0; index <= serialized->second.size(); ++index) {
+    const char ch = index < serialized->second.size() ? serialized->second[index] : '\t';
+    if (escaped) {
+      if (ch == 't') field.push_back('\t');
+      else if (ch == 'n') field.push_back('\n');
+      else if (ch == 'r') field.push_back('\r');
+      else field.push_back(ch);
+      escaped = false;
+      continue;
+    }
+    if (ch == '\\') {
+      escaped = true;
+      continue;
+    }
+    if (ch == '\t') {
+      if (field.compare(0, prefix.size(), prefix) == 0) return field.substr(prefix.size());
+      field.clear();
+      continue;
+    }
+    field.push_back(ch);
+  }
+  return {};
 }
 
 inline ScriptIdentity derive_native_script_identity(const std::string& source_path,
