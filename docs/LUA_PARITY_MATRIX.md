@@ -60,7 +60,7 @@ Until all seven gates pass, substantive Lua implementations remain the specifica
 | `ReaADR_Open_Manager_1.lua` | Compatibility launcher / native routed | Native Manager startup-tab bridge owns behavior; smoke test remains. |
 | `ReaADR_Open_Manager_2.lua` | Compatibility launcher / native routed | Native Manager startup-tab bridge owns behavior; smoke test remains. |
 | `ReaADR_Open_Manager_3.lua` | Compatibility launcher / native routed | Native Manager startup-tab bridge owns behavior; smoke test remains. |
-| `ReaADR_Overlay.lua` | Native foundation/backend | Audit remaining wrapper behavior and entry routing. |
+| `ReaADR_Overlay.lua` | Compatibility launcher / native routed | Delegates directly to `_ReaADRRefreshVideoOverlayNative`; no Lua overlay workflow remains in this launcher. Native overlay refresh/settings/profile behavior still requires REAPER smoke testing before parity approval. |
 | `ReaADR_Overlay_Settings.lua` | Compatibility launcher / native routed | Native Manager/settings path owns behavior; settings UI smoke test remains. |
 | `ReaADR_Preferences.lua` | Compatibility launcher / native routed | Native preferences command owns behavior; smoke test remains. |
 | `ReaADR_Previous_Cue.lua` | Compatibility launcher / native routed | Native action owns navigation; wrap/filter smoke test remains. |
