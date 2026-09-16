@@ -51,7 +51,7 @@ CueImportApplicationResult CueImportApplicationService::import_content(
     return result;
   }
 
-  const ScriptIdentity script = derive_native_script_identity(source_path);
+  const ScriptIdentity script = derive_native_script_identity(source_path, result.imported.cues);
   annotate_imported_cues(result.imported.cues, script);
 
   const std::string normalized_mode = normalize_import_mode(mode.empty() ? "all" : mode);
