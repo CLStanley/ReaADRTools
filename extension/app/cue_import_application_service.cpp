@@ -55,7 +55,43 @@ CueImportApplicationResult CueImportApplicationService::import_content(
   annotate_imported_cues(result.imported.cues, script);
 
   const std::string normalized_mode = normalize_import_mode(mode.empty() ? "all" : mode);
-  if (normalized_mode == "selected") {
+  if (normalized_mode == "all") {
+    if (!repository_) {
+      result.error = "Native full import requires a canonical session repository.";
+      return result;
+    }
+    const auto loaded = repository_->load();
+    if (!loaded) {
+      result.error = core::session_load_error_message(loaded);
+      return result;
+    }
+
+    // Import Entire Script is additive once a canonical session exists. Never
+    // replace unrelated scripts merely because the caller selected the full
+    // incoming sheet. A second import of the same script is a revision and must
+    // go through Update Existing Import so stale cues can be removed safely.
+    for (const auto& existing : loaded.model.cues) {
+      if (cue_field(existing, "script_id") == script.script_id) {
+        result.error = "This script is already present in the canonical session. Use Update Existing Import for a revision.";
+        return result;
+      }
+    }
+
+    std::vector<core::Fields> merged = loaded.model.cues;
+    std::set<std::string> existing_keys;
+    for (const auto& cue : merged) existing_keys.insert(core::render_cue_key(cue));
+    for (const auto& incoming : result.imported.cues) {
+      const std::string key = core::render_cue_key(incoming);
+      if (existing_keys.count(key) != 0) {
+        result.error = "Cue " + key +
+          " already exists in the canonical session. Resolve the duplicate cue ID before importing this script.";
+        return result;
+      }
+      merged.push_back(incoming);
+      existing_keys.insert(key);
+    }
+    result.imported.cues = std::move(merged);
+  } else if (normalized_mode == "selected") {
     if (!repository_) {
       result.error = "Native selected import requires a canonical session repository.";
       return result;
@@ -78,9 +114,6 @@ CueImportApplicationResult CueImportApplicationService::import_content(
       return result;
     }
 
-    // Selected-character import is additive, but a character already imported
-    // from this script must be updated explicitly. This preserves unrelated
-    // scripts while matching the reference workflow's duplicate protection.
     for (const auto& existing : loaded.model.cues) {
       if (cue_field(existing, "script_id") != script.script_id) continue;
       const std::string existing_character = cue_field(existing, "character");
@@ -133,9 +166,6 @@ CueImportApplicationResult CueImportApplicationService::import_content(
       return result;
     }
 
-    // Update Existing Import replaces the selected characters for this script,
-    // rather than merging only matching cue keys. That removes stale cues from
-    // an older revision while leaving other scripts and characters untouched.
     std::vector<core::Fields> merged;
     merged.reserve(loaded.model.cues.size() + incoming_cues.size());
     for (const auto& existing : loaded.model.cues) {
@@ -147,7 +177,7 @@ CueImportApplicationResult CueImportApplicationService::import_content(
     }
     merged.insert(merged.end(), incoming_cues.begin(), incoming_cues.end());
     result.imported.cues = std::move(merged);
-  } else if (normalized_mode != "all") {
+  } else {
     result.error = "Unsupported native import mode: " + mode;
     return result;
   }
