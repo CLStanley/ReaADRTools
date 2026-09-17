@@ -35,8 +35,8 @@ Until all seven gates pass, substantive Lua implementations remain the specifica
 | Lua reference | Current native state | Remaining parity gate(s) |
 | --- | --- | --- |
 | `ReaADR_App.lua` | Native foundation | Native Manager/application services own substantial session, overlay, recording, import and quick-action behavior. Continue the remaining ownership/reference audit before retiring the application reference. |
-| `ReaADR_Character_Filter.lua` | Native routed/backend | REAPER smoke-test filtering, lane and visibility behavior. |
-| `ReaADR_Clean_Generated_Cues.lua` | Native routed/backend | Smoke-test preservation/ownership edge cases. |
+| `ReaADR_Character_Filter.lua` | Compatibility launcher / native routed | Delegates to `_ReaADRApplyCharacterFilterNative`; native filtering owns the workflow. Remaining: REAPER smoke-test filtering, lane and visibility behavior. |
+| `ReaADR_Clean_Generated_Cues.lua` | Compatibility launcher / native routed | Delegates to `_ReaADRClearCharacterCuesNative`; native cleanup owns the workflow. Remaining: smoke-test preservation/ownership edge cases. |
 | `ReaADR_Core.lua` | Support module | Continue contract-by-contract migration/reference audit; retain while substantive callers/reference behavior remain. |
 | `ReaADR_Core_Characters.lua` | Support module / substantial native parity | Continue parity audit for character token/lane helpers. |
 | `ReaADR_Core_Ownership.lua` | Support module / native foundation | Verify every owned artifact rule before retirement. |
@@ -47,9 +47,9 @@ Until all seven gates pass, substantive Lua implementations remain the specifica
 | `ReaADR_Cue_Manager_Gfx.lua` | Lua visual/interaction reference | Native Manager replacement is active; retain for final visual/interaction parity audit. |
 | `ReaADR_Cue_Manager_ImGui.lua` | Lua visual/interaction reference | Native Manager replacement is active; retain for final visual/interaction parity audit. |
 | `ReaADR_Detect_Dialogue.lua` | Compatibility launcher / native routed | Delegates to `_ReaADRDetectDialogueNative`; Lua audio-scan fallback has been removed. Audit final result/UI parity (including video-window behavior) and smoke-test in REAPER. |
-| `ReaADR_Export_Cue_Sheet.lua` | Native backend/routed | Export-format parity audit and smoke test. |
-| `ReaADR_Export_Reports.lua` | Native backend/routed | Report-output parity audit and smoke test; Windows Manager report presentation still needs Metadata export exposure. |
-| `ReaADR_Generate_Cues.lua` | Native routed/backend | Native generation includes markers and regions by default. Remaining: marker/region REAPER parity smoke test. |
+| `ReaADR_Export_Cue_Sheet.lua` | Compatibility launcher / native routed | Routes directly to the native Manager Reports surface; no Lua export implementation remains. Remaining: export-format parity audit and smoke test. |
+| `ReaADR_Export_Reports.lua` | Compatibility launcher / native routed | Routes directly to the native Manager Reports surface; no Lua report implementation remains. Remaining: report-output parity audit and smoke test. |
+| `ReaADR_Generate_Cues.lua` | Compatibility launcher / native routed | Delegates to `_ReaADRUpdateCuesFromRegionsNative`; no Lua generation workflow remains. Native generation includes markers and regions by default. Remaining: marker/region REAPER parity smoke test. |
 | `ReaADR_Import_Cue_Sheet.lua` | Native routed/backend | Mapping/preview/XLSX/error-path parity audit and REAPER smoke test. |
 | `ReaADR_Import_Script.lua` | Compatibility launcher / native routed | Historical import-script entry delegates to the native cue-sheet import command. Remaining: cue-sheet import parity/smoke gate. |
 | `ReaADR_Jump_To_Cue.lua` | Compatibility launcher / native routed | Native action owns navigation; REAPER smoke test remains. |
