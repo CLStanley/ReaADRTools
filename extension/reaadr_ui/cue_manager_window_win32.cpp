@@ -68,6 +68,14 @@ constexpr int kModuleReports = 48330;
 constexpr int kModuleOverlay = 48331;
 constexpr int kModulePreferences = 48332;
 constexpr int kModuleHelp = 48333;
+constexpr int kLabelCueId = 48334;
+constexpr int kLabelCharacter = 48335;
+constexpr int kLabelType = 48336;
+constexpr int kLabelStatus = 48337;
+constexpr int kLabelDialogue = 48338;
+constexpr int kLabelNotes = 48339;
+constexpr int kLabelStart = 48340;
+constexpr int kLabelEnd = 48341;
 
 CueManagerController* g_controller = nullptr;
 double g_frame_rate = 24.0;
@@ -95,6 +103,69 @@ void create_child(HWND parent, const wchar_t* class_name, const wchar_t* text,
                   x, y, width, height, parent,
                   reinterpret_cast<HMENU>(static_cast<INT_PTR>(id)),
                   GetModuleHandleW(nullptr), nullptr);
+}
+
+void move_control(HWND hwnd, int id, int x, int y, int width, int height)
+{
+  HWND child = control(hwnd, id);
+  if (child) MoveWindow(child, x, y, width, height, TRUE);
+}
+
+void layout_window_controls(HWND hwnd)
+{
+  RECT client{};
+  if (!GetClientRect(hwnd, &client)) return;
+
+  const int width = client.right - client.left;
+  const int height = client.bottom - client.top;
+  constexpr int margin = 16;
+  constexpr int list_top = 116;
+  const int content_width = (std::max)(1, width - margin * 2);
+
+  // Keep the editor/actions pinned to the bottom so docking or resizing gives
+  // the cue table the available vertical space instead of leaving dead space.
+  const int action_y = height - 43;
+  const int dialogue_y = action_y - 30;
+  const int identity_y = dialogue_y - 32;
+  const int details_y = identity_y - 30;
+  const int list_height = (std::max)(80, details_y - 8 - list_top);
+
+  move_control(hwnd, kRows, margin, list_top, content_width, list_height);
+  move_control(hwnd, kDetails, margin, details_y, content_width, 24);
+
+  move_control(hwnd, kLabelCueId, 16, identity_y + 4, 52, 18);
+  move_control(hwnd, kEditCueId, 70, identity_y, 118, 24);
+  move_control(hwnd, kLabelCharacter, 198, identity_y + 4, 68, 18);
+  move_control(hwnd, kEditCharacter, 270, identity_y, 220, 24);
+  move_control(hwnd, kLabelType, 502, identity_y + 4, 38, 18);
+  move_control(hwnd, kEditType, 544, identity_y, 140, 160);
+  move_control(hwnd, kLabelStatus, 696, identity_y + 4, 44, 18);
+  move_control(hwnd, kEditStatus, 744, identity_y,
+               (std::max)(180, width - margin - 744), 180);
+
+  const int split = margin + content_width * 46 / 100;
+  const int dialogue_edit_x = 78;
+  const int notes_label_x = split + 12;
+  const int notes_edit_x = notes_label_x + 48;
+  move_control(hwnd, kLabelDialogue, 16, dialogue_y + 4, 58, 18);
+  move_control(hwnd, kEditDialogue, dialogue_edit_x, dialogue_y,
+               (std::max)(120, notes_label_x - 12 - dialogue_edit_x), 24);
+  move_control(hwnd, kLabelNotes, notes_label_x, dialogue_y + 4, 44, 18);
+  move_control(hwnd, kEditNotes, notes_edit_x, dialogue_y,
+               (std::max)(120, width - margin - notes_edit_x), 24);
+
+  move_control(hwnd, kLabelStart, 16, action_y + 6, 42, 18);
+  move_control(hwnd, kEditStart, 62, action_y + 2, 126, 24);
+  move_control(hwnd, kLabelEnd, 198, action_y + 6, 34, 18);
+  move_control(hwnd, kEditEnd, 236, action_y + 2, 126, 24);
+  move_control(hwnd, kApplyEdit, 376, action_y, 94, 28);
+
+  const int close_x = width - margin - 80;
+  const int next_x = close_x - 104 - 74;
+  const int previous_x = next_x - 6 - 84;
+  move_control(hwnd, kPrevious, previous_x, action_y, 84, 28);
+  move_control(hwnd, kNext, next_x, action_y, 74, 28);
+  move_control(hwnd, kClose, close_x, action_y, 80, 28);
 }
 
 std::string display_timecode(const std::string& value)
@@ -381,23 +452,23 @@ void create_window_controls(HWND hwnd)
 
   create_child(hwnd, L"EDIT", L"", WS_BORDER | ES_AUTOHSCROLL | ES_READONLY, 16, 576, 1040, 24, kDetails);
 
-  create_child(hwnd, L"STATIC", L"Cue ID", 0, 16, 610, 52, 18, -1);
+  create_child(hwnd, L"STATIC", L"Cue ID", 0, 16, 610, 52, 18, kLabelCueId);
   create_child(hwnd, L"EDIT", L"", WS_BORDER | ES_AUTOHSCROLL | WS_TABSTOP, 70, 606, 118, 24, kEditCueId);
-  create_child(hwnd, L"STATIC", L"Character", 0, 198, 610, 68, 18, -1);
+  create_child(hwnd, L"STATIC", L"Character", 0, 198, 610, 68, 18, kLabelCharacter);
   create_child(hwnd, L"EDIT", L"", WS_BORDER | ES_AUTOHSCROLL | WS_TABSTOP, 270, 606, 220, 24, kEditCharacter);
-  create_child(hwnd, L"STATIC", L"Type", 0, 502, 610, 38, 18, -1);
+  create_child(hwnd, L"STATIC", L"Type", 0, 502, 610, 38, 18, kLabelType);
   create_child(hwnd, L"COMBOBOX", L"", CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP, 544, 606, 140, 160, kEditType);
-  create_child(hwnd, L"STATIC", L"Status", 0, 696, 610, 44, 18, -1);
+  create_child(hwnd, L"STATIC", L"Status", 0, 696, 610, 44, 18, kLabelStatus);
   create_child(hwnd, L"COMBOBOX", L"", CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP, 744, 606, 180, 180, kEditStatus);
 
-  create_child(hwnd, L"STATIC", L"Dialogue", 0, 16, 642, 58, 18, -1);
+  create_child(hwnd, L"STATIC", L"Dialogue", 0, 16, 642, 58, 18, kLabelDialogue);
   create_child(hwnd, L"EDIT", L"", WS_BORDER | ES_AUTOHSCROLL | WS_TABSTOP, 78, 638, 412, 24, kEditDialogue);
-  create_child(hwnd, L"STATIC", L"Notes", 0, 502, 642, 44, 18, -1);
+  create_child(hwnd, L"STATIC", L"Notes", 0, 502, 642, 44, 18, kLabelNotes);
   create_child(hwnd, L"EDIT", L"", WS_BORDER | ES_AUTOHSCROLL | WS_TABSTOP, 550, 638, 374, 24, kEditNotes);
 
-  create_child(hwnd, L"STATIC", L"Start", 0, 16, 674, 42, 18, -1);
+  create_child(hwnd, L"STATIC", L"Start", 0, 16, 674, 42, 18, kLabelStart);
   create_child(hwnd, L"EDIT", L"", WS_BORDER | ES_AUTOHSCROLL | WS_TABSTOP, 62, 670, 126, 24, kEditStart);
-  create_child(hwnd, L"STATIC", L"End", 0, 198, 674, 34, 18, -1);
+  create_child(hwnd, L"STATIC", L"End", 0, 198, 674, 34, 18, kLabelEnd);
   create_child(hwnd, L"EDIT", L"", WS_BORDER | ES_AUTOHSCROLL | WS_TABSTOP, 236, 670, 126, 24, kEditEnd);
   create_child(hwnd, L"BUTTON", L"Apply Edit", BS_PUSHBUTTON | WS_TABSTOP, 376, 668, 94, 28, kApplyEdit);
   create_child(hwnd, L"BUTTON", L"Previous", BS_PUSHBUTTON | WS_TABSTOP, 708, 668, 84, 28, kPrevious);
@@ -470,7 +541,11 @@ LRESULT CALLBACK cue_manager_wnd_proc(HWND hwnd, UINT message, WPARAM wparam, LP
   switch (message) {
     case WM_CREATE:
       create_window_controls(hwnd);
+      layout_window_controls(hwnd);
       refresh_rows(hwnd);
+      return 0;
+    case WM_SIZE:
+      if (wparam != SIZE_MINIMIZED) layout_window_controls(hwnd);
       return 0;
     case WM_GETMINMAXINFO: {
       auto* info = reinterpret_cast<MINMAXINFO*>(lparam);
