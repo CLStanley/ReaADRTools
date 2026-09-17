@@ -370,11 +370,16 @@ void initialize_log_path()
   g_log_path = join_path(root, "reaper_reaadr.log");
 }
 
-void register_scripts()
+void retire_legacy_script_registrations()
 {
+  if (!AddRemoveReaScript) {
+    log_line("AddRemoveReaScript API unavailable; skipping legacy Lua action cleanup.");
+    return;
+  }
+
   const std::string root = resource_directory();
   const std::string old_root = plugin_directory();
-  log_line("Registering resource scripts from: " + root);
+  log_line("Retiring historical Lua action registrations under: " + root);
 
   for (const ScriptAction& legacy_action : g_legacy_actions) {
     const std::string old_script_path = join_path(old_root, legacy_action.relative_path + 8);
@@ -407,15 +412,6 @@ void register_scripts()
   }
 }
 
-void unregister_scripts()
-{
-  for (std::size_t i = 1; i < g_actions.size(); ++i) {
-    const bool commit = i + 1 == g_actions.size();
-    const std::string script_path = join_path(resource_directory(), g_actions[i].relative_path);
-    AddRemoveReaScript(false, kMainSection, script_path.c_str(), commit);
-    g_actions[i].command_id = 0;
-  }
-}
 
 void add_menu_item(HMENU menu, int position, const ScriptAction& action)
 {
@@ -2536,11 +2532,6 @@ bool load(reaper_plugin_info_t* plugin)
     return false;
   }
   reaadr::ui::initialize(ShowMessageBox);
-  if (!AddRemoveReaScript) {
-    log_line("AddRemoveReaScript API unavailable; cannot register ReaADR scripts.");
-    return false;
-  }
-
   plugin->Register("API_ReaADR_DetectDialogueSegments", reinterpret_cast<void*>(detect_dialogue_segments));
   plugin->Register("APIdef_ReaADR_DetectDialogueSegments", reinterpret_cast<void*>(const_cast<char*>(kDetectDialogueSegmentsDef)));
   plugin->Register("API_ReaADR_ReadXlsxAsTsv", reinterpret_cast<void*>(read_xlsx_as_tsv));
@@ -2548,7 +2539,7 @@ bool load(reaper_plugin_info_t* plugin)
   plugin->Register("API_ReaADR_ValidateSessionModel", reinterpret_cast<void*>(validate_session_model));
   plugin->Register("APIdef_ReaADR_ValidateSessionModel", reinterpret_cast<void*>(const_cast<char*>(kValidateSessionModelDef)));
   register_native_actions();
-  register_scripts();
+  retire_legacy_script_registrations();
   load_menu_functions();
   if (AddCustomizableMenu) {
     // Register after script actions so REAPER does not rebuild the main menu
@@ -2575,7 +2566,6 @@ void unload()
     g_plugin->Register("-API_ReaADR_ValidateSessionModel", reinterpret_cast<void*>(validate_session_model));
     g_plugin->Register("-APIdef_ReaADR_ValidateSessionModel", reinterpret_cast<void*>(const_cast<char*>(kValidateSessionModelDef)));
   }
-  unregister_scripts();
   g_plugin = nullptr;
 }
 
