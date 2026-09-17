@@ -393,13 +393,17 @@ void register_scripts()
   AddRemoveReaScript(false, kMainSection, old_manager_path.c_str(), false);
   AddRemoveReaScript(false, kMainSection, manager_path.c_str(), false);
 
+  // Quick Action slots are native workflow commands. Remove historical Lua
+  // registrations here, then let the persistent native runtime bind the menu
+  // slots to _ReaADRQuickAction{1..4}Native. This avoids briefly restoring Lua
+  // ownership during every extension load.
   for (std::size_t i = 1; i < g_actions.size(); ++i) {
     const bool commit = i + 1 == g_actions.size();
     const std::string old_script_path = join_path(old_root, g_actions[i].relative_path + 8);
     AddRemoveReaScript(false, kMainSection, old_script_path.c_str(), false);
     const std::string script_path = join_path(root, g_actions[i].relative_path);
-    g_actions[i].command_id = AddRemoveReaScript(true, kMainSection, script_path.c_str(), commit);
-    log_line(std::string("Registered ") + g_actions[i].label + " command_id=" + std::to_string(g_actions[i].command_id));
+    AddRemoveReaScript(false, kMainSection, script_path.c_str(), commit);
+    g_actions[i].command_id = 0;
   }
 }
 
