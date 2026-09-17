@@ -85,7 +85,7 @@ void run_persistent_native_cue_manager_action()
 
 bool promote_native_quick_actions(reaper_plugin_info_t* plugin)
 {
-  if (!plugin || !plugin->GetFunc || !AddRemoveReaScript) return false;
+  if (!plugin || !plugin->GetFunc) return false;
   using NamedCommandLookupFn = int (*)(const char*);
   auto named_command_lookup =
     reinterpret_cast<NamedCommandLookupFn>(plugin->GetFunc("NamedCommandLookup"));
@@ -106,17 +106,11 @@ bool promote_native_quick_actions(reaper_plugin_info_t* plugin)
     }
   }
 
-  const std::string root = resource_directory();
-  const std::string old_root = plugin_directory();
+  // Historical Lua registrations are retired opportunistically by the legacy
+  // host. Native Quick Action ownership itself must not depend on the
+  // AddRemoveReaScript compatibility API being present.
   for (std::size_t index = 0; index < command_ids.size(); ++index) {
     const std::size_t action_index = index + 1;
-    const bool commit = index + 1 == command_ids.size();
-    const std::string old_script_path =
-      join_path(old_root, g_actions[action_index].relative_path + 8);
-    const std::string script_path =
-      join_path(root, g_actions[action_index].relative_path);
-    AddRemoveReaScript(false, kMainSection, old_script_path.c_str(), false);
-    AddRemoveReaScript(false, kMainSection, script_path.c_str(), commit);
     g_actions[action_index].command_id = command_ids[index];
   }
   log_line("Promoted all four Quick Actions to native command registrations.");
