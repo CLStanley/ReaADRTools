@@ -85,7 +85,7 @@ On Windows, top-level size/layout persistence and modeless lifecycle are impleme
 
 Native workflow/action registration now owns Record Cue, Cue Info, Set Cue Status, Dialogue Detection and Quick Actions. Public Quick Action slots are promoted to `_ReaADRQuickAction1Native` through `_ReaADRQuickAction4Native`; historical Lua files are compatibility launchers/reference rather than the workflow owners.
 
-The host action table still contains a stale compatibility entry for `Scripts/ReaADRTools/scripts/ReaADR_Monitor_Markers.lua`. Repository history confirms that script was intentionally inert (a placeholder for a future live-monitoring feature), so continuous marker monitoring is **not** a migration parity requirement. Remove the stale registration during host-registration cleanup; treat any future live monitor as a post-migration feature.
+The stale compatibility registration for `Scripts/ReaADRTools/scripts/ReaADR_Monitor_Markers.lua` has been removed from the host action table. Repository history confirmed that script was intentionally inert (a placeholder for a future live-monitoring feature), so continuous marker monitoring is **not** a migration parity requirement. Any future live monitor is a post-migration feature.
 
 `CountTakes` and `GetSet_LoopTimeRange2` are required by the native take-count and recording-loop services. Because the extension uses `REAPERAPI_MINIMAL`, native Make/MSVC build paths request those APIs before the host translation unit is preprocessed. Runtime smoke testing in REAPER is still required before parity approval.
 
