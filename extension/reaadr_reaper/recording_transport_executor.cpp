@@ -58,6 +58,11 @@ bool RecordingTransportExecutor::restore_loop_range(std::string& error)
     return false;
   }
   loop_range_active_ = false;
+  // The saved range belongs to one recording operation. A later operation may
+  // begin after the user changes REAPER's loop selection, so capture it again.
+  loop_range_saved_ = false;
+  saved_loop_start_ = 0.0;
+  saved_loop_end_ = 0.0;
   return true;
 }
 
