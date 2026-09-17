@@ -83,7 +83,7 @@ On Windows, top-level size/layout persistence and modeless lifecycle are impleme
 
 ## Host registration audit
 
-Native workflow/action registration now owns Record Cue, Cue Info, Set Cue Status, Dialogue Detection and Quick Actions. Public Quick Action slots are promoted to `_ReaADRQuickAction1Native` through `_ReaADRQuickAction4Native`; historical Lua files are compatibility launchers/reference rather than the workflow owners.
+Native workflow/action registration now owns Record Cue, Cue Info, Set Cue Status, Dialogue Detection and Quick Actions. The legacy host actively removes historical Lua Quick Action registrations instead of registering them during startup; the persistent runtime then binds the four public slots directly to `_ReaADRQuickAction1Native` through `_ReaADRQuickAction4Native`. Historical Lua files remain compatibility launchers/reference only and are no longer transient runtime owners.
 
 The stale compatibility registration for `Scripts/ReaADRTools/scripts/ReaADR_Monitor_Markers.lua` has been removed from the host action table. Repository history confirmed that script was intentionally inert (a placeholder for a future live-monitoring feature), so continuous marker monitoring is **not** a migration parity requirement. Any future live monitor is a post-migration feature.
 
