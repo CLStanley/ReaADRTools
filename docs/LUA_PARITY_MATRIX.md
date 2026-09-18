@@ -83,6 +83,15 @@ On Windows, top-level size/layout persistence and modeless lifecycle are impleme
 
 ## Lua core ownership audit
 
+### Verified native contract matches
+
+- **Overlay defaults:** native `OverlaySettings` mirrors the Lua `DEFAULT_OVERLAY_SETTINGS` booleans, text color, metadata field list, 3-second preroll and `include_preroll_each_loop = true`; the repository persists the same compatibility namespace/prefix.
+- **Character/lane filtering:** native `character_filter_key`, `character_filter_target_key` and `assign_character_lanes` cover sanitized case-insensitive character tokens, per-lane keys, `Unassigned` fallback and preroll-aware overlap lane assignment used by the Lua core.
+- **Transaction ownership:** native `ProjectTransaction` preserves the Lua outermost-owner rule for nested operations, failed-operation labeling and guarded undo rollback so a failed no-op cannot undo an unrelated user action.
+- **Generated-artifact ownership:** native render planning validates role/key identity before treating generated tracks/cue-audio as owned artifacts, preserving the Lua core's fail-closed ownership intent while moving mutation decisions into typed plans/adapters.
+
+These checks remove the corresponding contracts from the list of reasons to retain Lua at runtime. The Lua files remain useful only for final edge-case/reference comparison and can be deleted during the post-parity cleanup phase once that audit is complete.
+
 The public Lua entry points inspected in this migration slice are compatibility launchers that invoke native named commands and do not load `ReaADR_Core.lua`. `ReaADR_Core.lua` still loads the Characters, Ownership, Persistence and Transactions modules internally, but that dependency graph is now isolated inside the retained Lua reference framework rather than the active host workflow graph. These files should remain until their edge-case contracts are compared against native code, but they no longer block removal of Lua runtime ownership.
 
 ## Lua application ownership audit
