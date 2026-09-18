@@ -37,11 +37,11 @@ Until all seven gates pass, substantive Lua implementations remain the specifica
 | `ReaADR_App.lua` | Lua reference / no active host ownership | Repository reference search found no active script/host consumer of the application framework. Native Manager/application services own the public session, overlay, recording, import and quick-action surfaces. Retain temporarily as behavioral/help reference while its embedded help/preferences contracts are checked against native surfaces; it is not a runtime migration dependency. |
 | `ReaADR_Character_Filter.lua` | Compatibility launcher / native routed | Delegates to `_ReaADRApplyCharacterFilterNative`; native filtering owns the workflow. Remaining: REAPER smoke-test filtering, lane and visibility behavior. |
 | `ReaADR_Clean_Generated_Cues.lua` | Compatibility launcher / native routed | Delegates to `_ReaADRClearCharacterCuesNative`; native cleanup owns the workflow. Remaining: smoke-test preservation/ownership edge cases. |
-| `ReaADR_Core.lua` | Support module | Continue contract-by-contract migration/reference audit; retain while substantive callers/reference behavior remain. |
-| `ReaADR_Core_Characters.lua` | Support module / substantial native parity | Continue parity audit for character token/lane helpers. |
-| `ReaADR_Core_Ownership.lua` | Support module / native foundation | Verify every owned artifact rule before retirement. |
-| `ReaADR_Core_Persistence.lua` | Support module / native foundation | Complete persistence/event/snapshot parity audit. |
-| `ReaADR_Core_Transactions.lua` | Support module / native foundation | Native project/model transactions exist; retain until remaining callers/reference contracts are cleared. |
+| `ReaADR_Core.lua` | Reference-only support module | All inspected public workflow scripts now route directly to native commands, and repository reference search found no active external loader of `ReaADR_Core.lua`. Its remaining value is as a behavioral/defaults reference for the migration audit, not as runtime infrastructure. |
+| `ReaADR_Core_Characters.lua` | Reference-only support module | Loaded only by `ReaADR_Core.lua` in the retained Lua framework. Native character/lane assignment and filter planning own the active workflow. Preserve temporarily to compare token/lane edge cases before Lua reference cleanup. |
+| `ReaADR_Core_Ownership.lua` | Reference-only support module | Loaded by the retained `ReaADR_Core.lua`; active public workflows no longer execute it. Native ownership/revalidation rules own runtime artifact mutation. Preserve until the final ownership-rule comparison is complete. |
+| `ReaADR_Core_Persistence.lua` | Reference-only support module | Loaded only through retained `ReaADR_Core.lua`; active public workflows are native-routed. Native repositories/session-model persistence own runtime state. Preserve temporarily for final persistence/event/snapshot contract comparison. |
+| `ReaADR_Core_Transactions.lua` | Reference-only support module | Loaded only through retained `ReaADR_Core.lua`; it is no longer on an active public workflow path. Native transaction/rollback ownership is the runtime implementation. Preserve temporarily as a rollback/undo semantics reference. |
 | `ReaADR_Cue_Info_Panel.lua` | Compatibility launcher / native routed | The historical file contains only a named-command bridge to `_ReaADRShowCueInfoNative`; native C++ owns Cue Info behavior. Remaining: cross-platform REAPER smoke testing and final visual/interaction parity against the retained visual references/history. |
 | `ReaADR_Cue_Manager.lua` | Compatibility launcher / native routed | The historical entry point contains only a named-command bridge to `_ReaADRShowCueManagerNative`; `CueManagerController`/`CueManagerSession` own the Manager. Remaining: final visual/interaction audit and cross-platform REAPER smoke testing. |
 | `ReaADR_Cue_Manager_Gfx.lua` | Lua visual/interaction reference | Native Manager replacement is active; retain for final visual/interaction parity audit. |
@@ -80,6 +80,10 @@ The active Manager is the persistent/modeless C++ implementation built around `C
 The Manager startup-tab bridge persists `ui.manager.launch_tab` as a one-shot launch request so historical Manager slot actions can route into the native Manager without recreating workflow behavior in Lua.
 
 On Windows, top-level size/layout persistence and modeless lifecycle are implemented, but child controls are still positioned with fixed coordinates. Responsive `WM_SIZE` layout remains an explicit parity item. On Linux/macOS, the Manager continues to use the host-provided SWELL/modstub architecture; do not replace it with a directly linked SWELL copy.
+
+## Lua core ownership audit
+
+The public Lua entry points inspected in this migration slice are compatibility launchers that invoke native named commands and do not load `ReaADR_Core.lua`. `ReaADR_Core.lua` still loads the Characters, Ownership, Persistence and Transactions modules internally, but that dependency graph is now isolated inside the retained Lua reference framework rather than the active host workflow graph. These files should remain until their edge-case contracts are compared against native code, but they no longer block removal of Lua runtime ownership.
 
 ## Lua application ownership audit
 
