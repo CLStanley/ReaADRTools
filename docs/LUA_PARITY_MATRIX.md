@@ -34,7 +34,7 @@ Until all seven gates pass, substantive Lua implementations remain the specifica
 
 | Lua reference | Current native state | Remaining parity gate(s) |
 | --- | --- | --- |
-| `ReaADR_App.lua` | Native foundation | Native Manager/application services own substantial session, overlay, recording, import and quick-action behavior. Continue the remaining ownership/reference audit before retiring the application reference. |
+| `ReaADR_App.lua` | Lua reference / no active host ownership | Repository reference search found no active script/host consumer of the application framework. Native Manager/application services own the public session, overlay, recording, import and quick-action surfaces. Retain temporarily as behavioral/help reference while its embedded help/preferences contracts are checked against native surfaces; it is not a runtime migration dependency. |
 | `ReaADR_Character_Filter.lua` | Compatibility launcher / native routed | Delegates to `_ReaADRApplyCharacterFilterNative`; native filtering owns the workflow. Remaining: REAPER smoke-test filtering, lane and visibility behavior. |
 | `ReaADR_Clean_Generated_Cues.lua` | Compatibility launcher / native routed | Delegates to `_ReaADRClearCharacterCuesNative`; native cleanup owns the workflow. Remaining: smoke-test preservation/ownership edge cases. |
 | `ReaADR_Core.lua` | Support module | Continue contract-by-contract migration/reference audit; retain while substantive callers/reference behavior remain. |
@@ -80,6 +80,10 @@ The active Manager is the persistent/modeless C++ implementation built around `C
 The Manager startup-tab bridge persists `ui.manager.launch_tab` as a one-shot launch request so historical Manager slot actions can route into the native Manager without recreating workflow behavior in Lua.
 
 On Windows, top-level size/layout persistence and modeless lifecycle are implemented, but child controls are still positioned with fixed coordinates. Responsive `WM_SIZE` layout remains an explicit parity item. On Linux/macOS, the Manager continues to use the host-provided SWELL/modstub architecture; do not replace it with a directly linked SWELL copy.
+
+## Lua application ownership audit
+
+A repository reference audit found no active caller loading `ReaADR_App.lua`; its `App.modules`, Manager-launch framework and quick-action script table are therefore no longer part of the extension's runtime ownership graph. `ReaADR_App.lua` still embeds historical help text, overlay/preference defaults and presentation contracts, so it remains in `scripts/` as a migration reference until those contracts are checked against the native Manager. This separates **reference retention** from **runtime dependency**: finishing native ownership no longer requires preserving the Lua application framework as an executable layer.
 
 ## Host registration audit
 
