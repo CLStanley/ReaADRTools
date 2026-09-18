@@ -266,7 +266,10 @@ ScriptAction g_import_cue_sheet_action = {"Import Cue Sheet (Native)", nullptr, 
 ScriptAction g_preferences_action = {"Preferences (Native Preview)", nullptr, 0};
 ScriptAction g_ui_test_action = {"Native UI Test Window (C++)", nullptr, 0};
 
-std::vector<ScriptAction> g_legacy_actions = {
+// Upgrade-only paths used to remove ReaScript registrations left by older
+// ReaADR releases. These files are not registered or executed by the native
+// extension; keep this list only while in-place upgrades need cleanup.
+std::vector<ScriptAction> g_legacy_registration_cleanup = {
   {"Import Script", "Scripts/ReaADRTools/scripts/ReaADR_Import_Script.lua", 0},
   {"Export Reports", "Scripts/ReaADRTools/scripts/ReaADR_Export_Reports.lua", 0},
   {"Preferences", "Scripts/ReaADRTools/scripts/ReaADR_Preferences.lua", 0},
@@ -381,7 +384,7 @@ void retire_legacy_script_registrations()
   const std::string old_root = plugin_directory();
   log_line("Retiring historical Lua action registrations under: " + root);
 
-  for (const ScriptAction& legacy_action : g_legacy_actions) {
+  for (const ScriptAction& legacy_action : g_legacy_registration_cleanup) {
     const std::string old_script_path = join_path(old_root, legacy_action.relative_path + 8);
     AddRemoveReaScript(false, kMainSection, old_script_path.c_str(), false);
     const std::string script_path = join_path(root, legacy_action.relative_path);
