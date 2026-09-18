@@ -42,8 +42,8 @@ Until all seven gates pass, substantive Lua implementations remain the specifica
 | `ReaADR_Core_Ownership.lua` | Support module / native foundation | Verify every owned artifact rule before retirement. |
 | `ReaADR_Core_Persistence.lua` | Support module / native foundation | Complete persistence/event/snapshot parity audit. |
 | `ReaADR_Core_Transactions.lua` | Support module / native foundation | Native project/model transactions exist; retain until remaining callers/reference contracts are cleared. |
-| `ReaADR_Cue_Info_Panel.lua` | Native routed/backend | Native live view, take counts, inline editing, character choices, filtered navigation, Space transport shortcut, floating geometry persistence, one-shot launch behavior and REAPER/SWELL docking are implemented. Remaining: cross-platform REAPER smoke testing and final visual/interaction parity. |
-| `ReaADR_Cue_Manager.lua` | Native routed/backend | Current modeless `CueManagerController`/`CueManagerSession` architecture owns the Manager. Remaining: Windows responsive child-control layout, report-tool presentation parity, and full cross-platform REAPER smoke testing. |
+| `ReaADR_Cue_Info_Panel.lua` | Compatibility launcher / native routed | The historical file contains only a named-command bridge to `_ReaADRShowCueInfoNative`; native C++ owns Cue Info behavior. Remaining: cross-platform REAPER smoke testing and final visual/interaction parity against the retained visual references/history. |
+| `ReaADR_Cue_Manager.lua` | Compatibility launcher / native routed | The historical entry point contains only a named-command bridge to `_ReaADRShowCueManagerNative`; `CueManagerController`/`CueManagerSession` own the Manager. Remaining: final visual/interaction audit and cross-platform REAPER smoke testing. |
 | `ReaADR_Cue_Manager_Gfx.lua` | Lua visual/interaction reference | Native Manager replacement is active; retain for final visual/interaction parity audit. |
 | `ReaADR_Cue_Manager_ImGui.lua` | Lua visual/interaction reference | Native Manager replacement is active; retain for final visual/interaction parity audit. |
 | `ReaADR_Detect_Dialogue.lua` | Compatibility launcher / native routed | Delegates to `_ReaADRDetectDialogueNative`; Lua audio-scan fallback has been removed. Audit final result/UI parity (including video-window behavior) and smoke-test in REAPER. |
@@ -69,7 +69,7 @@ Until all seven gates pass, substantive Lua implementations remain the specifica
 | `ReaADR_Quick_Action_3.lua` | Compatibility launcher / native routed | Public host action is promoted to `_ReaADRQuickAction3Native`; REAPER smoke test remains. |
 | `ReaADR_Quick_Action_4.lua` | Compatibility launcher / native routed | Public host action is promoted to `_ReaADRQuickAction4Native`; REAPER smoke test remains. |
 | `ReaADR_Record_Arm.lua` | **Retired** | Removed after reference search found no remaining consumers; native recording workflow owns arm capture/isolation/restore. Validate that behavior in the full Record Cue smoke gate. |
-| `ReaADR_Record_Cue.lua` | Native routed/backend | Native workflow/window and `_ReaADRRecordCueNative` own recording. Remaining: final docker/visual/lifecycle parity and cross-platform REAPER smoke testing. |
+| `ReaADR_Record_Cue.lua` | Compatibility launcher / native routed | The historical file contains only a named-command bridge to `_ReaADRRecordCueNative`; the native workflow/window owns recording. Remaining: final docker/visual/lifecycle parity and cross-platform REAPER smoke testing. |
 | `ReaADR_Start_Recording_Workflow.lua` | Compatibility launcher / native routed | Historical workflow action delegates to `_ReaADRRecordCueNative`; no Lua recording workflow remains in this launcher. |
 | `ReaADR_Set_Cue_Status.lua` | Compatibility launcher / native routed | Six-choice native presentation and registered native action own status updates; REAPER smoke testing remains. |
 
