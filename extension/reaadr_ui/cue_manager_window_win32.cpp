@@ -344,7 +344,11 @@ void show_overlay_tools(HWND hwnd)
 {
   if (!g_controller) return;
   constexpr UINT kRefreshOverlay = 1, kActor = 2, kEngineer = 3,
-                 kStudio = 4, kMinimal = 5;
+                 kStudio = 4, kMinimal = 5, kEnabled = 10, kCueId = 11,
+                 kCharacter = 12, kDialogue = 13, kStatus = 14,
+                 kTimecode = 15, kProjectTimer = 16, kVisualCue = 17,
+                 kDirection = 18, kCueType = 19, kStreamer = 20,
+                 kFlash = 21, kMetadata = 22;
   HMENU menu = CreatePopupMenu();
   if (!menu) return;
   AppendMenuW(menu, MF_STRING, kRefreshOverlay, L"Refresh Video Overlay");
@@ -353,6 +357,24 @@ void show_overlay_tools(HWND hwnd)
   AppendMenuW(menu, MF_STRING, kEngineer, L"Engineer Profile");
   AppendMenuW(menu, MF_STRING, kStudio, L"Studio Profile");
   AppendMenuW(menu, MF_STRING, kMinimal, L"Minimal Profile");
+  AppendMenuW(menu, MF_SEPARATOR, 0, nullptr);
+  const auto& overlay = g_controller->view().preferences.overlay;
+  auto add_toggle = [menu](UINT id, const wchar_t* label, bool enabled) {
+    AppendMenuW(menu, MF_STRING | (enabled ? MF_CHECKED : MF_UNCHECKED), id, label);
+  };
+  add_toggle(kEnabled, L"Overlay Enabled", overlay.enabled);
+  add_toggle(kCueId, L"Show Cue ID", overlay.show_cue_id);
+  add_toggle(kCharacter, L"Show Character", overlay.show_character);
+  add_toggle(kDialogue, L"Show Dialogue", overlay.show_dialogue);
+  add_toggle(kStatus, L"Show Status", overlay.show_status);
+  add_toggle(kTimecode, L"Show Cue Timecode", overlay.show_cue_timecode);
+  add_toggle(kProjectTimer, L"Show Project Timer", overlay.show_project_timer);
+  add_toggle(kVisualCue, L"Show Visual Cue", overlay.show_visual_cue);
+  add_toggle(kDirection, L"Show Direction", overlay.show_direction);
+  add_toggle(kCueType, L"Show Cue Type", overlay.show_cue_type);
+  add_toggle(kStreamer, L"Show Streamer", overlay.show_streamer);
+  add_toggle(kFlash, L"Show Flash", overlay.show_flash);
+  add_toggle(kMetadata, L"Show Metadata", overlay.show_metadata);
 
   RECT anchor{};
   HWND button = control(hwnd, kModuleOverlay);
@@ -365,7 +387,23 @@ void show_overlay_tools(HWND hwnd)
   else if (choice == kEngineer) g_controller->trigger_action("overlay_profile:engineer");
   else if (choice == kStudio) g_controller->trigger_action("overlay_profile:studio");
   else if (choice == kMinimal) g_controller->trigger_action("overlay_profile:minimal");
-  else return;
+  else {
+    const char* key = choice == kEnabled ? "enabled" :
+                      choice == kCueId ? "show_cue_id" :
+                      choice == kCharacter ? "show_character" :
+                      choice == kDialogue ? "show_dialogue" :
+                      choice == kStatus ? "show_status" :
+                      choice == kTimecode ? "show_cue_timecode" :
+                      choice == kProjectTimer ? "show_project_timer" :
+                      choice == kVisualCue ? "show_visual_cue" :
+                      choice == kDirection ? "show_direction" :
+                      choice == kCueType ? "show_cue_type" :
+                      choice == kStreamer ? "show_streamer" :
+                      choice == kFlash ? "show_flash" :
+                      choice == kMetadata ? "show_metadata" : nullptr;
+    if (!key) return;
+    g_controller->trigger_action(std::string("overlay_toggle:") + key);
+  }
   reload_and_refresh(hwnd);
 }
 
