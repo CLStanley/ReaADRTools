@@ -431,8 +431,17 @@ INT_PTR cue_manager_proc(HWND hwnd, UINT message, WPARAM wparam, LPARAM lparam)
       }
     }
     if (reaper::inspect_window_dock_state(hwnd).docked()) reaper::remove_window_from_docker(hwnd);
+    DestroyWindow(hwnd);
+    return 1;
+  }
+  if (message == WM_CLOSE) {
+    SendMessage(hwnd, WM_COMMAND, IDCANCEL, 0);
+    return 1;
+  }
+  if (message == WM_DESTROY) {
     if (g_window == hwnd) g_window = nullptr;
-    EndDialog(hwnd, 0); return 1;
+    g_controller = nullptr;
+    return 1;
   }
   if (message == WM_COMMAND && LOWORD(wparam) == kColumns) {
     DialogBoxParam(nullptr, MAKEINTRESOURCE(kColumnsDialog), hwnd, columns_proc,
@@ -972,10 +981,16 @@ bool show_cue_manager(CueManagerController& controller, double frame_rate)
     return true;
   }
   g_controller = &controller;
-  const int result = DialogBoxParam(nullptr, MAKEINTRESOURCE(kDialog), nullptr, cue_manager_proc, 0);
-  g_window = nullptr;
-  g_controller = nullptr;
-  return result >= 0;
+  g_window = CreateDialogParam(nullptr, MAKEINTRESOURCE(kDialog), nullptr, cue_manager_proc, 0);
+  if (!g_window) {
+    g_controller = nullptr;
+    return false;
+  }
+  ShowWindow(g_window, SW_SHOW);
+  if (reaper::inspect_window_dock_state(g_window).docked())
+    reaper::activate_docked_window(g_window);
+  SetForegroundWindow(g_window);
+  return true;
 #else
   (void)controller;
   (void)frame_rate;
