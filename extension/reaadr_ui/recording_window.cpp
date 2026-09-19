@@ -454,4 +454,11 @@ bool show_recording_window(RecordingController& controller)
 #endif
 }
 
+bool close_recording_window()
+{
+  if (!g_window || !IsWindow(g_window)) return true;
+  close_recording(g_window);
+  return !g_window || !IsWindow(g_window);
+}
+
 } // namespace reaadr::ui
