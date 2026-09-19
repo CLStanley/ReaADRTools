@@ -343,8 +343,29 @@ void show_character_filter_tools(HWND hwnd)
 void show_overlay_tools(HWND hwnd)
 {
   if (!g_controller) return;
-  const int choice = MessageBoxW(hwnd, L"Yes: Refresh the video overlay.\nNo: Switch to the Actor overlay profile.\nCancel: Return without changes.", L"ReaADR Overlay", MB_YESNOCANCEL | MB_ICONQUESTION);
-  if (choice == IDYES) g_controller->trigger_action("refresh_overlay"); else if (choice == IDNO) g_controller->trigger_action("overlay_profile:actor"); else return;
+  constexpr UINT kRefreshOverlay = 1, kActor = 2, kEngineer = 3,
+                 kStudio = 4, kMinimal = 5;
+  HMENU menu = CreatePopupMenu();
+  if (!menu) return;
+  AppendMenuW(menu, MF_STRING, kRefreshOverlay, L"Refresh Video Overlay");
+  AppendMenuW(menu, MF_SEPARATOR, 0, nullptr);
+  AppendMenuW(menu, MF_STRING, kActor, L"Actor Profile");
+  AppendMenuW(menu, MF_STRING, kEngineer, L"Engineer Profile");
+  AppendMenuW(menu, MF_STRING, kStudio, L"Studio Profile");
+  AppendMenuW(menu, MF_STRING, kMinimal, L"Minimal Profile");
+
+  RECT anchor{};
+  HWND button = control(hwnd, kModuleOverlay);
+  if (button) GetWindowRect(button, &anchor); else GetWindowRect(hwnd, &anchor);
+  const UINT choice = TrackPopupMenu(menu, TPM_RETURNCMD | TPM_LEFTALIGN | TPM_TOPALIGN | TPM_RIGHTBUTTON,
+                                     anchor.left, anchor.bottom, 0, hwnd, nullptr);
+  DestroyMenu(menu);
+  if (choice == kRefreshOverlay) g_controller->trigger_action("refresh_overlay");
+  else if (choice == kActor) g_controller->trigger_action("overlay_profile:actor");
+  else if (choice == kEngineer) g_controller->trigger_action("overlay_profile:engineer");
+  else if (choice == kStudio) g_controller->trigger_action("overlay_profile:studio");
+  else if (choice == kMinimal) g_controller->trigger_action("overlay_profile:minimal");
+  else return;
   reload_and_refresh(hwnd);
 }
 
