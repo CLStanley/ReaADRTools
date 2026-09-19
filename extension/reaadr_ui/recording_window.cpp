@@ -358,7 +358,10 @@ LRESULT CALLBACK recording_window_proc(HWND hwnd, UINT message, WPARAM wparam, L
       return 0;
 
     case WM_NCDESTROY:
+      KillTimer(hwnd, kTimer);
+      if (g_controller && g_controller->active()) g_controller->shutdown();
       if (g_window == hwnd) g_window = nullptr;
+      g_controller = nullptr;
       break;
   }
   return DefWindowProcW(hwnd, message, wparam, lparam);
