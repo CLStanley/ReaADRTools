@@ -463,12 +463,18 @@ void edit_overlay_settings(HWND hwnd)
   EnableWindow(hwnd, FALSE);
   MSG message{};
   bool save = false;
+  std::string metadata;
+  std::string preroll;
   while (IsWindow(dialog) && GetMessageW(&message, nullptr, 0, 0) > 0) {
     if (message.hwnd == dialog || IsChild(dialog, message.hwnd)) {
       if (message.message == WM_COMMAND) {
         const int id = LOWORD(message.wParam);
         if (id == kSave || id == kCancel) {
           save = id == kSave;
+          if (save) {
+            metadata = win32::get_window_text_utf8(GetDlgItem(dialog, kMetadata));
+            preroll = win32::get_window_text_utf8(GetDlgItem(dialog, kPreroll));
+          }
           DestroyWindow(dialog);
           continue;
         }
@@ -484,8 +490,6 @@ void edit_overlay_settings(HWND hwnd)
   SetForegroundWindow(hwnd);
 
   if (!save || !g_controller) return;
-  const std::string metadata = win32::get_window_text_utf8(GetDlgItem(dialog, kMetadata));
-  const std::string preroll = win32::get_window_text_utf8(GetDlgItem(dialog, kPreroll));
   g_controller->trigger_action(std::string("overlay_settings:") + metadata + "|" + preroll);
   reload_and_refresh(hwnd);
 }
