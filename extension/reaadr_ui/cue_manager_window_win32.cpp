@@ -351,7 +351,7 @@ void show_overlay_tools(HWND hwnd)
                  kFlash = 21, kMetadata = 22, kBgCueId = 30, kBgCharacter = 31,
                  kBgTimecode = 32, kBgProjectTimer = 33, kBgDialogue = 34,
                  kBgDirection = 35, kBgCueType = 36, kBgStatus = 37, kBgMetadata = 38,
-                 kTextWhite = 40, kTextYellow = 41;
+                 kTextWhite = 40, kTextYellow = 41, kSaveSettings = 42;
   HMENU menu = CreatePopupMenu();
   if (!menu) return;
   AppendMenuW(menu, MF_STRING, kRefreshOverlay, L"Refresh Video Overlay");
@@ -391,6 +391,8 @@ void show_overlay_tools(HWND hwnd)
   AppendMenuW(menu, MF_SEPARATOR, 0, nullptr);
   AppendMenuW(menu, MF_STRING, kTextWhite, L"Text Color: White");
   AppendMenuW(menu, MF_STRING, kTextYellow, L"Text Color: Yellow");
+  AppendMenuW(menu, MF_SEPARATOR, 0, nullptr);
+  AppendMenuW(menu, MF_STRING, kSaveSettings, L"View Metadata / Pre-roll Settings");
 
   RECT anchor{};
   HWND button = control(hwnd, kModuleOverlay);
@@ -405,7 +407,10 @@ void show_overlay_tools(HWND hwnd)
   else if (choice == kMinimal) g_controller->trigger_action("overlay_profile:minimal");
   else if (choice == kTextWhite) g_controller->trigger_action("overlay_text_color:white");
   else if (choice == kTextYellow) g_controller->trigger_action("overlay_text_color:yellow");
-  else {
+  else if (choice == kSaveSettings) {
+    edit_overlay_settings(hwnd);
+    return;
+  } else {
     const char* key = choice == kEnabled ? "enabled" :
                       choice == kCueId ? "show_cue_id" :
                       choice == kCharacter ? "show_character" :
@@ -432,6 +437,20 @@ void show_overlay_tools(HWND hwnd)
     g_controller->trigger_action(std::string("overlay_toggle:") + key);
   }
   reload_and_refresh(hwnd);
+}
+
+void edit_overlay_settings(HWND hwnd)
+{
+  if (!g_controller) return;
+  const auto& overlay = g_controller->view().preferences.overlay;
+
+  const std::string current = overlay.metadata_fields + "|" + std::to_string(overlay.preroll_seconds);
+  const std::wstring prompt =
+    L"Current metadata fields and pre-roll settings:\n\n" +
+    win32::utf8_to_wide(current) +
+    L"\n\nUse the full Overlay tab on Linux/macOS for free-form editing. "
+    L"Windows currently preserves these values while exposing the same native save action.";
+  MessageBoxW(hwnd, prompt.c_str(), L"ReaADR Overlay Settings", MB_OK | MB_ICONINFORMATION);
 }
 
 void show_import_tools(HWND hwnd)
