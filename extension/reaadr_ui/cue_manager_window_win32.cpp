@@ -348,7 +348,10 @@ void show_overlay_tools(HWND hwnd)
                  kCharacter = 12, kDialogue = 13, kStatus = 14,
                  kTimecode = 15, kProjectTimer = 16, kVisualCue = 17,
                  kDirection = 18, kCueType = 19, kStreamer = 20,
-                 kFlash = 21, kMetadata = 22;
+                 kFlash = 21, kMetadata = 22, kBgCueId = 30, kBgCharacter = 31,
+                 kBgTimecode = 32, kBgProjectTimer = 33, kBgDialogue = 34,
+                 kBgDirection = 35, kBgCueType = 36, kBgStatus = 37, kBgMetadata = 38,
+                 kTextWhite = 40, kTextYellow = 41;
   HMENU menu = CreatePopupMenu();
   if (!menu) return;
   AppendMenuW(menu, MF_STRING, kRefreshOverlay, L"Refresh Video Overlay");
@@ -375,6 +378,19 @@ void show_overlay_tools(HWND hwnd)
   add_toggle(kStreamer, L"Show Streamer", overlay.show_streamer);
   add_toggle(kFlash, L"Show Flash", overlay.show_flash);
   add_toggle(kMetadata, L"Show Metadata", overlay.show_metadata);
+  AppendMenuW(menu, MF_SEPARATOR, 0, nullptr);
+  add_toggle(kBgCueId, L"Cue ID Background", overlay.bg_cue_id);
+  add_toggle(kBgCharacter, L"Character Background", overlay.bg_character);
+  add_toggle(kBgTimecode, L"Cue Timecode Background", overlay.bg_cue_timecode);
+  add_toggle(kBgProjectTimer, L"Project Timer Background", overlay.bg_project_timer);
+  add_toggle(kBgDialogue, L"Dialogue Background", overlay.bg_dialogue);
+  add_toggle(kBgDirection, L"Direction Background", overlay.bg_direction);
+  add_toggle(kBgCueType, L"Cue Type Background", overlay.bg_cue_type);
+  add_toggle(kBgStatus, L"Status Background", overlay.bg_status);
+  add_toggle(kBgMetadata, L"Metadata Background", overlay.bg_metadata);
+  AppendMenuW(menu, MF_SEPARATOR, 0, nullptr);
+  AppendMenuW(menu, MF_STRING, kTextWhite, L"Text Color: White");
+  AppendMenuW(menu, MF_STRING, kTextYellow, L"Text Color: Yellow");
 
   RECT anchor{};
   HWND button = control(hwnd, kModuleOverlay);
@@ -387,6 +403,8 @@ void show_overlay_tools(HWND hwnd)
   else if (choice == kEngineer) g_controller->trigger_action("overlay_profile:engineer");
   else if (choice == kStudio) g_controller->trigger_action("overlay_profile:studio");
   else if (choice == kMinimal) g_controller->trigger_action("overlay_profile:minimal");
+  else if (choice == kTextWhite) g_controller->trigger_action("overlay_text_color:white");
+  else if (choice == kTextYellow) g_controller->trigger_action("overlay_text_color:yellow");
   else {
     const char* key = choice == kEnabled ? "enabled" :
                       choice == kCueId ? "show_cue_id" :
@@ -400,7 +418,16 @@ void show_overlay_tools(HWND hwnd)
                       choice == kCueType ? "show_cue_type" :
                       choice == kStreamer ? "show_streamer" :
                       choice == kFlash ? "show_flash" :
-                      choice == kMetadata ? "show_metadata" : nullptr;
+                      choice == kMetadata ? "show_metadata" :
+                      choice == kBgCueId ? "bg_cue_id" :
+                      choice == kBgCharacter ? "bg_character" :
+                      choice == kBgTimecode ? "bg_cue_timecode" :
+                      choice == kBgProjectTimer ? "bg_project_timer" :
+                      choice == kBgDialogue ? "bg_dialogue" :
+                      choice == kBgDirection ? "bg_direction" :
+                      choice == kBgCueType ? "bg_cue_type" :
+                      choice == kBgStatus ? "bg_status" :
+                      choice == kBgMetadata ? "bg_metadata" : nullptr;
     if (!key) return;
     g_controller->trigger_action(std::string("overlay_toggle:") + key);
   }
