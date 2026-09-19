@@ -444,13 +444,50 @@ void edit_overlay_settings(HWND hwnd)
   if (!g_controller) return;
   const auto& overlay = g_controller->view().preferences.overlay;
 
-  const std::string current = overlay.metadata_fields + "|" + std::to_string(overlay.preroll_seconds);
-  const std::wstring prompt =
-    L"Current metadata fields and pre-roll settings:\n\n" +
-    win32::utf8_to_wide(current) +
-    L"\n\nUse the full Overlay tab on Linux/macOS for free-form editing. "
-    L"Windows currently preserves these values while exposing the same native save action.";
-  MessageBoxW(hwnd, prompt.c_str(), L"ReaADR Overlay Settings", MB_OK | MB_ICONINFORMATION);
+  constexpr int kMetadata = 1, kPreroll = 2, kSave = 3, kCancel = 4;
+  HWND dialog = CreateWindowExW(
+    WS_EX_DLGMODALFRAME, L"STATIC", L"ReaADR Overlay Settings",
+    WS_POPUP | WS_CAPTION | WS_SYSMENU | WS_VISIBLE,
+    CW_USEDEFAULT, CW_USEDEFAULT, 560, 190, hwnd, nullptr, GetModuleHandleW(nullptr), nullptr);
+  if (!dialog) return;
+
+  create_child(dialog, L"STATIC", L"Metadata fields (comma-separated)", SS_LEFT, 16, 18, 250, 20, -1);
+  create_child(dialog, L"EDIT", win32::utf8_to_wide(overlay.metadata_fields).c_str(),
+               WS_BORDER | WS_TABSTOP | ES_AUTOHSCROLL, 16, 42, 510, 24, kMetadata);
+  create_child(dialog, L"STATIC", L"Pre-roll seconds", SS_LEFT, 16, 80, 120, 20, -1);
+  create_child(dialog, L"EDIT", win32::utf8_to_wide(std::to_string(overlay.preroll_seconds)).c_str(),
+               WS_BORDER | WS_TABSTOP | ES_AUTOHSCROLL, 142, 78, 110, 24, kPreroll);
+  create_child(dialog, L"BUTTON", L"Save", BS_DEFPUSHBUTTON | WS_TABSTOP, 350, 116, 80, 28, kSave);
+  create_child(dialog, L"BUTTON", L"Cancel", BS_PUSHBUTTON | WS_TABSTOP, 446, 116, 80, 28, kCancel);
+
+  EnableWindow(hwnd, FALSE);
+  MSG message{};
+  bool save = false;
+  while (IsWindow(dialog) && GetMessageW(&message, nullptr, 0, 0) > 0) {
+    if (message.hwnd == dialog || IsChild(dialog, message.hwnd)) {
+      if (message.message == WM_COMMAND) {
+        const int id = LOWORD(message.wParam);
+        if (id == kSave || id == kCancel) {
+          save = id == kSave;
+          DestroyWindow(dialog);
+          continue;
+        }
+      } else if (message.message == WM_CLOSE) {
+        DestroyWindow(dialog);
+        continue;
+      }
+    }
+    TranslateMessage(&message);
+    DispatchMessageW(&message);
+  }
+  EnableWindow(hwnd, TRUE);
+  SetForegroundWindow(hwnd);
+
+  if (!save || !g_controller) return;
+  const std::string metadata = win32::get_window_text_utf8(GetDlgItem(dialog, kMetadata));
+  const std::string preroll = win32::get_window_text_utf8(GetDlgItem(dialog, kPreroll));
+  g_controller->trigger_action(std::string("overlay_settings:") + metadata + "|" + preroll);
+  reload_and_refresh(hwnd);
 }
 
 void show_import_tools(HWND hwnd)
