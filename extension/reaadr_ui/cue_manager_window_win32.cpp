@@ -372,10 +372,13 @@ void show_overlay_tools(HWND hwnd)
 void show_import_tools(HWND hwnd)
 {
   if (!g_controller) return;
-  constexpr UINT kImport = 1, kPreview = 2;
+  constexpr UINT kImportAll = 1, kPreview = 2, kImportSelected = 3, kImportUpdate = 4;
   HMENU menu = CreatePopupMenu();
   if (!menu) return;
-  AppendMenuW(menu, MF_STRING, kImport, L"Choose Cue Sheet and Import");
+  AppendMenuW(menu, MF_STRING, kImportAll, L"Choose Cue Sheet and Import All");
+  AppendMenuW(menu, MF_STRING, kImportSelected, L"Choose Cue Sheet and Import Selected Characters");
+  AppendMenuW(menu, MF_STRING, kImportUpdate, L"Choose Cue Sheet and Update Existing Cues");
+  AppendMenuW(menu, MF_SEPARATOR, 0, nullptr);
   AppendMenuW(menu, MF_STRING, kPreview, L"Choose Cue Sheet and Preview Headers");
   RECT anchor{};
   HWND button = control(hwnd, kModuleImport);
@@ -383,9 +386,25 @@ void show_import_tools(HWND hwnd)
   const UINT choice = TrackPopupMenu(menu, TPM_RETURNCMD | TPM_LEFTALIGN | TPM_TOPALIGN | TPM_RIGHTBUTTON,
                                      anchor.left, anchor.bottom, 0, hwnd, nullptr);
   DestroyMenu(menu);
-  if (choice == kImport) g_controller->trigger_import({}, false, "all", {});
-  else if (choice == kPreview) g_controller->trigger_import({}, true, "all", {});
-  else return;
+  if (!choice) return;
+
+  const std::string mapping = g_controller->last_import_mapping();
+  if (choice == kImportAll)
+    g_controller->trigger_import(mapping, false, "all", {});
+  else if (choice == kPreview)
+    g_controller->trigger_import(mapping, true, "all", {});
+  else if (choice == kImportUpdate)
+    g_controller->trigger_import(mapping, false, "update", {});
+  else if (choice == kImportSelected) {
+    const std::string character = control_text(hwnd, kCharacter);
+    if (character.empty()) {
+      MessageBoxW(hwnd,
+        L"Enter or choose a Character filter first. The selected-character import mode uses that value as its import scope.",
+        L"ReaADR Import", MB_OK | MB_ICONINFORMATION);
+      return;
+    }
+    g_controller->trigger_import(mapping, false, "selected", character);
+  } else return;
   reload_and_refresh(hwnd);
 }
 
