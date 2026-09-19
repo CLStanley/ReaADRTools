@@ -534,6 +534,11 @@ LRESULT CALLBACK cue_info_window_proc(HWND hwnd, UINT message, WPARAM wparam, LP
       if (handle_cue_info_command(hwnd, LOWORD(wparam), HIWORD(wparam))) return 0;
       break;
 
+    case WM_GETDLGCODE:
+      if (wparam == VK_LEFT || wparam == VK_RIGHT || wparam == VK_SPACE)
+        return DLGC_WANTALLKEYS;
+      break;
+
     case WM_CLOSE:
       close_window(hwnd);
       return 0;
