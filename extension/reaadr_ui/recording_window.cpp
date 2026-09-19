@@ -423,21 +423,11 @@ bool show_recording_window(RecordingController& controller)
   update_window(hwnd);
   SetTimer(hwnd, kTimer, 30, nullptr);
 
-  MSG message{};
-  while (IsWindow(hwnd) && GetMessage(&message, nullptr, 0, 0) > 0) {
-    if (message.message == WM_KEYDOWN && message.wParam == VK_SPACE && Main_OnCommand) {
-      Main_OnCommand(kTransportPlayStop, 0);
-      continue;
-    }
-    if (!IsDialogMessage(hwnd, &message)) {
-      TranslateMessage(&message);
-      DispatchMessage(&message);
-    }
-  }
-  const bool closed = !IsWindow(hwnd);
-  g_window = nullptr;
-  g_controller = nullptr;
-  return closed;
+  // Keep the native window modeless, like the SWELL implementation and REAPER's
+  // other extension windows. The host owns the application message pump; running
+  // a nested GetMessage loop here blocks the command hook that opened Record Cue
+  // and makes Windows behave differently from Linux/macOS.
+  return true;
 #endif
 }
 
