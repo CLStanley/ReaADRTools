@@ -2,6 +2,7 @@
 #include "reaadr_ui.hpp"
 #include "cue_manager_ui_contract.hpp"
 #include "reaadr_core/domain_utils.hpp"
+#include "reaadr_reaper/window_docking.hpp"
 #ifdef _WIN32
 // Common Controls depends on the core Win32 declarations. Keep both includes
 // local to the only translation unit that uses the native list-view API.
@@ -80,6 +81,9 @@ CueManagerController* g_controller = nullptr;
 // List notifications during rebuilding must not overwrite the canonical selection.
 bool g_refreshing_rows = false;
 double g_frame_rate = 24.0;
+HWND g_window = nullptr;
+constexpr const char* kDockIdentifier = "reaadr.cue_manager";
+constexpr const char* kWindowTitle = "ReaADR Tools - Cue Manager";
 
 std::string display_timecode(const std::string& value)
 {
@@ -360,6 +364,19 @@ INT_PTR columns_proc(HWND hwnd, UINT message, WPARAM wparam, LPARAM lparam)
 INT_PTR cue_manager_proc(HWND hwnd, UINT message, WPARAM wparam, LPARAM lparam)
 {
   if (message == WM_INITDIALOG) {
+    g_window = hwnd;
+    if (g_controller) {
+      const auto layout = g_controller->load_window_layout();
+      RECT current{};
+      if (GetWindowRect(hwnd, &current)) {
+        SetWindowPos(hwnd, nullptr, layout.has_position ? layout.x : current.left,
+                     layout.has_position ? layout.y : current.top,
+                     (std::max)(800, layout.width), (std::max)(600, layout.height),
+                     SWP_NOZORDER | SWP_NOACTIVATE);
+      }
+      if (layout.dock >= 0)
+        reaper::add_window_to_docker(hwnd, kWindowTitle, kDockIdentifier, layout.dock);
+    }
     const HWND table = GetDlgItem(hwnd, kRows);
     ListView_SetExtendedListViewStyleEx(table, 0, LVS_EX_FULLROWSELECT | LVS_EX_GRIDLINES);
     const auto& columns = core::cue_manager_columns();
@@ -401,6 +418,19 @@ INT_PTR cue_manager_proc(HWND hwnd, UINT message, WPARAM wparam, LPARAM lparam)
     return 1;
   }
   if (message == WM_COMMAND && (LOWORD(wparam) == IDOK || LOWORD(wparam) == IDCANCEL)) {
+    if (g_controller) {
+      RECT rect{};
+      if (GetWindowRect(hwnd, &rect)) {
+        core::WindowLayout layout;
+        layout.x = rect.left; layout.y = rect.top;
+        layout.width = rect.right - rect.left; layout.height = rect.bottom - rect.top;
+        layout.dock = reaper::inspect_window_dock_state(hwnd).dock_index;
+        layout.has_position = true;
+        g_controller->save_window_layout(layout);
+      }
+    }
+    if (reaper::inspect_window_dock_state(hwnd).docked()) reaper::remove_window_from_docker(hwnd);
+    if (g_window == hwnd) g_window = nullptr;
     EndDialog(hwnd, 0); return 1;
   }
   if (message == WM_COMMAND && LOWORD(wparam) == kColumns) {
@@ -934,8 +964,15 @@ bool show_cue_manager(CueManagerController& controller, double frame_rate)
 {
 #ifndef _WIN32
   g_frame_rate = frame_rate;
+  if (g_window && IsWindow(g_window)) {
+    ShowWindow(g_window, SW_SHOW);
+    reaper::activate_docked_window(g_window);
+    SetForegroundWindow(g_window);
+    return true;
+  }
   g_controller = &controller;
   const int result = DialogBoxParam(nullptr, MAKEINTRESOURCE(kDialog), nullptr, cue_manager_proc, 0);
+  g_window = nullptr;
   g_controller = nullptr;
   return result >= 0;
 #else
