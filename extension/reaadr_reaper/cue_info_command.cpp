@@ -25,6 +25,8 @@
 #include <reaper_plugin.h>
 #include <reaper_plugin_functions.h>
 
+#include <memory>
+
 namespace reaadr::reaper {
 namespace {
 
@@ -56,49 +58,67 @@ bool refresh_overlay_application(OverlayApplicationService& overlay,
   return static_cast<bool>(refreshed);
 }
 
+struct CueInfoWindowSession {
+  ProjectStateStore project_state;
+  core::SessionModelRepository sessions;
+  core::EventLogRepository event_log;
+  core::CharacterFilterRepository filters;
+  core::OverlaySettingsRepository overlay_settings;
+  core::CueSelectionRepository selections;
+  core::ManagerPreferencesRepository preferences;
+  RecordingTargetApplicationService targets;
+  CueInfoApplicationService info;
+  OverlayApplicationService overlay;
+  SessionRenderService renderer;
+  SessionRenderOptions render_options;
+  CueManagerApplicationService mutations;
+  CueNavigationApi navigation_api;
+  ui::CueInfoController controller;
+
+  CueInfoWindowSession()
+    : project_state(nullptr, {GetProjExtState, SetProjExtState}),
+      sessions(project_state),
+      event_log(project_state),
+      filters(project_state),
+      overlay_settings(project_state),
+      selections(project_state),
+      preferences(project_state),
+      targets(sessions, selections, filters, overlay_settings),
+      info(targets, nullptr, native_cue_take_count_api()),
+      overlay(sessions, overlay_settings, selections, filters,
+              {command_frame_rate, empty_overlay_selection, command_refresh_overlay}),
+      renderer(sessions, event_log, filters, nullptr,
+               native_track_region_api(), native_ruler_lane_api(), native_cue_audio_api(),
+               native_transaction_api()),
+      render_options(),
+      mutations(sessions, overlay_settings, selections, renderer, render_options,
+                {native_utc_timestamp, command_frame_rate}),
+      navigation_api{GetPlayState, GetPlayPosition, GetCursorPosition, SetEditCurPos},
+      controller(info, mutations, sessions, selections, preferences, project_state, navigation_api,
+                 render_options.refresh_overlay,
+                 {native_play_state, native_play_position, native_cursor_position, command_frame_rate})
+  {
+    render_options.cue_audio_path = native_project_cue_audio_path(nullptr);
+    render_options.event.source = "native_cue_info";
+    render_options.refresh_overlay = [this](std::string* error) {
+      return refresh_overlay_application(overlay, error);
+    };
+  }
+};
+
+std::unique_ptr<CueInfoWindowSession> g_cue_info_session;
+
 } // namespace
 
 bool run_native_cue_info_command()
 {
-  ProjectStateStore project_state(nullptr, {GetProjExtState, SetProjExtState});
-  core::SessionModelRepository sessions(project_state);
-  core::EventLogRepository event_log(project_state);
-  core::CharacterFilterRepository filters(project_state);
-  core::OverlaySettingsRepository overlay_settings(project_state);
-  core::CueSelectionRepository selections(project_state);
-  core::ManagerPreferencesRepository preferences(project_state);
+  if (!g_cue_info_session)
+    g_cue_info_session = std::make_unique<CueInfoWindowSession>();
 
-  RecordingTargetApplicationService targets(
-    sessions, selections, filters, overlay_settings);
-  CueInfoApplicationService info(
-    targets, nullptr, native_cue_take_count_api());
+  if (ui::show_cue_info_window(g_cue_info_session->controller)) return true;
 
-  OverlayApplicationService overlay(
-    sessions, overlay_settings, selections, filters,
-    {command_frame_rate, empty_overlay_selection, command_refresh_overlay});
-
-  SessionRenderService renderer(
-    sessions, event_log, filters, nullptr,
-    native_track_region_api(), native_ruler_lane_api(), native_cue_audio_api(),
-    native_transaction_api());
-  SessionRenderOptions render_options;
-  render_options.cue_audio_path = native_project_cue_audio_path(nullptr);
-  render_options.event.source = "native_cue_info";
-  render_options.refresh_overlay = [&overlay](std::string* error) {
-    return refresh_overlay_application(overlay, error);
-  };
-  CueManagerApplicationService mutations(
-    sessions, overlay_settings, selections, renderer, render_options,
-    {native_utc_timestamp, command_frame_rate});
-
-  const CueNavigationApi navigation_api = {
-    GetPlayState, GetPlayPosition, GetCursorPosition, SetEditCurPos,
-  };
-  ui::CueInfoController controller(
-    info, mutations, sessions, selections, preferences, project_state, navigation_api,
-    render_options.refresh_overlay,
-    {native_play_state, native_play_position, native_cursor_position, command_frame_rate});
-  return ui::show_cue_info_window(controller);
+  g_cue_info_session.reset();
+  return false;
 }
 
 } // namespace reaadr::reaper
