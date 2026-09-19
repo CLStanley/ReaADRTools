@@ -389,6 +389,71 @@ void show_import_tools(HWND hwnd)
   reload_and_refresh(hwnd);
 }
 
+void show_preferences_tools(HWND hwnd)
+{
+  if (!g_controller) return;
+  const auto& prefs = g_controller->view().preferences;
+  constexpr UINT kRemember = 1, kHover = 2, kTooltips = 3, kWrap = 4,
+                 kAutoDock = 5, kQuick1 = 10, kQuick2 = 11, kQuick3 = 12, kQuick4 = 13;
+  HMENU menu = CreatePopupMenu();
+  if (!menu) return;
+  auto add_toggle = [menu](UINT id, const wchar_t* label, bool enabled) {
+    AppendMenuW(menu, MF_STRING | (enabled ? MF_CHECKED : MF_UNCHECKED), id, label);
+  };
+  add_toggle(kRemember, L"Remember Window Layout", prefs.remember_layout);
+  add_toggle(kHover, L"Cue Hover Preview", prefs.hover_preview);
+  add_toggle(kTooltips, L"Tooltips", prefs.tooltips);
+  add_toggle(kWrap, L"Navigation Wrap", prefs.navigation_wrap);
+  add_toggle(kAutoDock, L"Cue Manager Auto-Dock", prefs.cue_manager_auto_dock);
+  AppendMenuW(menu, MF_SEPARATOR, 0, nullptr);
+  AppendMenuW(menu, MF_STRING, kQuick1, L"Configure Quick Action 1");
+  AppendMenuW(menu, MF_STRING, kQuick2, L"Configure Quick Action 2");
+  AppendMenuW(menu, MF_STRING, kQuick3, L"Configure Quick Action 3");
+  AppendMenuW(menu, MF_STRING, kQuick4, L"Configure Quick Action 4");
+
+  RECT anchor{};
+  HWND button = control(hwnd, kModulePreferences);
+  if (button) GetWindowRect(button, &anchor); else GetWindowRect(hwnd, &anchor);
+  const UINT choice = TrackPopupMenu(menu, TPM_RETURNCMD | TPM_LEFTALIGN | TPM_TOPALIGN | TPM_RIGHTBUTTON,
+                                     anchor.left, anchor.bottom, 0, hwnd, nullptr);
+  DestroyMenu(menu);
+  if (!choice) return;
+
+  if (choice >= kQuick1 && choice <= kQuick4) {
+    const std::size_t slot = choice - kQuick1;
+    const auto actions = core::manager_quick_action_choices();
+    HMENU actions_menu = CreatePopupMenu();
+    if (!actions_menu) return;
+    for (std::size_t i = 0; i < actions.size(); ++i) {
+      const std::wstring label = win32::utf8_to_wide(actions[i]);
+      AppendMenuW(actions_menu, MF_STRING, 100 + static_cast<UINT>(i), label.c_str());
+    }
+    const UINT selected = TrackPopupMenu(actions_menu, TPM_RETURNCMD | TPM_LEFTALIGN | TPM_TOPALIGN | TPM_RIGHTBUTTON,
+                                         anchor.left, anchor.bottom, 0, hwnd, nullptr);
+    DestroyMenu(actions_menu);
+    if (selected < 100 || selected >= 100 + actions.size()) return;
+    auto configured = prefs.quick_actions;
+    configured[slot] = actions[selected - 100];
+    std::string action = "quick_actions:";
+    for (std::size_t i = 0; i < configured.size(); ++i) {
+      if (i) action += ',';
+      action += configured[i];
+    }
+    g_controller->trigger_action(action);
+  } else {
+    const char* key = choice == kRemember ? "remember_layout" :
+                      choice == kHover ? "hover_preview" :
+                      choice == kTooltips ? "tooltips" :
+                      choice == kWrap ? "navigation_wrap" : "cue_manager_auto_dock";
+    const bool current = choice == kRemember ? prefs.remember_layout :
+                         choice == kHover ? prefs.hover_preview :
+                         choice == kTooltips ? prefs.tooltips :
+                         choice == kWrap ? prefs.navigation_wrap : prefs.cue_manager_auto_dock;
+    g_controller->trigger_action(std::string("preference_toggles:") + key + "=" + (current ? "0" : "1"));
+  }
+  reload_and_refresh(hwnd);
+}
+
 void show_help(HWND hwnd)
 {
   MessageBoxW(hwnd, L"Cues: browse, filter, edit, navigate, record, and inspect canonical cues.\n\nImport: choose a cue sheet and run the native transactional importer.\n\nSession: validate or refresh generated tracks, regions, cue audio, filters, and overlays.\n\nReports: inspect a session summary or export cue, timing, and metadata reports.\n\nOverlay: refresh native video overlay output and profiles.\n\nPreferences: edit native Manager and overlay preferences.", L"ReaADR Manager Help", MB_OK | MB_ICONINFORMATION);
@@ -525,7 +590,7 @@ LRESULT CALLBACK cue_manager_wnd_proc(HWND hwnd, UINT message, WPARAM wparam, LP
       if (command == kModuleCues) { reload_and_refresh(hwnd); return 0; }
       if (command == kModuleImport) { show_import_tools(hwnd); return 0; }
       if (command == kModuleSession) { show_session_tools(hwnd); return 0; } if (command == kModuleReports) { show_reports_tools(hwnd); return 0; } if (command == kModuleOverlay) { show_overlay_tools(hwnd); return 0; }
-      if (command == kModulePreferences) { if (g_controller) { g_controller->trigger_action("preferences"); reload_and_refresh(hwnd); } return 0; }
+      if (command == kModulePreferences) { show_preferences_tools(hwnd); return 0; }
       if (command == kModuleHelp) { show_help(hwnd); return 0; } if (command == kColumns) { show_column_widths(hwnd); return 0; } if (command == kJump) { jump_to_cue(hwnd); return 0; } if (command == kApplyFilter) { apply_table_filters(hwnd); return 0; }
       if (command == kResetFilter) { SetDlgItemTextW(hwnd, kSearch, L""); SetDlgItemTextW(hwnd, kCharacter, L""); SetDlgItemTextW(hwnd, kStatus, L"Any"); if (g_controller && g_controller->set_filters({}, {}, {})) refresh_rows(hwnd); return 0; }
       if (command == kCharacterFilter) { show_character_filter_tools(hwnd); return 0; }
