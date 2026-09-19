@@ -16,6 +16,7 @@
 #ifndef _WIN32
 #include <swell/swell-dlggen.h>
 #endif
+#include <algorithm>
 #include <string>
 #include <cstring>
 #include <cctype>
