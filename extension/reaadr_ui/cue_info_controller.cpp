@@ -5,6 +5,8 @@
 #include <cstdlib>
 #include <set>
 
+#include "../reaadr_core/window_layout.hpp"
+
 namespace reaadr::ui {
 namespace {
 constexpr const char* kStateNamespace = "ReaADRTools";
@@ -48,37 +50,33 @@ double CueInfoController::frame_rate() const
 
 bool CueInfoController::remember_window_layout() const
 {
-  const auto value = project_state_.read(kStateNamespace, kRememberLayoutKey);
-  if (!value) return false;
-  return value.value == "1" || value.value == "true" || value.value == "yes";
+  core::WindowLayoutRepository layouts(
+    const_cast<core::ProjectStateStore&>(project_state_), "cue_info", 1100, 740);
+  const auto loaded = layouts.load();
+  return loaded && loaded.remembered;
 }
 
 CueInfoWindowLayout CueInfoController::load_window_layout() const
 {
-  CueInfoWindowLayout layout;
-  if (!remember_window_layout()) return layout;
-
-  int value = 0;
-  if (parse_int(project_state_.read(kStateNamespace, kWindowWidthKey), value) && value > 0)
-    layout.width = (std::max)(820, value);
-  if (parse_int(project_state_.read(kStateNamespace, kWindowHeightKey), value) && value > 0)
-    layout.height = (std::max)(560, value);
-  if (parse_int(project_state_.read(kStateNamespace, kWindowDockKey), value))
-    layout.dock = value;
-  const bool has_x = parse_int(project_state_.read(kStateNamespace, kWindowXKey), layout.x);
-  const bool has_y = parse_int(project_state_.read(kStateNamespace, kWindowYKey), layout.y);
-  layout.has_position = has_x && has_y;
-  return layout;
+  core::WindowLayoutRepository layouts(
+    const_cast<core::ProjectStateStore&>(project_state_), "cue_info", 1100, 740);
+  const auto loaded = layouts.load();
+  if (!loaded) return {};
+  const auto& source = loaded.layout;
+  return {source.width, source.height, source.dock, source.x, source.y, source.has_position};
 }
 
 bool CueInfoController::save_window_layout(const CueInfoWindowLayout& layout)
 {
-  if (!remember_window_layout()) return false;
-  return project_state_.write(kStateNamespace, kWindowDockKey, std::to_string(layout.dock)) &&
-    project_state_.write(kStateNamespace, kWindowXKey, std::to_string(layout.x)) &&
-    project_state_.write(kStateNamespace, kWindowYKey, std::to_string(layout.y)) &&
-    project_state_.write(kStateNamespace, kWindowWidthKey, std::to_string((std::max)(820, layout.width))) &&
-    project_state_.write(kStateNamespace, kWindowHeightKey, std::to_string((std::max)(560, layout.height)));
+  core::WindowLayoutRepository layouts(project_state_, "cue_info", 1100, 740);
+  core::WindowLayout value;
+  value.width = layout.width;
+  value.height = layout.height;
+  value.dock = layout.dock;
+  value.x = layout.x;
+  value.y = layout.y;
+  value.has_position = layout.has_position;
+  return layouts.save(value);
 }
 
 CueInfoLaunchOptions CueInfoController::consume_launch_options()
