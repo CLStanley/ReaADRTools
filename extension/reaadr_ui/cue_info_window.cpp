@@ -608,28 +608,10 @@ bool show_cue_info_window(CueInfoController& controller)
   UpdateWindow(hwnd);
   SetTimer(hwnd, kTimer, 100, nullptr);
 
-  MSG message{};
-  while (IsWindow(hwnd) && GetMessage(&message, nullptr, 0, 0) > 0) {
-    if (message.message == WM_KEYDOWN && !editor_has_focus(hwnd)) {
-      const int key = static_cast<int>(message.wParam);
-      if (key == VK_SPACE && Main_OnCommand) {
-        Main_OnCommand(kTransportPlayStop, 0);
-        continue;
-      }
-      if (handle_nav_key(hwnd, key)) continue;
-    }
-    if (!IsDialogMessage(hwnd, &message)) {
-      TranslateMessage(&message);
-      DispatchMessage(&message);
-    }
-  }
-  const bool closed = !IsWindow(hwnd);
-  g_window = nullptr;
-  g_controller = nullptr;
-  g_close_on_save = false;
-  g_dirty = false;
-  g_loaded_key.clear();
-  return closed;
+  // REAPER owns the application message pump. Keep Cue Info modeless so opening
+  // the native window does not block the action hook and so Windows matches the
+  // persistent SWELL window behavior on Linux/macOS.
+  return true;
 #endif
 }
 
