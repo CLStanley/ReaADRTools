@@ -157,11 +157,7 @@ bool close_recording(HWND hwnd)
   if (dock.docked()) reaper::remove_window_from_docker(hwnd);
   KillTimer(hwnd, kTimer);
   if (g_window == hwnd) g_window = nullptr;
-#ifdef _WIN32
   DestroyWindow(hwnd);
-#else
-  EndDialog(hwnd, 0);
-#endif
   return true;
 }
 
@@ -205,7 +201,7 @@ INT_PTR recording_proc(HWND hwnd, UINT message, WPARAM wparam, LPARAM)
     case WM_INITDIALOG:
       if (!g_controller || !g_controller->begin()) {
         show_error(hwnd);
-        EndDialog(hwnd, -1);
+        DestroyWindow(hwnd);
         return 1;
       }
       g_window = hwnd;
@@ -234,6 +230,12 @@ INT_PTR recording_proc(HWND hwnd, UINT message, WPARAM wparam, LPARAM)
 
     case WM_CLOSE:
       close_recording(hwnd);
+      return 1;
+
+    case WM_DESTROY:
+      KillTimer(hwnd, kTimer);
+      if (g_window == hwnd) g_window = nullptr;
+      g_controller = nullptr;
       return 1;
   }
   return 0;
@@ -395,11 +397,18 @@ bool show_recording_window(RecordingController& controller)
 
 #ifndef _WIN32
   g_controller = &controller;
-  const int result = DialogBoxParam(
+  g_window = CreateDialogParam(
     nullptr, MAKEINTRESOURCE(kDialog), nullptr, recording_proc, 0);
-  g_window = nullptr;
-  g_controller = nullptr;
-  return result >= 0;
+  if (!g_window) {
+    if (g_controller) g_controller->shutdown();
+    g_controller = nullptr;
+    return false;
+  }
+  ShowWindow(g_window, SW_SHOW);
+  if (reaper::inspect_window_dock_state(g_window).docked())
+    reaper::activate_docked_window(g_window);
+  SetForegroundWindow(g_window);
+  return true;
 #else
   if (!register_windows_recording_class()) return false;
   g_controller = &controller;
