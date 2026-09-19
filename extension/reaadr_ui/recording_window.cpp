@@ -349,6 +349,10 @@ LRESULT CALLBACK recording_window_proc(HWND hwnd, UINT message, WPARAM wparam, L
       if (handle_recording_command(hwnd, LOWORD(wparam))) return 0;
       break;
 
+    case WM_GETDLGCODE:
+      if (wparam == VK_SPACE) return DLGC_WANTALLKEYS;
+      break;
+
     case WM_CLOSE:
       close_recording(hwnd);
       return 0;
