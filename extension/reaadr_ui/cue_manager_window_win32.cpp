@@ -79,6 +79,7 @@ constexpr int kLabelEnd = 48341;
 constexpr int kColumns = 48342;
 constexpr int kJumpCueId = 48343;
 constexpr int kJump = 48344;
+constexpr int kClearCharacterCues = 48345;
 
 CueManagerController* g_controller = nullptr;
 double g_frame_rate = 24.0;
@@ -264,6 +265,19 @@ void show_reports_tools(HWND hwnd)
   else if (choice == kMetadata) g_controller->trigger_action("export_session_metadata");
 }
 
+void clear_character_cues(HWND hwnd)
+{
+  if (!g_controller) return;
+  const std::string character = control_text(hwnd, kCharacter);
+  std::string prompt = "Clear generated cues";
+  if (!character.empty()) prompt += " for " + character;
+  prompt += "?\n\nThis rebuilds the native generated cue artifacts for the selected scope.";
+  if (win32::message_box_utf8(hwnd, prompt, "ReaADR Cue Manager", MB_YESNO | MB_ICONWARNING) != IDYES)
+    return;
+  g_controller->trigger_action("clear_character_cues");
+  reload_and_refresh(hwnd);
+}
+
 void show_character_filter_tools(HWND hwnd)
 {
   if (!g_controller) return;
@@ -354,6 +368,7 @@ void create_window_controls(HWND hwnd)
   create_child(hwnd, L"BUTTON", L"Update From Regions", BS_PUSHBUTTON | WS_TABSTOP, 474, 80, 138, 26, kSync); create_child(hwnd, L"BUTTON", L"New Cue", BS_PUSHBUTTON | WS_TABSTOP, 624, 80, 74, 26, kNewCue);
   create_child(hwnd, L"BUTTON", L"Add Cue", BS_PUSHBUTTON | WS_TABSTOP, 704, 80, 74, 26, kAddCue); create_child(hwnd, L"BUTTON", L"Remove Cue", BS_PUSHBUTTON | WS_TABSTOP, 784, 80, 88, 26, kRemoveCue);
   create_child(hwnd, L"BUTTON", L"Columns", BS_PUSHBUTTON | WS_TABSTOP, 878, 80, 82, 26, kColumns);
+  create_child(hwnd, L"BUTTON", L"Clear Character Cues", BS_PUSHBUTTON | WS_TABSTOP, 966, 80, 124, 26, kClearCharacterCues);
   create_child(hwnd, WC_LISTVIEWW, L"", LVS_REPORT | LVS_SINGLESEL | LVS_SHOWSELALWAYS | WS_BORDER | WS_TABSTOP, 16, 116, 1040, 452, kRows);
   HWND table = control(hwnd, kRows); ListView_SetExtendedListViewStyleEx(table, 0, LVS_EX_FULLROWSELECT | LVS_EX_GRIDLINES);
   const auto& columns = core::cue_manager_columns();
@@ -471,6 +486,7 @@ LRESULT CALLBACK cue_manager_wnd_proc(HWND hwnd, UINT message, WPARAM wparam, LP
       if (command == kModuleHelp) { show_help(hwnd); return 0; } if (command == kColumns) { show_column_widths(hwnd); return 0; } if (command == kJump) { jump_to_cue(hwnd); return 0; } if (command == kApplyFilter) { apply_table_filters(hwnd); return 0; }
       if (command == kResetFilter) { SetDlgItemTextW(hwnd, kSearch, L""); SetDlgItemTextW(hwnd, kCharacter, L""); SetDlgItemTextW(hwnd, kStatus, L"Any"); if (g_controller && g_controller->set_filters({}, {}, {})) refresh_rows(hwnd); return 0; }
       if (command == kCharacterFilter) { show_character_filter_tools(hwnd); return 0; }
+      if (command == kClearCharacterCues) { clear_character_cues(hwnd); return 0; }
       if (command == kRecord || command == kCueInfo || command == kRefresh || command == kSync) { if (!g_controller) return 0; const char* action = command == kRecord ? "record_cue" : command == kCueInfo ? "cue_info" : command == kRefresh ? "refresh_session" : "sync_regions"; g_controller->trigger_action(action); reload_and_refresh(hwnd); return 0; }
       if (command == kNewCue) { populate_new_cue(hwnd); return 0; } if (command == kAddCue) { add_cue(hwnd); return 0; }
       if (command == kRemoveCue) { const auto* row = g_controller ? g_controller->selected_row() : nullptr; if (!row) { MessageBoxW(hwnd, L"Select a cue before removing it.", L"ReaADR Cue Manager", MB_OK | MB_ICONINFORMATION); return 0; } const std::string prompt = "Remove cue " + row->cue_key + " (" + row->character + ")?"; if (win32::message_box_utf8(hwnd, prompt, "ReaADR Cue Manager", MB_YESNO | MB_ICONWARNING) == IDYES) { std::string error; if (g_controller->remove_selected(error)) refresh_rows(hwnd); else if (!error.empty()) win32::message_box_utf8(hwnd, error, "ReaADR Cue Manager", MB_OK | MB_ICONERROR); } return 0; }
