@@ -272,6 +272,26 @@ void show_overlay_tools(HWND hwnd)
   reload_and_refresh(hwnd);
 }
 
+void show_import_tools(HWND hwnd)
+{
+  if (!g_controller) return;
+  constexpr UINT kImport = 1, kPreview = 2;
+  HMENU menu = CreatePopupMenu();
+  if (!menu) return;
+  AppendMenuW(menu, MF_STRING, kImport, L"Choose Cue Sheet and Import");
+  AppendMenuW(menu, MF_STRING, kPreview, L"Choose Cue Sheet and Preview Headers");
+  RECT anchor{};
+  HWND button = control(hwnd, kModuleImport);
+  if (button) GetWindowRect(button, &anchor); else GetWindowRect(hwnd, &anchor);
+  const UINT choice = TrackPopupMenu(menu, TPM_RETURNCMD | TPM_LEFTALIGN | TPM_TOPALIGN | TPM_RIGHTBUTTON,
+                                     anchor.left, anchor.bottom, 0, hwnd, nullptr);
+  DestroyMenu(menu);
+  if (choice == kImport) g_controller->trigger_import({}, false, "all", {});
+  else if (choice == kPreview) g_controller->trigger_import({}, true, "all", {});
+  else return;
+  reload_and_refresh(hwnd);
+}
+
 void show_help(HWND hwnd)
 {
   MessageBoxW(hwnd, L"Cues: browse, filter, edit, navigate, record, and inspect canonical cues.\n\nImport: choose a cue sheet and run the native transactional importer.\n\nSession: validate or refresh generated tracks, regions, cue audio, filters, and overlays.\n\nReports: inspect a session summary or export cue, timing, and metadata reports.\n\nOverlay: refresh native video overlay output and profiles.\n\nPreferences: edit native Manager and overlay preferences.", L"ReaADR Manager Help", MB_OK | MB_ICONINFORMATION);
@@ -405,7 +425,7 @@ LRESULT CALLBACK cue_manager_wnd_proc(HWND hwnd, UINT message, WPARAM wparam, LP
     case WM_COMMAND: {
       const int command = LOWORD(wparam);
       if (command == kModuleCues) { reload_and_refresh(hwnd); return 0; }
-      if (command == kModuleImport) { if (g_controller) { g_controller->trigger_import({}, false, "all", {}); reload_and_refresh(hwnd); } return 0; }
+      if (command == kModuleImport) { show_import_tools(hwnd); return 0; }
       if (command == kModuleSession) { show_session_tools(hwnd); return 0; } if (command == kModuleReports) { show_reports_tools(hwnd); return 0; } if (command == kModuleOverlay) { show_overlay_tools(hwnd); return 0; }
       if (command == kModulePreferences) { if (g_controller) { g_controller->trigger_action("preferences"); reload_and_refresh(hwnd); } return 0; }
       if (command == kModuleHelp) { show_help(hwnd); return 0; } if (command == kColumns) { show_column_widths(hwnd); return 0; } if (command == kJump) { jump_to_cue(hwnd); return 0; } if (command == kApplyFilter) { apply_table_filters(hwnd); return 0; }
