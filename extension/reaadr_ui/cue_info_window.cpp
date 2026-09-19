@@ -544,7 +544,12 @@ LRESULT CALLBACK cue_info_window_proc(HWND hwnd, UINT message, WPARAM wparam, LP
       return 0;
 
     case WM_NCDESTROY:
+      KillTimer(hwnd, kTimer);
       if (g_window == hwnd) g_window = nullptr;
+      g_controller = nullptr;
+      g_close_on_save = false;
+      g_dirty = false;
+      g_loaded_key.clear();
       break;
   }
   return DefWindowProcW(hwnd, message, wparam, lparam);
