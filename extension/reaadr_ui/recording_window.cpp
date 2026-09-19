@@ -338,6 +338,13 @@ LRESULT CALLBACK recording_window_proc(HWND hwnd, UINT message, WPARAM wparam, L
       }
       return 0;
 
+    case WM_KEYDOWN:
+      if (wparam == VK_SPACE && Main_OnCommand) {
+        Main_OnCommand(kTransportPlayStop, 0);
+        return 0;
+      }
+      break;
+
     case WM_COMMAND:
       if (handle_recording_command(hwnd, LOWORD(wparam))) return 0;
       break;
