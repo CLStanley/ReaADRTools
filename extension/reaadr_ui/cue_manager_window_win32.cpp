@@ -234,11 +234,33 @@ void show_session_summary(HWND hwnd)
   win32::message_box_utf8(hwnd, summary, "ReaADR Session Summary", MB_OK | MB_ICONINFORMATION);
 }
 
-void show_session_tools(HWND hwnd)
+void clear_character_cues(HWND hwnd);\nvoid show_character_filter_tools(HWND hwnd);\n\nvoid show_session_tools(HWND hwnd)
 {
   if (!g_controller) return;
-  const int choice = MessageBoxW(hwnd, L"Yes: Validate the canonical ADR session.\nNo: Refresh/rebuild generated session artifacts.\nCancel: Return without changes.", L"ReaADR Session Tools", MB_YESNOCANCEL | MB_ICONQUESTION);
-  if (choice == IDYES) g_controller->trigger_action("validate_session"); else if (choice == IDNO) g_controller->trigger_action("refresh_session"); else return;
+  constexpr UINT kValidate = 1, kRefreshSession = 2, kSyncRegions = 3,
+                 kClearCues = 4, kFilter = 5;
+  HMENU menu = CreatePopupMenu();
+  if (!menu) return;
+  AppendMenuW(menu, MF_STRING, kValidate, L"Check Session");
+  AppendMenuW(menu, MF_STRING, kRefreshSession, L"Refresh Session");
+  AppendMenuW(menu, MF_STRING, kSyncRegions, L"Update Cues From Regions");
+  AppendMenuW(menu, MF_SEPARATOR, 0, nullptr);
+  AppendMenuW(menu, MF_STRING, kClearCues, L"Clear Character Cues");
+  AppendMenuW(menu, MF_STRING, kFilter, L"Character Filter");
+
+  RECT anchor{};
+  HWND button = control(hwnd, kModuleSession);
+  if (button) GetWindowRect(button, &anchor); else GetWindowRect(hwnd, &anchor);
+  const UINT choice = TrackPopupMenu(menu, TPM_RETURNCMD | TPM_LEFTALIGN | TPM_TOPALIGN | TPM_RIGHTBUTTON,
+                                     anchor.left, anchor.bottom, 0, hwnd, nullptr);
+  DestroyMenu(menu);
+
+  if (choice == kValidate) g_controller->trigger_action("validate_session");
+  else if (choice == kRefreshSession) g_controller->trigger_action("refresh_session");
+  else if (choice == kSyncRegions) g_controller->trigger_action("sync_regions");
+  else if (choice == kClearCues) { clear_character_cues(hwnd); return; }
+  else if (choice == kFilter) { show_character_filter_tools(hwnd); return; }
+  else return;
   reload_and_refresh(hwnd);
 }
 
