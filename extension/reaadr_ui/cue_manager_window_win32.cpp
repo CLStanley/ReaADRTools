@@ -76,6 +76,7 @@ constexpr int kLabelDialogue = 48338;
 constexpr int kLabelNotes = 48339;
 constexpr int kLabelStart = 48340;
 constexpr int kLabelEnd = 48341;
+constexpr int kColumns = 48342;
 
 CueManagerController* g_controller = nullptr;
 double g_frame_rate = 24.0;
@@ -288,6 +289,7 @@ void create_window_controls(HWND hwnd)
   create_child(hwnd, L"BUTTON", L"Character Filter", BS_PUSHBUTTON | WS_TABSTOP, 240, 80, 110, 26, kCharacterFilter); create_child(hwnd, L"BUTTON", L"Refresh Session", BS_PUSHBUTTON | WS_TABSTOP, 356, 80, 112, 26, kRefresh);
   create_child(hwnd, L"BUTTON", L"Update From Regions", BS_PUSHBUTTON | WS_TABSTOP, 474, 80, 138, 26, kSync); create_child(hwnd, L"BUTTON", L"New Cue", BS_PUSHBUTTON | WS_TABSTOP, 624, 80, 74, 26, kNewCue);
   create_child(hwnd, L"BUTTON", L"Add Cue", BS_PUSHBUTTON | WS_TABSTOP, 704, 80, 74, 26, kAddCue); create_child(hwnd, L"BUTTON", L"Remove Cue", BS_PUSHBUTTON | WS_TABSTOP, 784, 80, 88, 26, kRemoveCue);
+  create_child(hwnd, L"BUTTON", L"Columns", BS_PUSHBUTTON | WS_TABSTOP, 878, 80, 82, 26, kColumns);
   create_child(hwnd, WC_LISTVIEWW, L"", LVS_REPORT | LVS_SINGLESEL | LVS_SHOWSELALWAYS | WS_BORDER | WS_TABSTOP, 16, 116, 1040, 452, kRows);
   HWND table = control(hwnd, kRows); ListView_SetExtendedListViewStyleEx(table, 0, LVS_EX_FULLROWSELECT | LVS_EX_GRIDLINES);
   const auto& columns = core::cue_manager_columns();
@@ -306,6 +308,44 @@ void create_window_controls(HWND hwnd)
   for (const auto& status : core::cue_manager_status_choices()) { const std::wstring wide = win32::utf8_to_wide(status); SendDlgItemMessageW(hwnd, kStatus, CB_ADDSTRING, 0, reinterpret_cast<LPARAM>(wide.c_str())); SendDlgItemMessageW(hwnd, kEditStatus, CB_ADDSTRING, 0, reinterpret_cast<LPARAM>(wide.c_str())); }
   for (const auto& type : core::cue_manager_type_choices()) { const std::wstring wide = win32::utf8_to_wide(type); SendDlgItemMessageW(hwnd, kEditType, CB_ADDSTRING, 0, reinterpret_cast<LPARAM>(wide.c_str())); }
   SetDlgItemTextW(hwnd, kStatus, L"Any");
+}
+
+void show_column_widths(HWND hwnd)
+{
+  HWND table = control(hwnd, kRows);
+  if (!table) return;
+  const auto& columns = core::cue_manager_columns();
+  HMENU menu = CreatePopupMenu();
+  if (!menu) return;
+  constexpr UINT kReset = 49000;
+  AppendMenuW(menu, MF_STRING, kReset, L"Reset all columns");
+  AppendMenuW(menu, MF_SEPARATOR, 0, nullptr);
+  for (std::size_t index = 0; index < columns.size(); ++index) {
+    const std::wstring label = win32::utf8_to_wide(columns[index].label);
+    HMENU submenu = CreatePopupMenu();
+    AppendMenuW(submenu, MF_STRING, 49100 + static_cast<UINT>(index), L"Narrower");
+    AppendMenuW(submenu, MF_STRING, 49200 + static_cast<UINT>(index), L"Wider");
+    const std::wstring title = label + L" (" + std::to_wstring(ListView_GetColumnWidth(table, static_cast<int>(index))) + L")";
+    AppendMenuW(menu, MF_POPUP, reinterpret_cast<UINT_PTR>(submenu), title.c_str());
+  }
+  RECT anchor{};
+  HWND button = control(hwnd, kColumns);
+  if (button) GetWindowRect(button, &anchor); else GetWindowRect(hwnd, &anchor);
+  const UINT choice = TrackPopupMenu(menu, TPM_RETURNCMD | TPM_LEFTALIGN | TPM_TOPALIGN | TPM_RIGHTBUTTON,
+                                     anchor.left, anchor.bottom, 0, hwnd, nullptr);
+  DestroyMenu(menu);
+  if (choice == kReset) {
+    for (std::size_t index = 0; index < columns.size(); ++index)
+      ListView_SetColumnWidth(table, static_cast<int>(index), columns[index].width);
+  } else if (choice >= 49100 && choice < 49100 + columns.size()) {
+    const int index = static_cast<int>(choice - 49100);
+    ListView_SetColumnWidth(table, index,
+      core::adjust_cue_manager_column_width(ListView_GetColumnWidth(table, index), false));
+  } else if (choice >= 49200 && choice < 49200 + columns.size()) {
+    const int index = static_cast<int>(choice - 49200);
+    ListView_SetColumnWidth(table, index,
+      core::adjust_cue_manager_column_width(ListView_GetColumnWidth(table, index), true));
+  }
 }
 
 void apply_table_filters(HWND hwnd)
@@ -349,7 +389,7 @@ LRESULT CALLBACK cue_manager_wnd_proc(HWND hwnd, UINT message, WPARAM wparam, LP
       if (command == kModuleImport) { if (g_controller) { g_controller->trigger_import({}, false, "all", {}); reload_and_refresh(hwnd); } return 0; }
       if (command == kModuleSession) { show_session_tools(hwnd); return 0; } if (command == kModuleReports) { show_reports_tools(hwnd); return 0; } if (command == kModuleOverlay) { show_overlay_tools(hwnd); return 0; }
       if (command == kModulePreferences) { if (g_controller) { g_controller->trigger_action("preferences"); reload_and_refresh(hwnd); } return 0; }
-      if (command == kModuleHelp) { show_help(hwnd); return 0; } if (command == kApplyFilter) { apply_table_filters(hwnd); return 0; }
+      if (command == kModuleHelp) { show_help(hwnd); return 0; } if (command == kColumns) { show_column_widths(hwnd); return 0; } if (command == kApplyFilter) { apply_table_filters(hwnd); return 0; }
       if (command == kResetFilter) { SetDlgItemTextW(hwnd, kSearch, L""); SetDlgItemTextW(hwnd, kCharacter, L""); SetDlgItemTextW(hwnd, kStatus, L"Any"); if (g_controller && g_controller->set_filters({}, {}, {})) refresh_rows(hwnd); return 0; }
       if (command == kRecord || command == kCueInfo || command == kCharacterFilter || command == kRefresh || command == kSync) { if (!g_controller) return 0; const char* action = command == kRecord ? "record_cue" : command == kCueInfo ? "cue_info" : command == kCharacterFilter ? "character_filter" : command == kRefresh ? "refresh_session" : "sync_regions"; g_controller->trigger_action(action); reload_and_refresh(hwnd); return 0; }
       if (command == kNewCue) { populate_new_cue(hwnd); return 0; } if (command == kAddCue) { add_cue(hwnd); return 0; }
