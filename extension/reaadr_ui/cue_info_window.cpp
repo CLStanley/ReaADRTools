@@ -520,6 +520,16 @@ LRESULT CALLBACK cue_info_window_proc(HWND hwnd, UINT message, WPARAM wparam, LP
       if (wparam == kTimer) refresh_live_state(hwnd);
       return 0;
 
+    case WM_KEYDOWN:
+      if (!editor_has_focus(hwnd)) {
+        if (wparam == VK_SPACE && Main_OnCommand) {
+          Main_OnCommand(kTransportPlayStop, 0);
+          return 0;
+        }
+        if (handle_nav_key(hwnd, static_cast<int>(wparam))) return 0;
+      }
+      break;
+
     case WM_COMMAND:
       if (handle_cue_info_command(hwnd, LOWORD(wparam), HIWORD(wparam))) return 0;
       break;
