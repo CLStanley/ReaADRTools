@@ -10,24 +10,8 @@
 namespace reaadr::ui {
 namespace {
 constexpr const char* kStateNamespace = "ReaADRTools";
-constexpr const char* kRememberLayoutKey = "ui.remember_window_layout";
-constexpr const char* kWindowWidthKey = "ui.window.cue_info.width";
-constexpr const char* kWindowHeightKey = "ui.window.cue_info.height";
-constexpr const char* kWindowDockKey = "ui.window.cue_info.dock";
-constexpr const char* kWindowXKey = "ui.window.cue_info.x";
-constexpr const char* kWindowYKey = "ui.window.cue_info.y";
 constexpr const char* kOpenEditKey = "cue_info_open_edit";
 constexpr const char* kCloseOnSaveKey = "cue_info_close_on_save";
-
-bool parse_int(const core::StateReadResult& value, int& output)
-{
-  if (!value || value.value.empty()) return false;
-  char* end = nullptr;
-  const long parsed = std::strtol(value.value.c_str(), &end, 10);
-  if (!end || *end != '\0') return false;
-  output = static_cast<int>(parsed);
-  return true;
-}
 
 } // namespace
 
