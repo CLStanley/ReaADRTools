@@ -77,6 +77,8 @@ constexpr int kLabelNotes = 48339;
 constexpr int kLabelStart = 48340;
 constexpr int kLabelEnd = 48341;
 constexpr int kColumns = 48342;
+constexpr int kJumpCueId = 48343;
+constexpr int kJump = 48344;
 
 CueManagerController* g_controller = nullptr;
 double g_frame_rate = 24.0;
@@ -285,6 +287,8 @@ void create_window_controls(HWND hwnd)
   create_child(hwnd, L"STATIC", L"Character", 0, 288, 50, 66, 18, -1); create_child(hwnd, L"EDIT", L"", WS_BORDER | ES_AUTOHSCROLL | WS_TABSTOP, 356, 46, 160, 24, kCharacter);
   create_child(hwnd, L"STATIC", L"Status", 0, 528, 50, 48, 18, -1); create_child(hwnd, L"COMBOBOX", L"", CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP, 578, 46, 150, 180, kStatus);
   create_child(hwnd, L"BUTTON", L"Apply", BS_PUSHBUTTON | WS_TABSTOP, 740, 46, 62, 24, kApplyFilter); create_child(hwnd, L"BUTTON", L"Reset", BS_PUSHBUTTON | WS_TABSTOP, 808, 46, 62, 24, kResetFilter);
+  create_child(hwnd, L"STATIC", L"Jump", 0, 882, 50, 40, 18, -1); create_child(hwnd, L"EDIT", L"", WS_BORDER | ES_AUTOHSCROLL | WS_TABSTOP, 924, 46, 116, 24, kJumpCueId);
+  create_child(hwnd, L"BUTTON", L"Go", BS_PUSHBUTTON | WS_TABSTOP, 1046, 46, 44, 24, kJump);
   create_child(hwnd, L"BUTTON", L"Record Current Cue", BS_PUSHBUTTON | WS_TABSTOP, 16, 80, 130, 26, kRecord); create_child(hwnd, L"BUTTON", L"Cue Info", BS_PUSHBUTTON | WS_TABSTOP, 152, 80, 82, 26, kCueInfo);
   create_child(hwnd, L"BUTTON", L"Character Filter", BS_PUSHBUTTON | WS_TABSTOP, 240, 80, 110, 26, kCharacterFilter); create_child(hwnd, L"BUTTON", L"Refresh Session", BS_PUSHBUTTON | WS_TABSTOP, 356, 80, 112, 26, kRefresh);
   create_child(hwnd, L"BUTTON", L"Update From Regions", BS_PUSHBUTTON | WS_TABSTOP, 474, 80, 138, 26, kSync); create_child(hwnd, L"BUTTON", L"New Cue", BS_PUSHBUTTON | WS_TABSTOP, 624, 80, 74, 26, kNewCue);
@@ -354,6 +358,21 @@ void apply_table_filters(HWND hwnd)
   if (g_controller->set_filters(control_text(hwnd, kSearch), control_text(hwnd, kCharacter), status)) refresh_rows(hwnd); else show_error(hwnd);
 }
 
+void jump_to_cue(HWND hwnd)
+{
+  if (!g_controller) return;
+  const std::string cue_id = control_text(hwnd, kJumpCueId);
+  std::string error;
+  if (g_controller->navigate_to_id(cue_id, error)) {
+    SetDlgItemTextW(hwnd, kSearch, L"");
+    SetDlgItemTextW(hwnd, kCharacter, L"");
+    SetDlgItemTextW(hwnd, kStatus, L"Any");
+    refresh_rows(hwnd);
+  } else if (!error.empty()) {
+    win32::message_box_utf8(hwnd, error, "ReaADR Cue Manager", MB_OK | MB_ICONERROR);
+  }
+}
+
 void add_cue(HWND hwnd)
 {
   if (!g_controller) return; core::CueManagerAddOptions cue;
@@ -389,7 +408,7 @@ LRESULT CALLBACK cue_manager_wnd_proc(HWND hwnd, UINT message, WPARAM wparam, LP
       if (command == kModuleImport) { if (g_controller) { g_controller->trigger_import({}, false, "all", {}); reload_and_refresh(hwnd); } return 0; }
       if (command == kModuleSession) { show_session_tools(hwnd); return 0; } if (command == kModuleReports) { show_reports_tools(hwnd); return 0; } if (command == kModuleOverlay) { show_overlay_tools(hwnd); return 0; }
       if (command == kModulePreferences) { if (g_controller) { g_controller->trigger_action("preferences"); reload_and_refresh(hwnd); } return 0; }
-      if (command == kModuleHelp) { show_help(hwnd); return 0; } if (command == kColumns) { show_column_widths(hwnd); return 0; } if (command == kApplyFilter) { apply_table_filters(hwnd); return 0; }
+      if (command == kModuleHelp) { show_help(hwnd); return 0; } if (command == kColumns) { show_column_widths(hwnd); return 0; } if (command == kJump) { jump_to_cue(hwnd); return 0; } if (command == kApplyFilter) { apply_table_filters(hwnd); return 0; }
       if (command == kResetFilter) { SetDlgItemTextW(hwnd, kSearch, L""); SetDlgItemTextW(hwnd, kCharacter, L""); SetDlgItemTextW(hwnd, kStatus, L"Any"); if (g_controller && g_controller->set_filters({}, {}, {})) refresh_rows(hwnd); return 0; }
       if (command == kRecord || command == kCueInfo || command == kCharacterFilter || command == kRefresh || command == kSync) { if (!g_controller) return 0; const char* action = command == kRecord ? "record_cue" : command == kCueInfo ? "cue_info" : command == kCharacterFilter ? "character_filter" : command == kRefresh ? "refresh_session" : "sync_regions"; g_controller->trigger_action(action); reload_and_refresh(hwnd); return 0; }
       if (command == kNewCue) { populate_new_cue(hwnd); return 0; } if (command == kAddCue) { add_cue(hwnd); return 0; }
