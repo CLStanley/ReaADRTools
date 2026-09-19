@@ -31,4 +31,12 @@ bool run_native_record_cue_command()
   return false;
 }
 
+bool shutdown_native_record_cue_command()
+{
+  if (!g_recording_session) return true;
+  if (!ui::close_recording_window()) return false;
+  g_recording_session.reset();
+  return true;
+}
+
 } // namespace reaadr::reaper
