@@ -264,6 +264,46 @@ void show_reports_tools(HWND hwnd)
   else if (choice == kMetadata) g_controller->trigger_action("export_session_metadata");
 }
 
+void show_character_filter_tools(HWND hwnd)
+{
+  if (!g_controller) return;
+  const auto& rows = g_controller->view().cues.rows;
+  std::set<std::string> characters;
+  for (const auto& row : rows) if (!row.character.empty()) characters.insert(row.character);
+  if (characters.empty()) {
+    MessageBoxW(hwnd, L"No cue characters are available in the current session.", L"ReaADR Character Filter", MB_OK | MB_ICONINFORMATION);
+    return;
+  }
+
+  HMENU menu = CreatePopupMenu();
+  if (!menu) return;
+  constexpr UINT kClear = 1;
+  AppendMenuW(menu, MF_STRING, kClear, L"Show all characters");
+  AppendMenuW(menu, MF_SEPARATOR, 0, nullptr);
+  std::vector<std::string> choices(characters.begin(), characters.end());
+  for (std::size_t index = 0; index < choices.size(); ++index) {
+    const std::wstring label = win32::utf8_to_wide(choices[index]);
+    AppendMenuW(menu, MF_STRING, 2 + static_cast<UINT>(index), label.c_str());
+  }
+
+  RECT anchor{};
+  HWND button = control(hwnd, kCharacterFilter);
+  if (button) GetWindowRect(button, &anchor); else GetWindowRect(hwnd, &anchor);
+  const UINT choice = TrackPopupMenu(menu, TPM_RETURNCMD | TPM_LEFTALIGN | TPM_TOPALIGN | TPM_RIGHTBUTTON,
+                                     anchor.left, anchor.bottom, 0, hwnd, nullptr);
+  DestroyMenu(menu);
+  if (choice == 0) return;
+
+  const std::string character = choice == kClear ? std::string{} : choices[choice - 2];
+  SetDlgItemTextW(hwnd, kCharacter, win32::utf8_to_wide(character).c_str());
+  std::string status = control_text(hwnd, kStatus);
+  if (status == "Any") status.clear();
+  if (g_controller->set_filters(control_text(hwnd, kSearch), character, status))
+    refresh_rows(hwnd);
+  else
+    show_error(hwnd);
+}
+
 void show_overlay_tools(HWND hwnd)
 {
   if (!g_controller) return;
@@ -430,7 +470,8 @@ LRESULT CALLBACK cue_manager_wnd_proc(HWND hwnd, UINT message, WPARAM wparam, LP
       if (command == kModulePreferences) { if (g_controller) { g_controller->trigger_action("preferences"); reload_and_refresh(hwnd); } return 0; }
       if (command == kModuleHelp) { show_help(hwnd); return 0; } if (command == kColumns) { show_column_widths(hwnd); return 0; } if (command == kJump) { jump_to_cue(hwnd); return 0; } if (command == kApplyFilter) { apply_table_filters(hwnd); return 0; }
       if (command == kResetFilter) { SetDlgItemTextW(hwnd, kSearch, L""); SetDlgItemTextW(hwnd, kCharacter, L""); SetDlgItemTextW(hwnd, kStatus, L"Any"); if (g_controller && g_controller->set_filters({}, {}, {})) refresh_rows(hwnd); return 0; }
-      if (command == kRecord || command == kCueInfo || command == kCharacterFilter || command == kRefresh || command == kSync) { if (!g_controller) return 0; const char* action = command == kRecord ? "record_cue" : command == kCueInfo ? "cue_info" : command == kCharacterFilter ? "character_filter" : command == kRefresh ? "refresh_session" : "sync_regions"; g_controller->trigger_action(action); reload_and_refresh(hwnd); return 0; }
+      if (command == kCharacterFilter) { show_character_filter_tools(hwnd); return 0; }
+      if (command == kRecord || command == kCueInfo || command == kRefresh || command == kSync) { if (!g_controller) return 0; const char* action = command == kRecord ? "record_cue" : command == kCueInfo ? "cue_info" : command == kRefresh ? "refresh_session" : "sync_regions"; g_controller->trigger_action(action); reload_and_refresh(hwnd); return 0; }
       if (command == kNewCue) { populate_new_cue(hwnd); return 0; } if (command == kAddCue) { add_cue(hwnd); return 0; }
       if (command == kRemoveCue) { const auto* row = g_controller ? g_controller->selected_row() : nullptr; if (!row) { MessageBoxW(hwnd, L"Select a cue before removing it.", L"ReaADR Cue Manager", MB_OK | MB_ICONINFORMATION); return 0; } const std::string prompt = "Remove cue " + row->cue_key + " (" + row->character + ")?"; if (win32::message_box_utf8(hwnd, prompt, "ReaADR Cue Manager", MB_YESNO | MB_ICONWARNING) == IDYES) { std::string error; if (g_controller->remove_selected(error)) refresh_rows(hwnd); else if (!error.empty()) win32::message_box_utf8(hwnd, error, "ReaADR Cue Manager", MB_OK | MB_ICONERROR); } return 0; }
       if (command == kApplyEdit) { apply_edit(hwnd); return 0; }
