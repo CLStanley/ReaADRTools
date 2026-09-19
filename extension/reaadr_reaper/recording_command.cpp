@@ -4,13 +4,31 @@
 #include "reaadr_ui/recording_controller.hpp"
 #include "reaadr_ui/recording_window.hpp"
 
+#include <memory>
+
 namespace reaadr::reaper {
+namespace {
+
+struct RecordingWindowSession {
+  RecordingCommandContext context;
+  ui::RecordingController controller;
+
+  RecordingWindowSession() : controller(context) {}
+};
+
+std::unique_ptr<RecordingWindowSession> g_recording_session;
+
+} // namespace
 
 bool run_native_record_cue_command()
 {
-  RecordingCommandContext context;
-  ui::RecordingController controller(context);
-  return ui::show_recording_window(controller);
+  if (!g_recording_session)
+    g_recording_session = std::make_unique<RecordingWindowSession>();
+
+  if (ui::show_recording_window(g_recording_session->controller)) return true;
+
+  g_recording_session.reset();
+  return false;
 }
 
 } // namespace reaadr::reaper
