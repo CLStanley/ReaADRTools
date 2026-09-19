@@ -238,11 +238,7 @@ void close_window(HWND hwnd)
   if (dock.docked()) reaper::remove_window_from_docker(hwnd);
   KillTimer(hwnd, kTimer);
   if (g_window == hwnd) g_window = nullptr;
-#ifdef _WIN32
   DestroyWindow(hwnd);
-#else
-  EndDialog(hwnd, 0);
-#endif
 }
 
 void refresh_live_state(HWND hwnd)
@@ -352,6 +348,15 @@ INT_PTR cue_info_proc(HWND hwnd, UINT message, WPARAM wparam, LPARAM)
 
     case WM_CLOSE:
       close_window(hwnd);
+      return 1;
+
+    case WM_DESTROY:
+      KillTimer(hwnd, kTimer);
+      if (g_window == hwnd) g_window = nullptr;
+      g_controller = nullptr;
+      g_close_on_save = false;
+      g_dirty = false;
+      g_loaded_key.clear();
       return 1;
   }
   return 0;
@@ -586,11 +591,17 @@ bool show_cue_info_window(CueInfoController& controller)
   g_dirty = false;
   g_close_on_save = false;
   g_loaded_key.clear();
-  const int result = DialogBoxParam(nullptr, MAKEINTRESOURCE(kDialog), nullptr, cue_info_proc, 0);
-  g_window = nullptr;
-  g_controller = nullptr;
-  g_close_on_save = false;
-  return result >= 0;
+  g_window = CreateDialogParam(nullptr, MAKEINTRESOURCE(kDialog), nullptr, cue_info_proc, 0);
+  if (!g_window) {
+    g_controller = nullptr;
+    g_close_on_save = false;
+    return false;
+  }
+  ShowWindow(g_window, SW_SHOW);
+  if (reaper::inspect_window_dock_state(g_window).docked())
+    reaper::activate_docked_window(g_window);
+  SetForegroundWindow(g_window);
+  return true;
 #else
   if (!register_windows_cue_info_class()) return false;
   g_controller = &controller;
