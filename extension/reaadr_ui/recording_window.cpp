@@ -96,8 +96,11 @@ void update_window(HWND hwnd)
   set_text(hwnd, kLoop, view.loop_enabled ? "Loop: ON" : "Loop: OFF");
   set_text(hwnd, kPreroll,
            view.include_preroll_each_loop ? "Pre-roll Each Loop" : "Default Repeat");
-  EnableWindow(GetDlgItem(hwnd, kRecord),
-               view.mode == core::RecordingTransportMode::idle);
+  const bool idle = view.mode == core::RecordingTransportMode::idle;
+  EnableWindow(GetDlgItem(hwnd, kRecord), idle);
+  EnableWindow(GetDlgItem(hwnd, kStop), !idle);
+  EnableWindow(GetDlgItem(hwnd, kLoop), idle);
+  EnableWindow(GetDlgItem(hwnd, kPreroll), idle);
   EnableWindow(GetDlgItem(hwnd, kRetry), !view.error.empty());
 }
 
