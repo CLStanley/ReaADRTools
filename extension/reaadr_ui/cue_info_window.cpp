@@ -646,4 +646,11 @@ bool show_cue_info_window(CueInfoController& controller)
 #endif
 }
 
+bool close_cue_info_window()
+{
+  if (!g_window || !IsWindow(g_window)) return true;
+  close_window(g_window);
+  return !g_window || !IsWindow(g_window);
+}
+
 } // namespace reaadr::ui
