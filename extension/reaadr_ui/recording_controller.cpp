@@ -2,6 +2,8 @@
 
 #include "reaadr_core/domain_utils.hpp"
 
+#include <algorithm>
+
 namespace reaadr::ui {
 namespace {
 
@@ -49,6 +51,9 @@ void RecordingController::sync_state()
   view_.loop_enabled = state.loop_enabled;
   view_.include_preroll_each_loop = state.include_preroll_each_loop;
   view_.mode = state.mode;
+  view_.countdown_seconds = state.mode == core::RecordingTransportMode::preroll
+    ? (std::max)(0.0, view_.cue_start - context_.timeline_position())
+    : 0.0;
   view_.status_text = status_text(state);
   view_.error.clear();
 }
