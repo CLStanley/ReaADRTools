@@ -64,7 +64,8 @@ constexpr int kOverlayBgCueId = 48076, kOverlayBgCharacter = 48077,
               kOverlayBgCueType = 48082, kOverlayBgStatus = 48083,
               kOverlayBgMetadata = 48084;
 constexpr int kOverlayTextWhite = 48085, kOverlayTextYellow = 48086;
-constexpr int kOverlayMetadataFields = 48087, kOverlayPreroll = 48088, kOverlaySaveSettings = 48089;
+constexpr int kOverlayMetadataFields = 48087, kOverlayPreroll = 48088, kOverlaySaveSettings = 48089,
+              kOverlayPrerollEachLoop = 48142;
 constexpr int kPreferencesReload = 48054;
 constexpr int kQuickAction1 = 48090, kQuickAction2 = 48091,
               kQuickAction3 = 48092, kQuickAction4 = 48093,
@@ -215,6 +216,7 @@ void apply_tab_visibility(HWND hwnd, const std::string& tab)
   ShowWindow(GetDlgItem(hwnd, kOverlayMetadataFields), tab == "overlay" ? SW_SHOW : SW_HIDE);
   ShowWindow(GetDlgItem(hwnd, kOverlayPreroll), tab == "overlay" ? SW_SHOW : SW_HIDE);
   ShowWindow(GetDlgItem(hwnd, kOverlaySaveSettings), tab == "overlay" ? SW_SHOW : SW_HIDE);
+  ShowWindow(GetDlgItem(hwnd, kOverlayPrerollEachLoop), tab == "overlay" ? SW_SHOW : SW_HIDE);
   ShowWindow(GetDlgItem(hwnd, kPreferencesOpen), tab == "preferences" ? SW_SHOW : SW_HIDE);
   ShowWindow(GetDlgItem(hwnd, kPreferencesReload), tab == "preferences" ? SW_SHOW : SW_HIDE);
   const int quick_controls[] = {kQuickAction1, kQuickAction2, kQuickAction3, kQuickAction4, kQuickActionSave};
@@ -592,6 +594,13 @@ INT_PTR cue_manager_proc(HWND hwnd, UINT message, WPARAM wparam, LPARAM lparam)
     }
     return 1;
   }
+  if (message == WM_COMMAND && LOWORD(wparam) == kOverlayPrerollEachLoop) {
+    if (g_controller) {
+      g_controller->trigger_action("overlay_toggle:include_preroll_each_loop");
+      if (g_controller->reload()) { update_tab_details(hwnd); update_overlay_controls(hwnd); }
+    }
+    return 1;
+  }
   if (message == WM_COMMAND && LOWORD(wparam) == kOverlaySaveSettings) {
     if (g_controller) {
       char metadata[512] = {}, preroll[64] = {};
@@ -861,7 +870,8 @@ BEGIN
   EDITTEXT kOverlayMetadataFields, 232, 352, 500, 20, ES_AUTOHSCROLL
   LTEXT "Preroll (seconds)", -1, 16, 386, 110, 16
   EDITTEXT kOverlayPreroll, 132, 382, 90, 20, ES_AUTOHSCROLL
-  PUSHBUTTON "Save Overlay Settings", kOverlaySaveSettings, 232, 380, 170, 24
+  CHECKBOX "Include pre-roll each loop", kOverlayPrerollEachLoop, 232, 380, 180, 20
+  PUSHBUTTON "Save Overlay Settings", kOverlaySaveSettings, 420, 378, 170, 24
   PUSHBUTTON "Open Preferences", kPreferencesOpen, 16, 150, 140, 24
   PUSHBUTTON "Reload Preferences", kPreferencesReload, 164, 150, 150, 24
   LTEXT "Quick Action 1", -1, 16, 190, 100, 16
