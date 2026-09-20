@@ -21,8 +21,9 @@ struct RecordingPreferenceSaveResult {
   explicit operator bool() const { return error.empty(); }
 };
 
-// Reads and writes the exact project key used by the transitional Lua overlay
-// settings table, so either runtime observes one per-project preference.
+// Reads and writes the canonical per-project overlay preference used by the
+// native recording and overlay workflows. The storage key is intentionally
+// stable so existing ReaADR projects retain their saved behavior.
 class RecordingPreferenceRepository {
 public:
   explicit RecordingPreferenceRepository(ProjectStateStore& store) : store_(store) {}
