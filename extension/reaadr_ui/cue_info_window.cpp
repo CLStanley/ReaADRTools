@@ -42,6 +42,7 @@ constexpr int kJumpId = 48314;
 constexpr int kJump = 48315;
 constexpr int kSave = 48316;
 constexpr int kError = 48317;
+constexpr int kRecord = 48318;
 constexpr int kTimer = 1;
 constexpr int kTransportPlayStop = 40044;
 constexpr int kVkR = 0x52;
@@ -307,6 +308,12 @@ bool handle_cue_info_command(HWND hwnd, int command, int notification)
     }
     return true;
   }
+  if (command == kRecord) {
+    if (!confirm_discard_edits(hwnd, "record the current cue")) return true;
+    if (!g_controller->record_current_cue())
+      set_text(hwnd, kError, g_controller->error());
+    return true;
+  }
   if (command == kPrevious || command == kNext) {
     if (!confirm_discard_edits(hwnd, "navigate to another cue")) return true;
     const bool moved = command == kNext ? g_controller->next() : g_controller->previous();
@@ -415,6 +422,7 @@ BEGIN
   PUSHBUTTON "Jump", kJump, 232, 520, 72, 26
   PUSHBUTTON "Previous", kPrevious, 326, 520, 86, 26
   PUSHBUTTON "Next", kNext, 418, 520, 72, 26
+  PUSHBUTTON "Record Cue", kRecord, 500, 520, 94, 26
   PUSHBUTTON "Save", kSave, 604, 520, 86, 26
   DEFPUSHBUTTON "Close", IDCANCEL, 698, 520, 86, 26
 
@@ -486,7 +494,8 @@ void layout_windows_controls(HWND hwnd)
   SetWindowPos(GetDlgItem(hwnd, kJump), nullptr, 232, action_y - 1, 72, 26, SWP_NOZORDER);
   SetWindowPos(GetDlgItem(hwnd, kPrevious), nullptr, 326, action_y - 1, 86, 26, SWP_NOZORDER);
   SetWindowPos(GetDlgItem(hwnd, kNext), nullptr, 418, action_y - 1, 72, 26, SWP_NOZORDER);
-  SetWindowPos(GetDlgItem(hwnd, kSave), nullptr, (std::max)(516, right - 190), action_y - 1, 86, 26, SWP_NOZORDER);
+  SetWindowPos(GetDlgItem(hwnd, kRecord), nullptr, 500, action_y - 1, 94, 26, SWP_NOZORDER);
+  SetWindowPos(GetDlgItem(hwnd, kSave), nullptr, (std::max)(610, right - 190), action_y - 1, 86, 26, SWP_NOZORDER);
   SetWindowPos(GetDlgItem(hwnd, IDCANCEL), nullptr, (std::max)(610, right - 96), action_y - 1, 86, 26, SWP_NOZORDER);
   SetWindowPos(GetDlgItem(hwnd, kError), nullptr, 18, action_y + 34, full_width, 44, SWP_NOZORDER);
 }
@@ -520,6 +529,7 @@ LRESULT CALLBACK cue_info_window_proc(HWND hwnd, UINT message, WPARAM wparam, LP
       create_child(hwnd, "BUTTON", "Jump", WS_TABSTOP | BS_PUSHBUTTON, kJump);
       create_child(hwnd, "BUTTON", "Previous", WS_TABSTOP | BS_PUSHBUTTON, kPrevious);
       create_child(hwnd, "BUTTON", "Next", WS_TABSTOP | BS_PUSHBUTTON, kNext);
+      create_child(hwnd, "BUTTON", "Record Cue", WS_TABSTOP | BS_PUSHBUTTON, kRecord);
       create_child(hwnd, "BUTTON", "Save", WS_TABSTOP | BS_PUSHBUTTON, kSave);
       create_child(hwnd, "BUTTON", "Close", WS_TABSTOP | BS_DEFPUSHBUTTON, IDCANCEL);
       create_child(hwnd, "STATIC", "", SS_LEFT, kError);
