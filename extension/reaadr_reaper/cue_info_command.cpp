@@ -121,4 +121,12 @@ bool run_native_cue_info_command()
   return false;
 }
 
+bool shutdown_native_cue_info_command()
+{
+  if (!g_cue_info_session) return true;
+  if (!ui::close_cue_info_window()) return false;
+  g_cue_info_session.reset();
+  return true;
+}
+
 } // namespace reaadr::reaper
