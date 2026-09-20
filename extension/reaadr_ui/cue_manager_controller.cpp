@@ -83,6 +83,12 @@ std::string CueManagerController::last_import_mapping() const
 
 void CueManagerController::trigger_action(const std::string& action)
 {
+  if (action == "adopt_legacy_project") {
+    const auto adopted = reaper::run_legacy_project_adoption_command();
+    if (!adopted) view_.error = adopted.error;
+    else if (!adopted.cancelled) reload();
+    return;
+  }
   if (action == "generate_cues") {
     const auto generated = reaper::run_marker_cue_generation_command();
     if (!generated) view_.error = generated.error;
