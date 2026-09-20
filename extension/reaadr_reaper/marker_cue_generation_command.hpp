@@ -21,4 +21,11 @@ struct MarkerCueGenerationCommandResult {
 MarkerCueGenerationCommandResult run_marker_cue_generation_command(
   ReaProject* project = nullptr);
 
+// Native legacy-project adoption. This is intentionally distinct from normal
+// cue generation: it only runs when no canonical ADR session exists and
+// treats existing REAPER regions as the source of truth for the initial
+// session model.
+MarkerCueGenerationCommandResult run_legacy_project_adoption_command(
+  ReaProject* project = nullptr);
+
 } // namespace reaadr::reaper
