@@ -3,6 +3,7 @@
 #include "reaadr_core/domain_utils.hpp"
 
 #include <algorithm>
+#include <cmath>
 
 namespace reaadr::ui {
 namespace {
@@ -54,6 +55,12 @@ void RecordingController::sync_state()
   view_.countdown_seconds = state.mode == core::RecordingTransportMode::preroll
     ? (std::max)(0.0, view_.cue_start - context_.timeline_position())
     : 0.0;
+  // ADR count-in beats are spaced 500 ms apart. Expose the number of upcoming
+  // beats from transport time so presentation and future audible cue playback
+  // share one deterministic countdown instead of independent window timers.
+  view_.countdown_beats_remaining = state.mode == core::RecordingTransportMode::preroll
+    ? (std::max)(0, static_cast<int>(std::ceil(view_.countdown_seconds / 0.5)))
+    : 0;
   view_.status_text = status_text(state);
   view_.error.clear();
 }
