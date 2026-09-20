@@ -8,7 +8,6 @@
 #include "reaadr_reaper/cue_navigation_service.hpp"
 
 #include <functional>
-#include <utility>
 #include <vector>
 
 namespace reaadr::ui {
@@ -32,7 +31,6 @@ public:
                       const std::string& mode = "all", const std::string& characters = {});
   std::string last_import_mapping() const;
   void trigger_action(const std::string& action);
-  void set_external_error(std::string error) { view_.error = std::move(error); }
   bool set_filters(const std::string& query,
                    const std::string& character,
                    const std::string& status);
