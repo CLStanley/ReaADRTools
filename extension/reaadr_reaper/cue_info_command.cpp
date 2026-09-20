@@ -58,6 +58,17 @@ bool refresh_overlay_application(OverlayApplicationService& overlay,
   return static_cast<bool>(refreshed);
 }
 
+SessionRenderOptions make_cue_info_render_options(OverlayApplicationService& overlay)
+{
+  SessionRenderOptions options;
+  options.cue_audio_path = native_project_cue_audio_path(nullptr);
+  options.event.source = "native_cue_info";
+  options.refresh_overlay = [&overlay](std::string* error) {
+    return refresh_overlay_application(overlay, error);
+  };
+  return options;
+}
+
 struct CueInfoWindowSession {
   ProjectStateStore project_state;
   core::SessionModelRepository sessions;
@@ -90,7 +101,7 @@ struct CueInfoWindowSession {
       renderer(sessions, event_log, filters, nullptr,
                native_track_region_api(), native_ruler_lane_api(), native_cue_audio_api(),
                native_transaction_api()),
-      render_options(),
+      render_options(make_cue_info_render_options(overlay)),
       mutations(sessions, overlay_settings, selections, renderer, render_options,
                 {native_utc_timestamp, command_frame_rate}),
       navigation_api{GetPlayState, GetPlayPosition, GetCursorPosition, SetEditCurPos},
@@ -98,11 +109,6 @@ struct CueInfoWindowSession {
                  render_options.refresh_overlay,
                  {native_play_state, native_play_position, native_cursor_position, command_frame_rate})
   {
-    render_options.cue_audio_path = native_project_cue_audio_path(nullptr);
-    render_options.event.source = "native_cue_info";
-    render_options.refresh_overlay = [this](std::string* error) {
-      return refresh_overlay_application(overlay, error);
-    };
   }
 };
 
