@@ -292,8 +292,12 @@ bool handle_cue_info_command(HWND hwnd, int command, int notification)
   if (!g_controller) return false;
   if (command == kSave) {
     if (g_controller->save(read_editors(hwnd))) {
+      // The persisted model now owns the editor values. Clear dirty before a
+      // close-on-save request so a successful Save never asks the user to
+      // discard the changes that were just committed.
+      g_dirty = false;
       if (g_close_on_save) {
-        if (close_window(hwnd)) return true;
+        close_window(hwnd);
         return true;
       }
       refresh_character_choices(hwnd);
