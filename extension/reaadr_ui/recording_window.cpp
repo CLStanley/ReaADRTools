@@ -35,6 +35,7 @@ constexpr int kStop = 48209;
 constexpr int kRetry = 48210;
 constexpr int kTakeCount = 48211;
 constexpr int kLane = 48212;
+constexpr int kCountdown = 48213;
 constexpr int kTimer = 1;
 constexpr int kTransportPlayStop = 40044;
 constexpr int kMinWindowWidth = 530;
@@ -87,6 +88,10 @@ void update_window(HWND hwnd)
   const double duration = view.cue_end - view.cue_start;
   set_text(hwnd, kTiming, view.cue_start_timecode + "   " + number(duration) +
     "s cue  +  " + number(view.preroll_seconds) + "s preroll");
+  const double countdown = (view.mode == core::RecordingTransportMode::preroll)
+    ? (std::max)(0.0, view.cue_start - g_controller->timeline_position()) : 0.0;
+  set_text(hwnd, kCountdown, view.mode == core::RecordingTransportMode::preroll
+    ? "Cue in " + number(countdown, 2) + "s" : "");
   const std::string track_label = view.track_name.empty() ? view.track_key : view.track_name;
   set_text(hwnd, kTrack, "Track: " + track_label);
   set_text(hwnd, kLane, "ADR Lane: " + std::to_string(view.lane));
@@ -261,7 +266,8 @@ SWELL_DEFINE_DIALOG_RESOURCE_BEGIN2(kDialog, SWELL_DLG_WS_FLIPPED,
 BEGIN
   LTEXT "", kCue, 20, 18, 520, 22
   LTEXT "", kDialogue, 20, 50, 520, 38
-  LTEXT "", kTiming, 20, 96, 520, 20
+  LTEXT "", kTiming, 20, 96, 360, 20
+  LTEXT "", kCountdown, 390, 96, 150, 20
   LTEXT "", kTrack, 20, 124, 360, 20
   LTEXT "", kLane, 390, 124, 150, 20
   LTEXT "", kTakeCount, 390, 158, 150, 20
@@ -308,7 +314,8 @@ void layout_windows_controls(HWND hwnd)
 
   SetWindowPos(GetDlgItem(hwnd, kCue), nullptr, 20, 16, content_width, 22, SWP_NOZORDER);
   SetWindowPos(GetDlgItem(hwnd, kDialogue), nullptr, 20, 44, content_width, 38, SWP_NOZORDER);
-  SetWindowPos(GetDlgItem(hwnd, kTiming), nullptr, 20, 88, content_width, 20, SWP_NOZORDER);
+  SetWindowPos(GetDlgItem(hwnd, kTiming), nullptr, 20, 88, (std::max)(180, content_width - 170), 20, SWP_NOZORDER);
+  SetWindowPos(GetDlgItem(hwnd, kCountdown), nullptr, (std::max)(220, width - 170), 88, 150, 20, SWP_NOZORDER);
   SetWindowPos(GetDlgItem(hwnd, kTrack), nullptr, 20, 114, (std::max)(180, content_width - 170), 20, SWP_NOZORDER);
   SetWindowPos(GetDlgItem(hwnd, kLane), nullptr, (std::max)(220, width - 170), 114, 150, 20, SWP_NOZORDER);
   SetWindowPos(GetDlgItem(hwnd, kTakeCount), nullptr, (std::max)(220, width - 170), 142, 150, 20, SWP_NOZORDER);
@@ -331,6 +338,7 @@ LRESULT CALLBACK recording_window_proc(HWND hwnd, UINT message, WPARAM wparam, L
       create_child(hwnd, "STATIC", "", SS_LEFT, kCue);
       create_child(hwnd, "STATIC", "", SS_LEFT, kDialogue);
       create_child(hwnd, "STATIC", "", SS_LEFT, kTiming);
+      create_child(hwnd, "STATIC", "", SS_LEFT, kCountdown);
       create_child(hwnd, "STATIC", "", SS_LEFT, kTrack);
       create_child(hwnd, "STATIC", "", SS_LEFT, kLane);
       create_child(hwnd, "STATIC", "", SS_LEFT, kTakeCount);
