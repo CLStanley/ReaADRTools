@@ -3,6 +3,7 @@
 #include "cue_info_action.hpp"
 #include "cue_status_command.hpp"
 #include "dialogue_detection_command.hpp"
+#include "marker_cue_generation_command.hpp"
 #include "recording_action.hpp"
 
 #include <array>
@@ -18,6 +19,8 @@ constexpr const char* kCueStatusCommandName = "ReaADRSetCueStatusNative";
 constexpr const char* kCueStatusActionLabel = "ReaADR: Set Cue Status (Native)";
 constexpr const char* kDialogueDetectionCommandName = "ReaADRDetectDialogueNative";
 constexpr const char* kDialogueDetectionActionLabel = "ReaADR: Detect Dialogue From Selected Media (Native)";
+constexpr const char* kLegacyAdoptionCommandName = "ReaADRAdoptLegacyProjectNative";
+constexpr const char* kLegacyAdoptionActionLabel = "ReaADR: Adopt Existing Regions as Session (Native)";
 constexpr std::array<const char*, 4> kQuickCommandNames = {{
   "ReaADRQuickAction1Native",
   "ReaADRQuickAction2Native",
@@ -46,6 +49,9 @@ bool g_cue_status_hook_registered = false;
 int g_dialogue_detection_command_id = 0;
 gaccel_register_t g_dialogue_detection_accel = {};
 bool g_dialogue_detection_hook_registered = false;
+int g_legacy_adoption_command_id = 0;
+gaccel_register_t g_legacy_adoption_accel = {};
+bool g_legacy_adoption_hook_registered = false;
 std::array<int, 4> g_quick_command_ids = {};
 std::array<gaccel_register_t, 4> g_quick_accels = {};
 bool g_quick_hook_registered = false;
@@ -145,6 +151,53 @@ bool register_dialogue_detection_action(reaper_plugin_info_t* plugin)
     return false;
   }
   g_dialogue_detection_hook_registered = true;
+  return true;
+}
+
+bool hook_legacy_adoption_command(int command, int)
+{
+  if (command != 0 && command == g_legacy_adoption_command_id) {
+    run_legacy_project_adoption_command();
+    return true;
+  }
+  return false;
+}
+
+void unregister_legacy_adoption_action(reaper_plugin_info_t* plugin)
+{
+  if (!plugin) return;
+  if (g_legacy_adoption_hook_registered) {
+    plugin->Register("-hookcommand", reinterpret_cast<void*>(hook_legacy_adoption_command));
+    g_legacy_adoption_hook_registered = false;
+  }
+  if (g_legacy_adoption_command_id != 0) {
+    plugin->Register("-gaccel", reinterpret_cast<void*>(&g_legacy_adoption_accel));
+    g_legacy_adoption_command_id = 0;
+    g_legacy_adoption_accel = {};
+  }
+}
+
+bool register_legacy_adoption_action(reaper_plugin_info_t* plugin)
+{
+  if (!plugin) return false;
+  if (g_legacy_adoption_command_id != 0) return true;
+  g_legacy_adoption_command_id = plugin->Register(
+    "command_id", reinterpret_cast<void*>(const_cast<char*>(kLegacyAdoptionCommandName)));
+  if (!g_legacy_adoption_command_id) return false;
+  g_legacy_adoption_accel.accel.cmd = static_cast<WORD>(g_legacy_adoption_command_id);
+  g_legacy_adoption_accel.desc = kLegacyAdoptionActionLabel;
+  if (!plugin->Register("gaccel", reinterpret_cast<void*>(&g_legacy_adoption_accel))) {
+    g_legacy_adoption_command_id = 0;
+    g_legacy_adoption_accel = {};
+    return false;
+  }
+  if (!plugin->Register("hookcommand", reinterpret_cast<void*>(hook_legacy_adoption_command))) {
+    plugin->Register("-gaccel", reinterpret_cast<void*>(&g_legacy_adoption_accel));
+    g_legacy_adoption_command_id = 0;
+    g_legacy_adoption_accel = {};
+    return false;
+  }
+  g_legacy_adoption_hook_registered = true;
   return true;
 }
 
@@ -279,7 +332,15 @@ bool register_native_workflow_actions(reaper_plugin_info_t* plugin)
     unregister_recording_action(plugin);
     return false;
   }
+  if (!register_legacy_adoption_action(plugin)) {
+    unregister_dialogue_detection_action(plugin);
+    unregister_cue_status_action(plugin);
+    unregister_cue_info_action(plugin);
+    unregister_recording_action(plugin);
+    return false;
+  }
   if (!register_quick_action_actions(plugin)) {
+    unregister_legacy_adoption_action(plugin);
     unregister_dialogue_detection_action(plugin);
     unregister_cue_status_action(plugin);
     unregister_cue_info_action(plugin);
@@ -293,6 +354,7 @@ void unregister_native_workflow_actions(reaper_plugin_info_t* plugin)
 {
   if (!plugin) return;
   unregister_quick_action_actions(plugin);
+  unregister_legacy_adoption_action(plugin);
   unregister_dialogue_detection_action(plugin);
   unregister_cue_status_action(plugin);
   unregister_cue_info_action(plugin);
