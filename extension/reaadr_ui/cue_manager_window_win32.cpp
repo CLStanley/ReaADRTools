@@ -235,7 +235,10 @@ void show_session_summary(HWND hwnd)
   win32::message_box_utf8(hwnd, summary, "ReaADR Session Summary", MB_OK | MB_ICONINFORMATION);
 }
 
-void clear_character_cues(HWND hwnd);\nvoid show_character_filter_tools(HWND hwnd);\n\nvoid show_session_tools(HWND hwnd)
+void clear_character_cues(HWND hwnd);
+void show_character_filter_tools(HWND hwnd);
+
+void show_session_tools(HWND hwnd)
 {
   if (!g_controller) return;
   constexpr UINT kValidate = 1, kRefreshSession = 2, kSyncRegions = 3,
