@@ -42,6 +42,7 @@ public:
   bool toggle_preroll_each_loop();
   bool retry_pending();
   bool shutdown();
+  double timeline_position() const { return context_.timeline_position(); }
 
   reaper::RecordingWindowLayout load_window_layout() const
   {
