@@ -51,6 +51,7 @@ public:
 
   bool reload() { return controller_.reload(); }
   bool show();
+  bool generate_cues_from_project_markers(std::string& error);
   ReaProject* project() const { return project_; }
   ui::CueManagerController& controller() { return controller_; }
   const ui::CueManagerController& controller() const { return controller_; }
