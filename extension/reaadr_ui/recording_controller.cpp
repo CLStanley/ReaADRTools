@@ -61,6 +61,13 @@ void RecordingController::sync_state()
   view_.countdown_beats_remaining = state.mode == core::RecordingTransportMode::preroll
     ? (std::max)(0, static_cast<int>(std::ceil(view_.countdown_seconds / 0.5)))
     : 0;
+  // The traditional ADR cue is three beats ending one beat before picture.
+  // Longer preroll remains visible as ordinary countdown time; the 3-2-1
+  // count-in becomes active only inside the final 1.5 seconds.
+  view_.count_in_beat = state.mode == core::RecordingTransportMode::preroll &&
+      view_.countdown_seconds > 0.0 && view_.countdown_seconds <= 1.5
+    ? (std::max)(1, static_cast<int>(std::ceil(view_.countdown_seconds / 0.5)))
+    : 0;
   view_.status_text = status_text(state);
   view_.error.clear();
 }
