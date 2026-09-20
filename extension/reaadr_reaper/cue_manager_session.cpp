@@ -1,6 +1,8 @@
 #include "cue_manager_session.hpp"
 
 #include "native_host_services.hpp"
+#include "reaadr_core/marker_cue_generation.hpp"
+#include "marker_snapshot_adapter.hpp"
 #include "reaadr_ui/cue_manager_lifecycle.hpp"
 #include "reaadr_ui/cue_manager_window.hpp"
 
@@ -78,7 +80,15 @@ CueManagerSession::CueManagerSession(CueManagerSessionConfig config)
     navigation_api_(resolve_navigation_api(config.navigation_api)),
     controller_(view_service_, mutations_, project_state_, navigation_api_,
                 std::move(config.callbacks.trigger_import),
-                std::move(config.callbacks.trigger_action),
+                [this, trigger_action = std::move(config.callbacks.trigger_action)](const std::string& action) {
+                  if (action == "generate_cues") {
+                    std::string error;
+                    if (!generate_cues_from_project_markers(error)) controller_.set_external_error(error);
+                    else controller_.reload();
+                    return;
+                  }
+                  if (trigger_action) trigger_action(action);
+                },
                 render_options_.refresh_overlay),
     frame_rate_(overlay_api_.frame_rate)
 {
@@ -88,6 +98,35 @@ bool CueManagerSession::show()
 {
   const double frame_rate = frame_rate_ ? frame_rate_() : 24.0;
   return ui::show_cue_manager(controller_, frame_rate);
+}
+
+bool CueManagerSession::generate_cues_from_project_markers(std::string& error)
+{
+  error.clear();
+  const auto snapshot = snapshot_project_markers(project_, native_marker_snapshot_api());
+  if (!snapshot) { error = snapshot.error; return false; }
+
+  core::MarkerCueGenerationOptions generation;
+  generation.include_markers = true;
+  generation.include_regions = true;
+  generation.flexible_export = true;
+  const auto cues = core::build_cues_from_project_markers(snapshot.sources, generation);
+  if (cues.empty()) { error = "The project has no markers or regions to generate cues from."; return false; }
+
+  SessionRenderOptions render = render_options_;
+  render.commit.replacement.last_operation = "generate_cues_from_markers_regions";
+  render.commit.replacement.build.frame_rate = std::to_string(frame_rate_ ? frame_rate_() : 24.0);
+  render.commit.replacement.build.cues_modified = true;
+  render.commit.replacement.build.tracks_modified = true;
+  render.commit.replacement.build.regions_modified = true;
+  render.commit.snapshot_label = "Generate Cues From Markers/Regions";
+  render.commit.utc_timestamp = native_utc_timestamp();
+  render.undo_description = "ReaADR: generate cues from markers/regions";
+  render.commit_event_type = "CuesGenerated";
+  render.event.utc_timestamp = render.commit.utc_timestamp;
+  const auto rendered = renderer_.commit_and_render(cues, render);
+  if (!rendered) { error = rendered.error; return false; }
+  return true;
 }
 
 bool CueManagerSessionHost::open_or_activate(
