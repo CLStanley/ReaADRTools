@@ -16,6 +16,7 @@ struct RecordingViewState {
   double cue_start = 0.0;
   double cue_end = 0.0;
   double preroll_seconds = 0.0;
+  double countdown_seconds = 0.0;
   int lane = 1;
   int take_count = 0;
   bool loop_enabled = false;
