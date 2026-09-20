@@ -33,6 +33,8 @@ constexpr int kLoop = 48207;
 constexpr int kPreroll = 48208;
 constexpr int kStop = 48209;
 constexpr int kRetry = 48210;
+constexpr int kTakeCount = 48211;
+constexpr int kLane = 48212;
 constexpr int kTimer = 1;
 constexpr int kTransportPlayStop = 40044;
 constexpr int kMinWindowWidth = 530;
@@ -87,6 +89,9 @@ void update_window(HWND hwnd)
     "s cue  +  " + number(view.preroll_seconds) + "s preroll");
   const std::string track_label = view.track_name.empty() ? view.track_key : view.track_name;
   set_text(hwnd, kTrack, "Track: " + track_label);
+  set_text(hwnd, kLane, "ADR Lane: " + std::to_string(view.lane));
+  set_text(hwnd, kTakeCount, std::to_string(view.take_count) +
+    (view.take_count == 1 ? " take" : " takes"));
   set_text(hwnd, kStatus, view.status_text);
   set_text(hwnd, kLoop, view.loop_enabled ? "Loop: ON" : "Loop: OFF");
   set_text(hwnd, kPreroll,
@@ -251,8 +256,10 @@ BEGIN
   LTEXT "", kCue, 20, 18, 520, 22
   LTEXT "", kDialogue, 20, 50, 520, 38
   LTEXT "", kTiming, 20, 96, 520, 20
-  LTEXT "", kTrack, 20, 124, 520, 20
-  LTEXT "", kStatus, 20, 158, 520, 24
+  LTEXT "", kTrack, 20, 124, 360, 20
+  LTEXT "", kLane, 390, 124, 150, 20
+  LTEXT "", kTakeCount, 390, 158, 150, 20
+  LTEXT "", kStatus, 20, 158, 360, 24
   PUSHBUTTON "Record", kRecord, 20, 220, 105, 32
   PUSHBUTTON "Loop: OFF", kLoop, 137, 220, 105, 32
   PUSHBUTTON "Pre-roll Each Loop", kPreroll, 254, 220, 145, 32
@@ -296,8 +303,10 @@ void layout_windows_controls(HWND hwnd)
   SetWindowPos(GetDlgItem(hwnd, kCue), nullptr, 20, 16, content_width, 22, SWP_NOZORDER);
   SetWindowPos(GetDlgItem(hwnd, kDialogue), nullptr, 20, 44, content_width, 38, SWP_NOZORDER);
   SetWindowPos(GetDlgItem(hwnd, kTiming), nullptr, 20, 88, content_width, 20, SWP_NOZORDER);
-  SetWindowPos(GetDlgItem(hwnd, kTrack), nullptr, 20, 114, content_width, 20, SWP_NOZORDER);
-  SetWindowPos(GetDlgItem(hwnd, kStatus), nullptr, 20, 142, content_width, 24, SWP_NOZORDER);
+  SetWindowPos(GetDlgItem(hwnd, kTrack), nullptr, 20, 114, (std::max)(180, content_width - 170), 20, SWP_NOZORDER);
+  SetWindowPos(GetDlgItem(hwnd, kLane), nullptr, (std::max)(220, width - 170), 114, 150, 20, SWP_NOZORDER);
+  SetWindowPos(GetDlgItem(hwnd, kTakeCount), nullptr, (std::max)(220, width - 170), 142, 150, 20, SWP_NOZORDER);
+  SetWindowPos(GetDlgItem(hwnd, kStatus), nullptr, 20, 142, (std::max)(180, content_width - 170), 24, SWP_NOZORDER);
 
   const int button_y = (std::max)(176, height - 74);
   const int close_y = (std::max)(214, height - 36);
@@ -317,6 +326,8 @@ LRESULT CALLBACK recording_window_proc(HWND hwnd, UINT message, WPARAM wparam, L
       create_child(hwnd, "STATIC", "", SS_LEFT, kDialogue);
       create_child(hwnd, "STATIC", "", SS_LEFT, kTiming);
       create_child(hwnd, "STATIC", "", SS_LEFT, kTrack);
+      create_child(hwnd, "STATIC", "", SS_LEFT, kLane);
+      create_child(hwnd, "STATIC", "", SS_LEFT, kTakeCount);
       create_child(hwnd, "STATIC", "", SS_LEFT, kStatus);
       create_child(hwnd, "BUTTON", "Record", WS_TABSTOP | BS_PUSHBUTTON, kRecord);
       create_child(hwnd, "BUTTON", "Loop: OFF", WS_TABSTOP | BS_PUSHBUTTON, kLoop);
