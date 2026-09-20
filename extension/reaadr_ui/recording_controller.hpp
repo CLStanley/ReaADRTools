@@ -25,8 +25,8 @@ struct RecordingViewState {
   std::string error;
 };
 
-// Presentation controller for the SWELL Record Cue window. It contains no
-// recording rules: button/timer events are translated into semantic events
+// Presentation controller shared by the native SWELL and Win32 Record Cue
+// windows. It contains no recording rules: button/timer events are translated into semantic events
 // for RecordingCommandContext, and display state is projected from the accepted
 // native workflow state.
 class RecordingController final {
