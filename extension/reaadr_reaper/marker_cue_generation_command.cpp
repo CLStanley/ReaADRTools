@@ -146,4 +146,102 @@ MarkerCueGenerationCommandResult run_marker_cue_generation_command(ReaProject* p
   return command;
 }
 
+MarkerCueGenerationCommandResult run_legacy_project_adoption_command(ReaProject* project)
+{
+  MarkerCueGenerationCommandResult command;
+  if (!GetProjExtState || !SetProjExtState || !ShowMessageBox) {
+    command.error = "Required REAPER project-state or message-box APIs are unavailable.";
+    return command;
+  }
+
+  ProjectStateStore project_state(project, {GetProjExtState, SetProjExtState});
+  core::SessionModelRepository repository(project_state);
+  const core::SessionLoadResult existing = repository.load();
+  if (existing) {
+    command.error = "This project already contains a canonical ReaADR session and does not need legacy adoption.";
+    ShowMessageBox(command.error.c_str(), "ReaADR Adopt Legacy Project", 0);
+    return command;
+  }
+  if (existing.error != core::SessionLoadError::missing) {
+    command.error = core::session_load_error_message(existing);
+    ShowMessageBox(command.error.c_str(), "ReaADR Adopt Legacy Project", 0);
+    return command;
+  }
+
+  core::EventLogRepository event_log(project_state);
+  core::CharacterFilterRepository character_filter(project_state);
+  core::OverlaySettingsRepository overlay_settings(project_state);
+  core::CueSelectionRepository cue_selection(project_state);
+  const OverlayApplicationApi overlay_api = {
+    command_frame_rate, empty_overlay_selection, command_refresh_overlay,
+  };
+  OverlayApplicationService overlay_application(
+    repository, overlay_settings, cue_selection, character_filter, overlay_api);
+  SessionRenderService renderer(
+    repository, event_log, character_filter, project,
+    native_track_region_api(), native_ruler_lane_api(), native_cue_audio_api(),
+    native_transaction_api());
+  MarkerCueGenerationApplicationService generator(
+    renderer, project, native_marker_snapshot_api());
+
+  core::MarkerCueGenerationOptions generation_options;
+  generation_options.include_markers = false;
+  generation_options.include_regions = true;
+  generation_options.flexible_export = true;
+  const auto prepared = generator.preview(generation_options);
+  if (!prepared) {
+    command.error = prepared.error;
+    ShowMessageBox(command.error.c_str(), "ReaADR Adopt Legacy Project", 0);
+    return command;
+  }
+  command.cue_count = prepared.cues.size();
+
+  std::ostringstream confirmation;
+  confirmation << "Adopt " << prepared.cues.size()
+               << " existing project region(s) as the initial ReaADR session?\n\n"
+                  "This creates the canonical session model and ReaADR-owned tracks, "
+                  "regions, cue audio, filtering, and overlay state. Existing project "
+                  "regions are used as the timing source.";
+  if (ShowMessageBox(confirmation.str().c_str(), "ReaADR Adopt Legacy Project", 4) != 6) {
+    command.cancelled = true;
+    return command;
+  }
+
+  SessionRenderOptions render_options;
+  render_options.cue_audio_path = native_project_cue_audio_path(project);
+  render_options.undo_description = "ReaADR: adopt legacy project regions";
+  render_options.commit.snapshot_label = "Adopt Legacy Project Regions";
+  render_options.commit.utc_timestamp = native_utc_timestamp();
+  render_options.commit.replacement.last_operation = "adopt_legacy_regions";
+  render_options.commit.replacement.build.frame_rate =
+    std::to_string(native_project_frame_rate(project));
+  render_options.commit.replacement.build.session_id =
+    "legacy-adopted-" + render_options.commit.utc_timestamp;
+  render_options.commit.replacement.build.session_name = "Adopted Project Regions";
+  render_options.event.source = "legacy_adoption";
+  render_options.commit_event_type = "LegacySessionAdopted";
+  render_options.refresh_overlay = [&overlay_application](std::string* error) {
+    const auto refreshed = overlay_application.refresh();
+    if (!refreshed && error) *error = refreshed.error;
+    return static_cast<bool>(refreshed);
+  };
+
+  const auto adopted = generator.render_prepared(std::move(prepared), render_options);
+  if (!adopted) {
+    command.error = adopted.error;
+    ShowMessageBox(command.error.c_str(), "ReaADR Adopt Legacy Project", 0);
+    return command;
+  }
+
+  std::ostringstream summary;
+  summary << "Adopted " << adopted.cues.size() << " legacy region cue(s).\n\n"
+          << "Tracks created: " << adopted.rendered.render.tracks_and_regions.tracks_created << '\n'
+          << "Regions created: " << adopted.rendered.render.tracks_and_regions.regions_created << '\n'
+          << "Cue-audio items created: " << adopted.rendered.render.cue_audio.items_created;
+  if (!adopted.rendered.event_warning.empty())
+    summary << "\n\nWarning: " << adopted.rendered.event_warning;
+  ShowMessageBox(summary.str().c_str(), "ReaADR Legacy Project Adopted (Native)", 0);
+  return command;
+}
+
 } // namespace reaadr::reaper
