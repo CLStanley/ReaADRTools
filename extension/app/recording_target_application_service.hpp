@@ -16,8 +16,9 @@ struct RecordingTargetApplicationResult {
   explicit operator bool() const { return error.empty(); }
 };
 
-// Loads the exact project-local inputs used by Lua active_cue() and delegates
-// the deterministic selection/filter/lane rules to the REAPER-independent core.
+// Loads canonical project-local selection/filter/overlay inputs and delegates
+// deterministic recording-target and lane resolution to the host-independent
+// core shared by the native Record Cue and Cue Info workflows.
 class RecordingTargetApplicationService final {
 public:
   RecordingTargetApplicationService(core::SessionModelRepository& sessions,
