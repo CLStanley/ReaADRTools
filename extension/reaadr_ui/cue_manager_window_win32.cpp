@@ -239,13 +239,14 @@ void clear_character_cues(HWND hwnd);\nvoid show_character_filter_tools(HWND hwn
 {
   if (!g_controller) return;
   constexpr UINT kValidate = 1, kRefreshSession = 2, kSyncRegions = 3,
-                 kClearCues = 4, kFilter = 5, kGenerate = 6;
+                 kClearCues = 4, kFilter = 5, kGenerate = 6, kDetectDialogue = 7;
   HMENU menu = CreatePopupMenu();
   if (!menu) return;
   AppendMenuW(menu, MF_STRING, kValidate, L"Check Session");
   AppendMenuW(menu, MF_STRING, kRefreshSession, L"Refresh Session");
   AppendMenuW(menu, MF_STRING, kSyncRegions, L"Update Cues From Regions");
   AppendMenuW(menu, MF_STRING, kGenerate, L"Generate Cues From Markers/Regions");
+  AppendMenuW(menu, MF_STRING, kDetectDialogue, L"Detect Dialogue From Selected Media");
   AppendMenuW(menu, MF_SEPARATOR, 0, nullptr);
   AppendMenuW(menu, MF_STRING, kClearCues, L"Clear Character Cues");
   AppendMenuW(menu, MF_STRING, kFilter, L"Character Filter");
@@ -261,6 +262,7 @@ void clear_character_cues(HWND hwnd);\nvoid show_character_filter_tools(HWND hwn
   else if (choice == kRefreshSession) g_controller->trigger_action("refresh_session");
   else if (choice == kSyncRegions) g_controller->trigger_action("sync_regions");
   else if (choice == kGenerate) g_controller->trigger_action("generate_cues");
+  else if (choice == kDetectDialogue) g_controller->trigger_action("detect_dialogue");
   else if (choice == kClearCues) { clear_character_cues(hwnd); return; }
   else if (choice == kFilter) { show_character_filter_tools(hwnd); return; }
   else return;
