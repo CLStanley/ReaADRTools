@@ -48,7 +48,7 @@ constexpr int kImportMapping = 48034;
 constexpr int kImportMode = 48036, kImportCharacters = 48037;
 constexpr int kSessionValidate = 48039, kSessionRefresh = 48040, kSessionSync = 48041;
 constexpr int kSessionClear = 48051, kSessionFilter = 48052, kSessionGenerate = 48140,
-              kSessionDetectDialogue = 48141;
+              kSessionDetectDialogue = 48141, kSessionAdoptLegacy = 48145;
 constexpr int kOverlayRefresh = 48042, kPreferencesOpen = 48043;
 constexpr int kOverlayActor = 48059, kOverlayEngineer = 48060,
               kOverlayStudio = 48061, kOverlayMinimal = 48062;
