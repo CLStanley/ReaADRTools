@@ -178,12 +178,15 @@ bool handle_recording_command(HWND hwnd, int command)
   if (command == kRecord) {
     changed = g_controller->record();
   } else if (command == kStop) {
+    if (g_controller->view().mode == core::RecordingTransportMode::idle) return true;
     changed = g_controller->stop();
   } else if (command == kPreroll) {
+    if (g_controller->view().mode != core::RecordingTransportMode::idle) return true;
     changed = g_controller->toggle_preroll_each_loop();
   } else if (command == kRetry) {
     changed = g_controller->retry_pending();
   } else if (command == kLoop) {
+    if (g_controller->view().mode != core::RecordingTransportMode::idle) return true;
     if (!g_controller->view().loop_enabled) {
       const int answer = show_message(
         hwnd,
