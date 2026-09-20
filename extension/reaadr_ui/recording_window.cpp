@@ -32,6 +32,7 @@ constexpr int kRecord = 48206;
 constexpr int kLoop = 48207;
 constexpr int kPreroll = 48208;
 constexpr int kStop = 48209;
+constexpr int kRetry = 48210;
 constexpr int kTimer = 1;
 constexpr int kTransportPlayStop = 40044;
 constexpr int kMinWindowWidth = 530;
@@ -92,6 +93,7 @@ void update_window(HWND hwnd)
            view.include_preroll_each_loop ? "Pre-roll Each Loop" : "Default Repeat");
   EnableWindow(GetDlgItem(hwnd, kRecord),
                view.mode == core::RecordingTransportMode::idle);
+  EnableWindow(GetDlgItem(hwnd, kRetry), !view.error.empty());
 }
 
 void activate_recording_window()
@@ -171,6 +173,8 @@ bool handle_recording_command(HWND hwnd, int command)
     changed = g_controller->stop();
   } else if (command == kPreroll) {
     changed = g_controller->toggle_preroll_each_loop();
+  } else if (command == kRetry) {
+    changed = g_controller->retry_pending();
   } else if (command == kLoop) {
     if (!g_controller->view().loop_enabled) {
       const int answer = show_message(
@@ -253,6 +257,7 @@ BEGIN
   PUSHBUTTON "Loop: OFF", kLoop, 137, 220, 105, 32
   PUSHBUTTON "Pre-roll Each Loop", kPreroll, 254, 220, 145, 32
   PUSHBUTTON "Stop", kStop, 435, 220, 105, 32
+  PUSHBUTTON "Retry", kRetry, 318, 262, 105, 24
   DEFPUSHBUTTON "Close", IDCANCEL, 435, 262, 105, 24
 END
 SWELL_DEFINE_DIALOG_RESOURCE_END2(kDialog)
@@ -300,6 +305,7 @@ void layout_windows_controls(HWND hwnd)
   SetWindowPos(GetDlgItem(hwnd, kLoop), nullptr, 137, button_y, 105, 30, SWP_NOZORDER);
   SetWindowPos(GetDlgItem(hwnd, kPreroll), nullptr, 254, button_y, 145, 30, SWP_NOZORDER);
   SetWindowPos(GetDlgItem(hwnd, kStop), nullptr, (std::max)(410, width - 125), button_y, 105, 30, SWP_NOZORDER);
+  SetWindowPos(GetDlgItem(hwnd, kRetry), nullptr, (std::max)(293, width - 242), close_y, 105, 24, SWP_NOZORDER);
   SetWindowPos(GetDlgItem(hwnd, IDCANCEL), nullptr, (std::max)(410, width - 125), close_y, 105, 24, SWP_NOZORDER);
 }
 
@@ -316,6 +322,7 @@ LRESULT CALLBACK recording_window_proc(HWND hwnd, UINT message, WPARAM wparam, L
       create_child(hwnd, "BUTTON", "Loop: OFF", WS_TABSTOP | BS_PUSHBUTTON, kLoop);
       create_child(hwnd, "BUTTON", "Pre-roll Each Loop", WS_TABSTOP | BS_PUSHBUTTON, kPreroll);
       create_child(hwnd, "BUTTON", "Stop", WS_TABSTOP | BS_PUSHBUTTON, kStop);
+      create_child(hwnd, "BUTTON", "Retry", WS_TABSTOP | BS_PUSHBUTTON, kRetry);
       create_child(hwnd, "BUTTON", "Close", WS_TABSTOP | BS_DEFPUSHBUTTON, IDCANCEL);
       layout_windows_controls(hwnd);
       return 0;
