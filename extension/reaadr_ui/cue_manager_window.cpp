@@ -79,7 +79,7 @@ constexpr int kHelpSearch = 48101, kHelpSearchRun = 48102;
 constexpr int kReportsSummary = 48049, kReportsExport = 48050;
 constexpr int kReportsTiming = 48103;
 constexpr int kReportsMetadata = 48104;
-constexpr int kCueRefresh = 48105, kCueSync = 48106;
+constexpr int kCueRefresh = 48105, kCueSync = 48106, kCueRecord = 48143, kCueInfo = 48144;
 CueManagerController* g_controller = nullptr;
 // List notifications during rebuilding must not overwrite the canonical selection.
 bool g_refreshing_rows = false;
@@ -186,7 +186,8 @@ void apply_tab_visibility(HWND hwnd, const std::string& tab)
     kRows, kPrevious, kNext, kCharacterFilter, kApplyFilter,
     kEditDialogue, kEditNotes, kEditType, kEditStart, kEditEnd, kEditStatus,
     kApplyEdit, kEditCueId, kEditCharacter, kSearchFilter, kStatusFilter,
-    kResetFilter, kJumpCueId, kJump, kNewCue, kAddCue, kRemoveCue, kCueRefresh, kCueSync, kColumns,
+    kResetFilter, kJumpCueId, kJump, kNewCue, kAddCue, kRemoveCue, kCueRefresh, kCueSync,
+    kCueRecord, kCueInfo, kColumns,
   };
   for (const int id : cue_controls)
     ShowWindow(GetDlgItem(hwnd, id), cues ? SW_SHOW : SW_HIDE);
@@ -716,6 +717,15 @@ INT_PTR cue_manager_proc(HWND hwnd, UINT message, WPARAM wparam, LPARAM lparam)
     if (g_controller) g_controller->trigger_action("export_session_metadata");
     return 1;
   }
+  if (message == WM_COMMAND && (LOWORD(wparam) == kCueRecord || LOWORD(wparam) == kCueInfo)) {
+    if (g_controller) {
+      g_controller->trigger_action(LOWORD(wparam) == kCueRecord ? "record_cue" : "cue_info");
+      if (!g_controller->view().error.empty())
+        MessageBox(hwnd, g_controller->view().error.c_str(), "ReaADR Cue Manager", 0);
+      else if (g_controller->reload()) refresh_rows(hwnd);
+    }
+    return 1;
+  }
   if (message == WM_COMMAND && LOWORD(wparam) == kResetFilter) {
     SetDlgItemText(hwnd, kSearchFilter, "");
     SetDlgItemText(hwnd, kCharacterFilter, "");
@@ -914,6 +924,8 @@ BEGIN
   EDITTEXT kJumpCueId, 918, 40, 130, 20, ES_AUTOHSCROLL
   PUSHBUTTON "Go", kJump, 1054, 40, 50, 20
   PUSHBUTTON "New Cue", kNewCue, 16, 70, 82, 20
+  PUSHBUTTON "Record Current Cue", kCueRecord, 884, 70, 140, 24
+  PUSHBUTTON "Cue Info", kCueInfo, 1030, 70, 90, 24
   PUSHBUTTON "Add Cue", kAddCue, 104, 70, 82, 20
   PUSHBUTTON "Remove Cue", kRemoveCue, 192, 70, 96, 20
   PUSHBUTTON "Update Cues From Regions", kCueSync, 300, 70, 180, 20
