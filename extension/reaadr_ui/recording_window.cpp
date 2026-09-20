@@ -88,10 +88,13 @@ void update_window(HWND hwnd)
   const double duration = view.cue_end - view.cue_start;
   set_text(hwnd, kTiming, view.cue_start_timecode + "   " + number(duration) +
     "s cue  +  " + number(view.preroll_seconds) + "s preroll");
-  set_text(hwnd, kCountdown, view.mode == core::RecordingTransportMode::preroll
-    ? "Cue in " + number(view.countdown_seconds, 2) + "s  |  " +
-        std::to_string(view.countdown_beats_remaining) + " beats"
-    : "");
+  std::string countdown_text;
+  if (view.mode == core::RecordingTransportMode::preroll) {
+    countdown_text = "Cue in " + number(view.countdown_seconds, 2) + "s";
+    if (view.count_in_beat > 0)
+      countdown_text += "  |  " + std::to_string(view.count_in_beat);
+  }
+  set_text(hwnd, kCountdown, countdown_text);
   const std::string track_label = view.track_name.empty() ? view.track_key : view.track_name;
   set_text(hwnd, kTrack, "Track: " + track_label);
   set_text(hwnd, kLane, "ADR Lane: " + std::to_string(view.lane));
