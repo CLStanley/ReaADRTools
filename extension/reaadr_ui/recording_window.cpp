@@ -457,8 +457,27 @@ bool show_recording_window(RecordingController& controller)
 bool close_recording_window()
 {
   if (!g_window || !IsWindow(g_window)) return true;
-  close_recording(g_window);
+  if (!close_recording(g_window)) return false;
   return !g_window || !IsWindow(g_window);
+}
+
+bool force_close_recording_window()
+{
+  if (!g_window || !IsWindow(g_window)) return true;
+
+  // Runtime teardown cannot keep a modeless window alive after its controller
+  // storage is released. Make one best-effort workflow shutdown so REAPER gets
+  // its record-arm/loop state restored, then destroy the presentation even if
+  // a host cleanup step reports an error.
+  if (g_controller) g_controller->shutdown();
+  save_window_geometry(g_window);
+  const auto dock = reaper::inspect_window_dock_state(g_window);
+  if (dock.docked()) reaper::remove_window_from_docker(g_window);
+  KillTimer(g_window, kTimer);
+  HWND closing = g_window;
+  g_window = nullptr;
+  DestroyWindow(closing);
+  return true;
 }
 
 } // namespace reaadr::ui
