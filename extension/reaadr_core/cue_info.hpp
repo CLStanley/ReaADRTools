@@ -36,10 +36,10 @@ struct CueInfoView {
   explicit operator bool() const { return error.empty(); }
 };
 
-// Projects one canonical cue into the live information shown by the legacy
-// Cue Info Panel. This deliberately contains no REAPER/UI dependency: the host
-// supplies the current timeline position and recorded-take count, while the UI
-// decides how to present/edit the values.
+// Projects one canonical cue into the native Cue Info live read model. This
+// deliberately contains no REAPER/UI dependency: the host supplies the current
+// timeline position and recorded-take count, while the UI decides how to
+// present and edit the values.
 CueInfoView build_cue_info_view(const Fields& cue, const CueInfoOptions& options = {});
 
 } // namespace reaadr::core
