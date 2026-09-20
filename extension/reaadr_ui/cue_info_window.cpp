@@ -260,11 +260,19 @@ void refresh_live_state(HWND hwnd)
   }
 }
 
+bool confirm_discard_edits(HWND hwnd, const char* action)
+{
+  if (!g_dirty) return true;
+  const std::string message = std::string("This cue has unsaved changes. Discard them and ") + action + "?";
+  return show_message(hwnd, message, "ReaADR Cue Information", MB_YESNO | MB_ICONWARNING) == IDYES;
+}
+
 bool handle_nav_key(HWND hwnd, int key)
 {
   if (!g_controller || editor_has_focus(hwnd)) return false;
   const bool is_refresh = key == kVkR && (GetAsyncKeyState(VK_CONTROL) & 0x8000);
   if (key != VK_LEFT && key != VK_RIGHT && !is_refresh) return false;
+  if (g_dirty && !confirm_discard_edits(hwnd, is_refresh ? "refresh the cue" : "navigate to another cue")) return true;
   const bool ok = key == VK_LEFT ? g_controller->previous()
                    : key == VK_RIGHT ? g_controller->next()
                    : g_controller->refresh();
@@ -296,12 +304,14 @@ bool handle_cue_info_command(HWND hwnd, int command, int notification)
     return true;
   }
   if (command == kPrevious || command == kNext) {
+    if (!confirm_discard_edits(hwnd, "navigate to another cue")) return true;
     const bool moved = command == kNext ? g_controller->next() : g_controller->previous();
     if (moved) populate_editors(hwnd);
     else set_text(hwnd, kError, g_controller->error());
     return true;
   }
   if (command == kJump) {
+    if (!confirm_discard_edits(hwnd, "jump to another cue")) return true;
     if (g_controller->jump_to_id(control_text(hwnd, kJumpId))) populate_editors(hwnd);
     else set_text(hwnd, kError, g_controller->error());
     return true;
