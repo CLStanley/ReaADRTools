@@ -351,7 +351,8 @@ void show_overlay_tools(HWND hwnd)
                  kFlash = 21, kMetadata = 22, kBgCueId = 30, kBgCharacter = 31,
                  kBgTimecode = 32, kBgProjectTimer = 33, kBgDialogue = 34,
                  kBgDirection = 35, kBgCueType = 36, kBgStatus = 37, kBgMetadata = 38,
-                 kTextWhite = 40, kTextYellow = 41, kSaveSettings = 42;
+                 kTextWhite = 40, kTextYellow = 41, kSaveSettings = 42,
+                 kPrerollEachLoop = 43;
   HMENU menu = CreatePopupMenu();
   if (!menu) return;
   AppendMenuW(menu, MF_STRING, kRefreshOverlay, L"Refresh Video Overlay");
@@ -392,6 +393,8 @@ void show_overlay_tools(HWND hwnd)
   AppendMenuW(menu, MF_STRING, kTextWhite, L"Text Color: White");
   AppendMenuW(menu, MF_STRING, kTextYellow, L"Text Color: Yellow");
   AppendMenuW(menu, MF_SEPARATOR, 0, nullptr);
+  add_toggle(kPrerollEachLoop, L"Include Pre-roll Each Loop", overlay.include_preroll_each_loop);
+  AppendMenuW(menu, MF_SEPARATOR, 0, nullptr);
   AppendMenuW(menu, MF_STRING, kSaveSettings, L"View Metadata / Pre-roll Settings");
 
   RECT anchor{};
@@ -407,6 +410,7 @@ void show_overlay_tools(HWND hwnd)
   else if (choice == kMinimal) g_controller->trigger_action("overlay_profile:minimal");
   else if (choice == kTextWhite) g_controller->trigger_action("overlay_text_color:white");
   else if (choice == kTextYellow) g_controller->trigger_action("overlay_text_color:yellow");
+  else if (choice == kPrerollEachLoop) g_controller->trigger_action("overlay_toggle:include_preroll_each_loop");
   else if (choice == kSaveSettings) {
     edit_overlay_settings(hwnd);
     return;
