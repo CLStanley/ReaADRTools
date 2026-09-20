@@ -21,7 +21,7 @@ struct RecordingSessionStartResult {
   explicit operator bool() const { return error.empty(); }
 };
 
-// Reproduces the startup contract of ReaADR_Record_Cue.lua without owning UI:
+// Owns the native Record Cue startup contract without owning presentation:
 // resolve active cue -> load loop preference -> prepare owned recording track ->
 // initialize the deterministic transport/application workflow.
 class RecordingSessionService final {
