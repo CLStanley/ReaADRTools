@@ -8,6 +8,8 @@
 #include <utility>
 
 #include "cue_manager_session.hpp"
+#include "cue_info_command.hpp"
+#include "recording_command.hpp"
 #include "native_action_registry.hpp"
 
 #include <reaper_plugin.h>
@@ -59,6 +61,14 @@ inline bool shutdown_native_runtime(
   // Window/controller ownership must end before command hooks are removed and
   // before REAPER host APIs disappear during extension unload.
   if (!cue_manager_session_host().shutdown(error)) return false;
+  if (!shutdown_native_record_cue_command()) {
+    if (error) *error = "The native Record Cue window could not be closed safely.";
+    return false;
+  }
+  if (!shutdown_native_cue_info_command()) {
+    if (error) *error = "The native Cue Info window could not be closed safely.";
+    return false;
+  }
 
   reaper_plugin_info_t* registration_host = plugin ? plugin : g_native_runtime_plugin;
   if (registration_host) unregister_native_workflow_actions(registration_host);
