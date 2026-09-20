@@ -604,7 +604,34 @@ void show_preferences_tools(HWND hwnd)
 
 void show_help(HWND hwnd)
 {
-  MessageBoxW(hwnd, L"Cues: browse, filter, edit, navigate, record, and inspect canonical cues.\n\nImport: choose a cue sheet and run the native transactional importer.\n\nSession: validate or refresh generated tracks, regions, cue audio, filters, and overlays.\n\nReports: inspect a session summary or export cue, timing, and metadata reports.\n\nOverlay: refresh native video overlay output and profiles.\n\nPreferences: edit native Manager and overlay preferences.", L"ReaADR Manager Help", MB_OK | MB_ICONINFORMATION);
+  constexpr UINT kCues = 1, kImport = 2, kOverlay = 3, kReports = 4,
+                 kQuickActions = 5, kOverview = 6;
+  HMENU menu = CreatePopupMenu();
+  if (!menu) return;
+  AppendMenuW(menu, MF_STRING, kOverview, L"Manager Overview");
+  AppendMenuW(menu, MF_SEPARATOR, 0, nullptr);
+  AppendMenuW(menu, MF_STRING, kCues, L"Cues and Navigation");
+  AppendMenuW(menu, MF_STRING, kImport, L"Importing Cue Sheets");
+  AppendMenuW(menu, MF_STRING, kOverlay, L"Overlay Controls");
+  AppendMenuW(menu, MF_STRING, kReports, L"Reports and Exports");
+  AppendMenuW(menu, MF_STRING, kQuickActions, L"Quick Actions and Preferences");
+  RECT anchor{};
+  HWND button = control(hwnd, kModuleHelp);
+  if (button) GetWindowRect(button, &anchor); else GetWindowRect(hwnd, &anchor);
+  const UINT choice = TrackPopupMenu(menu, TPM_RETURNCMD | TPM_LEFTALIGN | TPM_TOPALIGN | TPM_RIGHTBUTTON,
+                                     anchor.left, anchor.bottom, 0, hwnd, nullptr);
+  DestroyMenu(menu);
+  if (!choice) return;
+
+  const wchar_t* title = L"ReaADR Manager Help";
+  const wchar_t* body = nullptr;
+  if (choice == kCues) body = L"Browse canonical cues in the table, filter by search, character, or status, and click a column header to sort. Use Jump, Previous, and Next to navigate while keeping REAPER and the selected cue synchronized. Record Current Cue and Cue Info open the native recording and detail workflows.";
+  else if (choice == kImport) body = L"Import supports all cues, selected characters, or updating existing cues. The saved mapping is reused by default. Preview Headers lets you inspect a cue sheet before committing changes; selected-character import uses the Character filter as its scope.";
+  else if (choice == kOverlay) body = L"Overlay controls include actor, engineer, studio, and minimal profiles plus individual display/background toggles, text color, metadata fields, pre-roll seconds, and whether pre-roll repeats on each loop. Refresh Video Overlay rebuilds the current native overlay output.";
+  else if (choice == kReports) body = L"Session Summary shows the current canonical cue counts. Export Cue Sheet CSV, Export Timing Report, and Export Session Metadata use the native reporting actions for the current project.";
+  else if (choice == kQuickActions) body = L"Preferences control remembered window layout, hover preview, tooltips, navigation wrapping, and Cue Manager auto-docking. Four configurable Quick Actions can be assigned from the native action catalog.";
+  else body = L"ReaADR Cue Manager is the native control surface for cue import, editing, navigation, recording, session synchronization, reports, overlays, and Manager preferences. Use the Help menu topics for workflow-specific guidance.";
+  MessageBoxW(hwnd, body, title, MB_OK | MB_ICONINFORMATION);
 }
 
 void create_window_controls(HWND hwnd)
