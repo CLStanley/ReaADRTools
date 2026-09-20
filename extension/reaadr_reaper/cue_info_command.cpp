@@ -10,6 +10,7 @@
 
 #include "native_host_services.hpp"
 #include "overlay_refresh_adapter.hpp"
+#include "recording_command.hpp"
 #include "project_state.hpp"
 #include "../app/cue_info_application_service.hpp"
 #include "../app/cue_manager_application_service.hpp"
@@ -107,6 +108,7 @@ struct CueInfoWindowSession {
       navigation_api{GetPlayState, GetPlayPosition, GetCursorPosition, SetEditCurPos},
       controller(info, mutations, sessions, selections, preferences, project_state, navigation_api,
                  render_options.refresh_overlay,
+                 []() { return run_native_record_cue_command(); },
                  {native_play_state, native_play_position, native_cursor_position, command_frame_rate})
   {
   }
