@@ -674,4 +674,14 @@ bool close_cue_info_window()
   return !g_window || !IsWindow(g_window);
 }
 
+bool force_close_cue_info_window()
+{
+  if (!g_window || !IsWindow(g_window)) return true;
+  // Runtime unload/project teardown cannot safely leave the modeless window
+  // holding a controller that is about to be destroyed. Treat this like host
+  // shutdown rather than a user-requested close and discard transient edits.
+  g_dirty = false;
+  return close_window(g_window) && (!g_window || !IsWindow(g_window));
+}
+
 } // namespace reaadr::ui
