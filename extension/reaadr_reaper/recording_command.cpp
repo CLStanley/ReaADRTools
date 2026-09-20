@@ -34,7 +34,7 @@ bool run_native_record_cue_command()
 bool shutdown_native_record_cue_command()
 {
   if (!g_recording_session) return true;
-  if (!ui::close_recording_window()) return false;
+  if (!ui::force_close_recording_window()) return false;
   g_recording_session.reset();
   return true;
 }
