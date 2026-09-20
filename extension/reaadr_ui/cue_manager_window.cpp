@@ -283,6 +283,7 @@ void update_overlay_controls(HWND hwnd)
     {kOverlayBgProjectTimer, overlay.bg_project_timer}, {kOverlayBgDialogue, overlay.bg_dialogue},
     {kOverlayBgDirection, overlay.bg_direction}, {kOverlayBgCueType, overlay.bg_cue_type},
     {kOverlayBgStatus, overlay.bg_status}, {kOverlayBgMetadata, overlay.bg_metadata},
+    {kOverlayPrerollEachLoop, overlay.include_preroll_each_loop},
   };
   for (const auto& value : values) CheckDlgButton(hwnd, value.first, value.second ? BST_CHECKED : BST_UNCHECKED);
   SetDlgItemText(hwnd, kOverlayMetadataFields, overlay.metadata_fields.c_str());
