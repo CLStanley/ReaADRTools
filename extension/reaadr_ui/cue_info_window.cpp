@@ -231,13 +231,13 @@ void save_window_geometry(HWND hwnd)
   g_controller->save_window_layout(layout);
 }
 
-void close_window(HWND hwnd)
+bool close_window(HWND hwnd)
 {
   if (g_dirty) {
     const int answer = show_message(hwnd,
       "This cue has unsaved changes. Close Cue Info and discard them?",
       "ReaADR Cue Information", MB_YESNO | MB_ICONWARNING);
-    if (answer != IDYES) return;
+    if (answer != IDYES) return false;
   }
   save_window_geometry(hwnd);
   const auto dock = reaper::inspect_window_dock_state(hwnd);
@@ -245,6 +245,7 @@ void close_window(HWND hwnd)
   KillTimer(hwnd, kTimer);
   if (g_window == hwnd) g_window = nullptr;
   DestroyWindow(hwnd);
+  return true;
 }
 
 void refresh_live_state(HWND hwnd)
@@ -284,7 +285,7 @@ bool handle_cue_info_command(HWND hwnd, int command, int notification)
   if (command == kSave) {
     if (g_controller->save(read_editors(hwnd))) {
       if (g_close_on_save) {
-        close_window(hwnd);
+        if (close_window(hwnd)) return true;
         return true;
       }
       refresh_character_choices(hwnd);
@@ -655,7 +656,7 @@ bool show_cue_info_window(CueInfoController& controller)
 bool close_cue_info_window()
 {
   if (!g_window || !IsWindow(g_window)) return true;
-  close_window(g_window);
+  if (!close_window(g_window)) return false;
   return !g_window || !IsWindow(g_window);
 }
 
