@@ -130,7 +130,7 @@ bool run_native_cue_info_command()
 bool shutdown_native_cue_info_command()
 {
   if (!g_cue_info_session) return true;
-  if (!ui::close_cue_info_window()) return false;
+  if (!ui::force_close_cue_info_window()) return false;
   g_cue_info_session.reset();
   return true;
 }
