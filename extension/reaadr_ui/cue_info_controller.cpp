@@ -194,6 +194,31 @@ bool CueInfoController::navigate_relative(int delta)
   return jump_to_id(cues[static_cast<std::size_t>(next_index)].cue_key);
 }
 
+bool CueInfoController::record_current_cue()
+{
+  error_.clear();
+  if (!current_ || current_.view.cue_key.empty()) {
+    error_ = "No active ADR cue is available to record.";
+    return false;
+  }
+  if (!open_record_cue_) {
+    error_ = "The native Record Cue command is unavailable.";
+    return false;
+  }
+  // Persist the Cue Info cue as the Manager selection first so Record Cue's
+  // shared target resolver opens on exactly the cue the user is viewing.
+  const auto selected = selections_.save_selected_cue(current_.view.cue_key);
+  if (!selected) {
+    error_ = selected.error;
+    return false;
+  }
+  if (!open_record_cue_()) {
+    error_ = "The native Record Cue window could not be opened.";
+    return false;
+  }
+  return true;
+}
+
 bool CueInfoController::previous()
 {
   return navigate_relative(-1);
