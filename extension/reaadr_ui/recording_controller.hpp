@@ -18,6 +18,7 @@ struct RecordingViewState {
   double preroll_seconds = 0.0;
   double countdown_seconds = 0.0;
   int countdown_beats_remaining = 0;
+  int count_in_beat = 0;
   int lane = 1;
   int take_count = 0;
   bool loop_enabled = false;
