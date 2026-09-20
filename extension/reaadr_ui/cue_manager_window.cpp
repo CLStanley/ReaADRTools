@@ -47,7 +47,8 @@ constexpr int kImportBrowse = 48032, kImportRun = 48033, kImportPreview = 48035;
 constexpr int kImportMapping = 48034;
 constexpr int kImportMode = 48036, kImportCharacters = 48037;
 constexpr int kSessionValidate = 48039, kSessionRefresh = 48040, kSessionSync = 48041;
-constexpr int kSessionClear = 48051, kSessionFilter = 48052, kSessionGenerate = 48140;
+constexpr int kSessionClear = 48051, kSessionFilter = 48052, kSessionGenerate = 48140,
+              kSessionDetectDialogue = 48141;
 constexpr int kOverlayRefresh = 48042, kPreferencesOpen = 48043;
 constexpr int kOverlayActor = 48059, kOverlayEngineer = 48060,
               kOverlayStudio = 48061, kOverlayMinimal = 48062;
@@ -191,7 +192,8 @@ void apply_tab_visibility(HWND hwnd, const std::string& tab)
   ShowWindow(GetDlgItem(hwnd, kCueHeader), cues ? SW_SHOW : SW_HIDE);
 
   const int session_controls[] = {
-    kSessionValidate, kSessionRefresh, kSessionSync, kSessionGenerate, kSessionClear, kSessionFilter,
+    kSessionValidate, kSessionRefresh, kSessionSync, kSessionGenerate, kSessionDetectDialogue,
+    kSessionClear, kSessionFilter,
   };
   for (const int id : session_controls)
     ShowWindow(GetDlgItem(hwnd, id), tab == "session" ? SW_SHOW : SW_HIDE);
@@ -531,11 +533,13 @@ INT_PTR cue_manager_proc(HWND hwnd, UINT message, WPARAM wparam, LPARAM lparam)
   if (message == WM_COMMAND &&
       (LOWORD(wparam) == kSessionValidate || LOWORD(wparam) == kSessionRefresh ||
        LOWORD(wparam) == kSessionSync || LOWORD(wparam) == kSessionGenerate ||
-       LOWORD(wparam) == kCueRefresh || LOWORD(wparam) == kCueSync)) {
+       LOWORD(wparam) == kSessionDetectDialogue || LOWORD(wparam) == kCueRefresh ||
+       LOWORD(wparam) == kCueSync)) {
     if (g_controller) {
       const char* action = LOWORD(wparam) == kSessionValidate ? "validate_session" :
         (LOWORD(wparam) == kSessionRefresh || LOWORD(wparam) == kCueRefresh) ? "refresh_session" :
-        LOWORD(wparam) == kSessionGenerate ? "generate_cues" : "sync_regions";
+        LOWORD(wparam) == kSessionGenerate ? "generate_cues" :
+        LOWORD(wparam) == kSessionDetectDialogue ? "detect_dialogue" : "sync_regions";
       g_controller->trigger_action(action);
       if (g_controller->reload()) {
         refresh_rows(hwnd);
@@ -819,8 +823,9 @@ BEGIN
   PUSHBUTTON "Refresh Session", kSessionRefresh, 142, 150, 120, 24
   PUSHBUTTON "Update From Regions", kSessionSync, 268, 150, 150, 24
   PUSHBUTTON "Generate From Markers/Regions", kSessionGenerate, 428, 150, 190, 24
-  PUSHBUTTON "Clear Character Cues", kSessionClear, 628, 150, 150, 24
-  PUSHBUTTON "Character Filter", kSessionFilter, 788, 150, 120, 24
+  PUSHBUTTON "Detect Dialogue", kSessionDetectDialogue, 628, 150, 130, 24
+  PUSHBUTTON "Clear Character Cues", kSessionClear, 768, 150, 150, 24
+  PUSHBUTTON "Character Filter", kSessionFilter, 928, 150, 120, 24
   PUSHBUTTON "Refresh Video Overlay", kOverlayRefresh, 16, 150, 160, 24
   PUSHBUTTON "Actor", kOverlayActor, 184, 150, 80, 24
   PUSHBUTTON "Engineer", kOverlayEngineer, 272, 150, 90, 24
