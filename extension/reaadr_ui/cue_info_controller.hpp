@@ -55,16 +55,19 @@ public:
                     core::ProjectStateStore& project_state,
                     reaper::CueNavigationApi navigation_api,
                     std::function<bool(std::string*)> refresh_overlay,
+                    std::function<bool()> open_record_cue,
                     CueInfoControllerApi api)
     : info_(info), mutations_(mutations), sessions_(sessions), selections_(selections),
       preferences_(preferences), project_state_(project_state), navigation_api_(navigation_api),
-      refresh_overlay_(std::move(refresh_overlay)), api_(api) {}
+      refresh_overlay_(std::move(refresh_overlay)),
+      open_record_cue_(std::move(open_record_cue)), api_(api) {}
 
   bool refresh();
   bool save(const CueInfoEditValues& values);
   bool previous();
   bool next();
   bool jump_to_id(const std::string& cue_id);
+  bool record_current_cue();
 
   const core::CueInfoView& view() const { return current_.view; }
   const std::string& error() const { return error_; }
@@ -88,6 +91,7 @@ private:
   core::ProjectStateStore& project_state_;
   reaper::CueNavigationApi navigation_api_;
   std::function<bool(std::string*)> refresh_overlay_;
+  std::function<bool()> open_record_cue_;
   CueInfoControllerApi api_;
   reaper::CueInfoApplicationResult current_;
   std::string error_;
