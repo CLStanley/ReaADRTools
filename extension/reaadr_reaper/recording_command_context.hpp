@@ -38,6 +38,7 @@ public:
   const core::RecordingTransportState& state() const { return session_.state(); }
   const core::RecordingSetupPlan& plan() const { return session_.plan(); }
   double frame_rate() const;
+  double timeline_position() const { return current_timeline_position(); }
   RecordingWindowLayout load_window_layout() const;
   bool save_window_layout(const RecordingWindowLayout& layout);
 
