@@ -21,17 +21,17 @@ struct RecordingTargetResult {
   bool used_selected_cue = false;
   bool used_next_cue = false;
   std::string error;
-  // The exact filtered/lane-aware cue list Lua active_cue() exposes to callers.
-  // Cue Info uses this for Previous/Next so its navigation cannot escape the
-  // active character filter or silently disagree with Record Cue targeting.
+  // Filtered/lane-aware canonical cue list shared with Cue Info navigation so
+  // Previous/Next cannot escape the active character filter or silently
+  // disagree with Record Cue targeting.
   std::vector<CueNavigationEntry> visible_cues;
 
   explicit operator bool() const { return error.empty(); }
 };
 
-// Mirrors Lua active_cue(): first apply the active character/lane filter, then
-// honor the Manager-selected cue when it remains visible, otherwise choose the
-// cue under the current timeline position or the next visible cue.
+// Applies the native active-cue contract: first the character/lane filter,
+// then the Manager-selected cue when it remains visible, otherwise the cue
+// under the timeline position or the next visible cue.
 RecordingTargetResult resolve_recording_target(
   const SessionModel& model,
   const CharacterFilterState& filter,
