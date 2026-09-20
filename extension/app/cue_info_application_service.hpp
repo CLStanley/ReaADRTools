@@ -16,8 +16,8 @@ struct CueInfoApplicationResult {
   explicit operator bool() const { return error.empty(); }
 };
 
-// Builds the legacy Cue Info Panel's live read model from the same active-cue
-// resolver used by Record Cue, then adds the Lua-parity recorded-take count.
+// Builds the native Cue Info live read model from the same canonical active-cue
+// resolver used by Record Cue, then adds the recorded-take count from REAPER.
 class CueInfoApplicationService final {
 public:
   CueInfoApplicationService(RecordingTargetApplicationService& targets,
