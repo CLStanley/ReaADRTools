@@ -843,6 +843,7 @@ BEGIN
   PUSHBUTTON "Refresh Session", kSessionRefresh, 142, 150, 120, 24
   PUSHBUTTON "Update From Regions", kSessionSync, 268, 150, 150, 24
   PUSHBUTTON "Generate From Markers/Regions", kSessionGenerate, 428, 150, 190, 24
+  PUSHBUTTON "Adopt Existing Regions", kSessionAdoptLegacy, 16, 214, 180, 24
   PUSHBUTTON "Detect Dialogue", kSessionDetectDialogue, 628, 150, 130, 24
   PUSHBUTTON "Clear Character Cues", kSessionClear, 768, 150, 150, 24
   PUSHBUTTON "Character Filter", kSessionFilter, 928, 150, 120, 24
