@@ -233,6 +233,12 @@ void save_window_geometry(HWND hwnd)
 
 void close_window(HWND hwnd)
 {
+  if (g_dirty) {
+    const int answer = show_message(hwnd,
+      "This cue has unsaved changes. Close Cue Info and discard them?",
+      "ReaADR Cue Information", MB_YESNO | MB_ICONWARNING);
+    if (answer != IDYES) return;
+  }
   save_window_geometry(hwnd);
   const auto dock = reaper::inspect_window_dock_state(hwnd);
   if (dock.docked()) reaper::remove_window_from_docker(hwnd);
