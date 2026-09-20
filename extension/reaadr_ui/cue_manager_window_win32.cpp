@@ -18,6 +18,7 @@
 #include <algorithm>
 #include <array>
 #include <cstring>
+#include <cctype>
 #include <map>
 #include <set>
 #include <string>
@@ -653,7 +654,7 @@ void show_preferences_tools(HWND hwnd)
 void show_help(HWND hwnd)
 {
   constexpr UINT kCues = 1, kImport = 2, kOverlay = 3, kReports = 4,
-                 kQuickActions = 5, kOverview = 6;
+                 kQuickActions = 5, kOverview = 6, kSearch = 7;
   HMENU menu = CreatePopupMenu();
   if (!menu) return;
   AppendMenuW(menu, MF_STRING, kOverview, L"Manager Overview");
@@ -663,6 +664,8 @@ void show_help(HWND hwnd)
   AppendMenuW(menu, MF_STRING, kOverlay, L"Overlay Controls");
   AppendMenuW(menu, MF_STRING, kReports, L"Reports and Exports");
   AppendMenuW(menu, MF_STRING, kQuickActions, L"Quick Actions and Preferences");
+  AppendMenuW(menu, MF_SEPARATOR, 0, nullptr);
+  AppendMenuW(menu, MF_STRING, kSearch, L"Search Help Topics");
   RECT anchor{};
   HWND button = control(hwnd, kModuleHelp);
   if (button) GetWindowRect(button, &anchor); else GetWindowRect(hwnd, &anchor);
@@ -673,6 +676,41 @@ void show_help(HWND hwnd)
 
   const wchar_t* title = L"ReaADR Manager Help";
   const wchar_t* body = nullptr;
+  if (choice == kSearch) {
+    constexpr int kQuery = 1, kRun = 2, kCancel = 3;
+    HWND dialog = CreateWindowExW(WS_EX_DLGMODALFRAME, L"STATIC", L"Search ReaADR Manager Help",
+      WS_POPUP | WS_CAPTION | WS_SYSMENU | WS_VISIBLE, CW_USEDEFAULT, CW_USEDEFAULT,
+      500, 150, hwnd, nullptr, GetModuleHandleW(nullptr), nullptr);
+    if (!dialog) return;
+    create_child(dialog, L"STATIC", L"Search topics", SS_LEFT, 16, 16, 100, 20, -1);
+    create_child(dialog, L"EDIT", L"", WS_BORDER | WS_TABSTOP | ES_AUTOHSCROLL, 16, 40, 450, 24, kQuery);
+    create_child(dialog, L"BUTTON", L"Search", BS_DEFPUSHBUTTON | WS_TABSTOP, 286, 78, 84, 28, kRun);
+    create_child(dialog, L"BUTTON", L"Cancel", BS_PUSHBUTTON | WS_TABSTOP, 382, 78, 84, 28, kCancel);
+    EnableWindow(hwnd, FALSE);
+    MSG message{}; std::string query; bool run = false;
+    while (IsWindow(dialog) && GetMessageW(&message, nullptr, 0, 0) > 0) {
+      if (message.hwnd == dialog || IsChild(dialog, message.hwnd)) {
+        if (message.message == WM_COMMAND) {
+          const int id = LOWORD(message.wParam);
+          if (id == kRun || id == kCancel) {
+            run = id == kRun;
+            if (run) query = win32::get_window_text_utf8(GetDlgItem(dialog, kQuery));
+            DestroyWindow(dialog); continue;
+          }
+        } else if (message.message == WM_CLOSE) { DestroyWindow(dialog); continue; }
+      }
+      TranslateMessage(&message); DispatchMessageW(&message);
+    }
+    EnableWindow(hwnd, TRUE); SetForegroundWindow(hwnd);
+    if (!run) return;
+    for (char& ch : query) ch = static_cast<char>(std::tolower(static_cast<unsigned char>(ch)));
+    body = query.find("import") != std::string::npos ? L"Import Help: use CSV, TSV, TAB, TXT, or XLSX files; preview headers and configure mappings." :
+      query.find("cue") != std::string::npos ? L"Cue Help: browse, filter, edit, navigate, record, and refresh canonical session cues." :
+      query.find("overlay") != std::string::npos ? L"Overlay Help: choose a profile, toggle elements, edit metadata/pre-roll, and refresh." :
+      query.find("report") != std::string::npos || query.find("export") != std::string::npos ? L"Reports Help: review the session summary or export cue, timing, and metadata reports." :
+      query.find("quick") != std::string::npos || query.find("preference") != std::string::npos ? L"Preferences Help: configure quick actions and persisted Manager UI toggles." :
+      L"Search topics: import, cues, overlay, reports, quick actions, preferences.";
+  }
   if (choice == kCues) body = L"Browse canonical cues in the table, filter by search, character, or status, and click a column header to sort. Use Jump, Previous, and Next to navigate while keeping REAPER and the selected cue synchronized. Record Current Cue and Cue Info open the native recording and detail workflows.";
   else if (choice == kImport) body = L"Import supports all cues, selected characters, or updating existing cues. The saved mapping is reused by default. Preview Headers lets you inspect a cue sheet before committing changes; selected-character import uses the Character filter as its scope.";
   else if (choice == kOverlay) body = L"Overlay controls include actor, engineer, studio, and minimal profiles plus individual display/background toggles, text color, metadata fields, pre-roll seconds, and whether pre-roll repeats on each loop. Refresh Video Overlay rebuilds the current native overlay output.";
