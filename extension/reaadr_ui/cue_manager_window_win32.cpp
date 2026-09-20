@@ -498,6 +498,53 @@ void edit_overlay_settings(HWND hwnd)
   reload_and_refresh(hwnd);
 }
 
+bool edit_import_scope(HWND hwnd, std::string& mapping, std::string& characters)
+{
+  constexpr int kMapping = 1, kCharacters = 2, kContinue = 3, kCancel = 4;
+  HWND dialog = CreateWindowExW(
+    WS_EX_DLGMODALFRAME, L"STATIC", L"ReaADR Import Options",
+    WS_POPUP | WS_CAPTION | WS_SYSMENU | WS_VISIBLE,
+    CW_USEDEFAULT, CW_USEDEFAULT, 620, 210, hwnd, nullptr, GetModuleHandleW(nullptr), nullptr);
+  if (!dialog) return false;
+
+  create_child(dialog, L"STATIC", L"Column mapping", SS_LEFT, 16, 18, 150, 20, -1);
+  create_child(dialog, L"EDIT", win32::utf8_to_wide(mapping).c_str(),
+               WS_BORDER | WS_TABSTOP | ES_AUTOHSCROLL, 16, 42, 570, 24, kMapping);
+  create_child(dialog, L"STATIC", L"Characters (selected mode)", SS_LEFT, 16, 78, 190, 20, -1);
+  create_child(dialog, L"EDIT", win32::utf8_to_wide(characters).c_str(),
+               WS_BORDER | WS_TABSTOP | ES_AUTOHSCROLL, 16, 102, 570, 24, kCharacters);
+  create_child(dialog, L"BUTTON", L"Continue", BS_DEFPUSHBUTTON | WS_TABSTOP, 404, 142, 86, 28, kContinue);
+  create_child(dialog, L"BUTTON", L"Cancel", BS_PUSHBUTTON | WS_TABSTOP, 500, 142, 86, 28, kCancel);
+
+  EnableWindow(hwnd, FALSE);
+  MSG message{};
+  bool accepted = false;
+  while (IsWindow(dialog) && GetMessageW(&message, nullptr, 0, 0) > 0) {
+    if (message.hwnd == dialog || IsChild(dialog, message.hwnd)) {
+      if (message.message == WM_COMMAND) {
+        const int id = LOWORD(message.wParam);
+        if (id == kContinue || id == kCancel) {
+          accepted = id == kContinue;
+          if (accepted) {
+            mapping = win32::get_window_text_utf8(GetDlgItem(dialog, kMapping));
+            characters = win32::get_window_text_utf8(GetDlgItem(dialog, kCharacters));
+          }
+          DestroyWindow(dialog);
+          continue;
+        }
+      } else if (message.message == WM_CLOSE) {
+        DestroyWindow(dialog);
+        continue;
+      }
+    }
+    TranslateMessage(&message);
+    DispatchMessageW(&message);
+  }
+  EnableWindow(hwnd, TRUE);
+  SetForegroundWindow(hwnd);
+  return accepted;
+}
+
 void show_import_tools(HWND hwnd)
 {
   if (!g_controller) return;
@@ -517,7 +564,9 @@ void show_import_tools(HWND hwnd)
   DestroyMenu(menu);
   if (!choice) return;
 
-  const std::string mapping = g_controller->last_import_mapping();
+  std::string mapping = g_controller->last_import_mapping();
+  std::string characters = control_text(hwnd, kCharacter);
+  if (!edit_import_scope(hwnd, mapping, characters)) return;
   if (choice == kImportAll)
     g_controller->trigger_import(mapping, false, "all", {});
   else if (choice == kPreview)
@@ -525,14 +574,13 @@ void show_import_tools(HWND hwnd)
   else if (choice == kImportUpdate)
     g_controller->trigger_import(mapping, false, "update", {});
   else if (choice == kImportSelected) {
-    const std::string character = control_text(hwnd, kCharacter);
-    if (character.empty()) {
+    if (characters.empty()) {
       MessageBoxW(hwnd,
         L"Enter or choose a Character filter first. The selected-character import mode uses that value as its import scope.",
         L"ReaADR Import", MB_OK | MB_ICONINFORMATION);
       return;
     }
-    g_controller->trigger_import(mapping, false, "selected", character);
+    g_controller->trigger_import(mapping, false, "selected", characters);
   } else return;
   reload_and_refresh(hwnd);
 }
