@@ -3,7 +3,6 @@
 #include "reaadr_core/domain_utils.hpp"
 
 #include <algorithm>
-#include <cmath>
 
 namespace reaadr::ui {
 namespace {
@@ -55,12 +54,22 @@ void RecordingController::sync_state()
   view_.countdown_seconds = state.mode == core::RecordingTransportMode::preroll
     ? (std::max)(0.0, view_.cue_start - context_.timeline_position())
     : 0.0;
-  // The generated cue-audio item supplies the audible three-beep count-in.
-  // This projection only mirrors its final 1.5 seconds for the native window.
-  view_.count_in_beat = state.mode == core::RecordingTransportMode::preroll &&
-      view_.countdown_seconds > 0.0 && view_.countdown_seconds <= 1.5
-    ? (std::max)(1, static_cast<int>(std::ceil(view_.countdown_seconds / 0.5)))
-    : 0;
+  // The rendered cue WAV has three one-frame beeps whose starts are 500 ms
+  // apart and whose final beep ends exactly at picture. Mirror those same
+  // boundaries in the native display instead of running an independent 1.5 s
+  // countdown that can disagree with the audio item.
+  const double frame_seconds = 1.0 / context_.frame_rate();
+  const double cue_audio_seconds = 1.0 + frame_seconds;
+  if (state.mode != core::RecordingTransportMode::preroll ||
+      view_.countdown_seconds <= 0.0 || view_.countdown_seconds > cue_audio_seconds) {
+    view_.count_in_beat = 0;
+  } else if (view_.countdown_seconds > 0.5 + frame_seconds) {
+    view_.count_in_beat = 3;
+  } else if (view_.countdown_seconds > frame_seconds) {
+    view_.count_in_beat = 2;
+  } else {
+    view_.count_in_beat = 1;
+  }
   view_.status_text = status_text(state);
   view_.error.clear();
 }
