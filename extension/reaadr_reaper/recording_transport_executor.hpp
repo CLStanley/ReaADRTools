@@ -14,6 +14,7 @@ struct RecordingTransportApi {
   bool (*set_loop_time_range)(double, double) = nullptr;
   bool (*set_edit_cursor_position)(double, bool, bool) = nullptr;
   bool (*run_command)(int) = nullptr;
+  bool (*play_count_in_beat)(int) = nullptr;
 };
 
 struct PendingRecordingApplicationActions {
