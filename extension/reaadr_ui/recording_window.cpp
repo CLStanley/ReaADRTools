@@ -45,6 +45,15 @@ constexpr const char* kWindowTitle = "ReaADR Record Cue";
 
 RecordingController* g_controller = nullptr;
 HWND g_window = nullptr;
+bool g_controller_shutdown = false;
+
+bool shutdown_controller()
+{
+  if (!g_controller || g_controller_shutdown) return true;
+  if (!g_controller->shutdown()) return false;
+  g_controller_shutdown = true;
+  return true;
+}
 
 std::string number(double value, int precision = 1)
 {
@@ -165,7 +174,7 @@ bool show_error(HWND hwnd)
 
 bool close_recording(HWND hwnd)
 {
-  if (g_controller && !g_controller->shutdown()) {
+  if (!shutdown_controller()) {
     show_error(hwnd);
     update_window(hwnd);
     return false;
@@ -396,7 +405,7 @@ LRESULT CALLBACK recording_window_proc(HWND hwnd, UINT message, WPARAM wparam, L
 
     case WM_NCDESTROY:
       KillTimer(hwnd, kTimer);
-      if (g_controller) g_controller->shutdown();
+      shutdown_controller();
       if (g_window == hwnd) g_window = nullptr;
       g_controller = nullptr;
       break;
@@ -432,10 +441,11 @@ bool show_recording_window(RecordingController& controller)
 
 #ifndef _WIN32
   g_controller = &controller;
+  g_controller_shutdown = false;
   g_window = CreateDialogParam(
     nullptr, MAKEINTRESOURCE(kDialog), nullptr, recording_proc, 0);
   if (!g_window) {
-    if (g_controller) g_controller->shutdown();
+    shutdown_controller();
     g_controller = nullptr;
     return false;
   }
@@ -447,6 +457,7 @@ bool show_recording_window(RecordingController& controller)
 #else
   if (!register_windows_recording_class()) return false;
   g_controller = &controller;
+  g_controller_shutdown = false;
   if (!g_controller->begin()) {
     show_error(nullptr);
     g_controller = nullptr;
@@ -466,7 +477,7 @@ bool show_recording_window(RecordingController& controller)
     WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU | WS_THICKFRAME,
     x, y, width, height, owner, nullptr, GetModuleHandleW(nullptr), nullptr);
   if (!hwnd) {
-    g_controller->shutdown();
+    shutdown_controller();
     g_controller = nullptr;
     return false;
   }
@@ -504,7 +515,7 @@ bool force_close_recording_window()
   // storage is released. Make one best-effort workflow shutdown so REAPER gets
   // its record-arm/loop state restored, then destroy the presentation even if
   // a host cleanup step reports an error.
-  if (g_controller) g_controller->shutdown();
+  shutdown_controller();
   save_window_geometry(g_window);
   const auto dock = reaper::inspect_window_dock_state(g_window);
   if (dock.docked()) reaper::remove_window_from_docker(g_window);
