@@ -130,14 +130,6 @@ RecordingTransportExecutionResult RecordingTransportExecutor::apply(
     compensate_start_failure(isolated_arm, configured_loop, result.error);
     return result;
   }
-  if (actions.play_count_in_beat > 0 &&
-      (!api_.play_count_in_beat || !api_.play_count_in_beat(actions.play_count_in_beat))) {
-    result.error = "REAPER could not play the ADR count-in beat.";
-    // A cue failure must not strand an isolated record arm or temporary ADR
-    // loop range. Treat it like the other start-path host failures.
-    compensate_start_failure(isolated_arm, configured_loop, result.error);
-    return result;
-  }
   if (actions.record && (!api_.run_command || !api_.run_command(kRecordCommand))) {
     result.error = "REAPER could not start recording.";
     compensate_start_failure(isolated_arm, configured_loop, result.error);
