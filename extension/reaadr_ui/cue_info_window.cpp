@@ -494,9 +494,12 @@ void layout_windows_controls(HWND hwnd)
   SetWindowPos(GetDlgItem(hwnd, kJump), nullptr, 232, action_y - 1, 72, 26, SWP_NOZORDER);
   SetWindowPos(GetDlgItem(hwnd, kPrevious), nullptr, 326, action_y - 1, 86, 26, SWP_NOZORDER);
   SetWindowPos(GetDlgItem(hwnd, kNext), nullptr, 418, action_y - 1, 72, 26, SWP_NOZORDER);
-  SetWindowPos(GetDlgItem(hwnd, kRecord), nullptr, 500, action_y - 1, 94, 26, SWP_NOZORDER);
-  SetWindowPos(GetDlgItem(hwnd, kSave), nullptr, (std::max)(610, right - 190), action_y - 1, 86, 26, SWP_NOZORDER);
-  SetWindowPos(GetDlgItem(hwnd, IDCANCEL), nullptr, (std::max)(610, right - 96), action_y - 1, 86, 26, SWP_NOZORDER);
+  const int close_x = right - 86;
+  const int save_x = close_x - 94;
+  const int record_x = save_x - 102;
+  SetWindowPos(GetDlgItem(hwnd, kRecord), nullptr, record_x, action_y - 1, 94, 26, SWP_NOZORDER);
+  SetWindowPos(GetDlgItem(hwnd, kSave), nullptr, save_x, action_y - 1, 86, 26, SWP_NOZORDER);
+  SetWindowPos(GetDlgItem(hwnd, IDCANCEL), nullptr, close_x, action_y - 1, 86, 26, SWP_NOZORDER);
   SetWindowPos(GetDlgItem(hwnd, kError), nullptr, 18, action_y + 34, full_width, 44, SWP_NOZORDER);
 }
 
