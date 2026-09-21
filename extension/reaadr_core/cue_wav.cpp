@@ -68,7 +68,10 @@ CueWavResult build_cue_wav(const CueWavOptions& options)
 
   result.frame_rate = frame_rate;
   result.beep_seconds = 1.0 / frame_rate;
-  result.duration_seconds = options.interval_seconds * static_cast<double>(options.beep_count);
+  // The asset ends after the final one-frame beep rather than carrying an
+  // unnecessary full interval of silence after it.
+  result.duration_seconds = options.interval_seconds *
+    static_cast<double>(options.beep_count - 1) + result.beep_seconds;
   const double total_sample_value = std::floor(
     result.duration_seconds * static_cast<double>(options.sample_rate) + 0.5);
   if (!std::isfinite(total_sample_value) || total_sample_value < 1.0 ||
