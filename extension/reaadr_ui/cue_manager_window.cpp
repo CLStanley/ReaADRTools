@@ -195,7 +195,7 @@ void apply_tab_visibility(HWND hwnd, const std::string& tab)
 
   const int session_controls[] = {
     kSessionValidate, kSessionRefresh, kSessionSync, kSessionGenerate, kSessionDetectDialogue,
-    kSessionClear, kSessionFilter,
+    kSessionClear, kSessionFilter, kSessionAdoptLegacy,
   };
   for (const int id : session_controls)
     ShowWindow(GetDlgItem(hwnd, id), tab == "session" ? SW_SHOW : SW_HIDE);
