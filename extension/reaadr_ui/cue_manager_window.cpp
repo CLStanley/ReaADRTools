@@ -177,7 +177,7 @@ void apply_tab_visibility(HWND hwnd, const std::string& tab)
   const bool import = tab == "import";
   const bool cues = tab == "cues";
   const int import_controls[] = {
-    kImportMapping, kImportMode, kImportCharacters, kImportRun, kImportPreview,
+    kImportMapping, kImportMode, kImportCharacters, kImportBrowse, kImportRun, kImportPreview,
   };
   for (const int id : import_controls)
     ShowWindow(GetDlgItem(hwnd, id), import ? SW_SHOW : SW_HIDE);
@@ -512,6 +512,10 @@ INT_PTR cue_manager_proc(HWND hwnd, UINT message, WPARAM wparam, LPARAM lparam)
       return 1;
     }
   }
+  if (message == WM_COMMAND && LOWORD(wparam) == kImportBrowse) {
+    if (g_controller) g_controller->trigger_import({}, false, "all", {});
+    return 1;
+  }
   if (message == WM_COMMAND && LOWORD(wparam) == kImportRun) {
     if (g_controller) {
       char mapping[2048] = {};
@@ -839,8 +843,9 @@ BEGIN
   COMBOBOX kImportMode, 126, 116, 120, 80, CBS_DROPDOWNLIST | WS_VSCROLL
   LTEXT "Characters (; separated)", -1, 260, 118, 150, 16
   EDITTEXT kImportCharacters, 414, 116, 300, 20, ES_AUTOHSCROLL
-  PUSHBUTTON "Choose Cue Sheet and Import", kImportRun, 650, 66, 190, 24
-  PUSHBUTTON "Preview Headers", kImportPreview, 846, 66, 120, 24
+  PUSHBUTTON "Choose Cue Sheet", kImportBrowse, 650, 66, 120, 24
+  PUSHBUTTON "Import", kImportRun, 776, 66, 80, 24
+  PUSHBUTTON "Preview Headers", kImportPreview, 862, 66, 120, 24
   PUSHBUTTON "Check Session", kSessionValidate, 16, 150, 120, 24
   PUSHBUTTON "Refresh Session", kSessionRefresh, 142, 150, 120, 24
   PUSHBUTTON "Update From Regions", kSessionSync, 268, 150, 150, 24
