@@ -139,6 +139,16 @@ bool run_main_command(int command)
   return true;
 }
 
+bool play_count_in_beat(int beat)
+{
+  // The transport/executor boundary owns when a beat fires. Audio rendering is
+  // intentionally kept at the REAPER host boundary so the deterministic core
+  // remains platform-neutral. Until the native cue source is connected here,
+  // reject invalid beats but allow the transport migration to exercise the
+  // complete host action path without introducing a Lua or OS sound fallback.
+  return beat >= 1 && beat <= 3;
+}
+
 std::string selected_overlay_cue_key_from_regions()
 {
   if (!GetNumRegionsOrMarkers || !EnumProjectMarkers3 || !GetRegionOrMarker ||
@@ -344,6 +354,7 @@ RecordingTransportApi native_recording_transport_api()
     set_loop_time_range,
     set_edit_cursor_position,
     run_main_command,
+    play_count_in_beat,
   };
 }
 
