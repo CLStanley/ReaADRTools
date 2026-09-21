@@ -513,7 +513,14 @@ INT_PTR cue_manager_proc(HWND hwnd, UINT message, WPARAM wparam, LPARAM lparam)
     }
   }
   if (message == WM_COMMAND && LOWORD(wparam) == kImportBrowse) {
-    if (g_controller) g_controller->trigger_import({}, false, "all", {});
+    if (g_controller) {
+      char mapping[2048] = {};
+      char mode[64] = {}, characters[512] = {};
+      GetDlgItemText(hwnd, kImportMapping, mapping, sizeof(mapping));
+      GetDlgItemText(hwnd, kImportMode, mode, sizeof(mode));
+      GetDlgItemText(hwnd, kImportCharacters, characters, sizeof(characters));
+      g_controller->trigger_import(mapping, true, mode, characters);
+    }
     return 1;
   }
   if (message == WM_COMMAND && LOWORD(wparam) == kImportRun) {
@@ -843,9 +850,9 @@ BEGIN
   COMBOBOX kImportMode, 126, 116, 120, 80, CBS_DROPDOWNLIST | WS_VSCROLL
   LTEXT "Characters (; separated)", -1, 260, 118, 150, 16
   EDITTEXT kImportCharacters, 414, 116, 300, 20, ES_AUTOHSCROLL
-  PUSHBUTTON "Choose Cue Sheet", kImportBrowse, 650, 66, 120, 24
-  PUSHBUTTON "Import", kImportRun, 776, 66, 80, 24
-  PUSHBUTTON "Preview Headers", kImportPreview, 862, 66, 120, 24
+  PUSHBUTTON "Preview Cue Sheet", kImportBrowse, 650, 66, 130, 24
+  PUSHBUTTON "Import", kImportRun, 786, 66, 80, 24
+  PUSHBUTTON "Preview Headers", kImportPreview, 872, 66, 120, 24
   PUSHBUTTON "Check Session", kSessionValidate, 16, 150, 120, 24
   PUSHBUTTON "Refresh Session", kSessionRefresh, 142, 150, 120, 24
   PUSHBUTTON "Update From Regions", kSessionSync, 268, 150, 150, 24
