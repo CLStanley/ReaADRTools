@@ -537,13 +537,15 @@ INT_PTR cue_manager_proc(HWND hwnd, UINT message, WPARAM wparam, LPARAM lparam)
   if (message == WM_COMMAND &&
       (LOWORD(wparam) == kSessionValidate || LOWORD(wparam) == kSessionRefresh ||
        LOWORD(wparam) == kSessionSync || LOWORD(wparam) == kSessionGenerate ||
-       LOWORD(wparam) == kSessionDetectDialogue || LOWORD(wparam) == kCueRefresh ||
+       LOWORD(wparam) == kSessionDetectDialogue || LOWORD(wparam) == kSessionAdoptLegacy ||
+       LOWORD(wparam) == kCueRefresh ||
        LOWORD(wparam) == kCueSync)) {
     if (g_controller) {
       const char* action = LOWORD(wparam) == kSessionValidate ? "validate_session" :
         (LOWORD(wparam) == kSessionRefresh || LOWORD(wparam) == kCueRefresh) ? "refresh_session" :
         LOWORD(wparam) == kSessionGenerate ? "generate_cues" :
-        LOWORD(wparam) == kSessionDetectDialogue ? "detect_dialogue" : "sync_regions";
+        LOWORD(wparam) == kSessionDetectDialogue ? "detect_dialogue" :
+        LOWORD(wparam) == kSessionAdoptLegacy ? "adopt_legacy_project" : "sync_regions";
       g_controller->trigger_action(action);
       if (g_controller->reload()) {
         refresh_rows(hwnd);
