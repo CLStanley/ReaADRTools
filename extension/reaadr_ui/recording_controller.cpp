@@ -55,15 +55,8 @@ void RecordingController::sync_state()
   view_.countdown_seconds = state.mode == core::RecordingTransportMode::preroll
     ? (std::max)(0.0, view_.cue_start - context_.timeline_position())
     : 0.0;
-  // ADR count-in beats are spaced 500 ms apart. Expose the number of upcoming
-  // beats from transport time so presentation and future audible cue playback
-  // share one deterministic countdown instead of independent window timers.
-  view_.countdown_beats_remaining = state.mode == core::RecordingTransportMode::preroll
-    ? (std::max)(0, static_cast<int>(std::ceil(view_.countdown_seconds / 0.5)))
-    : 0;
-  // The traditional ADR cue is three beats ending one beat before picture.
-  // Longer preroll remains visible as ordinary countdown time; the 3-2-1
-  // count-in becomes active only inside the final 1.5 seconds.
+  // The generated cue-audio item supplies the audible three-beep count-in.
+  // This projection only mirrors its final 1.5 seconds for the native window.
   view_.count_in_beat = state.mode == core::RecordingTransportMode::preroll &&
       view_.countdown_seconds > 0.0 && view_.countdown_seconds <= 1.5
     ? (std::max)(1, static_cast<int>(std::ceil(view_.countdown_seconds / 0.5)))
