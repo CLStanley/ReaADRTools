@@ -11,7 +11,7 @@ struct CueWavOptions {
   int sample_rate = 48000;
   double beep_frequency = 1000.0;
   double amplitude = 0.36;
-  double interval_seconds = 1.0;
+  double interval_seconds = 0.5;
   int beep_count = 3;
 };
 
@@ -25,7 +25,8 @@ struct CueWavResult {
   explicit operator bool() const { return error.empty(); }
 };
 
-// Builds the exact mono 16-bit countdown asset used by the Lua renderer. The
+// Builds the native mono 16-bit ADR countdown asset. Each beep lasts one
+// project frame and the default three-beep cadence is 500 ms. The
 // result is kept in memory so validation completes before an existing project
 // file is replaced.
 CueWavResult build_cue_wav(const CueWavOptions& options = {});
