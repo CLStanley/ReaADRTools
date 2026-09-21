@@ -33,7 +33,6 @@ struct RecordingTransportState {
   bool loop_range_active = false;
   bool operation_finalized = true;
   int take_count = 0;
-  int last_count_in_beat = 0;
 };
 
 struct RecordingTransportInput {
@@ -54,7 +53,6 @@ struct RecordingTransportActions {
   bool isolate_recording_track = false;
   bool play = false;
   bool record = false;
-  int play_count_in_beat = 0;
   bool restore_record_arm = false;
   bool refresh_active_cue = false;
   bool finalize_recorded_takes = false;
