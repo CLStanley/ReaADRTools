@@ -20,13 +20,6 @@ void finalize_operation(RecordingTransportTransition& transition, bool finalize_
   }
 }
 
-int count_in_beat(double cue_start, double play_position)
-{
-  const double remaining = cue_start - play_position;
-  if (remaining <= 0.0 || remaining > 1.5) return 0;
-  return (std::max)(1, static_cast<int>(std::ceil(remaining / 0.5)));
-}
-
 void start_take(RecordingTransportTransition& transition,
                 const RecordingTransportContext& context)
 {
@@ -48,7 +41,6 @@ void start_take(RecordingTransportTransition& transition,
     ? context.record_start
     : context.cue_start;
   transition.actions.isolate_recording_track = true;
-  transition.state.last_count_in_beat = 0;
   if (use_preroll && transition.actions.cursor_position < context.cue_start) {
     transition.actions.play = true;
     transition.state.mode = RecordingTransportMode::preroll;
@@ -100,16 +92,9 @@ RecordingTransportTransition advance_recording_transport(
         if (input.play_state == 0) {
           finalize_operation(transition, false);
         } else if (input.play_position >= context.cue_start) {
-          transition.state.last_count_in_beat = 0;
           transition.actions.record = true;
           transition.state.mode = RecordingTransportMode::recording;
           ++transition.state.take_count;
-        } else {
-          const int beat = count_in_beat(context.cue_start, input.play_position);
-          if (beat > 0 && beat != state.last_count_in_beat) {
-            transition.actions.play_count_in_beat = beat;
-            transition.state.last_count_in_beat = beat;
-          }
         }
       } else if (state.mode == RecordingTransportMode::recording) {
         if (input.play_state == 0) {
