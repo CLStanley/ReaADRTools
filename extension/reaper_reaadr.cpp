@@ -55,7 +55,6 @@ void run_persistent_native_cue_manager_action()
     if (action == "validate_session") command = g_validate_session_command_id;
     else if (action == "sync_regions") command = g_update_cues_from_regions_command_id;
     else if (action == "clear_character_cues") command = g_clear_character_cues_command_id;
-    else if (action == "character_filter") command = g_character_filter_command_id;
 
     if (command && Main_OnCommand) Main_OnCommand(command, 0);
     else if (action == "export_cue_sheet") run_native_export_cue_sheet_action();
