@@ -129,7 +129,12 @@ void CueManagerController::trigger_action(const std::string& action)
     return;
   }
   if (action == "character_filter") {
-    if (show_character_filter_window(*this)) reload();
+    if (!show_character_filter_window(*this)) {
+      if (view_.error.empty())
+        view_.error = "The native character filter window could not be opened.";
+      return;
+    }
+    reload();
     return;
   }
   if (action == "refresh_session") {
