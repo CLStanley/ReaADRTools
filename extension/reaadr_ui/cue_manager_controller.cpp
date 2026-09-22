@@ -71,7 +71,16 @@ bool CueManagerController::reload_if_revision_changed(bool& changed)
 void CueManagerController::trigger_import(const std::string& mapping, bool preview,
                                           const std::string& mode, const std::string& characters)
 {
-  if (trigger_import_) trigger_import_(mapping, preview, mode, characters);
+  view_.error.clear();
+  if (!trigger_import_) {
+    view_.error = "The native cue-sheet import workflow is unavailable.";
+    return;
+  }
+  trigger_import_(mapping, preview, mode, characters);
+  // Preview is intentionally non-mutating. A completed import may replace the
+  // canonical session, so consume that new state immediately instead of waiting
+  // for the modeless Manager revision poll.
+  if (!preview) reload();
 }
 
 std::string CueManagerController::last_import_mapping() const
@@ -83,6 +92,10 @@ std::string CueManagerController::last_import_mapping() const
 
 void CueManagerController::trigger_action(const std::string& action)
 {
+  // Action errors belong to the current invocation. Without clearing a prior
+  // failure, modeless Manager controls can keep reporting a stale error after
+  // a later native action succeeds.
+  view_.error.clear();
   if (action == "adopt_legacy_project") {
     const auto adopted = reaper::run_legacy_project_adoption_command();
     if (!adopted) view_.error = adopted.error;
@@ -121,7 +134,11 @@ void CueManagerController::trigger_action(const std::string& action)
       return;
     }
   }
-  if (trigger_action_) trigger_action_(action);
+  if (trigger_action_) {
+    trigger_action_(action);
+    return;
+  }
+  view_.error = "The requested native Cue Manager action is unavailable: " + action;
 }
 
 bool CueManagerController::set_tab(const std::string& tab)
