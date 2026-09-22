@@ -53,7 +53,6 @@ void run_persistent_native_cue_manager_action()
   config.callbacks.trigger_action = [](const std::string& action) {
     int command = 0;
     if (action == "validate_session") command = g_validate_session_command_id;
-    else if (action == "refresh_session") command = g_refresh_session_command_id;
     else if (action == "sync_regions") command = g_update_cues_from_regions_command_id;
     else if (action == "clear_character_cues") command = g_clear_character_cues_command_id;
     else if (action == "character_filter") command = g_character_filter_command_id;
