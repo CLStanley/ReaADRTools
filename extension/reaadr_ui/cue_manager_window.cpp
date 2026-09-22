@@ -679,7 +679,9 @@ INT_PTR cue_manager_proc(HWND hwnd, UINT message, WPARAM wparam, LPARAM lparam)
         action += values[index];
       }
       g_controller->trigger_action(action);
-      if (g_controller->reload()) { update_tab_details(hwnd); update_quick_action_controls(hwnd); }
+      if (!g_controller->view().error.empty())
+        MessageBox(hwnd, g_controller->view().error.c_str(), "ReaADR Cue Manager", 0);
+      else if (g_controller->reload()) { update_tab_details(hwnd); update_quick_action_controls(hwnd); }
     }
     return 1;
   }
@@ -697,7 +699,9 @@ INT_PTR cue_manager_proc(HWND hwnd, UINT message, WPARAM wparam, LPARAM lparam)
         action += IsDlgButtonChecked(hwnd, ids[index]) == BST_CHECKED ? "1" : "0";
       }
       g_controller->trigger_action(action);
-      if (g_controller->reload()) { update_tab_details(hwnd); update_preference_controls(hwnd); }
+      if (!g_controller->view().error.empty())
+        MessageBox(hwnd, g_controller->view().error.c_str(), "ReaADR Cue Manager", 0);
+      else if (g_controller->reload()) { update_tab_details(hwnd); update_preference_controls(hwnd); }
     }
     return 1;
   }
