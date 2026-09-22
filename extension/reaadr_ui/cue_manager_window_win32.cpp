@@ -658,6 +658,10 @@ void show_preferences_tools(HWND hwnd)
                          choice == kWrap ? prefs.navigation_wrap : prefs.cue_manager_auto_dock;
     g_controller->trigger_action(std::string("preference_toggles:") + key + "=" + (current ? "0" : "1"));
   }
+  if (!g_controller->view().error.empty()) {
+    win32::message_box_utf8(hwnd, g_controller->view().error, "ReaADR Cue Manager", MB_OK | MB_ICONERROR);
+    return;
+  }
   reload_and_refresh(hwnd);
 }
 
