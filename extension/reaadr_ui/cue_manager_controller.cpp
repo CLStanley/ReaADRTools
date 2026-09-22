@@ -145,6 +145,11 @@ void CueManagerController::trigger_action(const std::string& action)
     reload();
     return;
   }
+  if (action == "preferences") {
+    requested_tab_ = "preferences";
+    reload();
+    return;
+  }
   if (trigger_action_) {
     trigger_action_(action);
     return;
