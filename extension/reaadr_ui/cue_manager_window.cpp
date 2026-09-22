@@ -567,11 +567,26 @@ INT_PTR cue_manager_proc(HWND hwnd, UINT message, WPARAM wparam, LPARAM lparam)
     }
     return 1;
   }
-  if (message == WM_COMMAND &&
-      (LOWORD(wparam) == kSessionClear || LOWORD(wparam) == kSessionFilter)) {
+  if (message == WM_COMMAND && LOWORD(wparam) == kSessionClear) {
     if (g_controller) {
-      const char* action = LOWORD(wparam) == kSessionClear ? "clear_character_cues" : "character_filter";
-      g_controller->trigger_action(action);
+      std::string character;
+      char buffer[512] = {};
+      GetDlgItemText(hwnd, kCharacterFilter, buffer, sizeof(buffer));
+      character = buffer;
+      std::string prompt = "Clear generated cues";
+      if (!character.empty()) prompt += " for " + character;
+      prompt += "?\n\nThis rebuilds the native generated cue artifacts for the selected scope.";
+      if (MessageBox(hwnd, prompt.c_str(), "ReaADR Cue Manager", MB_YESNO | MB_ICONWARNING) == IDYES) {
+        g_controller->trigger_action("clear_character_cues");
+        if (g_controller->reload()) { refresh_rows(hwnd); update_tab_details(hwnd); }
+      }
+    }
+    return 1;
+  }
+  if (message == WM_COMMAND && LOWORD(wparam) == kSessionFilter) {
+    if (g_controller) {
+      g_controller->trigger_action("character_filter");
+      if (g_controller->reload()) { refresh_rows(hwnd); update_tab_details(hwnd); }
     }
     return 1;
   }
