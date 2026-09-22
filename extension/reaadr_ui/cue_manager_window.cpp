@@ -596,8 +596,17 @@ INT_PTR cue_manager_proc(HWND hwnd, UINT message, WPARAM wparam, LPARAM lparam)
   }
   if (message == WM_COMMAND &&
       (LOWORD(wparam) == kOverlayRefresh || LOWORD(wparam) == kPreferencesOpen)) {
-    if (g_controller)
+    if (g_controller) {
       g_controller->trigger_action(LOWORD(wparam) == kOverlayRefresh ? "refresh_overlay" : "preferences");
+      if (!g_controller->view().error.empty())
+        MessageBox(hwnd, g_controller->view().error.c_str(), "ReaADR Cue Manager", 0);
+      else if (g_controller->reload()) {
+        update_tab_details(hwnd);
+        update_overlay_controls(hwnd);
+        update_quick_action_controls(hwnd);
+        update_preference_controls(hwnd);
+      }
+    }
     return 1;
   }
   if (message == WM_COMMAND && LOWORD(wparam) >= kOverlayActor && LOWORD(wparam) <= kOverlayMinimal) {
@@ -737,16 +746,16 @@ INT_PTR cue_manager_proc(HWND hwnd, UINT message, WPARAM wparam, LPARAM lparam)
     }
     return 1;
   }
-  if (message == WM_COMMAND && LOWORD(wparam) == kReportsExport) {
-    if (g_controller) g_controller->trigger_action("export_cue_sheet");
-    return 1;
-  }
-  if (message == WM_COMMAND && LOWORD(wparam) == kReportsTiming) {
-    if (g_controller) g_controller->trigger_action("export_timing_report");
-    return 1;
-  }
-  if (message == WM_COMMAND && LOWORD(wparam) == kReportsMetadata) {
-    if (g_controller) g_controller->trigger_action("export_session_metadata");
+  if (message == WM_COMMAND &&
+      (LOWORD(wparam) == kReportsExport || LOWORD(wparam) == kReportsTiming ||
+       LOWORD(wparam) == kReportsMetadata)) {
+    if (g_controller) {
+      const char* action = LOWORD(wparam) == kReportsExport ? "export_cue_sheet" :
+        LOWORD(wparam) == kReportsTiming ? "export_timing_report" : "export_session_metadata";
+      g_controller->trigger_action(action);
+      if (!g_controller->view().error.empty())
+        MessageBox(hwnd, g_controller->view().error.c_str(), "ReaADR Cue Manager", 0);
+    }
     return 1;
   }
   if (message == WM_COMMAND && (LOWORD(wparam) == kCueRecord || LOWORD(wparam) == kCueInfo)) {
