@@ -57,7 +57,6 @@ void run_persistent_native_cue_manager_action()
     else if (action == "sync_regions") command = g_update_cues_from_regions_command_id;
     else if (action == "clear_character_cues") command = g_clear_character_cues_command_id;
     else if (action == "character_filter") command = g_character_filter_command_id;
-    else if (action == "refresh_overlay") command = g_refresh_overlay_command_id;
     else if (action == "preferences") command = g_preferences_command_id;
 
     if (command && Main_OnCommand) Main_OnCommand(command, 0);
