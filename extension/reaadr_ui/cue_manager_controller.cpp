@@ -129,10 +129,21 @@ void CueManagerController::trigger_action(const std::string& action)
     return;
   }
   if (action == "character_filter") {
-    if (show_character_filter_window(*this)) {
-      reload();
+    if (show_character_filter_window(*this)) reload();
+    return;
+  }
+  if (action == "refresh_overlay") {
+    if (!refresh_overlay_) {
+      view_.error = "The native overlay refresh workflow is unavailable.";
       return;
     }
+    std::string error;
+    if (!refresh_overlay_(&error)) {
+      view_.error = error.empty() ? "The native overlay could not be refreshed." : error;
+      return;
+    }
+    reload();
+    return;
   }
   if (trigger_action_) {
     trigger_action_(action);
