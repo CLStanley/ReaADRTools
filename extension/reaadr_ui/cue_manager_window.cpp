@@ -578,7 +578,9 @@ INT_PTR cue_manager_proc(HWND hwnd, UINT message, WPARAM wparam, LPARAM lparam)
       prompt += "?\n\nThis rebuilds the native generated cue artifacts for the selected scope.";
       if (MessageBox(hwnd, prompt.c_str(), "ReaADR Cue Manager", MB_YESNO | MB_ICONWARNING) == IDYES) {
         g_controller->trigger_action("clear_character_cues");
-        if (g_controller->reload()) { refresh_rows(hwnd); update_tab_details(hwnd); }
+        if (!g_controller->view().error.empty())
+          MessageBox(hwnd, g_controller->view().error.c_str(), "ReaADR Cue Manager", 0);
+        else if (g_controller->reload()) { refresh_rows(hwnd); update_tab_details(hwnd); }
       }
     }
     return 1;
@@ -586,7 +588,9 @@ INT_PTR cue_manager_proc(HWND hwnd, UINT message, WPARAM wparam, LPARAM lparam)
   if (message == WM_COMMAND && LOWORD(wparam) == kSessionFilter) {
     if (g_controller) {
       g_controller->trigger_action("character_filter");
-      if (g_controller->reload()) { refresh_rows(hwnd); update_tab_details(hwnd); }
+      if (!g_controller->view().error.empty())
+        MessageBox(hwnd, g_controller->view().error.c_str(), "ReaADR Cue Manager", 0);
+      else if (g_controller->reload()) { refresh_rows(hwnd); update_tab_details(hwnd); }
     }
     return 1;
   }
