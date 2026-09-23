@@ -1,5 +1,6 @@
 #pragma once
 
+#include "app/cue_cleanup_application_service.hpp"
 #include "app/overlay_application_service.hpp"
 #include "cue_navigation_service.hpp"
 #include "cue_take_count_adapter.hpp"
@@ -25,6 +26,7 @@ TrackRegionApi native_track_region_api();
 RulerLaneApi native_ruler_lane_api();
 CueAudioApi native_cue_audio_api();
 TransactionApi native_transaction_api();
+CueCleanupApplicationApi native_cue_cleanup_application_api(ReaProject* project = nullptr);
 MarkerSnapshotApi native_marker_snapshot_api();
 DialogueDetectionApi native_dialogue_detection_api();
 CueTakeCountApi native_cue_take_count_api();
