@@ -51,10 +51,14 @@ void run_persistent_native_cue_manager_action()
       run_native_import_cue_sheet_action(mapping, preview, mode, characters);
     };
   config.callbacks.trigger_action = [](const std::string& action) {
-    // Only workflows that still require host-owned dialogs/project mutation
-    // remain here. Manager preference/overlay/Quick Action persistence is now
-    // owned by CueManagerController and its native repositories.
-    if (action == "sync_regions") run_update_cues_from_regions_action();
+    // Region timing synchronization now stays inside the persistent native
+    // Manager dependency graph. Only workflows that still require host-owned
+    // dialogs/project mutation remain routed through the legacy shell.
+    if (action == "sync_regions") {
+      std::string error;
+      if (!reaadr::reaper::cue_manager_session_host().sync_regions(error) && !error.empty())
+        ShowMessageBox(error.c_str(), "ReaADR Cue Manager", 0);
+    }
     else if (action == "clear_character_cues") run_clear_character_cues_action();
     else if (action == "export_cue_sheet") run_native_export_cue_sheet_action();
     else if (action == "export_timing_report") run_native_export_timing_report_action();
