@@ -79,7 +79,7 @@ CueManagerSession::CueManagerSession(CueManagerSessionConfig config)
     controller_(view_service_, mutations_, project_state_, navigation_api_,
                 std::move(config.callbacks.trigger_import),
                 std::move(config.callbacks.trigger_action),
-                render_options_.refresh_overlay),
+                render_options_.refresh_overlay, &global_state_),
     frame_rate_(overlay_api_.frame_rate)
 {
 }
@@ -95,34 +95,20 @@ bool CueManagerSessionHost::open_or_activate(
   std::string& error)
 {
   error.clear();
-
-  // A persistent Manager graph is project-bound. If REAPER changes projects
-  // while the Manager is alive, close the old window before releasing its
-  // repositories/controller and construct a fresh graph for the new project.
   if (session_ && session_->project() != config.project) {
     if (!shutdown(&error)) return false;
   }
-
-  if (!session_)
-    session_ = std::make_unique<CueManagerSession>(std::move(config));
-
+  if (!session_) session_ = std::make_unique<CueManagerSession>(std::move(config));
   if (!session_->reload()) {
     error = session_->controller().view().error;
     if (!ui::cue_manager_lifecycle().is_open()) session_.reset();
     return false;
   }
-
   if (!session_->show()) {
     error = "The native Cue Manager window could not be opened.";
     if (!ui::cue_manager_lifecycle().is_open()) session_.reset();
     return false;
   }
-
-  // Session ownership is deliberately independent of show()'s return value.
-  // The presentation may be modal today or modeless tomorrow; either way the
-  // host keeps the controller/service graph alive until an explicit shutdown
-  // or project rebind. This prevents a modeless HWND from retaining a dangling
-  // controller pointer when show() returns immediately.
   return true;
 }
 
@@ -130,7 +116,6 @@ bool CueManagerSessionHost::shutdown(std::string* error)
 {
   if (error) error->clear();
   if (!session_) return true;
-
   if (ui::cue_manager_lifecycle().is_open() && !ui::request_close_cue_manager()) {
     if (error) *error = "The native Cue Manager window could not be closed safely.";
     return false;
@@ -139,7 +124,6 @@ bool CueManagerSessionHost::shutdown(std::string* error)
     if (error) *error = "The native Cue Manager window is still active.";
     return false;
   }
-
   session_.reset();
   return true;
 }
