@@ -1,5 +1,6 @@
 #pragma once
 
+#include "app/cue_cleanup_application_service.hpp"
 #include "app/cue_manager_application_service.hpp"
 #include "app/manager_view_application_service.hpp"
 #include "app/overlay_application_service.hpp"
@@ -16,6 +17,7 @@
 #include <functional>
 #include <memory>
 #include <string>
+#include <vector>
 
 class ReaProject;
 
@@ -36,6 +38,7 @@ struct CueManagerSessionConfig {
   OverlayApplicationApi overlay_api;
   CueNavigationApi navigation_api;
   CueManagerApplicationApi mutation_api;
+  CueCleanupApplicationApi cleanup_api;
   std::string cue_audio_path;
   CueManagerSessionCallbacks callbacks;
 };
@@ -53,6 +56,9 @@ public:
   bool reload() { return controller_.reload(); }
   bool show();
   bool sync_regions(std::string& error);
+  CueCleanupApplicationResult clear_characters(
+    const std::vector<std::string>& characters,
+    std::string& error);
   ReaProject* project() const { return project_; }
   ui::CueManagerController& controller() { return controller_; }
   const ui::CueManagerController& controller() const { return controller_; }
@@ -80,6 +86,8 @@ private:
   SessionRenderOptions render_options_;
   CueManagerApplicationApi mutation_api_;
   CueManagerApplicationService mutations_;
+  CueCleanupApplicationApi cleanup_api_;
+  CueCleanupApplicationService cleanup_;
   CueNavigationApi navigation_api_;
   ui::CueManagerController controller_;
   double (*frame_rate_)() = nullptr;
@@ -93,6 +101,9 @@ class CueManagerSessionHost final {
 public:
   bool open_or_activate(CueManagerSessionConfig config, std::string& error);
   bool sync_regions(std::string& error);
+  CueCleanupApplicationResult clear_characters(
+    const std::vector<std::string>& characters,
+    std::string& error);
   bool shutdown(std::string* error = nullptr);
   bool has_session() const { return static_cast<bool>(session_); }
   CueManagerSession* session() { return session_.get(); }
