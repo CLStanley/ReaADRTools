@@ -90,6 +90,26 @@ bool CueManagerSession::show()
   return ui::show_cue_manager(controller_, frame_rate);
 }
 
+bool CueManagerSession::sync_regions(std::string& error)
+{
+  error.clear();
+  RegionTimingRenderOptions options;
+  options.session = render_options_;
+  options.session.commit.utc_timestamp = native_utc_timestamp();
+  options.session.event.utc_timestamp = options.session.commit.utc_timestamp;
+  RegionTimingApplicationService service(renderer_, std::move(options));
+  const auto result = service.update();
+  if (!result) {
+    error = result.error;
+    return false;
+  }
+  if (!controller_.reload()) {
+    error = controller_.view().error;
+    return false;
+  }
+  return true;
+}
+
 bool CueManagerSessionHost::open_or_activate(
   CueManagerSessionConfig config,
   std::string& error)
@@ -110,6 +130,16 @@ bool CueManagerSessionHost::open_or_activate(
     return false;
   }
   return true;
+}
+
+bool CueManagerSessionHost::sync_regions(std::string& error)
+{
+  error.clear();
+  if (!session_) {
+    error = "The native Cue Manager session is not active.";
+    return false;
+  }
+  return session_->sync_regions(error);
 }
 
 bool CueManagerSessionHost::shutdown(std::string* error)
