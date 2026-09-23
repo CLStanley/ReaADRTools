@@ -1,4 +1,7 @@
 #include "reaadr_ui.hpp"
+#ifdef _WIN32
+#include "win32_utf8.hpp"
+#endif
 #include <limits>
 #include <stdexcept>
 
@@ -25,6 +28,16 @@ void initialize(MessageBoxFn message_box)
 bool available()
 {
   return g_message_box != nullptr;
+}
+
+int show_message(HWND parent, const std::string& message,
+                 const std::string& title, int type)
+{
+#ifdef _WIN32
+  return win32::message_box_utf8(parent, message, title, type);
+#else
+  return MessageBox(parent, message.c_str(), title.c_str(), type);
+#endif
 }
 
 void show_test_window()
