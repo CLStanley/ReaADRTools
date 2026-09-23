@@ -20,7 +20,8 @@ public:
                        reaper::CueNavigationApi navigation_api,
                        std::function<void(const std::string&, bool, const std::string&, const std::string&)> trigger_import = {},
                        std::function<void(const std::string&)> trigger_action = {},
-                       std::function<bool(std::string*)> refresh_overlay = {});
+                       std::function<bool(std::string*)> refresh_overlay = {},
+                       core::GlobalStateStore* global_state = nullptr);
   bool reload();
   // Cheap polling boundary for modeless windows. Reads only the canonical
   // session revision and rebuilds the Manager view when another workflow has
@@ -68,10 +69,12 @@ public:
 
 private:
   bool navigate_displayed_row(bool next);
+  bool save_preferences(const std::vector<std::pair<std::string, std::string>>& updates);
   std::function<bool(std::string*)> refresh_overlay_;
   reaper::ManagerViewApplicationService& service_;
   reaper::CueManagerMutationService& mutations_;
   core::ProjectStateStore& project_state_;
+  core::GlobalStateStore* global_state_ = nullptr;
   reaper::CueNavigationApi navigation_api_;
   core::CueManagerViewOptions options_;
   core::ManagerViewModel view_;
