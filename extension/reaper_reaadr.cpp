@@ -38,11 +38,59 @@ namespace {
 
 bool g_runtime_host_hook_registered = false;
 
+void run_persistent_native_clear_character_cues_action()
+{
+  if (!GetUserInputs) {
+    ShowMessageBox("The character input API is unavailable.", "ReaADR Cue Cleanup", 0);
+    return;
+  }
+  std::array<char, 1024> input = {};
+  if (!GetUserInputs("ReaADR: Clear Character Cues", 1,
+                     "Characters (comma-separated):", input.data(), input.size())) return;
+
+  std::vector<std::string> characters;
+  std::stringstream values(input.data());
+  std::string value;
+  while (std::getline(values, value, ',')) {
+    const auto first = value.find_first_not_of(" \t\r\n");
+    const auto last = value.find_last_not_of(" \t\r\n");
+    if (first != std::string::npos)
+      characters.push_back(value.substr(first, last - first + 1));
+  }
+  if (characters.empty()) {
+    ShowMessageBox("Select at least one character.", "ReaADR Cue Cleanup", 0);
+    return;
+  }
+
+  const std::string prompt = "Remove generated cues, regions, cue audio, and cue tracks for " +
+    std::to_string(characters.size()) +
+    " character(s)? Recording tracks and takes are preserved.";
+  if (ShowMessageBox(prompt.c_str(), "ReaADR Cue Cleanup", 4) != 6) return;
+
+  std::string error;
+  const auto result = reaadr::reaper::cue_manager_session_host().clear_characters(characters, error);
+  if (!result) {
+    ShowMessageBox((error.empty() ? result.error : error).c_str(), "ReaADR Cue Cleanup", 0);
+    return;
+  }
+  if (!error.empty()) {
+    ShowMessageBox(error.c_str(), "ReaADR Cue Cleanup", 0);
+    return;
+  }
+
+  const std::string summary = "Removed " + std::to_string(result.cues_removed) +
+    " cue(s), " + std::to_string(result.regions_removed) + " region(s), and " +
+    std::to_string(result.cue_audio_removed) + " cue-audio item(s).\n\nCue tracks removed: " +
+    std::to_string(result.tracks_removed);
+  ShowMessageBox(summary.c_str(), "ReaADR Cue Cleanup", 0);
+}
+
 void run_persistent_native_cue_manager_action()
 {
   reaadr::reaper::CueManagerSessionConfig config;
   config.project_state_api = {GetProjExtState, SetProjExtState};
   config.global_state_api = {GetExtState, SetExtState};
+  config.cleanup_api = {native_cleanup_inspect, native_cleanup_apply, native_utc_timestamp()};
   config.callbacks.trigger_import = [](
     const std::string& mapping,
     bool preview,
@@ -51,15 +99,15 @@ void run_persistent_native_cue_manager_action()
       run_native_import_cue_sheet_action(mapping, preview, mode, characters);
     };
   config.callbacks.trigger_action = [](const std::string& action) {
-    // Region timing synchronization now stays inside the persistent native
-    // Manager dependency graph. Only workflows that still require host-owned
-    // dialogs/project mutation remain routed through the legacy shell.
+    // Region timing and destructive cue cleanup now stay inside the persistent
+    // native Manager dependency graph. Dialog-only export/import workflows are
+    // the remaining host-routed Manager operations.
     if (action == "sync_regions") {
       std::string error;
       if (!reaadr::reaper::cue_manager_session_host().sync_regions(error) && !error.empty())
         ShowMessageBox(error.c_str(), "ReaADR Cue Manager", 0);
     }
-    else if (action == "clear_character_cues") run_clear_character_cues_action();
+    else if (action == "clear_character_cues") run_persistent_native_clear_character_cues_action();
     else if (action == "export_cue_sheet") run_native_export_cue_sheet_action();
     else if (action == "export_timing_report") run_native_export_timing_report_action();
     else if (action == "export_session_metadata") run_native_export_session_metadata_action();
