@@ -51,11 +51,12 @@ void run_persistent_native_cue_manager_action()
       run_native_import_cue_sheet_action(mapping, preview, mode, characters);
     };
   config.callbacks.trigger_action = [](const std::string& action) {
-    int command = 0;
-    if (action == "sync_regions") command = g_update_cues_from_regions_command_id;
-    else if (action == "clear_character_cues") command = g_clear_character_cues_command_id;
-
-    if (command && Main_OnCommand) Main_OnCommand(command, 0);
+    // Manager-owned native workflows invoke their implementation directly.
+    // REAPER command IDs remain registered for the Action List, but the
+    // persistent Manager no longer round-trips through Main_OnCommand merely
+    // to reach the same C++ workflow.
+    if (action == "sync_regions") run_update_cues_from_regions_action();
+    else if (action == "clear_character_cues") run_clear_character_cues_action();
     else if (action == "export_cue_sheet") run_native_export_cue_sheet_action();
     else if (action == "export_timing_report") run_native_export_timing_report_action();
     else if (action == "export_session_metadata") run_native_export_session_metadata_action();
