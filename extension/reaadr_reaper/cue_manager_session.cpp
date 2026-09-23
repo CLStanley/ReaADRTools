@@ -75,6 +75,8 @@ CueManagerSession::CueManagerSession(CueManagerSessionConfig config)
     mutation_api_(resolve_mutation_api(config.mutation_api)),
     mutations_(repository_, overlay_settings_, cue_selection_, renderer_,
                render_options_, mutation_api_),
+    cleanup_api_(std::move(config.cleanup_api)),
+    cleanup_(repository_, native_transaction_api(), cleanup_api_),
     navigation_api_(resolve_navigation_api(config.navigation_api)),
     controller_(view_service_, mutations_, project_state_, navigation_api_,
                 std::move(config.callbacks.trigger_import),
@@ -110,6 +112,22 @@ bool CueManagerSession::sync_regions(std::string& error)
   return true;
 }
 
+CueCleanupApplicationResult CueManagerSession::clear_characters(
+  const std::vector<std::string>& characters,
+  std::string& error)
+{
+  error.clear();
+  if (cleanup_api_.utc_timestamp.empty()) cleanup_api_.utc_timestamp = native_utc_timestamp();
+  CueCleanupApplicationService service(repository_, native_transaction_api(), cleanup_api_);
+  const auto result = service.clear_characters(characters);
+  if (!result) {
+    error = result.error;
+    return result;
+  }
+  if (!controller_.reload()) error = controller_.view().error;
+  return result;
+}
+
 bool CueManagerSessionHost::open_or_activate(
   CueManagerSessionConfig config,
   std::string& error)
@@ -140,6 +158,20 @@ bool CueManagerSessionHost::sync_regions(std::string& error)
     return false;
   }
   return session_->sync_regions(error);
+}
+
+CueCleanupApplicationResult CueManagerSessionHost::clear_characters(
+  const std::vector<std::string>& characters,
+  std::string& error)
+{
+  error.clear();
+  if (!session_) {
+    CueCleanupApplicationResult result;
+    result.error = "The native Cue Manager session is not active.";
+    error = result.error;
+    return result;
+  }
+  return session_->clear_characters(characters, error);
 }
 
 bool CueManagerSessionHost::shutdown(std::string* error)
