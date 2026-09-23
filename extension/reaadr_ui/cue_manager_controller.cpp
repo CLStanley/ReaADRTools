@@ -96,6 +96,16 @@ void CueManagerController::trigger_action(const std::string& action)
   // failure, modeless Manager controls can keep reporting a stale error after
   // a later native action succeeds.
   view_.error.clear();
+  if (action == "validate_session") {
+    core::SessionModelRepository sessions(project_state_);
+    const auto loaded = sessions.load();
+    if (!loaded) {
+      view_.error = core::session_load_error_message(loaded);
+      return;
+    }
+    reload();
+    return;
+  }
   if (action == "adopt_legacy_project") {
     const auto adopted = reaper::run_legacy_project_adoption_command();
     if (!adopted) view_.error = adopted.error;
