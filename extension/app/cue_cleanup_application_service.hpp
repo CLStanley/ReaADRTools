@@ -1,13 +1,14 @@
 #pragma once
 #include "../reaadr_reaper/cue_cleanup_adapter.hpp"
 #include "../reaadr_core/model_repository.hpp"
+#include <functional>
 #include <string>
 #include <utility>
 #include <vector>
 namespace reaadr::reaper {
 struct CueCleanupApplicationApi {
-  core::ProjectRenderState (*inspect)(std::string* error) = nullptr;
-  CueCleanupApplyResult (*apply)(const core::CueCleanupPlan&, std::string* error) = nullptr;
+  std::function<core::ProjectRenderState(std::string* error)> inspect;
+  std::function<CueCleanupApplyResult(const core::CueCleanupPlan&, std::string* error)> apply;
   std::string utc_timestamp;
 };
 struct CueCleanupApplicationResult {
