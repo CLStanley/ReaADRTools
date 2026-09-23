@@ -14,6 +14,14 @@
 
 namespace reaadr::ui {
 
+#ifdef _WIN32
+namespace {
+// The Win32 overlay menu invokes this helper before its definition in the
+// implementation file. Keep the declaration TU-local to match that definition.
+void edit_overlay_settings(HWND hwnd);
+}
+#endif
+
 bool show_cue_manager(CueManagerController& controller, double frame_rate = 24.0);
 
 // Requests a synchronous close for the persistent native Manager window. Both
