@@ -3,6 +3,7 @@
 #include "app/cue_manager_application_service.hpp"
 #include "app/manager_view_application_service.hpp"
 #include "app/overlay_application_service.hpp"
+#include "app/region_timing_application_service.hpp"
 #include "reaadr_core/character_filter.hpp"
 #include "reaadr_core/event_log.hpp"
 #include "reaadr_core/model_repository.hpp"
@@ -51,6 +52,7 @@ public:
 
   bool reload() { return controller_.reload(); }
   bool show();
+  bool sync_regions(std::string& error);
   ReaProject* project() const { return project_; }
   ui::CueManagerController& controller() { return controller_; }
   const ui::CueManagerController& controller() const { return controller_; }
@@ -90,6 +92,7 @@ private:
 class CueManagerSessionHost final {
 public:
   bool open_or_activate(CueManagerSessionConfig config, std::string& error);
+  bool sync_regions(std::string& error);
   bool shutdown(std::string* error = nullptr);
   bool has_session() const { return static_cast<bool>(session_); }
   CueManagerSession* session() { return session_.get(); }
