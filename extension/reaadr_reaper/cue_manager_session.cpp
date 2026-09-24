@@ -4,6 +4,7 @@
 #include "reaadr_ui/cue_manager_lifecycle.hpp"
 #include "reaadr_ui/cue_manager_window.hpp"
 
+#include <sstream>
 #include <utility>
 
 namespace reaadr::reaper {
@@ -96,7 +97,24 @@ CueImportApplicationResult CueManagerSession::import_content(
   }
   CueImportApplicationService importer(renderer_, frame_rate, &repository_);
   auto result = importer.import_content(content, source_path, mapping, options, mode, characters);
-  if (result && !controller_.reload()) result.error = controller_.view().error;
+  if (!result) return result;
+
+  // Keep the Manager's last successful explicit mapping with the persistent
+  // project session rather than asking the legacy host shell to own it.
+  if (mapping) {
+    std::ostringstream serialized;
+    bool first = true;
+    for (const auto& entry : *mapping) {
+      if (!first) serialized << ';';
+      first = false;
+      serialized << entry.first << '=' << entry.second;
+    }
+    if (!project_state_.write("ReaADRTools", "import_mapping_last", serialized.str())) {
+      result.error = "The cue sheet imported, but its column mapping could not be saved.";
+      return result;
+    }
+  }
+  if (!controller_.reload()) result.error = controller_.view().error;
   return result;
 }
 
