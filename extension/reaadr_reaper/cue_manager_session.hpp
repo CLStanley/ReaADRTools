@@ -53,7 +53,7 @@ public:
   CueCleanupApplicationResult clear_characters(
     const std::vector<std::string>& characters,
     std::string& error);
-  core::SessionLoadResult load_session() const { return repository_.load(); }
+  core::SessionLoadResult load_session() const;
   ReaProject* project() const { return project_; }
   ui::CueManagerController& controller() { return controller_; }
   const ui::CueManagerController& controller() const { return controller_; }
