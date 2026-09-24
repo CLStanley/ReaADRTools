@@ -75,6 +75,31 @@ bool CueManagerSession::show()
   return ui::show_cue_manager(controller_, frame_rate);
 }
 
+CueImportApplicationResult CueManagerSession::import_content(
+  const std::string& content, const std::string& source_path,
+  const std::optional<core::ColumnMapping>& mapping, const std::string& mode,
+  const std::vector<std::string>& characters)
+{
+  SessionRenderOptions options = render_options_;
+  options.event.source = "native_import";
+  const double frame_rate = frame_rate_ ? frame_rate_() : 24.0;
+  options.commit.replacement.build.frame_rate = std::to_string(frame_rate);
+  const auto existing_session = repository_.load();
+  if (!existing_session && existing_session.error != core::SessionLoadError::missing) {
+    CueImportApplicationResult result;
+    result.error = core::session_load_error_message(existing_session);
+    return result;
+  }
+  if (existing_session.error == core::SessionLoadError::missing) {
+    options.commit.replacement.build.session_id = "native-import-" + native_utc_timestamp();
+    options.commit.replacement.build.session_name = source_path;
+  }
+  CueImportApplicationService importer(renderer_, frame_rate, &repository_);
+  auto result = importer.import_content(content, source_path, mapping, options, mode, characters);
+  if (result && !controller_.reload()) result.error = controller_.view().error;
+  return result;
+}
+
 core::SessionLoadResult CueManagerSession::load_session() const
 {
   return repository_.load();
@@ -124,6 +149,17 @@ bool CueManagerSessionHost::open_or_activate(CueManagerSessionConfig config, std
     return false;
   }
   return true;
+}
+
+CueImportApplicationResult CueManagerSessionHost::import_content(
+  const std::string& content, const std::string& source_path,
+  const std::optional<core::ColumnMapping>& mapping, const std::string& mode,
+  const std::vector<std::string>& characters)
+{
+  if (session_) return session_->import_content(content, source_path, mapping, mode, characters);
+  CueImportApplicationResult result;
+  result.error = "The native Cue Manager session is not active.";
+  return result;
 }
 
 bool CueManagerSessionHost::sync_regions(std::string& error)
