@@ -1,6 +1,7 @@
 #pragma once
 
 #include "app/cue_cleanup_application_service.hpp"
+#include "app/cue_import_application_service.hpp"
 #include "app/cue_manager_application_service.hpp"
 #include "app/manager_view_application_service.hpp"
 #include "app/overlay_application_service.hpp"
@@ -16,6 +17,7 @@
 
 #include <functional>
 #include <memory>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -49,6 +51,12 @@ public:
 
   bool reload() { return controller_.reload(); }
   bool show();
+  CueImportApplicationResult import_content(
+    const std::string& content,
+    const std::string& source_path,
+    const std::optional<core::ColumnMapping>& mapping,
+    const std::string& mode,
+    const std::vector<std::string>& characters);
   bool sync_regions(std::string& error);
   CueCleanupApplicationResult clear_characters(
     const std::vector<std::string>& characters,
@@ -91,6 +99,12 @@ private:
 class CueManagerSessionHost final {
 public:
   bool open_or_activate(CueManagerSessionConfig config, std::string& error);
+  CueImportApplicationResult import_content(
+    const std::string& content,
+    const std::string& source_path,
+    const std::optional<core::ColumnMapping>& mapping,
+    const std::string& mode,
+    const std::vector<std::string>& characters);
   bool sync_regions(std::string& error);
   CueCleanupApplicationResult clear_characters(
     const std::vector<std::string>& characters,
