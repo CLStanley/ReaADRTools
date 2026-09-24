@@ -28,9 +28,6 @@ struct CueManagerSessionCallbacks {
   std::function<void(const std::string&)> trigger_action;
 };
 
-// Host dependencies still owned by reaper_reaadr.cpp. Overlay, navigation,
-// mutation timing, and cue-audio defaults are resolved from native_host_services
-// when omitted, keeping the final entrypoint handoff intentionally small.
 struct CueManagerSessionConfig {
   ReaProject* project = nullptr;
   ProjectStateApi project_state_api;
@@ -43,9 +40,6 @@ struct CueManagerSessionConfig {
   CueManagerSessionCallbacks callbacks;
 };
 
-// Owns the complete native Cue Manager dependency graph. All services and
-// repositories outlive the controller, allowing the host to keep one Manager
-// session alive independently of the action invocation that opened its window.
 class CueManagerSession final {
 public:
   explicit CueManagerSession(CueManagerSessionConfig config);
@@ -59,6 +53,7 @@ public:
   CueCleanupApplicationResult clear_characters(
     const std::vector<std::string>& characters,
     std::string& error);
+  core::SessionLoadResult load_session() const { return repository_.load(); }
   ReaProject* project() const { return project_; }
   ui::CueManagerController& controller() { return controller_; }
   const ui::CueManagerController& controller() const { return controller_; }
@@ -93,10 +88,6 @@ private:
   double (*frame_rate_)() = nullptr;
 };
 
-// Persistent plug-in-level owner. Re-entrant Open Manager commands reuse the
-// same dependency graph while the native window is alive. A command issued for
-// another REAPER project closes the old window/session before rebinding so a
-// persistent Manager can never mutate the wrong project's canonical model.
 class CueManagerSessionHost final {
 public:
   bool open_or_activate(CueManagerSessionConfig config, std::string& error);
@@ -104,6 +95,7 @@ public:
   CueCleanupApplicationResult clear_characters(
     const std::vector<std::string>& characters,
     std::string& error);
+  core::SessionLoadResult load_session() const;
   bool shutdown(std::string* error = nullptr);
   bool has_session() const { return static_cast<bool>(session_); }
   CueManagerSession* session() { return session_.get(); }
