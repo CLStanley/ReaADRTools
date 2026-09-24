@@ -174,6 +174,14 @@ CueCleanupApplicationResult CueManagerSessionHost::clear_characters(
   return session_->clear_characters(characters, error);
 }
 
+core::SessionLoadResult CueManagerSessionHost::load_session() const
+{
+  if (session_) return session_->load_session();
+  core::SessionLoadResult result;
+  result.error = core::SessionLoadError::missing;
+  return result;
+}
+
 bool CueManagerSessionHost::shutdown(std::string* error)
 {
   if (error) error->clear();
