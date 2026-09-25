@@ -1,6 +1,8 @@
 #include <iostream>
+#include <optional>
 #include <string>
 #include <type_traits>
+#include <vector>
 
 // WDL/SWELL intentionally provides Win32-compatible min/max macros on
 // non-Windows hosts. Pull the C++ standard-library headers in first so those
@@ -13,6 +15,16 @@ int main()
   using Host = reaadr::reaper::CueManagerSessionHost;
   using ShutdownSignature = bool (Host::*)(std::string*);
   using ProjectSignature = ReaProject* (Session::*)() const;
+  using ImportSignature = reaadr::reaper::CueImportApplicationResult (Host::*)(
+    const std::string&,
+    const std::string&,
+    const std::optional<reaadr::core::ColumnMapping>&,
+    const std::string&,
+    const std::vector<std::string>&);
+  using SyncSignature = bool (Host::*)(std::string&);
+  using CleanupSignature = reaadr::reaper::CueCleanupApplicationResult (Host::*)(
+    const std::vector<std::string>&, std::string&);
+  using LoadSignature = reaadr::core::SessionLoadResult (Host::*)() const;
   using RuntimeInitSignature = bool (*)(reaper_plugin_info_t*, std::string*);
   using RuntimeShutdownSignature = bool (*)(reaper_plugin_info_t*, std::string*);
 
@@ -28,6 +40,14 @@ int main()
                 "CueManagerSessionHost must expose an unload-safe shutdown contract");
   static_assert(std::is_same_v<decltype(&Session::project), ProjectSignature>,
                 "CueManagerSession must expose its bound REAPER project for safe rebinding");
+  static_assert(std::is_same_v<decltype(&Host::import_content), ImportSignature>,
+                "Manager imports must execute through the persistent session host");
+  static_assert(std::is_same_v<decltype(&Host::sync_regions), SyncSignature>,
+                "Region synchronization must execute through the persistent session host");
+  static_assert(std::is_same_v<decltype(&Host::clear_characters), CleanupSignature>,
+                "Character cleanup must execute through the persistent session host");
+  static_assert(std::is_same_v<decltype(&Host::load_session), LoadSignature>,
+                "Manager exports must read through the persistent session host");
   static_assert(std::is_same_v<decltype(&reaadr::reaper::initialize_native_runtime), RuntimeInitSignature>,
                 "Native runtime initialization must stay a small plug-in host handoff");
   static_assert(std::is_same_v<decltype(&reaadr::reaper::shutdown_native_runtime), RuntimeShutdownSignature>,
