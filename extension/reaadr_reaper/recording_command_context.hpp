@@ -34,6 +34,7 @@ public:
   RecordingWorkflowDispatchResult retry_pending();
   RecordingWorkflowDispatchResult shutdown();
 
+  ReaProject* project() const { return project_; }
   bool active() const { return session_.active(); }
   const core::RecordingTransportState& state() const { return session_.state(); }
   const core::RecordingSetupPlan& plan() const { return session_.plan(); }
