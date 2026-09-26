@@ -100,7 +100,13 @@ inline bool open_native_cue_manager(
   // nullptr has convenient "current project" semantics for many REAPER APIs,
   // but it is not a stable project identity. Resolve the concrete project here
   // so a persistent Manager can detect project-tab switches and rebind safely.
-  if (!config.project) config.project = active_reaper_project();
+  if (!config.project) {
+    config.project = active_reaper_project();
+    if (!config.project) {
+      error = "The active REAPER project could not be resolved for the native Cue Manager.";
+      return false;
+    }
+  }
   return cue_manager_session_host().open_or_activate(std::move(config), error);
 }
 
