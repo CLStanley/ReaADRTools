@@ -76,13 +76,12 @@ bool CueManagerSession::show()
   return ui::show_cue_manager(controller_, frame_rate);
 }
 
-CueImportApplicationResult CueManagerSession::preview_import_content(
+CueImportPreviewResult CueManagerSession::preview_import_content(
   const std::string& content, const std::string& source_path,
-  const std::optional<core::ColumnMapping>& mapping) const
+  const std::optional<core::ColumnMapping>& mapping)
 {
   const double frame_rate = frame_rate_ ? frame_rate_() : 24.0;
-  CueImportApplicationService importer(const_cast<SessionRenderService&>(renderer_), frame_rate,
-                                       const_cast<core::SessionModelRepository*>(&repository_));
+  CueImportApplicationService importer(renderer_, frame_rate, &repository_);
   return importer.preview_content(content, source_path, mapping);
 }
 
@@ -109,8 +108,6 @@ CueImportApplicationResult CueManagerSession::import_content(
   auto result = importer.import_content(content, source_path, mapping, options, mode, characters);
   if (!result) return result;
 
-  // Keep the Manager's last successful explicit mapping with the persistent
-  // project session rather than asking the legacy host shell to own it.
   if (mapping) {
     std::ostringstream serialized;
     bool first = true;
@@ -179,12 +176,12 @@ bool CueManagerSessionHost::open_or_activate(CueManagerSessionConfig config, std
   return true;
 }
 
-CueImportApplicationResult CueManagerSessionHost::preview_import_content(
+CueImportPreviewResult CueManagerSessionHost::preview_import_content(
   const std::string& content, const std::string& source_path,
-  const std::optional<core::ColumnMapping>& mapping) const
+  const std::optional<core::ColumnMapping>& mapping)
 {
   if (session_) return session_->preview_import_content(content, source_path, mapping);
-  CueImportApplicationResult result;
+  CueImportPreviewResult result;
   result.error = "The native Cue Manager session is not active.";
   return result;
 }
