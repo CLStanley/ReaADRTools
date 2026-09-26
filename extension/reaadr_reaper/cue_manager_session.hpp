@@ -51,6 +51,10 @@ public:
 
   bool reload() { return controller_.reload(); }
   bool show();
+  CueImportApplicationResult preview_import_content(
+    const std::string& content,
+    const std::string& source_path,
+    const std::optional<core::ColumnMapping>& mapping) const;
   CueImportApplicationResult import_content(
     const std::string& content,
     const std::string& source_path,
@@ -99,6 +103,10 @@ private:
 class CueManagerSessionHost final {
 public:
   bool open_or_activate(CueManagerSessionConfig config, std::string& error);
+  CueImportApplicationResult preview_import_content(
+    const std::string& content,
+    const std::string& source_path,
+    const std::optional<core::ColumnMapping>& mapping) const;
   CueImportApplicationResult import_content(
     const std::string& content,
     const std::string& source_path,
