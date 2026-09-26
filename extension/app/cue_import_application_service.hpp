@@ -18,6 +18,14 @@ struct CueImportApplicationResult {
   explicit operator bool() const { return error.empty() && static_cast<bool>(rendered); }
 };
 
+struct CueImportPreviewResult {
+  core::TableParseResult parsed;
+  core::CueImportResult imported;
+  std::string error;
+
+  explicit operator bool() const { return error.empty() && static_cast<bool>(imported); }
+};
+
 // Converts already-loaded delimited content into canonical cues and renders
 // the replacement through the same model/project transaction as native edits.
 class CueImportApplicationService final {
@@ -25,6 +33,11 @@ public:
   CueImportApplicationService(SessionRenderService& renderer, double frame_rate,
                               core::SessionModelRepository* repository = nullptr)
     : renderer_(renderer), frame_rate_(frame_rate), repository_(repository) {}
+
+  CueImportPreviewResult preview_content(
+    const std::string& content,
+    const std::string& source_path,
+    const std::optional<core::ColumnMapping>& mapping) const;
 
   CueImportApplicationResult import_content(
     const std::string& content,
