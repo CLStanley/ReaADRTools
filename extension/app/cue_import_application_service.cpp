@@ -31,6 +31,22 @@ std::string normalize_import_mode(std::string value)
 
 namespace reaadr::reaper {
 
+CueImportPreviewResult CueImportApplicationService::preview_content(
+  const std::string& content,
+  const std::string& source_path,
+  const std::optional<core::ColumnMapping>& mapping) const
+{
+  CueImportPreviewResult result;
+  result.parsed = core::parse_delimited_content(content, source_path);
+  if (!result.parsed) {
+    result.error = result.parsed.message;
+    return result;
+  }
+  result.imported = core::import_cues(result.parsed.table, frame_rate_, mapping);
+  if (!result.imported) result.error = result.imported.message;
+  return result;
+}
+
 CueImportApplicationResult CueImportApplicationService::import_content(
   const std::string& content,
   const std::string& source_path,
@@ -66,10 +82,6 @@ CueImportApplicationResult CueImportApplicationService::import_content(
       return result;
     }
 
-    // Import Entire Script is additive once a canonical session exists. Never
-    // replace unrelated scripts merely because the caller selected the full
-    // incoming sheet. A second import of the same script is a revision and must
-    // go through Update Existing Import so stale cues can be removed safely.
     for (const auto& existing : loaded.model.cues) {
       if (cue_field(existing, "script_id") == script.script_id) {
         result.error = "This script is already present in the canonical session. Use Update Existing Import for a revision.";
