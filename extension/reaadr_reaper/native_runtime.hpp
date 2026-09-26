@@ -58,22 +58,39 @@ inline bool shutdown_native_runtime(
 {
   if (error) error->clear();
 
-  // Window/controller ownership must end before command hooks are removed and
-  // before REAPER host APIs disappear during extension unload.
-  if (!cue_manager_session_host().shutdown(error)) return false;
+  // Unload is a one-way lifetime boundary. Attempt every shutdown step even if
+  // one persistent window refuses to close so no command hook or host pointer
+  // can survive after REAPER unloads the extension.
+  bool ok = true;
+  std::string shutdown_error;
+  const auto append_error = [&](const std::string& message) {
+    if (message.empty()) return;
+    if (!shutdown_error.empty()) shutdown_error += " ";
+    shutdown_error += message;
+  };
+
+  std::string manager_error;
+  if (!cue_manager_session_host().shutdown(&manager_error)) {
+    ok = false;
+    append_error(manager_error.empty()
+      ? "The native Cue Manager could not be closed safely."
+      : manager_error);
+  }
   if (!shutdown_native_record_cue_command()) {
-    if (error) *error = "The native Record Cue window could not be closed safely.";
-    return false;
+    ok = false;
+    append_error("The native Record Cue window could not be closed safely.");
   }
   if (!shutdown_native_cue_info_command()) {
-    if (error) *error = "The native Cue Info window could not be closed safely.";
-    return false;
+    ok = false;
+    append_error("The native Cue Info window could not be closed safely.");
   }
 
   reaper_plugin_info_t* registration_host = plugin ? plugin : g_native_runtime_plugin;
   if (registration_host) unregister_native_workflow_actions(registration_host);
   g_native_runtime_plugin = nullptr;
-  return true;
+
+  if (error) *error = shutdown_error;
+  return ok;
 }
 
 inline bool open_native_cue_manager(
