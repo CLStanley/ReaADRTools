@@ -13,6 +13,7 @@
 #include <fstream>
 #include <functional>
 #include <map>
+#include <optional>
 #include <regex>
 #include <sstream>
 #include <string>
@@ -132,6 +133,137 @@ void run_persistent_native_clear_character_cues_action()
   ShowMessageBox(summary.c_str(), "ReaADR Cue Cleanup", 0);
 }
 
+std::string normalize_persistent_import_mode(std::string value)
+{
+  const auto first = value.find_first_not_of(" \t\r\n");
+  const auto last = value.find_last_not_of(" \t\r\n");
+  value = first == std::string::npos ? std::string() : value.substr(first, last - first + 1);
+  std::transform(value.begin(), value.end(), value.begin(), [](unsigned char ch) {
+    return static_cast<char>(std::tolower(ch));
+  });
+  if (value == "1" || value == "all" || value == "import entire script" ||
+      value == "import entire sheet") return "all";
+  if (value == "2" || value == "selected" || value == "import selected characters" ||
+      value == "add selected characters") return "selected";
+  if (value == "3" || value == "update" || value == "update existing import" ||
+      value == "update already imported characters") return "update";
+  return value;
+}
+
+std::optional<reaadr::core::ColumnMapping> parse_persistent_import_mapping(
+  const std::string& serialized,
+  std::string& error)
+{
+  error.clear();
+  if (serialized.empty()) return std::nullopt;
+  reaadr::core::ColumnMapping mapping;
+  std::stringstream entries(serialized);
+  std::string entry;
+  while (std::getline(entries, entry, ';')) {
+    const std::size_t equals = entry.find('=');
+    if (equals == std::string::npos) {
+      error = "Mappings must use key=column pairs separated by semicolons.";
+      return std::nullopt;
+    }
+    const auto trim = [](const std::string& text) {
+      const auto first = text.find_first_not_of(" \t\r\n");
+      const auto last = text.find_last_not_of(" \t\r\n");
+      return first == std::string::npos ? std::string() : text.substr(first, last - first + 1);
+    };
+    const std::string key = trim(entry.substr(0, equals));
+    const std::string column = trim(entry.substr(equals + 1));
+    if (key.empty() || column.empty()) {
+      error = "Mappings cannot contain empty keys or columns.";
+      return std::nullopt;
+    }
+    mapping[key] = column;
+  }
+  return mapping.empty() ? std::nullopt : std::optional<reaadr::core::ColumnMapping>(mapping);
+}
+
+void run_persistent_native_manager_import(
+  const std::string& mapping_override,
+  bool preview_only,
+  const std::string& mode,
+  const std::string& characters)
+{
+  // Preview remains host-only for this migration slice; importantly it does not
+  // mutate the session. All Manager import mutations below execute through the
+  // persistent CueManagerSessionHost rather than rebuilding the legacy graph.
+  if (preview_only) {
+    run_native_import_cue_sheet_action(mapping_override, true, mode, characters);
+    return;
+  }
+  if (!GetUserFileNameForRead) {
+    ShowMessageBox("The native file chooser is unavailable.", "ReaADR Import", 0);
+    return;
+  }
+  std::array<char, 4096> path = {};
+  if (!GetUserFileNameForRead(path.data(), "ReaADR: Import Cue Sheet", "csv;tsv;tab;txt;xlsx")) return;
+  std::ifstream file(path.data(), std::ios::binary);
+  if (!file) {
+    ShowMessageBox("Could not open the selected cue sheet.", "ReaADR Import", 0);
+    return;
+  }
+  std::string content((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
+  std::string lower_path(path.data());
+  std::transform(lower_path.begin(), lower_path.end(), lower_path.begin(), [](unsigned char ch) {
+    return static_cast<char>(std::tolower(ch));
+  });
+  if (lower_path.size() >= 5 && lower_path.compare(lower_path.size() - 5, 5, ".xlsx") == 0) {
+    std::vector<char> tsv(8 * 1024 * 1024), xlsx_error(4096);
+    if (!read_xlsx_as_tsv(path.data(), tsv.data(), static_cast<int>(tsv.size()),
+                          xlsx_error.data(), static_cast<int>(xlsx_error.size()))) {
+      ShowMessageBox(xlsx_error.data(), "ReaADR Import", 0);
+      return;
+    }
+    content = tsv.data();
+  }
+
+  std::string serialized_mapping = mapping_override;
+  if (serialized_mapping.empty() && GetUserInputs) {
+    std::array<char, 2048> input = {};
+    if (GetUserInputs("ReaADR Import: Column Mapping", 1,
+                      "Optional mapping key=column;... (blank=last/auto-detect)",
+                      input.data(), input.size())) serialized_mapping = input.data();
+  }
+  if (serialized_mapping.empty() && GetProjExtState) {
+    std::array<char, 4096> saved = {};
+    if (GetProjExtState(nullptr, "ReaADRTools", "import_mapping_last", saved.data(), saved.size()) > 0)
+      serialized_mapping = saved.data();
+  }
+  std::string mapping_error;
+  const auto mapping = parse_persistent_import_mapping(serialized_mapping, mapping_error);
+  if (!mapping_error.empty()) {
+    ShowMessageBox(mapping_error.c_str(), "ReaADR Import", 0);
+    return;
+  }
+
+  std::vector<std::string> selected_characters;
+  if (normalize_persistent_import_mode(mode.empty() ? "all" : mode) == "selected") {
+    std::stringstream values(characters);
+    std::string value;
+    while (std::getline(values, value, ';')) {
+      const auto first = value.find_first_not_of(" \t\r\n");
+      const auto last = value.find_last_not_of(" \t\r\n");
+      if (first != std::string::npos) selected_characters.push_back(value.substr(first, last - first + 1));
+    }
+  }
+
+  const auto result = reaadr::reaper::cue_manager_session_host().import_content(
+    content, path.data(), mapping,
+    normalize_persistent_import_mode(mode.empty() ? "all" : mode), selected_characters);
+  if (!result) {
+    ShowMessageBox(result.error.c_str(), "ReaADR Import", 0);
+    return;
+  }
+  const std::string summary = "Imported " + std::to_string(result.imported.cues.size()) +
+    " cue(s) from " + std::string(path.data()) + ".\n\nTracks created: " +
+    std::to_string(result.rendered.render.tracks_and_regions.tracks_created) +
+    "\nRegions created: " + std::to_string(result.rendered.render.tracks_and_regions.regions_created);
+  ShowMessageBox(summary.c_str(), "ReaADR Import (Native)", 0);
+}
+
 void run_persistent_native_cue_manager_action()
 {
   reaadr::reaper::CueManagerSessionConfig config;
@@ -140,7 +272,7 @@ void run_persistent_native_cue_manager_action()
   config.cleanup_api = {native_cleanup_inspect, native_cleanup_apply, native_utc_timestamp()};
   config.callbacks.trigger_import = [](
     const std::string& mapping, bool preview, const std::string& mode, const std::string& characters) {
-      run_native_import_cue_sheet_action(mapping, preview, mode, characters);
+      run_persistent_native_manager_import(mapping, preview, mode, characters);
     };
   config.callbacks.trigger_action = [](const std::string& action) {
     if (action == "sync_regions") {
