@@ -97,7 +97,7 @@ private:
   CueCleanupApplicationService cleanup_;
   CueNavigationApi navigation_api_;
   ui::CueManagerController controller_;
-  double (*frame_rate_)() = nullptr;
+  std::function<double()> frame_rate_;
 };
 
 class CueManagerSessionHost final {
