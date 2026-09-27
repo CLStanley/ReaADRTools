@@ -1,6 +1,7 @@
 #include "cue_manager_session.hpp"
 
 #include "native_host_services.hpp"
+#include "overlay_refresh_adapter.hpp"
 #include "reaadr_ui/cue_manager_lifecycle.hpp"
 #include "reaadr_ui/cue_manager_window.hpp"
 
@@ -9,12 +10,22 @@
 
 namespace reaadr::reaper {
 
-OverlayApplicationApi CueManagerSession::resolve_overlay_api(OverlayApplicationApi api)
+OverlayApplicationApi CueManagerSession::resolve_overlay_api(ReaProject* project,
+                                                              OverlayApplicationApi api)
 {
   const auto native = native_overlay_application_api();
-  if (!api.frame_rate) api.frame_rate = native.frame_rate;
+  if (!api.frame_rate) api.frame_rate = [project]() { return native_project_frame_rate(project); };
   if (!api.selection) api.selection = native.selection;
-  if (!api.refresh_overlay) api.refresh_overlay = native.refresh_overlay;
+  if (!api.refresh_overlay) {
+    api.refresh_overlay = [project](const core::OverlayRefreshOptions& options,
+                                    std::string* error) {
+      const auto refreshed = refresh_generated_overlay_transactionally(
+        project, native_overlay_refresh_api(), native_transaction_api(), options,
+        "ReaADR: refresh Cue Manager overlay");
+      if (!refreshed && error) *error = refreshed.error;
+      return static_cast<bool>(refreshed);
+    };
+  }
   return api;
 }
 
@@ -28,10 +39,11 @@ CueNavigationApi CueManagerSession::resolve_navigation_api(CueNavigationApi api)
   return api;
 }
 
-CueManagerApplicationApi CueManagerSession::resolve_mutation_api(CueManagerApplicationApi api)
+CueManagerApplicationApi CueManagerSession::resolve_mutation_api(ReaProject* project,
+                                                                  CueManagerApplicationApi api)
 {
   if (!api.utc_timestamp) api.utc_timestamp = native_utc_timestamp;
-  if (!api.frame_rate) api.frame_rate = native_current_project_frame_rate;
+  if (!api.frame_rate) api.frame_rate = [project]() { return native_project_frame_rate(project); };
   return api;
 }
 
@@ -54,13 +66,13 @@ CueManagerSession::CueManagerSession(CueManagerSessionConfig config)
     global_state_(config.global_state_api), repository_(project_state_),
     view_service_(project_state_, &global_state_), event_log_(project_state_),
     character_filter_(project_state_), overlay_settings_(project_state_), cue_selection_(project_state_),
-    overlay_api_(resolve_overlay_api(config.overlay_api)),
+    overlay_api_(resolve_overlay_api(config.project, std::move(config.overlay_api))),
     overlay_application_(repository_, overlay_settings_, cue_selection_, character_filter_, overlay_api_),
     renderer_(repository_, event_log_, character_filter_, config.project, native_track_region_api(),
               native_ruler_lane_api(), native_cue_audio_api(), native_transaction_api()),
     render_options_(make_render_options(overlay_application_, config.cue_audio_path.empty()
       ? native_project_cue_audio_path(config.project) : config.cue_audio_path)),
-    mutation_api_(resolve_mutation_api(config.mutation_api)),
+    mutation_api_(resolve_mutation_api(config.project, std::move(config.mutation_api))),
     mutations_(repository_, overlay_settings_, cue_selection_, renderer_, render_options_, mutation_api_),
     cleanup_api_(std::move(config.cleanup_api)), cleanup_(repository_, native_transaction_api(), cleanup_api_),
     navigation_api_(resolve_navigation_api(config.navigation_api)),
