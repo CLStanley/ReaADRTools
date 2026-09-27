@@ -43,9 +43,11 @@ public:
 };
 
 struct CueManagerApplicationApi {
-  std::string (*utc_timestamp)() = nullptr;
+  std::function<std::string()> utc_timestamp;
   // Read at submission so project frame-rate changes apply to subsequent edits.
-  double (*frame_rate)() = nullptr;
+  // A callable is used so persistent native sessions can bind the query to the
+  // ReaProject they own rather than whichever tab is current at invocation time.
+  std::function<double()> frame_rate;
 };
 
 // Validates a cue edit against the canonical model, then commits the resulting
@@ -64,7 +66,7 @@ public:
       selections_(selections),
       renderer_(renderer),
       render_options_(std::move(render_options)),
-      api_(api)
+      api_(std::move(api))
   {
   }
 
