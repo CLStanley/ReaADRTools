@@ -7,6 +7,7 @@
 #include "../reaadr_core/cue_navigation.hpp"
 
 #include <cstddef>
+#include <functional>
 #include <string>
 
 namespace reaadr::reaper {
@@ -17,9 +18,9 @@ struct OverlaySelectionInput {
 };
 
 struct OverlayApplicationApi {
-  double (*frame_rate)() = nullptr;
-  OverlaySelectionInput (*selection)() = nullptr;
-  bool (*refresh_overlay)(const core::OverlayRefreshOptions&, std::string* error) = nullptr;
+  std::function<double()> frame_rate;
+  std::function<OverlaySelectionInput()> selection;
+  std::function<bool(const core::OverlayRefreshOptions&, std::string* error)> refresh_overlay;
 };
 
 struct OverlayApplicationResult {
@@ -41,7 +42,7 @@ public:
                             core::CharacterFilterRepository& filters,
                             OverlayApplicationApi api)
     : sessions_(sessions), settings_(settings), selections_(selections),
-      filters_(filters), api_(api) {}
+      filters_(filters), api_(std::move(api)) {}
 
   OverlayApplicationResult refresh();
 
