@@ -13,24 +13,9 @@
 namespace reaadr::reaper {
 namespace {
 
-double command_frame_rate()
-{
-  return native_project_frame_rate(nullptr);
-}
-
 OverlaySelectionInput empty_overlay_selection()
 {
   return {};
-}
-
-bool command_refresh_overlay(const core::OverlayRefreshOptions& options,
-                             std::string* error)
-{
-  const auto refreshed = refresh_generated_overlay_transactionally(
-    nullptr, native_overlay_refresh_api(), native_transaction_api(), options,
-    "ReaADR: refresh recording overlay");
-  if (!refreshed && error) *error = refreshed.error;
-  return static_cast<bool>(refreshed);
 }
 
 } // namespace
@@ -45,9 +30,17 @@ RecordingCommandContext::RecordingCommandContext(ReaProject* project)
     selections_(project_state_),
     recording_preferences_(project_state_),
     target_application_(sessions_, selections_, filters_, overlay_settings_),
-    overlay_application_(sessions_, overlay_settings_, selections_, filters_,
-                         {command_frame_rate, empty_overlay_selection,
-                          command_refresh_overlay}),
+    overlay_application_(
+      sessions_, overlay_settings_, selections_, filters_,
+      {[project]() { return native_project_frame_rate(project); },
+       empty_overlay_selection,
+       [project](const core::OverlayRefreshOptions& options, std::string* error) {
+         const auto refreshed = refresh_generated_overlay_transactionally(
+           project, native_overlay_refresh_api(), native_transaction_api(), options,
+           "ReaADR: refresh recording overlay");
+         if (!refreshed && error) *error = refreshed.error;
+         return static_cast<bool>(refreshed);
+       }}),
     record_arm_(project, native_record_arm_api(), native_transaction_api()),
     recording_setup_(sessions_, project, native_recording_setup_api()),
     transport_(record_arm_, native_recording_transport_api()),
