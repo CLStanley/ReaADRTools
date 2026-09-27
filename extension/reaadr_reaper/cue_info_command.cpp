@@ -42,16 +42,6 @@ OverlaySelectionInput empty_overlay_selection()
   return {};
 }
 
-bool command_refresh_overlay(const core::OverlayRefreshOptions& options,
-                             std::string* error)
-{
-  const auto refreshed = refresh_generated_overlay_transactionally(
-    nullptr, native_overlay_refresh_api(), native_transaction_api(), options,
-    "ReaADR: refresh Cue Info overlay");
-  if (!refreshed && error) *error = refreshed.error;
-  return static_cast<bool>(refreshed);
-}
-
 bool refresh_overlay_application(OverlayApplicationService& overlay,
                                  std::string* error)
 {
@@ -102,7 +92,15 @@ struct CueInfoWindowSession {
       targets(sessions, selections, filters, overlay_settings),
       info(targets, bound_project, native_cue_take_count_api()),
       overlay(sessions, overlay_settings, selections, filters,
-              {command_frame_rate, empty_overlay_selection, command_refresh_overlay}),
+              {[bound_project]() { return native_project_frame_rate(bound_project); },
+               empty_overlay_selection,
+               [bound_project](const core::OverlayRefreshOptions& options, std::string* error) {
+                 const auto refreshed = refresh_generated_overlay_transactionally(
+                   bound_project, native_overlay_refresh_api(), native_transaction_api(), options,
+                   "ReaADR: refresh Cue Info overlay");
+                 if (!refreshed && error) *error = refreshed.error;
+                 return static_cast<bool>(refreshed);
+               }}),
       renderer(sessions, event_log, filters, bound_project,
                native_track_region_api(), native_ruler_lane_api(), native_cue_audio_api(),
                native_transaction_api()),
