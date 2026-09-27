@@ -30,10 +30,9 @@ DialogueDetectionApi native_dialogue_detection_api();
 CueTakeCountApi native_cue_take_count_api();
 CueNavigationApi native_cue_navigation_api();
 OverlayRefreshApi native_overlay_refresh_api();
-OverlayApplicationApi native_overlay_application_api(ReaProject* project = nullptr);
-OverlaySelectionInput native_overlay_selection(ReaProject* project = nullptr);
+OverlayApplicationApi native_overlay_application_api();
+OverlaySelectionInput native_overlay_selection();
 bool native_overlay_refresh_callback(
-  ReaProject* project,
   const core::OverlayRefreshOptions& options,
   std::string* error);
 RecordArmApi native_record_arm_api();
