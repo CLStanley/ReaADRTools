@@ -71,9 +71,9 @@ public:
   const ui::CueManagerController& controller() const { return controller_; }
 
 private:
-  static OverlayApplicationApi resolve_overlay_api(OverlayApplicationApi api);
+  static OverlayApplicationApi resolve_overlay_api(ReaProject* project, OverlayApplicationApi api);
   static CueNavigationApi resolve_navigation_api(CueNavigationApi api);
-  static CueManagerApplicationApi resolve_mutation_api(CueManagerApplicationApi api);
+  static CueManagerApplicationApi resolve_mutation_api(ReaProject* project, CueManagerApplicationApi api);
   static SessionRenderOptions make_render_options(
     OverlayApplicationService& overlay,
     const std::string& cue_audio_path);
