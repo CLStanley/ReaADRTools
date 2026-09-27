@@ -9,6 +9,7 @@
 #include "cue_info_command.hpp"
 
 #include "native_host_services.hpp"
+#include "native_runtime.hpp"
 #include "overlay_refresh_adapter.hpp"
 #include "recording_command.hpp"
 #include "project_state.hpp"
@@ -59,10 +60,11 @@ bool refresh_overlay_application(OverlayApplicationService& overlay,
   return static_cast<bool>(refreshed);
 }
 
-SessionRenderOptions make_cue_info_render_options(OverlayApplicationService& overlay)
+SessionRenderOptions make_cue_info_render_options(OverlayApplicationService& overlay,
+                                                   ReaProject* project)
 {
   SessionRenderOptions options;
-  options.cue_audio_path = native_project_cue_audio_path(nullptr);
+  options.cue_audio_path = native_project_cue_audio_path(project);
   options.event.source = "native_cue_info";
   options.refresh_overlay = [&overlay](std::string* error) {
     return refresh_overlay_application(overlay, error);
@@ -71,6 +73,7 @@ SessionRenderOptions make_cue_info_render_options(OverlayApplicationService& ove
 }
 
 struct CueInfoWindowSession {
+  ReaProject* project;
   ProjectStateStore project_state;
   core::SessionModelRepository sessions;
   core::EventLogRepository event_log;
@@ -87,8 +90,9 @@ struct CueInfoWindowSession {
   CueNavigationApi navigation_api;
   ui::CueInfoController controller;
 
-  CueInfoWindowSession()
-    : project_state(nullptr, {GetProjExtState, SetProjExtState}),
+  explicit CueInfoWindowSession(ReaProject* bound_project)
+    : project(bound_project),
+      project_state(bound_project, {GetProjExtState, SetProjExtState}),
       sessions(project_state),
       event_log(project_state),
       filters(project_state),
@@ -96,13 +100,13 @@ struct CueInfoWindowSession {
       selections(project_state),
       preferences(project_state),
       targets(sessions, selections, filters, overlay_settings),
-      info(targets, nullptr, native_cue_take_count_api()),
+      info(targets, bound_project, native_cue_take_count_api()),
       overlay(sessions, overlay_settings, selections, filters,
               {command_frame_rate, empty_overlay_selection, command_refresh_overlay}),
-      renderer(sessions, event_log, filters, nullptr,
+      renderer(sessions, event_log, filters, bound_project,
                native_track_region_api(), native_ruler_lane_api(), native_cue_audio_api(),
                native_transaction_api()),
-      render_options(make_cue_info_render_options(overlay)),
+      render_options(make_cue_info_render_options(overlay, bound_project)),
       mutations(sessions, overlay_settings, selections, renderer, render_options,
                 {native_utc_timestamp, command_frame_rate}),
       navigation_api{GetPlayState, GetPlayPosition, GetCursorPosition, SetEditCurPos},
@@ -120,8 +124,19 @@ std::unique_ptr<CueInfoWindowSession> g_cue_info_session;
 
 bool run_native_cue_info_command()
 {
+  // Cue Info owns project ext-state repositories, render services, take-count
+  // reads, and window preferences for exactly one project. Bind that graph to a
+  // concrete ReaProject so reopening the persistent window after a tab switch
+  // cannot continue mutating the previous project's state.
+  ReaProject* project = active_reaper_project();
+  if (!project) return false;
+
+  if (g_cue_info_session && g_cue_info_session->project != project) {
+    if (!shutdown_native_cue_info_command()) return false;
+  }
+
   if (!g_cue_info_session)
-    g_cue_info_session = std::make_unique<CueInfoWindowSession>();
+    g_cue_info_session = std::make_unique<CueInfoWindowSession>(project);
 
   if (ui::show_cue_info_window(g_cue_info_session->controller)) return true;
 
