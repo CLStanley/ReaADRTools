@@ -139,11 +139,11 @@ bool promote_native_quick_actions(reaper_plugin_info_t* plugin)
   for(std::size_t index=0;index<command_ids.size();++index)g_actions[index+1].command_id=command_ids[index];log_line("Promoted all four Quick Actions to native command registrations.");return true;
 }
 
-bool runtime_host_hook(int command, int flag)
+bool runtime_host_hook(int command, int)
 {
-  // These actions already execute through native application/service boundaries.
-  // Promote their dispatch here so the compatibility hook is only responsible
-  // for commands that still need to be extracted from the monolithic host.
+  // The persistent runtime now owns dispatch for every registered public action.
+  // Registration still comes from the compatibility bootstrap for stable command
+  // IDs, but no action execution falls back through hook_native_command_legacy.
   if (command == g_validate_session_command_id && command != 0) { run_validate_session_action(); return true; }
   if (command == g_refresh_overlay_command_id && command != 0) { run_refresh_overlay_action(); return true; }
   if (command == g_refresh_session_command_id && command != 0) { run_refresh_session_action(); return true; }
@@ -154,7 +154,10 @@ bool runtime_host_hook(int command, int flag)
   if (command == g_previous_cue_command_id && command != 0) { run_cue_navigation_action(false); return true; }
   if (command == g_jump_to_cue_command_id && command != 0) { run_jump_to_cue_action(); return true; }
   if (command == g_cue_manager_command_id && command != 0) { run_persistent_native_cue_manager_action(); return true; }
-  return hook_native_command_legacy(command, flag);
+  if (command == g_import_cue_sheet_command_id && command != 0) { run_native_import_cue_sheet_action(); return true; }
+  if (command == g_preferences_command_id && command != 0) { run_native_preferences_action(); return true; }
+  if (command == g_ui_test_command_id && command != 0) { reaadr::ui::show_test_window(); return true; }
+  return false;
 }
 
 bool activate_native_runtime(reaper_plugin_info_t* plugin)
