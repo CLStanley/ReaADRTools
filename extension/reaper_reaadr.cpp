@@ -63,199 +63,117 @@ void run_persistent_native_export_action(const std::string& action)
   const auto field = [](const reaadr::core::Fields& cue, const char* key) {
     const auto found = cue.find(key); return found == cue.end() ? std::string() : found->second;
   };
+  const auto csv = [](std::string value) {
+    std::string escaped;
+    for (char ch : value) { if (ch == '"') escaped += "\"\""; else escaped += ch; }
+    return '"' + escaped + '"';
+  };
   if (action == "export_cue_sheet") {
-    file << "Cue ID,Character,Start,End,Status,Type,Dialogue,Notes\n";
-    for (const auto& cue : loaded.model.cues)
-      file << native_csv_escape(field(cue, "id")) << ',' << native_csv_escape(field(cue, "character")) << ','
-           << native_csv_escape(field(cue, "start_time")) << ',' << native_csv_escape(field(cue, "end_time")) << ','
-           << native_csv_escape(field(cue, "status")) << ',' << native_csv_escape(field(cue, "cue_type")) << ','
-           << native_csv_escape(field(cue, "line")) << ',' << native_csv_escape(field(cue, "notes")) << '\n';
+    file << "id,character,start_tc,end_tc,dialogue,notes,status,type\n";
+    for (const auto& cue : loaded.session.cues) file << csv(field(cue,"id")) << ',' << csv(field(cue,"character")) << ',' << csv(field(cue,"start_tc")) << ',' << csv(field(cue,"end_tc")) << ',' << csv(field(cue,"dialogue")) << ',' << csv(field(cue,"notes")) << ',' << csv(field(cue,"status")) << ',' << csv(field(cue,"type")) << '\n';
   } else if (action == "export_timing_report") {
-    file << "Cue ID,Character,Start,End,Duration,Status\n";
-    for (const auto& cue : loaded.model.cues) {
-      const double start = std::strtod(field(cue, "start_time").c_str(), nullptr);
-      const double end = std::strtod(field(cue, "end_time").c_str(), nullptr);
-      file << native_csv_escape(field(cue, "id")) << ',' << native_csv_escape(field(cue, "character")) << ','
-           << start << ',' << end << ',' << (end - start) << ',' << native_csv_escape(field(cue, "status")) << '\n';
+    file << "id,character,start_tc,end_tc,start_seconds,end_seconds,duration_seconds,status\n";
+    for (const auto& cue : loaded.session.cues) {
+      const std::string start = field(cue,"start_seconds"), end = field(cue,"end_seconds"); double duration = 0.0;
+      try { if (!start.empty() && !end.empty()) duration = std::stod(end) - std::stod(start); } catch (...) {}
+      file << csv(field(cue,"id")) << ',' << csv(field(cue,"character")) << ',' << csv(field(cue,"start_tc")) << ',' << csv(field(cue,"end_tc")) << ',' << csv(start) << ',' << csv(end) << ',' << duration << ',' << csv(field(cue,"status")) << '\n';
     }
   } else {
-    file << "Field,Value\n";
-    for (const auto& entry : loaded.model.session) file << native_csv_escape(entry.first) << ',' << native_csv_escape(entry.second) << '\n';
+    file << "key,value\n" << csv("session_id") << ',' << csv(loaded.session.session_id) << '\n' << csv("session_name") << ',' << csv(loaded.session.session_name) << '\n' << csv("frame_rate") << ',' << csv(loaded.session.frame_rate) << '\n' << csv("revision") << ',' << loaded.session.revision << '\n' << csv("cue_count") << ',' << loaded.session.cues.size() << '\n';
   }
-  ShowMessageBox(("Exported to " + output_path + ".").c_str(), "ReaADR Export (Native)", 0);
+  if (!file) { ShowMessageBox("The CSV export could not be completed.", "ReaADR Export", 0); return; }
+  ShowMessageBox(("Exported to:\n" + output_path).c_str(), "ReaADR Export", 0);
 }
 
 void run_persistent_native_clear_character_cues_action()
 {
-  if (!GetUserInputs) { ShowMessageBox("The character input API is unavailable.", "ReaADR Cue Cleanup", 0); return; }
-  std::array<char, 1024> input = {};
-  if (!GetUserInputs("ReaADR: Clear Character Cues", 1, "Characters (comma-separated):", input.data(), input.size())) return;
-  std::vector<std::string> characters;
-  std::stringstream values(input.data()); std::string value;
-  while (std::getline(values, value, ',')) {
-    const auto first = value.find_first_not_of(" \t\r\n"); const auto last = value.find_last_not_of(" \t\r\n");
-    if (first != std::string::npos) characters.push_back(value.substr(first, last - first + 1));
-  }
-  if (characters.empty()) { ShowMessageBox("Select at least one character.", "ReaADR Cue Cleanup", 0); return; }
-  const std::string prompt = "Remove generated cues, regions, cue audio, and cue tracks for " + std::to_string(characters.size()) + " character(s)? Recording tracks and takes are preserved.";
-  if (ShowMessageBox(prompt.c_str(), "ReaADR Cue Cleanup", 4) != 6) return;
+  if (!GetUserInputs) return;
+  std::array<char, 4096> input = {};
+  if (!GetUserInputs("ReaADR: Clear Character Cues", 1, "Characters (semicolon-separated):", input.data(), input.size())) return;
+  std::vector<std::string> characters; std::stringstream values(input.data()); std::string value;
+  while (std::getline(values, value, ';')) { const auto first=value.find_first_not_of(" \t\r\n"), last=value.find_last_not_of(" \t\r\n"); if(first!=std::string::npos) characters.push_back(value.substr(first,last-first+1)); }
   std::string error; const auto result = reaadr::reaper::cue_manager_session_host().clear_characters(characters, error);
-  if (!result || !error.empty()) { ShowMessageBox((error.empty() ? result.error : error).c_str(), "ReaADR Cue Cleanup", 0); return; }
-  const std::string summary = "Removed " + std::to_string(result.cues_removed) + " cue(s), " + std::to_string(result.regions_removed) +
-    " region(s), and " + std::to_string(result.cue_audio_removed) + " cue-audio item(s).\n\nCue tracks removed: " + std::to_string(result.tracks_removed);
-  ShowMessageBox(summary.c_str(), "ReaADR Cue Cleanup", 0);
+  if (!result) { if (!error.empty()) ShowMessageBox(error.c_str(), "ReaADR Clear Character Cues", 0); return; }
+  const std::string summary = "Removed " + std::to_string(result.removed_cues) + " cue(s).";
+  ShowMessageBox(summary.c_str(), "ReaADR Clear Character Cues", 0);
 }
 
-std::string normalize_persistent_import_mode(std::string value)
+std::string normalize_persistent_import_mode(std::string mode)
 {
-  const auto first = value.find_first_not_of(" \t\r\n"); const auto last = value.find_last_not_of(" \t\r\n");
-  value = first == std::string::npos ? std::string() : value.substr(first, last - first + 1);
-  std::transform(value.begin(), value.end(), value.begin(), [](unsigned char ch) { return static_cast<char>(std::tolower(ch)); });
-  if (value == "1" || value == "all" || value == "import entire script" || value == "import entire sheet") return "all";
-  if (value == "2" || value == "selected" || value == "import selected characters" || value == "add selected characters") return "selected";
-  if (value == "3" || value == "update" || value == "update existing import" || value == "update already imported characters") return "update";
-  return value;
+  std::transform(mode.begin(), mode.end(), mode.begin(), [](unsigned char ch){ return static_cast<char>(std::tolower(ch)); });
+  if (mode == "merge") return "merge"; if (mode == "character" || mode == "characters" || mode == "selected") return "character"; return "all";
 }
 
-std::optional<reaadr::core::ColumnMapping> parse_persistent_import_mapping(const std::string& serialized, std::string& error)
+void run_persistent_native_manager_import(const std::string& serialized_mapping, bool preview_only, const std::string& mode, const std::string& serialized_characters)
 {
-  error.clear(); if (serialized.empty()) return std::nullopt;
-  reaadr::core::ColumnMapping mapping; std::stringstream entries(serialized); std::string entry;
-  while (std::getline(entries, entry, ';')) {
-    const std::size_t equals = entry.find('=');
-    if (equals == std::string::npos) { error = "Mappings must use key=column pairs separated by semicolons."; return std::nullopt; }
-    const auto trim = [](const std::string& text) {
-      const auto first = text.find_first_not_of(" \t\r\n"); const auto last = text.find_last_not_of(" \t\r\n");
-      return first == std::string::npos ? std::string() : text.substr(first, last - first + 1);
-    };
-    const std::string key = trim(entry.substr(0, equals)); const std::string column = trim(entry.substr(equals + 1));
-    if (key.empty() || column.empty()) { error = "Mappings cannot contain empty keys or columns."; return std::nullopt; }
-    mapping[key] = column;
-  }
-  return mapping.empty() ? std::nullopt : std::optional<reaadr::core::ColumnMapping>(mapping);
-}
-
-void run_persistent_native_manager_import(const std::string& mapping_override, bool preview_only,
-                                          const std::string& mode, const std::string& characters)
-{
-  if (!GetUserFileNameForRead) { ShowMessageBox("The native file chooser is unavailable.", "ReaADR Import", 0); return; }
-  std::array<char, 4096> path = {};
-  if (!GetUserFileNameForRead(path.data(), preview_only ? "ReaADR: Preview Cue Sheet" : "ReaADR: Import Cue Sheet", "csv;tsv;tab;txt;xlsx")) return;
-  std::ifstream file(path.data(), std::ios::binary);
-  if (!file) { ShowMessageBox("Could not open the selected cue sheet.", "ReaADR Import", 0); return; }
-  std::string content((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
-  std::string lower_path(path.data());
-  std::transform(lower_path.begin(), lower_path.end(), lower_path.begin(), [](unsigned char ch) { return static_cast<char>(std::tolower(ch)); });
-  if (lower_path.size() >= 5 && lower_path.compare(lower_path.size() - 5, 5, ".xlsx") == 0) {
-    std::vector<char> tsv(8 * 1024 * 1024), xlsx_error(4096);
-    if (!read_xlsx_as_tsv(path.data(), tsv.data(), static_cast<int>(tsv.size()), xlsx_error.data(), static_cast<int>(xlsx_error.size()))) {
-      ShowMessageBox(xlsx_error.data(), "ReaADR Import", 0); return;
-    }
-    content = tsv.data();
-  }
-  std::string serialized_mapping = mapping_override;
-  if (serialized_mapping.empty() && GetUserInputs) {
-    std::array<char, 2048> input = {};
-    if (GetUserInputs("ReaADR Import: Column Mapping", 1, "Optional mapping key=column;... (blank=last/auto-detect)", input.data(), input.size())) serialized_mapping = input.data();
-  }
-  if (serialized_mapping.empty() && GetProjExtState) {
-    std::array<char, 4096> saved = {};
-    if (GetProjExtState(nullptr, "ReaADRTools", "import_mapping_last", saved.data(), saved.size()) > 0) serialized_mapping = saved.data();
-  }
-  std::string mapping_error; const auto mapping = parse_persistent_import_mapping(serialized_mapping, mapping_error);
-  if (!mapping_error.empty()) { ShowMessageBox(mapping_error.c_str(), "ReaADR Import", 0); return; }
-
-  if (preview_only) {
-    const auto preview = reaadr::reaper::cue_manager_session_host().preview_import_content(content, path.data(), mapping);
-    if (!preview) { ShowMessageBox(preview.error.c_str(), "ReaADR Import Preview", 0); return; }
-    const std::string summary = "Previewed " + std::to_string(preview.imported.cues.size()) + " cue(s) from " + std::string(path.data()) +
-      ".\n\nNo project or session changes were made.";
-    ShowMessageBox(summary.c_str(), "ReaADR Import Preview (Native)", 0);
-    return;
-  }
-
-  std::vector<std::string> selected_characters;
-  if (normalize_persistent_import_mode(mode.empty() ? "all" : mode) == "selected") {
-    std::stringstream values(characters); std::string value;
-    while (std::getline(values, value, ';')) {
-      const auto first = value.find_first_not_of(" \t\r\n"); const auto last = value.find_last_not_of(" \t\r\n");
-      if (first != std::string::npos) selected_characters.push_back(value.substr(first, last - first + 1));
-    }
-  }
-  const auto result = reaadr::reaper::cue_manager_session_host().import_content(content, path.data(), mapping,
-    normalize_persistent_import_mode(mode.empty() ? "all" : mode), selected_characters);
-  if (!result) { ShowMessageBox(result.error.c_str(), "ReaADR Import", 0); return; }
-  const std::string summary = "Imported " + std::to_string(result.imported.cues.size()) + " cue(s) from " + std::string(path.data()) +
-    ".\n\nTracks created: " + std::to_string(result.rendered.render.tracks_and_regions.tracks_created) +
-    "\nRegions created: " + std::to_string(result.rendered.render.tracks_and_regions.regions_created);
-  ShowMessageBox(summary.c_str(), "ReaADR Import (Native)", 0);
+  if (!GetUserInputs) return;
+  std::array<char,4096> path={}; if(!GetUserInputs(preview_only?"ReaADR: Preview Cue Sheet Import":"ReaADR: Import Cue Sheet",1,"Cue sheet path",path.data(),path.size())) return;
+  std::string content;
+  const std::string source_path(path.data());
+  if (source_path.size() >= 5 && source_path.substr(source_path.size()-5) == ".xlsx") {
+    std::string xlsx_error; if(!read_xlsx_as_csv(source_path,content,xlsx_error)){ShowMessageBox(xlsx_error.c_str(),"ReaADR Import",0);return;}
+  } else { std::ifstream file(source_path,std::ios::binary); if(!file){ShowMessageBox("Could not open the selected cue sheet.","ReaADR Import",0);return;} content.assign(std::istreambuf_iterator<char>(file),{}); }
+  std::optional<reaadr::core::ColumnMapping> mapping;
+  if(!serialized_mapping.empty()){ reaadr::core::ColumnMapping parsed; std::stringstream entries(serialized_mapping); std::string entry; while(std::getline(entries,entry,';')){const auto equals=entry.find('=');if(equals!=std::string::npos&&equals>0)parsed[entry.substr(0,equals)]=entry.substr(equals+1);} if(!parsed.empty())mapping=std::move(parsed); }
+  if(preview_only){const auto preview=reaadr::reaper::cue_manager_session_host().preview_import_content(content,path.data(),mapping);if(!preview){ShowMessageBox(preview.error.c_str(),"ReaADR Import Preview",0);return;}const std::string summary="Parsed "+std::to_string(preview.preview.cues.size())+" cue(s).\n\nCharacters: "+std::to_string(preview.preview.characters.size())+"\nWarnings: "+std::to_string(preview.preview.warnings.size());ShowMessageBox(summary.c_str(),"ReaADR Import Preview",0);return;}
+  std::vector<std::string> selected_characters; if(!serialized_characters.empty()){std::stringstream values(serialized_characters);std::string value;while(std::getline(values,value,';')){const auto first=value.find_first_not_of(" \t\r\n");const auto last=value.find_last_not_of(" \t\r\n");if(first!=std::string::npos)selected_characters.push_back(value.substr(first,last-first+1));}}
+  const auto result=reaadr::reaper::cue_manager_session_host().import_content(content,path.data(),mapping,normalize_persistent_import_mode(mode.empty()?"all":mode),selected_characters);
+  if(!result){ShowMessageBox(result.error.c_str(),"ReaADR Import",0);return;}
+  const std::string summary="Imported "+std::to_string(result.imported.cues.size())+" cue(s) from "+std::string(path.data())+".\n\nTracks created: "+std::to_string(result.rendered.render.tracks_and_regions.tracks_created)+"\nRegions created: "+std::to_string(result.rendered.render.tracks_and_regions.regions_created);ShowMessageBox(summary.c_str(),"ReaADR Import (Native)",0);
 }
 
 void run_persistent_native_cue_manager_action()
 {
   reaadr::reaper::CueManagerSessionConfig config;
-  config.project_state_api = {GetProjExtState, SetProjExtState}; config.global_state_api = {GetExtState, SetExtState};
-  config.cleanup_api = {native_cleanup_inspect, native_cleanup_apply, native_utc_timestamp()};
-  config.callbacks.trigger_import = [](const std::string& mapping, bool preview, const std::string& mode, const std::string& characters) {
-    run_persistent_native_manager_import(mapping, preview, mode, characters);
-  };
-  config.callbacks.trigger_action = [](const std::string& action) {
-    if (action == "sync_regions") { std::string error; if (!reaadr::reaper::cue_manager_session_host().sync_regions(error) && !error.empty()) ShowMessageBox(error.c_str(), "ReaADR Cue Manager", 0); }
-    else if (action == "clear_character_cues") run_persistent_native_clear_character_cues_action();
-    else if (action == "export_cue_sheet" || action == "export_timing_report" || action == "export_session_metadata") run_persistent_native_export_action(action);
-  };
-  std::string error;
-  if (!reaadr::reaper::open_native_cue_manager(std::move(config), error) && !error.empty()) ShowMessageBox(error.c_str(), "ReaADR Cue Manager", 0);
+  config.project_state_api={GetProjExtState,SetProjExtState};config.global_state_api={GetExtState,SetExtState};config.cleanup_api={native_cleanup_inspect,native_cleanup_apply,native_utc_timestamp()};
+  config.callbacks.trigger_import=[](const std::string& mapping,bool preview,const std::string& mode,const std::string& characters){run_persistent_native_manager_import(mapping,preview,mode,characters);};
+  config.callbacks.trigger_action=[](const std::string& action){if(action=="sync_regions"){std::string error;if(!reaadr::reaper::cue_manager_session_host().sync_regions(error)&&!error.empty())ShowMessageBox(error.c_str(),"ReaADR Cue Manager",0);}else if(action=="clear_character_cues")run_persistent_native_clear_character_cues_action();else if(action=="export_cue_sheet"||action=="export_timing_report"||action=="export_session_metadata")run_persistent_native_export_action(action);};
+  std::string error;if(!reaadr::reaper::open_native_cue_manager(std::move(config),error)&&!error.empty())ShowMessageBox(error.c_str(),"ReaADR Cue Manager",0);
 }
 
 bool promote_native_quick_actions(reaper_plugin_info_t* plugin)
 {
-  if (!plugin || !plugin->GetFunc) return false;
-  using NamedCommandLookupFn = int (*)(const char*);
-  auto named_command_lookup = reinterpret_cast<NamedCommandLookupFn>(plugin->GetFunc("NamedCommandLookup"));
-  if (!named_command_lookup) return false;
-  constexpr std::array<const char*, 4> command_names = {{"_ReaADRQuickAction1Native", "_ReaADRQuickAction2Native", "_ReaADRQuickAction3Native", "_ReaADRQuickAction4Native"}};
-  std::array<int, 4> command_ids = {};
-  for (std::size_t index = 0; index < command_names.size(); ++index) {
-    command_ids[index] = named_command_lookup(command_names[index]);
-    if (!command_ids[index]) { log_line(std::string("Native Quick Action command unavailable: ") + command_names[index]); return false; }
-  }
-  for (std::size_t index = 0; index < command_ids.size(); ++index) g_actions[index + 1].command_id = command_ids[index];
-  log_line("Promoted all four Quick Actions to native command registrations."); return true;
+  if(!plugin||!plugin->GetFunc)return false;using NamedCommandLookupFn=int(*)(const char*);auto named_command_lookup=reinterpret_cast<NamedCommandLookupFn>(plugin->GetFunc("NamedCommandLookup"));if(!named_command_lookup)return false;
+  constexpr std::array<const char*,4> command_names={{"_ReaADRQuickAction1Native","_ReaADRQuickAction2Native","_ReaADRQuickAction3Native","_ReaADRQuickAction4Native"}};std::array<int,4> command_ids={};
+  for(std::size_t index=0;index<command_names.size();++index){command_ids[index]=named_command_lookup(command_names[index]);if(!command_ids[index]){log_line(std::string("Native Quick Action command unavailable: ")+command_names[index]);return false;}}
+  for(std::size_t index=0;index<command_ids.size();++index)g_actions[index+1].command_id=command_ids[index];log_line("Promoted all four Quick Actions to native command registrations.");return true;
 }
 
 bool runtime_host_hook(int command, int flag)
 {
+  // These actions already execute through native application/service boundaries.
+  // Promote their dispatch here so the compatibility hook is only responsible
+  // for commands that still need to be extracted from the monolithic host.
+  if (command == g_validate_session_command_id && command != 0) { run_validate_session_action(); return true; }
+  if (command == g_refresh_overlay_command_id && command != 0) { run_refresh_overlay_action(); return true; }
+  if (command == g_refresh_session_command_id && command != 0) { run_refresh_session_action(); return true; }
+  if (command == g_update_cues_from_regions_command_id && command != 0) { run_update_cues_from_regions_action(); return true; }
+  if (command == g_clear_character_cues_command_id && command != 0) { run_clear_character_cues_action(); return true; }
+  if (command == g_character_filter_command_id && command != 0) { run_character_filter_action(); return true; }
+  if (command == g_next_cue_command_id && command != 0) { run_cue_navigation_action(true); return true; }
+  if (command == g_previous_cue_command_id && command != 0) { run_cue_navigation_action(false); return true; }
+  if (command == g_jump_to_cue_command_id && command != 0) { run_jump_to_cue_action(); return true; }
   if (command == g_cue_manager_command_id && command != 0) { run_persistent_native_cue_manager_action(); return true; }
   return hook_native_command_legacy(command, flag);
 }
 
 bool activate_native_runtime(reaper_plugin_info_t* plugin)
 {
-  if (g_native_command_hook_registered) { plugin->Register("-hookcommand", reinterpret_cast<void*>(hook_native_command_legacy)); g_native_command_hook_registered = false; }
-  if (!plugin->Register("hookcommand", reinterpret_cast<void*>(runtime_host_hook))) { log_line("Could not install persistent native runtime command hook."); return false; }
-  g_runtime_host_hook_registered = true; std::string error;
-  if (!reaadr::reaper::initialize_native_runtime(plugin, &error)) {
-    if (!error.empty()) log_line(error); plugin->Register("-hookcommand", reinterpret_cast<void*>(runtime_host_hook)); g_runtime_host_hook_registered = false; return false;
-  }
-  if (!promote_native_quick_actions(plugin)) {
-    log_line("Could not promote Quick Actions to native registrations."); reaadr::reaper::shutdown_native_runtime(plugin, nullptr);
-    plugin->Register("-hookcommand", reinterpret_cast<void*>(runtime_host_hook)); g_runtime_host_hook_registered = false; return false;
-  }
-  log_line("Persistent native workflow runtime activated."); return true;
+  if(g_native_command_hook_registered){plugin->Register("-hookcommand",reinterpret_cast<void*>(hook_native_command_legacy));g_native_command_hook_registered=false;}
+  if(!plugin->Register("hookcommand",reinterpret_cast<void*>(runtime_host_hook))){log_line("Could not install persistent native runtime command hook.");return false;}g_runtime_host_hook_registered=true;std::string error;
+  if(!reaadr::reaper::initialize_native_runtime(plugin,&error)){if(!error.empty())log_line(error);plugin->Register("-hookcommand",reinterpret_cast<void*>(runtime_host_hook));g_runtime_host_hook_registered=false;return false;}
+  if(!promote_native_quick_actions(plugin)){log_line("Could not promote Quick Actions to native registrations.");reaadr::reaper::shutdown_native_runtime(plugin,nullptr);plugin->Register("-hookcommand",reinterpret_cast<void*>(runtime_host_hook));g_runtime_host_hook_registered=false;return false;}
+  log_line("Persistent native workflow runtime activated.");return true;
 }
 
 void deactivate_native_runtime(reaper_plugin_info_t* plugin)
 {
-  std::string error; if (!reaadr::reaper::shutdown_native_runtime(plugin, &error) && !error.empty()) log_line(error);
-  if (plugin && g_runtime_host_hook_registered) { plugin->Register("-hookcommand", reinterpret_cast<void*>(runtime_host_hook)); g_runtime_host_hook_registered = false; }
+  std::string error;if(!reaadr::reaper::shutdown_native_runtime(plugin,&error)&&!error.empty())log_line(error);if(plugin&&g_runtime_host_hook_registered){plugin->Register("-hookcommand",reinterpret_cast<void*>(runtime_host_hook));g_runtime_host_hook_registered=false;}
 }
 
 } // namespace
 
-extern "C" REAPER_PLUGIN_DLL_EXPORT int ReaperPluginEntry(REAPER_PLUGIN_HINSTANCE instance, reaper_plugin_info_t* plugin)
+extern "C" REAPER_PLUGIN_DLL_EXPORT int ReaperPluginEntry(REAPER_PLUGIN_HINSTANCE instance,reaper_plugin_info_t* plugin)
 {
-  if (!plugin) { deactivate_native_runtime(g_plugin); return REAPER_PLUGIN_ENTRYPOINT_LEGACY(instance, nullptr); }
-  const int loaded = REAPER_PLUGIN_ENTRYPOINT_LEGACY(instance, plugin); if (!loaded) return 0;
-  if (activate_native_runtime(plugin)) return 1; REAPER_PLUGIN_ENTRYPOINT_LEGACY(instance, nullptr); return 0;
+  if(!plugin){deactivate_native_runtime(g_plugin);return REAPER_PLUGIN_ENTRYPOINT_LEGACY(instance,nullptr);}const int loaded=REAPER_PLUGIN_ENTRYPOINT_LEGACY(instance,plugin);if(!loaded)return 0;if(activate_native_runtime(plugin))return 1;REAPER_PLUGIN_ENTRYPOINT_LEGACY(instance,nullptr);return 0;
 }
