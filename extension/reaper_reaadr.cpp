@@ -28,10 +28,33 @@
 #undef REAPER_PLUGIN_ENTRYPOINT
 
 #include "reaadr_reaper/native_runtime.hpp"
+#include "reaadr_reaper/workflow_action_ids.hpp"
 
 namespace {
 
 bool g_runtime_host_hook_registered = false;
+reaadr::reaper::WorkflowActionIds g_workflow_action_ids;
+
+void capture_legacy_workflow_action_ids()
+{
+  // This is the only remaining bridge from runtime dispatch to the legacy
+  // registration block. Once registration moves into the native registry this
+  // function disappears; runtime_host_hook itself will not need another rewrite.
+  g_workflow_action_ids = reaadr::reaper::migrated_workflow_action_ids(
+    g_validate_session_command_id,
+    g_refresh_overlay_command_id,
+    g_refresh_session_command_id,
+    g_update_cues_from_regions_command_id,
+    g_clear_character_cues_command_id,
+    g_character_filter_command_id,
+    g_next_cue_command_id,
+    g_previous_cue_command_id,
+    g_jump_to_cue_command_id,
+    g_cue_manager_command_id,
+    g_import_cue_sheet_command_id,
+    g_preferences_command_id,
+    g_ui_test_command_id);
+}
 
 std::string persistent_export_path(const char* title)
 {
@@ -141,27 +164,28 @@ bool promote_native_quick_actions(reaper_plugin_info_t* plugin)
 
 bool runtime_host_hook(int command, int)
 {
-  // The persistent runtime now owns dispatch for every registered public action.
-  // Registration still comes from the compatibility bootstrap for stable command
-  // IDs, but no action execution falls back through hook_native_command_legacy.
-  if (command == g_validate_session_command_id && command != 0) { run_validate_session_action(); return true; }
-  if (command == g_refresh_overlay_command_id && command != 0) { run_refresh_overlay_action(); return true; }
-  if (command == g_refresh_session_command_id && command != 0) { run_refresh_session_action(); return true; }
-  if (command == g_update_cues_from_regions_command_id && command != 0) { run_update_cues_from_regions_action(); return true; }
-  if (command == g_clear_character_cues_command_id && command != 0) { run_clear_character_cues_action(); return true; }
-  if (command == g_character_filter_command_id && command != 0) { run_character_filter_action(); return true; }
-  if (command == g_next_cue_command_id && command != 0) { run_cue_navigation_action(true); return true; }
-  if (command == g_previous_cue_command_id && command != 0) { run_cue_navigation_action(false); return true; }
-  if (command == g_jump_to_cue_command_id && command != 0) { run_jump_to_cue_action(); return true; }
-  if (command == g_cue_manager_command_id && command != 0) { run_persistent_native_cue_manager_action(); return true; }
-  if (command == g_import_cue_sheet_command_id && command != 0) { run_native_import_cue_sheet_action(); return true; }
-  if (command == g_preferences_command_id && command != 0) { run_native_preferences_action(); return true; }
-  if (command == g_ui_test_command_id && command != 0) { reaadr::ui::show_test_window(); return true; }
+  const auto& ids = g_workflow_action_ids;
+  if (command == ids.validate_session && command != 0) { run_validate_session_action(); return true; }
+  if (command == ids.refresh_overlay && command != 0) { run_refresh_overlay_action(); return true; }
+  if (command == ids.refresh_session && command != 0) { run_refresh_session_action(); return true; }
+  if (command == ids.update_cues_from_regions && command != 0) { run_update_cues_from_regions_action(); return true; }
+  if (command == ids.clear_character_cues && command != 0) { run_clear_character_cues_action(); return true; }
+  if (command == ids.character_filter && command != 0) { run_character_filter_action(); return true; }
+  if (command == ids.next_cue && command != 0) { run_cue_navigation_action(true); return true; }
+  if (command == ids.previous_cue && command != 0) { run_cue_navigation_action(false); return true; }
+  if (command == ids.jump_to_cue && command != 0) { run_jump_to_cue_action(); return true; }
+  if (command == ids.cue_manager && command != 0) { run_persistent_native_cue_manager_action(); return true; }
+  if (command == ids.import_cue_sheet && command != 0) { run_native_import_cue_sheet_action(); return true; }
+  if (command == ids.preferences && command != 0) { run_native_preferences_action(); return true; }
+  if (command == ids.ui_test && command != 0) { reaadr::ui::show_test_window(); return true; }
   return false;
 }
 
 bool activate_native_runtime(reaper_plugin_info_t* plugin)
 {
+  // Snapshot IDs after the compatibility bootstrap has registered them. Runtime
+  // dispatch no longer reads legacy command globals after this point.
+  capture_legacy_workflow_action_ids();
   if(g_native_command_hook_registered){plugin->Register("-hookcommand",reinterpret_cast<void*>(hook_native_command_legacy));g_native_command_hook_registered=false;}
   if(!plugin->Register("hookcommand",reinterpret_cast<void*>(runtime_host_hook))){log_line("Could not install persistent native runtime command hook.");return false;}g_runtime_host_hook_registered=true;std::string error;
   if(!reaadr::reaper::initialize_native_runtime(plugin,&error)){if(!error.empty())log_line(error);plugin->Register("-hookcommand",reinterpret_cast<void*>(runtime_host_hook));g_runtime_host_hook_registered=false;return false;}
@@ -172,6 +196,7 @@ bool activate_native_runtime(reaper_plugin_info_t* plugin)
 void deactivate_native_runtime(reaper_plugin_info_t* plugin)
 {
   std::string error;if(!reaadr::reaper::shutdown_native_runtime(plugin,&error)&&!error.empty())log_line(error);if(plugin&&g_runtime_host_hook_registered){plugin->Register("-hookcommand",reinterpret_cast<void*>(runtime_host_hook));g_runtime_host_hook_registered=false;}
+  g_workflow_action_ids = {};
 }
 
 } // namespace
