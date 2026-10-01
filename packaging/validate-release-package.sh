@@ -15,11 +15,16 @@ fail() {
 }
 
 [ -d "$package_dir/UserPlugins" ] || fail "UserPlugins is missing"
-[ -d "$package_dir/Scripts/ReaADRTools/scripts" ] || fail "runtime scripts are missing"
 [ -d "$package_dir/Scripts/ReaADRTools/assets" ] || fail "runtime assets are missing"
 [ -f "$package_dir/README.md" ] || fail "README.md is missing"
 [ -f "$package_dir/USER_GUIDE.md" ] || fail "USER_GUIDE.md is missing"
 [ -f "$package_dir/THIRD_PARTY_NOTICES.md" ] || fail "THIRD_PARTY_NOTICES.md is missing"
+
+# Lua files remain in the source tree as migration/parity references, but a
+# release payload must prove that the installed product is extension-owned.
+if find "$package_dir" -type f -name '*.lua' | grep -q .; then
+  fail "Lua runtime files are present in the native release payload"
+fi
 
 case "$platform" in
   linux-x64)
@@ -53,4 +58,4 @@ if find "$package_dir" -type f \( -name '*.obj' -o -name '*.o' -o -name '*.log' 
   fail "compiler, log, or peak artifacts are present"
 fi
 
-echo "Validated $platform release payload: $package_dir"
+echo "Validated native-only $platform release payload: $package_dir"
