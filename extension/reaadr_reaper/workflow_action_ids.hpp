@@ -7,9 +7,6 @@
 
 namespace reaadr::reaper {
 
-// Stable REAPER named-command identifiers. These strings are part of the
-// compatibility contract: existing keyboard shortcuts/toolbars and native
-// Quick Actions resolve them by name, so migration must not rename them.
 inline constexpr const char* kValidateSessionCommandName = "ReaADRValidateSessionModelNative";
 inline constexpr const char* kValidateSessionActionLabel = "ReaADR: Validate Session Model (Native Preview)";
 inline constexpr const char* kRefreshOverlayCommandName = "ReaADRRefreshVideoOverlayNative";
@@ -46,6 +43,29 @@ struct WorkflowActionIds {
   int ui_test = 0;
 };
 
+// Temporary construction helper used only while the compatibility bootstrap is
+// still the first registrar. It disappears when reaper_reaadr.cpp stops loading
+// that bootstrap entirely.
+inline WorkflowActionIds migrated_workflow_action_ids(int validate_session,
+                                                       int refresh_overlay,
+                                                       int refresh_session,
+                                                       int update_cues_from_regions,
+                                                       int clear_character_cues,
+                                                       int character_filter,
+                                                       int next_cue,
+                                                       int previous_cue,
+                                                       int jump_to_cue,
+                                                       int cue_manager,
+                                                       int import_cue_sheet,
+                                                       int preferences,
+                                                       int ui_test)
+{
+  return {validate_session, refresh_overlay, refresh_session,
+          update_cues_from_regions, clear_character_cues, character_filter,
+          next_cue, previous_cue, jump_to_cue, cue_manager, import_cue_sheet,
+          preferences, ui_test};
+}
+
 struct WorkflowActionDefinition {
   const char* command_name;
   const char* label;
@@ -68,12 +88,12 @@ inline constexpr std::array<WorkflowActionDefinition, 13> kMigratedWorkflowActio
   {kUiTestCommandName, "ReaADR: Native UI Test Window", &WorkflowActionIds::ui_test},
 }};
 
-inline WorkflowActionIds g_workflow_action_ids;
+inline WorkflowActionIds g_registered_workflow_action_ids;
 inline std::array<gaccel_register_t, kMigratedWorkflowActions.size()> g_workflow_action_accels = {};
 
 inline const WorkflowActionIds& workflow_action_ids()
 {
-  return g_workflow_action_ids;
+  return g_registered_workflow_action_ids;
 }
 
 inline void unregister_migrated_workflow_actions(reaper_plugin_info_t* plugin)
@@ -81,22 +101,22 @@ inline void unregister_migrated_workflow_actions(reaper_plugin_info_t* plugin)
   if (plugin) {
     for (std::size_t index = kMigratedWorkflowActions.size(); index > 0; --index) {
       const std::size_t slot = index - 1;
-      if (g_workflow_action_ids.*(kMigratedWorkflowActions[slot].id) != 0)
+      if (g_registered_workflow_action_ids.*(kMigratedWorkflowActions[slot].id) != 0)
         plugin->Register("-gaccel", reinterpret_cast<void*>(&g_workflow_action_accels[slot]));
     }
   }
-  g_workflow_action_ids = {};
+  g_registered_workflow_action_ids = {};
   g_workflow_action_accels = {};
 }
 
 inline bool register_migrated_workflow_actions(reaper_plugin_info_t* plugin)
 {
   if (!plugin) return false;
-  if (g_workflow_action_ids.validate_session != 0) return true;
+  if (g_registered_workflow_action_ids.validate_session != 0) return true;
 
   for (std::size_t index = 0; index < kMigratedWorkflowActions.size(); ++index) {
     const auto& action = kMigratedWorkflowActions[index];
-    int& command_id = g_workflow_action_ids.*(action.id);
+    int& command_id = g_registered_workflow_action_ids.*(action.id);
     command_id = plugin->Register(
       "command_id", reinterpret_cast<void*>(const_cast<char*>(action.command_name)));
     if (!command_id) {
