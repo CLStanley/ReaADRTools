@@ -19,9 +19,6 @@ namespace reaadr::reaper {
 
 using EnumProjectsFn = ReaProject* (*)(int index, char* project_filename, int project_filename_size);
 
-// The runtime keeps only the host pointer required to resolve project identity
-// and register/unregister actions. The Manager dependency graph remains owned
-// exclusively by CueManagerSessionHost.
 inline reaper_plugin_info_t* g_native_runtime_plugin = nullptr;
 
 inline ReaProject* active_reaper_project()
@@ -32,10 +29,6 @@ inline ReaProject* active_reaper_project()
   return enumerate ? enumerate(-1, nullptr, 0) : nullptr;
 }
 
-// Small extension-host boundary for native workflow lifetime. Keeping action
-// registration and persistent Manager ownership behind this API makes the final
-// reaper_reaadr.cpp cut-over a pair of explicit load/unload calls rather than
-// spreading native lifetime rules through the legacy host monolith.
 inline bool initialize_native_runtime(
   reaper_plugin_info_t* plugin,
   std::string* error = nullptr)
@@ -45,12 +38,11 @@ inline bool initialize_native_runtime(
     if (error) *error = "REAPER plug-in host is unavailable.";
     return false;
   }
-  if (!register_migrated_workflow_actions(plugin)) {
-    if (error) *error = "Migrated ReaADR workflow actions could not be registered.";
-    return false;
-  }
+  // The migrated workflow registry is implemented in workflow_action_ids.hpp,
+  // but activation remains with the compatibility registrar until the host
+  // relinquishes its gaccels in the same atomic cutover. Registering both here
+  // would create duplicate Action List entries during the transition.
   if (!register_native_workflow_actions(plugin)) {
-    unregister_migrated_workflow_actions(plugin);
     if (error) *error = "Native ReaADR workflow actions could not be registered.";
     return false;
   }
@@ -64,9 +56,6 @@ inline bool shutdown_native_runtime(
 {
   if (error) error->clear();
 
-  // Unload is a one-way lifetime boundary. Attempt every shutdown step even if
-  // one persistent window refuses to close so no command hook or host pointer
-  // can survive after REAPER unloads the extension.
   bool ok = true;
   std::string shutdown_error;
   const auto append_error = [&](const std::string& message) {
@@ -92,10 +81,7 @@ inline bool shutdown_native_runtime(
   }
 
   reaper_plugin_info_t* registration_host = plugin ? plugin : g_native_runtime_plugin;
-  if (registration_host) {
-    unregister_native_workflow_actions(registration_host);
-    unregister_migrated_workflow_actions(registration_host);
-  }
+  if (registration_host) unregister_native_workflow_actions(registration_host);
   g_native_runtime_plugin = nullptr;
 
   if (error) *error = shutdown_error;
@@ -106,9 +92,6 @@ inline bool open_native_cue_manager(
   CueManagerSessionConfig config,
   std::string& error)
 {
-  // nullptr has convenient "current project" semantics for many REAPER APIs,
-  // but it is not a stable project identity. Resolve the concrete project here
-  // so a persistent Manager can detect project-tab switches and rebind safely.
   if (!config.project) {
     config.project = active_reaper_project();
     if (!config.project) {
