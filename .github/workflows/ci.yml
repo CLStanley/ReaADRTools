@@ -35,6 +35,10 @@ jobs:
         run: packaging/create-release-packages.sh
       - name: Verify Linux release payload
         run: packaging/validate-release-package.sh dist/installers/ReaADRTools-linux-x64 linux-x64
+      - name: Verify Linux dist is Lua-free
+        run: |
+          test -z "$(find dist -type f -name '*.lua' -print -quit)"
+          test ! -d dist/Scripts/ReaADRTools/scripts
       - name: Verify unsupported packages were not fabricated
         run: |
           test ! -e dist/installers/ReaADRTools-windows.zip
@@ -75,5 +79,7 @@ jobs:
         shell: pwsh
         run: |
           if (-not (Test-Path 'dist/UserPlugins/reaper_reaadr.dll')) { throw 'Missing Windows native extension DLL.' }
-          if (-not (Test-Path 'dist/Scripts/ReaADRTools/scripts/ReaADR_Record_Cue.lua')) { throw 'Lua parity/reference scripts were not retained in the Windows payload.' }
-          if (-not (Test-Path 'dist/Scripts/ReaADRTools/scripts/ReaADR_Cue_Info_Panel.lua')) { throw 'Cue Info Lua reference is missing from the Windows payload.' }
+          if (Test-Path 'dist/Scripts/ReaADRTools/scripts') { throw 'Windows dist unexpectedly contains the retired Lua runtime directory.' }
+          $lua = Get-ChildItem -Path dist -Recurse -Filter '*.lua' -File -ErrorAction SilentlyContinue
+          if ($lua) { throw "Windows dist unexpectedly contains Lua runtime files: $($lua.FullName -join ', ')" }
+          if (-not (Test-Path 'dist/Scripts/ReaADRTools/assets')) { throw 'Windows runtime assets are missing.' }
