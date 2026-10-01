@@ -33,28 +33,6 @@
 namespace {
 
 bool g_runtime_host_hook_registered = false;
-reaadr::reaper::WorkflowActionIds g_workflow_action_ids;
-
-void capture_legacy_workflow_action_ids()
-{
-  // This is the only remaining bridge from runtime dispatch to the legacy
-  // registration block. Once registration moves into the native registry this
-  // function disappears; runtime_host_hook itself will not need another rewrite.
-  g_workflow_action_ids = reaadr::reaper::migrated_workflow_action_ids(
-    g_validate_session_command_id,
-    g_refresh_overlay_command_id,
-    g_refresh_session_command_id,
-    g_update_cues_from_regions_command_id,
-    g_clear_character_cues_command_id,
-    g_character_filter_command_id,
-    g_next_cue_command_id,
-    g_previous_cue_command_id,
-    g_jump_to_cue_command_id,
-    g_cue_manager_command_id,
-    g_import_cue_sheet_command_id,
-    g_preferences_command_id,
-    g_ui_test_command_id);
-}
 
 std::string persistent_export_path(const char* title)
 {
@@ -164,7 +142,7 @@ bool promote_native_quick_actions(reaper_plugin_info_t* plugin)
 
 bool runtime_host_hook(int command, int)
 {
-  const auto& ids = g_workflow_action_ids;
+  const auto& ids = reaadr::reaper::workflow_action_ids();
   if (command == ids.validate_session && command != 0) { run_validate_session_action(); return true; }
   if (command == ids.refresh_overlay && command != 0) { run_refresh_overlay_action(); return true; }
   if (command == ids.refresh_session && command != 0) { run_refresh_session_action(); return true; }
@@ -181,22 +159,69 @@ bool runtime_host_hook(int command, int)
   return false;
 }
 
+void bind_migrated_action_ids_to_legacy_menu_models()
+{
+  const auto& ids = reaadr::reaper::workflow_action_ids();
+  g_validate_session_action.command_id = ids.validate_session;
+  g_refresh_overlay_action.command_id = ids.refresh_overlay;
+  g_refresh_session_action.command_id = ids.refresh_session;
+  g_update_cues_from_regions_action.command_id = ids.update_cues_from_regions;
+  g_clear_character_cues_action.command_id = ids.clear_character_cues;
+  g_character_filter_action.command_id = ids.character_filter;
+  g_next_cue_action.command_id = ids.next_cue;
+  g_previous_cue_action.command_id = ids.previous_cue;
+  g_jump_to_cue_action.command_id = ids.jump_to_cue;
+  g_cue_manager_action.command_id = ids.cue_manager;
+  g_import_cue_sheet_action.command_id = ids.import_cue_sheet;
+  g_preferences_action.command_id = ids.preferences;
+  g_ui_test_action.command_id = ids.ui_test;
+}
+
 bool activate_native_runtime(reaper_plugin_info_t* plugin)
 {
-  // Snapshot IDs after the compatibility bootstrap has registered them. Runtime
-  // dispatch no longer reads legacy command globals after this point.
-  capture_legacy_workflow_action_ids();
-  if(g_native_command_hook_registered){plugin->Register("-hookcommand",reinterpret_cast<void*>(hook_native_command_legacy));g_native_command_hook_registered=false;}
-  if(!plugin->Register("hookcommand",reinterpret_cast<void*>(runtime_host_hook))){log_line("Could not install persistent native runtime command hook.");return false;}g_runtime_host_hook_registered=true;std::string error;
-  if(!reaadr::reaper::initialize_native_runtime(plugin,&error)){if(!error.empty())log_line(error);plugin->Register("-hookcommand",reinterpret_cast<void*>(runtime_host_hook));g_runtime_host_hook_registered=false;return false;}
-  if(!promote_native_quick_actions(plugin)){log_line("Could not promote Quick Actions to native registrations.");reaadr::reaper::shutdown_native_runtime(plugin,nullptr);plugin->Register("-hookcommand",reinterpret_cast<void*>(runtime_host_hook));g_runtime_host_hook_registered=false;return false;}
-  log_line("Persistent native workflow runtime activated.");return true;
+  // The compatibility entrypoint still performs host/API bootstrap, but it no
+  // longer owns these public workflow registrations after this point. Remove
+  // its hook and gaccels first, then atomically recreate the same stable named
+  // commands under the native registry so shortcuts and toolbar bindings keep
+  // resolving by their persisted command names.
+  unregister_native_actions();
+  if(!reaadr::reaper::register_migrated_workflow_actions(plugin)){
+    log_line("Could not cut workflow Action List registration over to the native registry.");
+    return false;
+  }
+  bind_migrated_action_ids_to_legacy_menu_models();
+  if(!plugin->Register("hookcommand",reinterpret_cast<void*>(runtime_host_hook))){
+    log_line("Could not install persistent native runtime command hook.");
+    reaadr::reaper::unregister_migrated_workflow_actions(plugin);
+    return false;
+  }
+  g_runtime_host_hook_registered=true;
+  std::string error;
+  if(!reaadr::reaper::initialize_native_runtime(plugin,&error)){
+    if(!error.empty())log_line(error);
+    plugin->Register("-hookcommand",reinterpret_cast<void*>(runtime_host_hook));
+    g_runtime_host_hook_registered=false;
+    reaadr::reaper::unregister_migrated_workflow_actions(plugin);
+    return false;
+  }
+  if(!promote_native_quick_actions(plugin)){
+    log_line("Could not promote Quick Actions to native registrations.");
+    reaadr::reaper::shutdown_native_runtime(plugin,nullptr);
+    plugin->Register("-hookcommand",reinterpret_cast<void*>(runtime_host_hook));
+    g_runtime_host_hook_registered=false;
+    reaadr::reaper::unregister_migrated_workflow_actions(plugin);
+    return false;
+  }
+  log_line("Persistent native workflow runtime activated with native Action List ownership.");
+  return true;
 }
 
 void deactivate_native_runtime(reaper_plugin_info_t* plugin)
 {
-  std::string error;if(!reaadr::reaper::shutdown_native_runtime(plugin,&error)&&!error.empty())log_line(error);if(plugin&&g_runtime_host_hook_registered){plugin->Register("-hookcommand",reinterpret_cast<void*>(runtime_host_hook));g_runtime_host_hook_registered=false;}
-  g_workflow_action_ids = {};
+  std::string error;
+  if(!reaadr::reaper::shutdown_native_runtime(plugin,&error)&&!error.empty())log_line(error);
+  if(plugin&&g_runtime_host_hook_registered){plugin->Register("-hookcommand",reinterpret_cast<void*>(runtime_host_hook));g_runtime_host_hook_registered=false;}
+  reaadr::reaper::unregister_migrated_workflow_actions(plugin);
 }
 
 } // namespace
