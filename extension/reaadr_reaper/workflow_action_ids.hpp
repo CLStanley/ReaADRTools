@@ -1,6 +1,9 @@
 #pragma once
 
-struct reaper_plugin_info_t;
+#include <array>
+#include <cstddef>
+
+#include <reaper_plugin.h>
 
 namespace reaadr::reaper {
 
@@ -43,10 +46,73 @@ struct WorkflowActionIds {
   int ui_test = 0;
 };
 
-// Registers the migrated workflow commands without installing a command hook.
-// The persistent runtime host owns dispatch for these IDs.
-bool register_migrated_workflow_actions(reaper_plugin_info_t* plugin);
-void unregister_migrated_workflow_actions(reaper_plugin_info_t* plugin);
-const WorkflowActionIds& workflow_action_ids();
+struct WorkflowActionDefinition {
+  const char* command_name;
+  const char* label;
+  int WorkflowActionIds::*id;
+};
+
+inline constexpr std::array<WorkflowActionDefinition, 13> kMigratedWorkflowActions = {{
+  {kValidateSessionCommandName, kValidateSessionActionLabel, &WorkflowActionIds::validate_session},
+  {kRefreshOverlayCommandName, kRefreshOverlayActionLabel, &WorkflowActionIds::refresh_overlay},
+  {kRefreshSessionCommandName, kRefreshSessionActionLabel, &WorkflowActionIds::refresh_session},
+  {kUpdateCuesFromRegionsCommandName, kUpdateCuesFromRegionsActionLabel, &WorkflowActionIds::update_cues_from_regions},
+  {kClearCharacterCuesCommandName, kClearCharacterCuesActionLabel, &WorkflowActionIds::clear_character_cues},
+  {kCharacterFilterCommandName, kCharacterFilterActionLabel, &WorkflowActionIds::character_filter},
+  {kNextCueCommandName, "ReaADR: Next Cue (Native)", &WorkflowActionIds::next_cue},
+  {kPreviousCueCommandName, "ReaADR: Previous Cue (Native)", &WorkflowActionIds::previous_cue},
+  {kJumpToCueCommandName, "ReaADR: Jump To Cue (Native)", &WorkflowActionIds::jump_to_cue},
+  {kCueManagerCommandName, "ReaADR: Cue Manager (Native)", &WorkflowActionIds::cue_manager},
+  {kImportCueSheetCommandName, "ReaADR: Import Cue Sheet (Native)", &WorkflowActionIds::import_cue_sheet},
+  {kPreferencesCommandName, "ReaADR: Preferences (Native Preview)", &WorkflowActionIds::preferences},
+  {kUiTestCommandName, "ReaADR: Native UI Test Window", &WorkflowActionIds::ui_test},
+}};
+
+inline WorkflowActionIds g_workflow_action_ids;
+inline std::array<gaccel_register_t, kMigratedWorkflowActions.size()> g_workflow_action_accels = {};
+
+inline const WorkflowActionIds& workflow_action_ids()
+{
+  return g_workflow_action_ids;
+}
+
+inline void unregister_migrated_workflow_actions(reaper_plugin_info_t* plugin)
+{
+  if (plugin) {
+    for (std::size_t index = kMigratedWorkflowActions.size(); index > 0; --index) {
+      const std::size_t slot = index - 1;
+      if (g_workflow_action_ids.*(kMigratedWorkflowActions[slot].id) != 0)
+        plugin->Register("-gaccel", reinterpret_cast<void*>(&g_workflow_action_accels[slot]));
+    }
+  }
+  g_workflow_action_ids = {};
+  g_workflow_action_accels = {};
+}
+
+inline bool register_migrated_workflow_actions(reaper_plugin_info_t* plugin)
+{
+  if (!plugin) return false;
+  if (g_workflow_action_ids.validate_session != 0) return true;
+
+  for (std::size_t index = 0; index < kMigratedWorkflowActions.size(); ++index) {
+    const auto& action = kMigratedWorkflowActions[index];
+    int& command_id = g_workflow_action_ids.*(action.id);
+    command_id = plugin->Register(
+      "command_id", reinterpret_cast<void*>(const_cast<char*>(action.command_name)));
+    if (!command_id) {
+      unregister_migrated_workflow_actions(plugin);
+      return false;
+    }
+    auto& accel = g_workflow_action_accels[index];
+    accel.accel.cmd = static_cast<WORD>(command_id);
+    accel.desc = action.label;
+    if (!plugin->Register("gaccel", reinterpret_cast<void*>(&accel))) {
+      command_id = 0;
+      unregister_migrated_workflow_actions(plugin);
+      return false;
+    }
+  }
+  return true;
+}
 
 } // namespace reaadr::reaper
