@@ -1,5 +1,7 @@
 #pragma once
 
+struct reaper_plugin_info_t;
+
 namespace reaadr::reaper {
 
 // Stable REAPER named-command identifiers. These strings are part of the
@@ -41,27 +43,10 @@ struct WorkflowActionIds {
   int ui_test = 0;
 };
 
-// During the bootstrap cutover this snapshot decouples runtime dispatch from
-// globals in reaper_reaadr_legacy.cpp. Registration ownership can then move to
-// the native registry without changing the dispatcher again.
-inline WorkflowActionIds migrated_workflow_action_ids(int validate_session,
-                                                       int refresh_overlay,
-                                                       int refresh_session,
-                                                       int update_cues_from_regions,
-                                                       int clear_character_cues,
-                                                       int character_filter,
-                                                       int next_cue,
-                                                       int previous_cue,
-                                                       int jump_to_cue,
-                                                       int cue_manager,
-                                                       int import_cue_sheet,
-                                                       int preferences,
-                                                       int ui_test)
-{
-  return {validate_session, refresh_overlay, refresh_session,
-          update_cues_from_regions, clear_character_cues, character_filter,
-          next_cue, previous_cue, jump_to_cue, cue_manager, import_cue_sheet,
-          preferences, ui_test};
-}
+// Registers the migrated workflow commands without installing a command hook.
+// The persistent runtime host owns dispatch for these IDs.
+bool register_migrated_workflow_actions(reaper_plugin_info_t* plugin);
+void unregister_migrated_workflow_actions(reaper_plugin_info_t* plugin);
+const WorkflowActionIds& workflow_action_ids();
 
 } // namespace reaadr::reaper
