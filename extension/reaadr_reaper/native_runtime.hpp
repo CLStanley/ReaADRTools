@@ -11,6 +11,7 @@
 #include "cue_info_command.hpp"
 #include "recording_command.hpp"
 #include "native_action_registry.hpp"
+#include "workflow_action_ids.hpp"
 
 #include <reaper_plugin.h>
 
@@ -44,7 +45,12 @@ inline bool initialize_native_runtime(
     if (error) *error = "REAPER plug-in host is unavailable.";
     return false;
   }
+  if (!register_migrated_workflow_actions(plugin)) {
+    if (error) *error = "Migrated ReaADR workflow actions could not be registered.";
+    return false;
+  }
   if (!register_native_workflow_actions(plugin)) {
+    unregister_migrated_workflow_actions(plugin);
     if (error) *error = "Native ReaADR workflow actions could not be registered.";
     return false;
   }
@@ -86,7 +92,10 @@ inline bool shutdown_native_runtime(
   }
 
   reaper_plugin_info_t* registration_host = plugin ? plugin : g_native_runtime_plugin;
-  if (registration_host) unregister_native_workflow_actions(registration_host);
+  if (registration_host) {
+    unregister_native_workflow_actions(registration_host);
+    unregister_migrated_workflow_actions(registration_host);
+  }
   g_native_runtime_plugin = nullptr;
 
   if (error) *error = shutdown_error;
