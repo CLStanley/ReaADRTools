@@ -28,26 +28,38 @@ CueManagerLifecycle::WindowHandle lifecycle_handle(HWND hwnd)
   return reinterpret_cast<CueManagerLifecycle::WindowHandle>(hwnd);
 }
 
-HWND find_static_label(HWND hwnd, const char* text)
+HWND find_label_by_vertical_order(HWND hwnd, const char* text, bool bottommost)
 {
   if (!hwnd || !text) return nullptr;
   HWND best = nullptr;
-  long best_top = -2147483647L;
+  long best_top = bottommost ? -2147483647L : 2147483647L;
   for (HWND child = GetWindow(hwnd, GW_CHILD); child; child = GetWindow(child, GW_HWNDNEXT)) {
     char value[128] = {};
     GetWindowText(child, value, sizeof(value));
     if (std::strcmp(value, text) != 0) continue;
 
-    // Several Manager tabs reuse words such as Character and Status. The cue
-    // editor labels are the bottom-most matching statics in the inherited
-    // resource, so select by geometry rather than resource enumeration order.
     RECT rect{};
-    if (GetWindowRect(child, &rect) && rect.top > best_top) {
+    if (!GetWindowRect(child, &rect)) continue;
+    if ((bottommost && rect.top > best_top) || (!bottommost && rect.top < best_top)) {
       best = child;
       best_top = rect.top;
     }
   }
   return best;
+}
+
+HWND find_static_label(HWND hwnd, const char* text)
+{
+  // The cue editor is the bottom-most group in the inherited SWELL resource.
+  // Selecting by geometry avoids collisions with repeated labels such as
+  // Character and Status on the filter row and Overlay tab.
+  return find_label_by_vertical_order(hwnd, text, true);
+}
+
+void set_label_visible(HWND hwnd, const char* text, bool visible, bool bottommost = true)
+{
+  if (HWND label = find_label_by_vertical_order(hwnd, text, bottommost))
+    ShowWindow(label, visible ? SW_SHOW : SW_HIDE);
 }
 
 void move_swell_control(HWND hwnd, int id, int x, int y, int width, int height)
@@ -62,15 +74,46 @@ void move_swell_label(HWND hwnd, const char* text, int x, int y, int width, int 
     SetWindowPos(label, nullptr, x, y, width, height, SWP_NOZORDER);
 }
 
-void sync_swell_editor_labels(HWND hwnd)
+void sync_swell_tab_labels(HWND hwnd)
 {
   if (!hwnd || !g_controller) return;
-  const bool visible = g_controller->view().active_tab == "cues";
-  const char* labels[] = {"Cue ID", "Character", "Dialogue", "Notes", "Type", "Start", "End", "Status"};
-  for (const char* text : labels) {
-    if (HWND label = find_static_label(hwnd, text))
-      ShowWindow(label, visible ? SW_SHOW : SW_HIDE);
-  }
+  const std::string& tab = g_controller->view().active_tab;
+  const bool cues = tab == "cues";
+  const bool import = tab == "import";
+  const bool overlay = tab == "overlay";
+  const bool preferences = tab == "preferences";
+  const bool help = tab == "help";
+
+  // apply_tab_visibility() owns all identified controls. These anonymous SWELL
+  // statics need the same tab ownership or they bleed through unrelated tabs.
+  const char* editor_labels[] = {"Cue ID", "Character", "Dialogue", "Notes", "Type", "Start", "End", "Status"};
+  for (const char* text : editor_labels)
+    set_label_visible(hwnd, text, cues, true);
+  set_label_visible(hwnd, "Search", cues);
+  set_label_visible(hwnd, "Jump", cues);
+  // Character and Status are repeated; the top-most instances belong to the
+  // cue filter row while the bottom-most instances belong to the editor.
+  set_label_visible(hwnd, "Character", cues, false);
+  set_label_visible(hwnd, "Status", cues, false);
+
+  const char* import_labels[] = {
+    "Cue sheet import uses the native transactional parser and renderer.",
+    "Mapping (optional)", "Mode (all/selected/update)", "Characters (; separated)"
+  };
+  for (const char* text : import_labels)
+    set_label_visible(hwnd, text, import);
+
+  const char* overlay_labels[] = {
+    "Text Backgrounds", "Text Color", "Metadata Fields (comma separated)", "Preroll (seconds)"
+  };
+  for (const char* text : overlay_labels)
+    set_label_visible(hwnd, text, overlay);
+
+  const char* preference_labels[] = {"Quick Action 1", "Quick Action 2", "Quick Action 3", "Quick Action 4"};
+  for (const char* text : preference_labels)
+    set_label_visible(hwnd, text, preferences);
+
+  set_label_visible(hwnd, "Search Help", help);
 }
 
 void layout_swell_manager(HWND hwnd)
@@ -126,7 +169,7 @@ void layout_swell_manager(HWND hwnd)
   move_swell_control(hwnd, kPrevious, previous_x, action_y - 2, 90, 24);
   move_swell_control(hwnd, kNext, next_x, action_y - 2, 90, 24);
   move_swell_control(hwnd, IDCANCEL, close_x, action_y - 2, 90, 24);
-  sync_swell_editor_labels(hwnd);
+  sync_swell_tab_labels(hwnd);
 }
 
 void restore_swell_layout(HWND hwnd)
@@ -173,7 +216,7 @@ void refresh_external_revision(HWND hwnd)
   refresh_rows(hwnd);
   apply_tab_visibility(hwnd, g_controller->view().active_tab);
   update_tab_details(hwnd);
-  sync_swell_editor_labels(hwnd);
+  sync_swell_tab_labels(hwnd);
 }
 
 void close_swell_manager(HWND hwnd)
@@ -213,7 +256,7 @@ INT_PTR modeless_cue_manager_proc(HWND hwnd, UINT message, WPARAM wparam, LPARAM
 
   const INT_PTR handled = cue_manager_proc(hwnd, message, wparam, lparam);
   if (message == WM_INITDIALOG || message == WM_COMMAND)
-    sync_swell_editor_labels(hwnd);
+    sync_swell_tab_labels(hwnd);
   return handled;
 }
 
