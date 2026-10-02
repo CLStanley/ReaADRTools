@@ -124,7 +124,12 @@ void update_window(HWND hwnd)
 void layout_recording_controls(HWND hwnd)
 {
   RECT client{};
+#ifdef _WIN32
   if (!GetClientRect(hwnd, &client)) return;
+#else
+  // SWELL's GetClientRect mirrors the Win32 operation but returns void.
+  GetClientRect(hwnd, &client);
+#endif
   const int width = static_cast<int>(client.right - client.left);
   const int height = static_cast<int>(client.bottom - client.top);
   const int content_width = (std::max)(100, width - 40);
