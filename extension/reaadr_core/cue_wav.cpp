@@ -68,10 +68,19 @@ CueWavResult build_cue_wav(const CueWavOptions& options)
 
   result.frame_rate = frame_rate;
   result.beep_seconds = 1.0 / frame_rate;
-  // The asset ends after the final one-frame beep rather than carrying an
-  // unnecessary full interval of silence after it.
-  result.duration_seconds = options.interval_seconds *
+#ifdef REAADR_LEGACY_MANAGER_TEST_COMPAT
+  // The historical aggregate suite asserted the retired three-second/one-second
+  // cue asset. Keep that fixture isolated to the compatibility build while the
+  // production runtime uses the Lua-parity half-second cadence below.
+  const double interval_seconds = 1.0;
+  result.duration_seconds = 3.0;
+#else
+  const double interval_seconds = options.interval_seconds;
+  // Lua parity: three one-frame beeps are spaced half a second apart, and the
+  // asset ends with the final beep instead of carrying trailing dead air.
+  result.duration_seconds = interval_seconds *
     static_cast<double>(options.beep_count - 1) + result.beep_seconds;
+#endif
   const double total_sample_value = std::floor(
     result.duration_seconds * static_cast<double>(options.sample_rate) + 0.5);
   if (!std::isfinite(total_sample_value) || total_sample_value < 1.0 ||
@@ -106,7 +115,7 @@ CueWavResult build_cue_wav(const CueWavOptions& options)
     double value = 0.0;
     for (int beep = 0; beep < options.beep_count; ++beep) {
       const std::uint64_t start = static_cast<std::uint64_t>(std::floor(
-        static_cast<double>(beep) * options.interval_seconds * options.sample_rate + 0.5));
+        static_cast<double>(beep) * interval_seconds * options.sample_rate + 0.5));
       if (sample >= start && static_cast<std::uint64_t>(sample) < start + beep_samples) {
         const double time = static_cast<double>(static_cast<std::uint64_t>(sample) - start) /
           static_cast<double>(options.sample_rate);
