@@ -12,6 +12,10 @@ ReaADR Tools is not considered a supported runtime while the Lua-to-C++ migratio
 6. The Cue Manager is the highest-priority user-facing surface. Its native window, behavior, editing, navigation, recording integration, Cue Info integration, docking, layout, and cross-platform parity take precedence over lower-visibility migration work.
 7. Windows, Linux, and macOS are target platforms. A native UI workflow is not considered fully migrated while a supported platform still falls back to a reduced compatibility presentation.
 
+## Current gate
+
+The native CI matrix is green on Linux, Windows, and macOS. The migration should therefore continue from behavior and presentation parity rather than build-system repair. The next implementation slices remain Cue Manager/Record Cue cross-platform presentation and in-REAPER parity, followed by the remaining native workflow smoke gates. Do not begin legacy-host cleanup merely because CI is green; `reaper_reaadr_legacy.cpp` remains transitional host infrastructure until parity is substantially complete.
+
 ## Migration order
 
 1. Complete Cue Manager UI and workflow parity.
