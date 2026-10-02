@@ -50,9 +50,6 @@ HWND find_label_by_vertical_order(HWND hwnd, const char* text, bool bottommost)
 
 HWND find_static_label(HWND hwnd, const char* text)
 {
-  // The cue editor is the bottom-most group in the inherited SWELL resource.
-  // Selecting by geometry avoids collisions with repeated labels such as
-  // Character and Status on the filter row and Overlay tab.
   return find_label_by_vertical_order(hwnd, text, true);
 }
 
@@ -68,9 +65,9 @@ void move_swell_control(HWND hwnd, int id, int x, int y, int width, int height)
     SetWindowPos(control, nullptr, x, y, width, height, SWP_NOZORDER);
 }
 
-void move_swell_label(HWND hwnd, const char* text, int x, int y, int width, int height)
+void move_swell_label(HWND hwnd, const char* text, int x, int y, int width, int height, bool bottommost = true)
 {
-  if (HWND label = find_static_label(hwnd, text))
+  if (HWND label = find_label_by_vertical_order(hwnd, text, bottommost))
     SetWindowPos(label, nullptr, x, y, width, height, SWP_NOZORDER);
 }
 
@@ -84,15 +81,11 @@ void sync_swell_tab_labels(HWND hwnd)
   const bool preferences = tab == "preferences";
   const bool help = tab == "help";
 
-  // apply_tab_visibility() owns all identified controls. These anonymous SWELL
-  // statics need the same tab ownership or they bleed through unrelated tabs.
   const char* editor_labels[] = {"Cue ID", "Character", "Dialogue", "Notes", "Type", "Start", "End", "Status"};
   for (const char* text : editor_labels)
     set_label_visible(hwnd, text, cues, true);
   set_label_visible(hwnd, "Search", cues);
   set_label_visible(hwnd, "Jump", cues);
-  // Character and Status are repeated; the top-most instances belong to the
-  // cue filter row while the bottom-most instances belong to the editor.
   set_label_visible(hwnd, "Character", cues, false);
   set_label_visible(hwnd, "Status", cues, false);
 
@@ -127,9 +120,52 @@ void layout_swell_manager(HWND hwnd)
   constexpr int list_top = 114;
   const int content_width = std::max(120, width - margin * 2);
 
-  // Match the dedicated Win32 presentation: the table consumes the flexible
-  // center while the details/editor surface remains anchored to the bottom of
-  // whatever floating or REAPER-docked client area SWELL gives us.
+  // Keep all seven native Manager tabs reachable when REAPER gives a narrow
+  // docker. The legacy resource assumed 1180px and pushed Help off-screen.
+  const int tab_ids[] = {kTabImport, kTabCues, kTabSession, kTabReports, kTabOverlay, kTabPreferences, kTabHelp};
+  constexpr int tab_count = static_cast<int>(sizeof(tab_ids) / sizeof(tab_ids[0]));
+  constexpr int tab_gap = 4;
+  const int tab_left = width >= 980 ? 320 : margin;
+  const int available_tabs = std::max(420, width - tab_left - margin);
+  const int tab_width = std::max(58, (available_tabs - tab_gap * (tab_count - 1)) / tab_count);
+  for (int index = 0; index < tab_count; ++index)
+    move_swell_control(hwnd, tab_ids[index], tab_left + index * (tab_width + tab_gap), 10, tab_width, 22);
+
+  // The cue filter/jump row also needs to contract with the docker rather than
+  // retaining the old 1180px coordinates. At the supported minimum width the
+  // fields stay usable and Go remains visible.
+  const int search_width = std::max(120, std::min(220, width / 5));
+  move_swell_label(hwnd, "Search", margin, 42, 48, 14, false);
+  move_swell_control(hwnd, kSearchFilter, 66, 40, search_width, 20);
+  const int character_label_x = 74 + search_width;
+  move_swell_label(hwnd, "Character", character_label_x, 42, 68, 14, false);
+  const int character_x = character_label_x + 70;
+  const int character_width = std::max(100, std::min(170, width / 7));
+  move_swell_control(hwnd, kCharacterFilter, character_x, 40, character_width, 20);
+  const int status_label_x = character_x + character_width + 8;
+  move_swell_label(hwnd, "Status", status_label_x, 42, 48, 14, false);
+  const int status_x = status_label_x + 50;
+  const int status_width = std::max(95, std::min(145, width / 8));
+  move_swell_control(hwnd, kStatusFilter, status_x, 40, status_width, 120);
+  const int apply_x = status_x + status_width + 8;
+  move_swell_control(hwnd, kApplyFilter, apply_x, 40, 58, 20);
+  move_swell_control(hwnd, kResetFilter, apply_x + 62, 40, 58, 20);
+  const int jump_label_x = apply_x + 128;
+  move_swell_label(hwnd, "Jump", jump_label_x, 42, 38, 14, false);
+  const int go_width = 50;
+  const int jump_x = jump_label_x + 40;
+  const int jump_width = std::max(70, width - jump_x - go_width - margin - 6);
+  move_swell_control(hwnd, kJumpCueId, jump_x, 40, jump_width, 20);
+  move_swell_control(hwnd, kJump, jump_x + jump_width + 6, 40, go_width, 20);
+
+  // Keep the right-side workflow actions reachable at narrower widths.
+  const int cue_info_width = 90;
+  const int record_width = 140;
+  const int cue_info_x = std::max(650, width - margin - cue_info_width);
+  const int record_x = std::max(504, cue_info_x - 6 - record_width);
+  move_swell_control(hwnd, kCueRecord, record_x, 70, record_width, 24);
+  move_swell_control(hwnd, kCueInfo, cue_info_x, 70, cue_info_width, 24);
+
   const int action_y = std::max(518, height - 40);
   const int dialogue_y = action_y - 26;
   const int identity_y = dialogue_y - 26;
