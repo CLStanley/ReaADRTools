@@ -11,6 +11,7 @@
 #include "reaadr_reaper/window_docking.hpp"
 
 #include <algorithm>
+#include <cstring>
 
 namespace reaadr::ui {
 namespace {
@@ -19,14 +20,35 @@ constexpr const char* kSwellDockIdentifier = "reaadr.cue_manager";
 constexpr const char* kSwellWindowTitle = "ReaADR Tools - Cue Manager";
 constexpr int kSwellMinWidth = 760;
 constexpr int kSwellMinHeight = 560;
-constexpr int kSwellReferenceWidth = 1180;
-constexpr int kSwellReferenceHeight = 820;
 constexpr UINT_PTR kRevisionTimer = 1;
 constexpr UINT kRevisionPollMs = 250;
 
 CueManagerLifecycle::WindowHandle lifecycle_handle(HWND hwnd)
 {
   return reinterpret_cast<CueManagerLifecycle::WindowHandle>(hwnd);
+}
+
+HWND find_static_label(HWND hwnd, const char* text)
+{
+  if (!hwnd || !text) return nullptr;
+  for (HWND child = GetWindow(hwnd, GW_CHILD); child; child = GetWindow(child, GW_HWNDNEXT)) {
+    char value[128] = {};
+    GetWindowText(child, value, sizeof(value));
+    if (std::strcmp(value, text) == 0) return child;
+  }
+  return nullptr;
+}
+
+void move_swell_control(HWND hwnd, int id, int x, int y, int width, int height)
+{
+  if (HWND control = GetDlgItem(hwnd, id))
+    SetWindowPos(control, nullptr, x, y, width, height, SWP_NOZORDER);
+}
+
+void move_swell_label(HWND hwnd, const char* text, int x, int y, int width, int height)
+{
+  if (HWND label = find_static_label(hwnd, text))
+    SetWindowPos(label, nullptr, x, y, width, height, SWP_NOZORDER);
 }
 
 void layout_swell_manager(HWND hwnd)
@@ -36,43 +58,52 @@ void layout_swell_manager(HWND hwnd)
   GetClientRect(hwnd, &client);
   const int width = static_cast<int>(client.right - client.left);
   const int height = static_cast<int>(client.bottom - client.top);
+  constexpr int margin = 16;
+  constexpr int list_top = 114;
+  const int content_width = std::max(120, width - margin * 2);
 
-  // The inherited SWELL resource still owns anonymous static labels, so moving
-  // only their associated editors vertically would separate labels from fields.
-  // Until the SWELL presentation is fully rebuilt, preserve the reference
-  // editor geometry when the docker is smaller and use resize space only when
-  // REAPER gives us more room than the legacy 1180x820 surface.
-  const int layout_width = std::max(kSwellReferenceWidth, width);
-  const int layout_height = std::max(kSwellReferenceHeight, height);
-  const int content_width = layout_width - 32;
-  const int vertical_growth = layout_height - kSwellReferenceHeight;
-  const int rows_height = 578 + vertical_growth;
-  const int details_y = 696 + vertical_growth;
-  const int identity_y = 728 + vertical_growth;
-  const int dialogue_y = 754 + vertical_growth;
-  const int action_y = 780 + vertical_growth;
+  // Match the dedicated Win32 presentation: the table consumes the flexible
+  // center while the details/editor surface remains anchored to the bottom of
+  // whatever floating or REAPER-docked client area SWELL gives us.
+  const int action_y = std::max(518, height - 40);
+  const int dialogue_y = action_y - 26;
+  const int identity_y = dialogue_y - 26;
+  const int details_y = identity_y - 32;
+  const int rows_height = std::max(260, details_y - 4 - list_top);
 
-  SetWindowPos(GetDlgItem(hwnd, kCueHeader), nullptr, 16, 98, content_width, 14, SWP_NOZORDER);
-  SetWindowPos(GetDlgItem(hwnd, kRows), nullptr, 16, 114, content_width, rows_height, SWP_NOZORDER);
-  SetWindowPos(GetDlgItem(hwnd, kDetails), nullptr, 16, details_y, content_width - 114, 20, SWP_NOZORDER);
+  move_swell_control(hwnd, kCueHeader, margin, 98, content_width, 14);
+  move_swell_control(hwnd, kRows, margin, list_top, content_width, rows_height);
+  move_swell_control(hwnd, kDetails, margin, details_y, content_width, 20);
 
-  SetWindowPos(GetDlgItem(hwnd, kEditCueId), nullptr, 70, identity_y, 120, 20, SWP_NOZORDER);
-  SetWindowPos(GetDlgItem(hwnd, kEditCharacter), nullptr, 270, identity_y, 260, 20, SWP_NOZORDER);
-  SetWindowPos(GetDlgItem(hwnd, kEditDialogue), nullptr, 90, dialogue_y, 330, 20, SWP_NOZORDER);
-  SetWindowPos(GetDlgItem(hwnd, kEditNotes), nullptr, 480, dialogue_y, 330, 20, SWP_NOZORDER);
-  SetWindowPos(GetDlgItem(hwnd, kEditType), nullptr, 860, dialogue_y, 100, 80, SWP_NOZORDER);
-  SetWindowPos(GetDlgItem(hwnd, kEditStart), nullptr, 70, action_y, 120, 20, SWP_NOZORDER);
-  SetWindowPos(GetDlgItem(hwnd, kEditEnd), nullptr, 245, action_y, 120, 20, SWP_NOZORDER);
-  SetWindowPos(GetDlgItem(hwnd, kEditStatus), nullptr, 435, action_y, 180, 80, SWP_NOZORDER);
-  SetWindowPos(GetDlgItem(hwnd, kApplyEdit), nullptr, 630, action_y - 2, 100, 24, SWP_NOZORDER);
+  move_swell_label(hwnd, "Cue ID", 16, identity_y + 2, 50, 14);
+  move_swell_control(hwnd, kEditCueId, 70, identity_y, 120, 20);
+  move_swell_label(hwnd, "Character", 200, identity_y + 2, 68, 14);
+  move_swell_control(hwnd, kEditCharacter, 270, identity_y, std::max(140, width / 4), 20);
 
-  // Extra horizontal room belongs to the cue table/details first. Keep the
-  // editor labels and controls paired at their reference coordinates until the
-  // dedicated SWELL presentation replaces the inherited resource.
-  const int horizontal_growth = layout_width - kSwellReferenceWidth;
-  SetWindowPos(GetDlgItem(hwnd, kPrevious), nullptr, 740 + horizontal_growth, action_y - 2, 90, 24, SWP_NOZORDER);
-  SetWindowPos(GetDlgItem(hwnd, kNext), nullptr, 836 + horizontal_growth, action_y - 2, 90, 24, SWP_NOZORDER);
-  SetWindowPos(GetDlgItem(hwnd, IDCANCEL), nullptr, 1050 + horizontal_growth, action_y - 2, 90, 24, SWP_NOZORDER);
+  const int split = std::max(430, width / 2);
+  move_swell_label(hwnd, "Dialogue", 16, dialogue_y + 2, 70, 14);
+  move_swell_control(hwnd, kEditDialogue, 90, dialogue_y, std::max(180, split - 110), 20);
+  move_swell_label(hwnd, "Notes", split + 8, dialogue_y + 2, 50, 14);
+  move_swell_control(hwnd, kEditNotes, split + 58, dialogue_y,
+                     std::max(160, width - split - 248), 20);
+  const int type_x = std::max(split + 230, width - 180);
+  move_swell_label(hwnd, "Type", type_x - 40, dialogue_y + 2, 40, 14);
+  move_swell_control(hwnd, kEditType, type_x, dialogue_y, 100, 80);
+
+  move_swell_label(hwnd, "Start", 16, action_y + 2, 50, 14);
+  move_swell_control(hwnd, kEditStart, 70, action_y, 120, 20);
+  move_swell_label(hwnd, "End", 200, action_y + 2, 40, 14);
+  move_swell_control(hwnd, kEditEnd, 245, action_y, 120, 20);
+  move_swell_label(hwnd, "Status", 380, action_y + 2, 50, 14);
+  move_swell_control(hwnd, kEditStatus, 435, action_y, 180, 80);
+  move_swell_control(hwnd, kApplyEdit, 630, action_y - 2, 100, 24);
+
+  const int close_x = std::max(660, width - 106);
+  const int next_x = std::max(564, close_x - 96);
+  const int previous_x = std::max(468, next_x - 96);
+  move_swell_control(hwnd, kPrevious, previous_x, action_y - 2, 90, 24);
+  move_swell_control(hwnd, kNext, next_x, action_y - 2, 90, 24);
+  move_swell_control(hwnd, IDCANCEL, close_x, action_y - 2, 90, 24);
 }
 
 void restore_swell_layout(HWND hwnd)
