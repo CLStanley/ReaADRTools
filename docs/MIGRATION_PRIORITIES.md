@@ -14,7 +14,7 @@ ReaADR Tools is not considered a supported runtime while the Lua-to-C++ migratio
 
 ## Current gate
 
-The native CI matrix is green on Linux, Windows, and macOS. The migration should therefore continue from behavior and presentation parity rather than build-system repair. The next implementation slices remain Cue Manager/Record Cue cross-platform presentation and in-REAPER parity, followed by the remaining native workflow smoke gates. Do not begin legacy-host cleanup merely because CI is green; `reaper_reaadr_legacy.cpp` remains transitional host infrastructure until parity is substantially complete.
+The native CI matrix is green on Linux, Windows, and macOS. Record Cue now has a shared responsive native layout on Win32 and the host-provided SWELL paths, and the historical Lua Record Cue action is only a compatibility launcher/reference rather than a runtime workflow owner. The migration should therefore continue from in-REAPER Record Cue docking/lifecycle/keyboard smoke parity and Cue Manager presentation parity, followed by the remaining native workflow smoke gates. Do not begin legacy-host cleanup merely because CI is green; `reaper_reaadr_legacy.cpp` remains transitional host infrastructure until parity is substantially complete.
 
 ## Migration order
 
