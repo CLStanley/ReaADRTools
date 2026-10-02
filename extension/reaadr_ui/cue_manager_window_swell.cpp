@@ -31,12 +31,23 @@ CueManagerLifecycle::WindowHandle lifecycle_handle(HWND hwnd)
 HWND find_static_label(HWND hwnd, const char* text)
 {
   if (!hwnd || !text) return nullptr;
+  HWND best = nullptr;
+  long best_top = -2147483647L;
   for (HWND child = GetWindow(hwnd, GW_CHILD); child; child = GetWindow(child, GW_HWNDNEXT)) {
     char value[128] = {};
     GetWindowText(child, value, sizeof(value));
-    if (std::strcmp(value, text) == 0) return child;
+    if (std::strcmp(value, text) != 0) continue;
+
+    // Several Manager tabs reuse words such as Character and Status. The cue
+    // editor labels are the bottom-most matching statics in the inherited
+    // resource, so select by geometry rather than resource enumeration order.
+    RECT rect{};
+    if (GetWindowRect(child, &rect) && rect.top > best_top) {
+      best = child;
+      best_top = rect.top;
+    }
   }
-  return nullptr;
+  return best;
 }
 
 void move_swell_control(HWND hwnd, int id, int x, int y, int width, int height)
@@ -49,6 +60,17 @@ void move_swell_label(HWND hwnd, const char* text, int x, int y, int width, int 
 {
   if (HWND label = find_static_label(hwnd, text))
     SetWindowPos(label, nullptr, x, y, width, height, SWP_NOZORDER);
+}
+
+void sync_swell_editor_labels(HWND hwnd)
+{
+  if (!hwnd || !g_controller) return;
+  const bool visible = g_controller->view().active_tab == "cues";
+  const char* labels[] = {"Cue ID", "Character", "Dialogue", "Notes", "Type", "Start", "End", "Status"};
+  for (const char* text : labels) {
+    if (HWND label = find_static_label(hwnd, text))
+      ShowWindow(label, visible ? SW_SHOW : SW_HIDE);
+  }
 }
 
 void layout_swell_manager(HWND hwnd)
@@ -104,6 +126,7 @@ void layout_swell_manager(HWND hwnd)
   move_swell_control(hwnd, kPrevious, previous_x, action_y - 2, 90, 24);
   move_swell_control(hwnd, kNext, next_x, action_y - 2, 90, 24);
   move_swell_control(hwnd, IDCANCEL, close_x, action_y - 2, 90, 24);
+  sync_swell_editor_labels(hwnd);
 }
 
 void restore_swell_layout(HWND hwnd)
@@ -150,6 +173,7 @@ void refresh_external_revision(HWND hwnd)
   refresh_rows(hwnd);
   apply_tab_visibility(hwnd, g_controller->view().active_tab);
   update_tab_details(hwnd);
+  sync_swell_editor_labels(hwnd);
 }
 
 void close_swell_manager(HWND hwnd)
@@ -187,7 +211,10 @@ INT_PTR modeless_cue_manager_proc(HWND hwnd, UINT message, WPARAM wparam, LPARAM
     return 0;
   }
 
-  return cue_manager_proc(hwnd, message, wparam, lparam);
+  const INT_PTR handled = cue_manager_proc(hwnd, message, wparam, lparam);
+  if (message == WM_INITDIALOG || message == WM_COMMAND)
+    sync_swell_editor_labels(hwnd);
+  return handled;
 }
 
 } // namespace
