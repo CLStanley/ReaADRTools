@@ -4,9 +4,10 @@ namespace reaadr::ui {
 
 class RecordingController;
 
-// Transitional SWELL presentation for the native Record Cue controller. The
-// Lua window remains installed as the parity reference until all platforms and
-// interactions have been smoke-tested against it.
+// Native modeless Record Cue presentation shared across the Win32 and
+// host-provided SWELL paths. Recording workflow ownership is entirely native;
+// the historical Lua action is only a compatibility launcher/reference while
+// final in-REAPER visual, docking, and lifecycle parity is smoke-tested.
 bool show_recording_window(RecordingController& controller);
 bool close_recording_window();
 // Host/runtime teardown bypasses interactive recovery and guarantees that the
