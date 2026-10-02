@@ -121,6 +121,33 @@ void update_window(HWND hwnd)
   EnableWindow(GetDlgItem(hwnd, kRetry), !view.error.empty());
 }
 
+void layout_recording_controls(HWND hwnd)
+{
+  RECT client{};
+  if (!GetClientRect(hwnd, &client)) return;
+  const int width = static_cast<int>(client.right - client.left);
+  const int height = static_cast<int>(client.bottom - client.top);
+  const int content_width = (std::max)(100, width - 40);
+
+  SetWindowPos(GetDlgItem(hwnd, kCue), nullptr, 20, 16, content_width, 22, SWP_NOZORDER);
+  SetWindowPos(GetDlgItem(hwnd, kDialogue), nullptr, 20, 44, content_width, 38, SWP_NOZORDER);
+  SetWindowPos(GetDlgItem(hwnd, kTiming), nullptr, 20, 88, (std::max)(180, content_width - 170), 20, SWP_NOZORDER);
+  SetWindowPos(GetDlgItem(hwnd, kCountdown), nullptr, (std::max)(220, width - 170), 88, 150, 20, SWP_NOZORDER);
+  SetWindowPos(GetDlgItem(hwnd, kTrack), nullptr, 20, 114, (std::max)(180, content_width - 170), 20, SWP_NOZORDER);
+  SetWindowPos(GetDlgItem(hwnd, kLane), nullptr, (std::max)(220, width - 170), 114, 150, 20, SWP_NOZORDER);
+  SetWindowPos(GetDlgItem(hwnd, kTakeCount), nullptr, (std::max)(220, width - 170), 142, 150, 20, SWP_NOZORDER);
+  SetWindowPos(GetDlgItem(hwnd, kStatus), nullptr, 20, 142, (std::max)(180, content_width - 170), 24, SWP_NOZORDER);
+
+  const int button_y = (std::max)(176, height - 74);
+  const int close_y = (std::max)(214, height - 36);
+  SetWindowPos(GetDlgItem(hwnd, kRecord), nullptr, 20, button_y, 105, 30, SWP_NOZORDER);
+  SetWindowPos(GetDlgItem(hwnd, kLoop), nullptr, 137, button_y, 105, 30, SWP_NOZORDER);
+  SetWindowPos(GetDlgItem(hwnd, kPreroll), nullptr, 254, button_y, 145, 30, SWP_NOZORDER);
+  SetWindowPos(GetDlgItem(hwnd, kStop), nullptr, (std::max)(410, width - 125), button_y, 105, 30, SWP_NOZORDER);
+  SetWindowPos(GetDlgItem(hwnd, kRetry), nullptr, (std::max)(293, width - 242), close_y, 105, 24, SWP_NOZORDER);
+  SetWindowPos(GetDlgItem(hwnd, IDCANCEL), nullptr, (std::max)(410, width - 125), close_y, 105, 24, SWP_NOZORDER);
+}
+
 void activate_recording_window()
 {
   if (!g_window || !IsWindow(g_window)) return;
@@ -239,8 +266,13 @@ INT_PTR recording_proc(HWND hwnd, UINT message, WPARAM wparam, LPARAM)
       g_window = hwnd;
       restore_window_geometry(hwnd);
       restore_window_docking(hwnd);
+      layout_recording_controls(hwnd);
       update_window(hwnd);
       SetTimer(hwnd, kTimer, 30, nullptr);
+      return 1;
+
+    case WM_SIZE:
+      layout_recording_controls(hwnd);
       return 1;
 
     case WM_TIMER:
@@ -316,33 +348,6 @@ HWND create_child(HWND parent, const char* class_name, const char* text,
   return child;
 }
 
-void layout_windows_controls(HWND hwnd)
-{
-  RECT client{};
-  if (!GetClientRect(hwnd, &client)) return;
-  const int width = static_cast<int>(client.right - client.left);
-  const int height = static_cast<int>(client.bottom - client.top);
-  const int content_width = (std::max)(100, width - 40);
-
-  SetWindowPos(GetDlgItem(hwnd, kCue), nullptr, 20, 16, content_width, 22, SWP_NOZORDER);
-  SetWindowPos(GetDlgItem(hwnd, kDialogue), nullptr, 20, 44, content_width, 38, SWP_NOZORDER);
-  SetWindowPos(GetDlgItem(hwnd, kTiming), nullptr, 20, 88, (std::max)(180, content_width - 170), 20, SWP_NOZORDER);
-  SetWindowPos(GetDlgItem(hwnd, kCountdown), nullptr, (std::max)(220, width - 170), 88, 150, 20, SWP_NOZORDER);
-  SetWindowPos(GetDlgItem(hwnd, kTrack), nullptr, 20, 114, (std::max)(180, content_width - 170), 20, SWP_NOZORDER);
-  SetWindowPos(GetDlgItem(hwnd, kLane), nullptr, (std::max)(220, width - 170), 114, 150, 20, SWP_NOZORDER);
-  SetWindowPos(GetDlgItem(hwnd, kTakeCount), nullptr, (std::max)(220, width - 170), 142, 150, 20, SWP_NOZORDER);
-  SetWindowPos(GetDlgItem(hwnd, kStatus), nullptr, 20, 142, (std::max)(180, content_width - 170), 24, SWP_NOZORDER);
-
-  const int button_y = (std::max)(176, height - 74);
-  const int close_y = (std::max)(214, height - 36);
-  SetWindowPos(GetDlgItem(hwnd, kRecord), nullptr, 20, button_y, 105, 30, SWP_NOZORDER);
-  SetWindowPos(GetDlgItem(hwnd, kLoop), nullptr, 137, button_y, 105, 30, SWP_NOZORDER);
-  SetWindowPos(GetDlgItem(hwnd, kPreroll), nullptr, 254, button_y, 145, 30, SWP_NOZORDER);
-  SetWindowPos(GetDlgItem(hwnd, kStop), nullptr, (std::max)(410, width - 125), button_y, 105, 30, SWP_NOZORDER);
-  SetWindowPos(GetDlgItem(hwnd, kRetry), nullptr, (std::max)(293, width - 242), close_y, 105, 24, SWP_NOZORDER);
-  SetWindowPos(GetDlgItem(hwnd, IDCANCEL), nullptr, (std::max)(410, width - 125), close_y, 105, 24, SWP_NOZORDER);
-}
-
 LRESULT CALLBACK recording_window_proc(HWND hwnd, UINT message, WPARAM wparam, LPARAM lparam)
 {
   switch (message) {
@@ -361,11 +366,11 @@ LRESULT CALLBACK recording_window_proc(HWND hwnd, UINT message, WPARAM wparam, L
       create_child(hwnd, "BUTTON", "Stop", WS_TABSTOP | BS_PUSHBUTTON, kStop);
       create_child(hwnd, "BUTTON", "Retry", WS_TABSTOP | BS_PUSHBUTTON, kRetry);
       create_child(hwnd, "BUTTON", "Close", WS_TABSTOP | BS_DEFPUSHBUTTON, IDCANCEL);
-      layout_windows_controls(hwnd);
+      layout_recording_controls(hwnd);
       return 0;
 
     case WM_SIZE:
-      layout_windows_controls(hwnd);
+      layout_recording_controls(hwnd);
       return 0;
 
     case WM_GETMINMAXINFO: {
