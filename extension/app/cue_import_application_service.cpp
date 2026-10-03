@@ -77,32 +77,39 @@ CueImportApplicationResult CueImportApplicationService::import_content(
       return result;
     }
     const auto loaded = repository_->load();
-    if (!loaded) {
+    if (!loaded && loaded.error != core::SessionLoadError::missing) {
       result.error = core::session_load_error_message(loaded);
       return result;
     }
 
-    for (const auto& existing : loaded.model.cues) {
-      if (cue_field(existing, "script_id") == script.script_id) {
-        result.error = "This script is already present in the canonical session. Use Update Existing Import for a revision.";
-        return result;
+    // A full import is also the native session-creation path. On a brand-new
+    // REAPER project there is intentionally no canonical model to merge yet;
+    // SessionRenderOptions carries the replacement session identity and the
+    // renderer commits the imported cues as the initial model. Requiring a
+    // successful repository load here made the first native import impossible.
+    if (loaded) {
+      for (const auto& existing : loaded.model.cues) {
+        if (cue_field(existing, "script_id") == script.script_id) {
+          result.error = "This script is already present in the canonical session. Use Update Existing Import for a revision.";
+          return result;
+        }
       }
-    }
 
-    std::vector<core::Fields> merged = loaded.model.cues;
-    std::set<std::string> existing_keys;
-    for (const auto& cue : merged) existing_keys.insert(core::render_cue_key(cue));
-    for (const auto& incoming : result.imported.cues) {
-      const std::string key = core::render_cue_key(incoming);
-      if (existing_keys.count(key) != 0) {
-        result.error = "Cue " + key +
-          " already exists in the canonical session. Resolve the duplicate cue ID before importing this script.";
-        return result;
+      std::vector<core::Fields> merged = loaded.model.cues;
+      std::set<std::string> existing_keys;
+      for (const auto& cue : merged) existing_keys.insert(core::render_cue_key(cue));
+      for (const auto& incoming : result.imported.cues) {
+        const std::string key = core::render_cue_key(incoming);
+        if (existing_keys.count(key) != 0) {
+          result.error = "Cue " + key +
+            " already exists in the canonical session. Resolve the duplicate cue ID before importing this script.";
+          return result;
+        }
+        merged.push_back(incoming);
+        existing_keys.insert(key);
       }
-      merged.push_back(incoming);
-      existing_keys.insert(key);
+      result.imported.cues = std::move(merged);
     }
-    result.imported.cues = std::move(merged);
   } else if (normalized_mode == "selected") {
     if (!repository_) {
       result.error = "Native selected import requires a canonical session repository.";
