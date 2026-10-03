@@ -20,6 +20,15 @@ int main()
   using namespace reaadr::core;
   const RecordingTransportContext context{7.0, 10.0, 12.0};
 
+  require(active_timeline_position(0, 11.25, 4.5) == 4.5,
+          "stopped transport should resolve workflow context from the edit cursor");
+  require(active_timeline_position(1, 11.25, 4.5) == 11.25,
+          "playing transport should resolve workflow context from the play position");
+  require(active_timeline_position(2, 11.25, 4.5) == 11.25,
+          "paused transport should resolve workflow context from the paused play position");
+  require(active_timeline_position(3, 11.25, 4.5) == 11.25,
+          "combined playing and paused bits should retain the active play position");
+
   {
     RecordingTransportState state;
     state.mode = RecordingTransportMode::preroll;
