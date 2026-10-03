@@ -152,7 +152,18 @@ bool RecordingController::shutdown()
     set_error(result.error);
     return false;
   }
-  view_.mode = core::RecordingTransportMode::idle;
+
+  // Shutdown is a real workflow transition, not just a window close. Project
+  // cleanup may stop transport, restore record-arm/loop state, finalize a take,
+  // or retry deferred cleanup. Project the returned canonical state before the
+  // presentation disappears so every close path observes the same final take
+  // count and options instead of retaining the last timer snapshot.
+  view_.take_count = result.state.take_count;
+  view_.loop_enabled = result.state.loop_enabled;
+  view_.include_preroll_each_loop = result.state.include_preroll_each_loop;
+  view_.mode = result.state.mode;
+  view_.countdown_seconds = 0.0;
+  view_.count_in_beat = 0;
   view_.status_text = status_text(result.state);
   view_.error.clear();
   return true;
