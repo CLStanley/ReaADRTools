@@ -127,7 +127,6 @@ void layout_recording_controls(HWND hwnd)
 #ifdef _WIN32
   if (!GetClientRect(hwnd, &client)) return;
 #else
-  // SWELL's GetClientRect mirrors the Win32 operation but returns void.
   GetClientRect(hwnd, &client);
 #endif
   const int width = static_cast<int>(client.right - client.left);
@@ -288,6 +287,10 @@ INT_PTR recording_proc(HWND hwnd, UINT message, WPARAM wparam, LPARAM)
       return 1;
 
     case WM_KEYDOWN:
+      if (wparam == VK_ESCAPE) {
+        close_recording(hwnd);
+        return 1;
+      }
       if (wparam == VK_SPACE && Main_OnCommand) {
         Main_OnCommand(kTransportPlayStop, 0);
         return 1;
@@ -303,6 +306,7 @@ INT_PTR recording_proc(HWND hwnd, UINT message, WPARAM wparam, LPARAM)
 
     case WM_DESTROY:
       KillTimer(hwnd, kTimer);
+      shutdown_controller();
       if (g_window == hwnd) g_window = nullptr;
       g_controller = nullptr;
       return 1;
@@ -395,6 +399,10 @@ LRESULT CALLBACK recording_window_proc(HWND hwnd, UINT message, WPARAM wparam, L
       return 0;
 
     case WM_KEYDOWN:
+      if (wparam == VK_ESCAPE) {
+        close_recording(hwnd);
+        return 0;
+      }
       if (wparam == VK_SPACE && Main_OnCommand) {
         Main_OnCommand(kTransportPlayStop, 0);
         return 0;
@@ -406,7 +414,7 @@ LRESULT CALLBACK recording_window_proc(HWND hwnd, UINT message, WPARAM wparam, L
       break;
 
     case WM_GETDLGCODE:
-      if (wparam == VK_SPACE) return DLGC_WANTALLKEYS;
+      if (wparam == VK_SPACE || wparam == VK_ESCAPE) return DLGC_WANTALLKEYS;
       break;
 
     case WM_CLOSE:
@@ -502,10 +510,6 @@ bool show_recording_window(RecordingController& controller)
   update_window(hwnd);
   SetTimer(hwnd, kTimer, 30, nullptr);
 
-  // Keep the native window modeless, like the SWELL implementation and REAPER's
-  // other extension windows. The host owns the application message pump; running
-  // a nested GetMessage loop here blocks the command hook that opened Record Cue
-  // and makes Windows behave differently from Linux/macOS.
   return true;
 #endif
 }
@@ -521,10 +525,6 @@ bool force_close_recording_window()
 {
   if (!g_window || !IsWindow(g_window)) return true;
 
-  // Runtime teardown cannot keep a modeless window alive after its controller
-  // storage is released. Make one best-effort workflow shutdown so REAPER gets
-  // its record-arm/loop state restored, then destroy the presentation even if
-  // a host cleanup step reports an error.
   shutdown_controller();
   save_window_geometry(g_window);
   const auto dock = reaper::inspect_window_dock_state(g_window);
