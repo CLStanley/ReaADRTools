@@ -173,11 +173,13 @@ CueImportApplicationResult CueImportApplicationService::import_content(
     }
 
     std::vector<core::Fields> incoming_cues;
+    std::set<std::string> incoming_characters;
     for (const auto& cue : result.imported.cues) {
       const auto found = cue.find("character");
       if (found != cue.end() &&
           std::find(characters.begin(), characters.end(), found->second) != characters.end()) {
         incoming_cues.push_back(cue);
+        incoming_characters.insert(found->second);
       }
     }
     if (incoming_cues.empty()) {
@@ -187,7 +189,9 @@ CueImportApplicationResult CueImportApplicationService::import_content(
 
     // Update is deliberately replacement-only. Every requested character must
     // already belong to this script in the canonical session; otherwise an
-    // update would silently behave like Add Selected Characters.
+    // update would silently behave like Add Selected Characters. The revised
+    // source must also still contain every requested character, otherwise the
+    // replacement step would delete that character's existing cues.
     std::set<std::string> existing_script_characters;
     for (const auto& existing : loaded.model.cues) {
       if (cue_field(existing, "script_id") != script.script_id) continue;
@@ -198,6 +202,11 @@ CueImportApplicationResult CueImportApplicationService::import_content(
       if (existing_script_characters.count(character) == 0) {
         result.error = "Character " + character +
           " is not already imported from this script. Use Add Selected Characters instead.";
+        return result;
+      }
+      if (incoming_characters.count(character) == 0) {
+        result.error = "Character " + character +
+          " is selected for update but is not present in the revised script. No existing cues were changed.";
         return result;
       }
     }
