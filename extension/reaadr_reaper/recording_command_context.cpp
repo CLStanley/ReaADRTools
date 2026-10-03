@@ -54,13 +54,8 @@ RecordingCommandContext::RecordingCommandContext(ReaProject* project)
 
 double RecordingCommandContext::current_timeline_position() const
 {
-  const int play_state = native_play_state();
-  // REAPER reports pause separately from the playing bit. While paused, the
-  // transport position is still the user's active timeline position; falling
-  // back to the edit cursor can resolve a completely different ADR cue.
-  return (play_state & (1 | 2)) != 0
-    ? native_play_position()
-    : native_cursor_position();
+  return core::active_timeline_position(
+    native_play_state(), native_play_position(), native_cursor_position());
 }
 
 double RecordingCommandContext::frame_rate() const
@@ -99,18 +94,12 @@ RecordingSessionStartResult RecordingCommandContext::begin()
   return session_.begin(current_timeline_position(), options);
 }
 
-RecordingWorkflowDispatchResult RecordingCommandContext::dispatch(
-  core::RecordingTransportEvent event)
+RecordingSessionDispatchResult RecordingCommandContext::dispatch(RecordingTransportEvent event)
 {
   return session_.dispatch(event, native_play_state(), native_play_position());
 }
 
-RecordingWorkflowDispatchResult RecordingCommandContext::retry_pending()
-{
-  return session_.retry_pending();
-}
-
-RecordingWorkflowDispatchResult RecordingCommandContext::shutdown()
+RecordingSessionDispatchResult RecordingCommandContext::shutdown()
 {
   return session_.shutdown(native_play_state(), native_play_position());
 }
