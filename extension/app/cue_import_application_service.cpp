@@ -185,6 +185,23 @@ CueImportApplicationResult CueImportApplicationService::import_content(
       return result;
     }
 
+    // Update is deliberately replacement-only. Every requested character must
+    // already belong to this script in the canonical session; otherwise an
+    // update would silently behave like Add Selected Characters.
+    std::set<std::string> existing_script_characters;
+    for (const auto& existing : loaded.model.cues) {
+      if (cue_field(existing, "script_id") != script.script_id) continue;
+      const std::string existing_character = cue_field(existing, "character");
+      if (!existing_character.empty()) existing_script_characters.insert(existing_character);
+    }
+    for (const auto& character : characters) {
+      if (existing_script_characters.count(character) == 0) {
+        result.error = "Character " + character +
+          " is not already imported from this script. Use Add Selected Characters instead.";
+        return result;
+      }
+    }
+
     std::vector<core::Fields> merged;
     merged.reserve(loaded.model.cues.size() + incoming_cues.size());
     for (const auto& existing : loaded.model.cues) {
