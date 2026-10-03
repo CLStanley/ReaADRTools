@@ -94,12 +94,17 @@ RecordingSessionStartResult RecordingCommandContext::begin()
   return session_.begin(current_timeline_position(), options);
 }
 
-RecordingSessionDispatchResult RecordingCommandContext::dispatch(RecordingTransportEvent event)
+RecordingWorkflowDispatchResult RecordingCommandContext::dispatch(RecordingTransportEvent event)
 {
   return session_.dispatch(event, native_play_state(), native_play_position());
 }
 
-RecordingSessionDispatchResult RecordingCommandContext::shutdown()
+RecordingWorkflowDispatchResult RecordingCommandContext::retry_pending()
+{
+  return session_.retry_pending();
+}
+
+RecordingWorkflowDispatchResult RecordingCommandContext::shutdown()
 {
   return session_.shutdown(native_play_state(), native_play_position());
 }
