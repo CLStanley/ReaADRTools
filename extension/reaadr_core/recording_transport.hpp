@@ -41,6 +41,16 @@ struct RecordingTransportInput {
   double play_position = 0.0;
 };
 
+// REAPER exposes playing and paused as separate bits. Both states retain an
+// active transport position; only a fully stopped transport should resolve ADR
+// workflow context from the edit cursor. Keeping this rule in core prevents
+// Record Cue and Cue Info from drifting apart as their host adapters evolve.
+inline double active_timeline_position(
+  int play_state, double play_position, double cursor_position)
+{
+  return (play_state & (1 | 2)) != 0 ? play_position : cursor_position;
+}
+
 // Booleans are intents, not side effects. The REAPER executor applies the
 // immediate prefix in declaration order; the application coordinator consumes
 // the final model/status intents after host execution succeeds.
