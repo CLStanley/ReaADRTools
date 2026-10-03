@@ -62,7 +62,7 @@ REAPER_SOURCES := reaadr_reaper/project_state.cpp reaadr_reaper/project_transact
 	reaadr_reaper/dialogue_detection_command.cpp reaadr_reaper/cue_status_command.cpp reaadr_reaper/cue_take_count_adapter.cpp reaadr_reaper/cue_info_command.cpp reaadr_reaper/cue_info_action.cpp reaadr_reaper/character_filter_adapter.cpp reaadr_reaper/character_filter_command.cpp \
 	reaadr_reaper/cue_navigation_service.cpp reaadr_reaper/record_arm_adapter.cpp reaadr_reaper/recording_setup_adapter.cpp \
 	reaadr_reaper/recording_transport_executor.cpp reaadr_reaper/recording_command_context.cpp reaadr_reaper/recording_command.cpp reaadr_reaper/recording_action.cpp \
-	reaadr_reaper/overlay_refresh_adapter.cpp reaadr_reaper/cue_cleanup_adapter.cpp \
+	reaadr_reaper/overlay_refresh_adapter.cpp reaadr_reaper/cue_cleanup_adapter.cpp reaadr_reaper/window_docking.cpp \
 	app/cue_info_application_service.cpp app/cue_status_application_service.cpp app/recording_application_service.cpp app/recording_target_application_service.cpp \
 	app/recording_workflow_service.cpp app/recording_session_service.cpp app/overlay_application_service.cpp app/cue_import_application_service.cpp \
 	app/marker_cue_generation_application_service.cpp app/dialogue_cue_generation_application_service.cpp app/dialogue_detection_application_service.cpp \
@@ -74,7 +74,7 @@ REAPER_HEADERS := reaadr_reaper/project_state.hpp reaadr_reaper/project_transact
 	reaadr_reaper/dialogue_detection_command.hpp reaadr_reaper/cue_status_command.hpp reaadr_reaper/cue_take_count_adapter.hpp reaadr_reaper/cue_info_command.hpp reaadr_reaper/cue_info_action.hpp reaadr_reaper/character_filter_adapter.hpp reaadr_reaper/character_filter_command.hpp \
 	reaadr_reaper/cue_navigation_service.hpp reaadr_reaper/record_arm_adapter.hpp reaadr_reaper/recording_setup_adapter.hpp \
 	reaadr_reaper/recording_transport_executor.hpp reaadr_reaper/recording_command_context.hpp reaadr_reaper/recording_command.hpp reaadr_reaper/recording_action.hpp \
-	reaadr_reaper/overlay_refresh_adapter.hpp reaadr_reaper/cue_cleanup_adapter.hpp app/cue_info_application_service.hpp app/cue_status_application_service.hpp \
+	reaadr_reaper/overlay_refresh_adapter.hpp reaadr_reaper/cue_cleanup_adapter.hpp reaadr_reaper/window_docking.hpp app/cue_info_application_service.hpp app/cue_status_application_service.hpp \
 	app/recording_application_service.hpp app/recording_target_application_service.hpp app/recording_workflow_service.hpp \
 	app/recording_session_service.hpp app/overlay_application_service.hpp app/cue_import_application_service.hpp \
 	app/marker_cue_generation_application_service.hpp app/dialogue_cue_generation_application_service.hpp app/dialogue_detection_application_service.hpp \
@@ -145,6 +145,6 @@ dist: all
 	rm -rf "$(DIST_DIR)"
 	@mkdir -p "$(DIST_USERPLUGINS_DIR)" "$(DIST_REAADR_DIR)/assets"
 	cp "$(BUILD_DIR)/$(TARGET)" "$(DIST_USERPLUGINS_DIR)/$(TARGET)"
-	cp ../assets/* "$(DIST_REAADR_DIR)/assets/"
+	cp -R ../assets/. "$(DIST_REAADR_DIR)/assets/"
 clean:
-	rm -rf "$(BUILD_DIR)" ../dist
+	rm -rf "$(BUILD_DIR)" "$(DIST_DIR)"
