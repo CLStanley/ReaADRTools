@@ -54,7 +54,11 @@ RecordingCommandContext::RecordingCommandContext(ReaProject* project)
 
 double RecordingCommandContext::current_timeline_position() const
 {
-  return (native_play_state() & 1) != 0
+  const int play_state = native_play_state();
+  // REAPER reports pause separately from the playing bit. While paused, the
+  // transport position is still the user's active timeline position; falling
+  // back to the edit cursor can resolve a completely different ADR cue.
+  return (play_state & (1 | 2)) != 0
     ? native_play_position()
     : native_cursor_position();
 }
