@@ -112,6 +112,24 @@ int main()
 
   {
     RecordingTransportState state;
+    state.mode = RecordingTransportMode::preroll;
+    state.loop_range_active = true;
+    state.operation_finalized = false;
+    const auto result = advance_recording_transport(
+      state, context, {RecordingTransportEvent::tick, 2, 8.5});
+    require(static_cast<bool>(result), "external pause during preroll should succeed");
+    require(result.state.mode == RecordingTransportMode::idle,
+            "external pause during preroll should return to idle");
+    require(result.actions.restore_loop_range,
+            "external preroll pause should restore loop range");
+    require(result.actions.restore_record_arm,
+            "external preroll pause should restore record arm");
+    require(!result.actions.finalize_recorded_takes,
+            "external preroll pause should not finalize a take that never started");
+  }
+
+  {
+    RecordingTransportState state;
     state.mode = RecordingTransportMode::recording;
     state.loop_range_active = true;
     state.operation_finalized = false;
@@ -127,6 +145,25 @@ int main()
             "external recording stop should restore record arm");
     require(result.actions.finalize_recorded_takes,
             "external recording stop should finalize completed recorded takes");
+  }
+
+  {
+    RecordingTransportState state;
+    state.mode = RecordingTransportMode::recording;
+    state.loop_range_active = true;
+    state.operation_finalized = false;
+    state.take_count = 1;
+    const auto result = advance_recording_transport(
+      state, context, {RecordingTransportEvent::tick, 2, 11.0});
+    require(static_cast<bool>(result), "external pause during recording should succeed");
+    require(result.state.mode == RecordingTransportMode::idle,
+            "external pause during recording should return to idle");
+    require(result.actions.restore_loop_range,
+            "external recording pause should restore loop range");
+    require(result.actions.restore_record_arm,
+            "external recording pause should restore record arm");
+    require(result.actions.finalize_recorded_takes,
+            "external recording pause should finalize completed recorded takes");
   }
 
   {
