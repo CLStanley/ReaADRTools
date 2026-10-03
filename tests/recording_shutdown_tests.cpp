@@ -187,6 +187,27 @@ int main()
             "loop restart should not finalize the operation between takes");
   }
 
+  {
+    RecordingTransportState state;
+    state.mode = RecordingTransportMode::loop_wait;
+    state.loop_enabled = true;
+    state.include_preroll_each_loop = true;
+    state.loop_range_active = true;
+    state.operation_finalized = false;
+    state.take_count = 1;
+    const auto result = advance_recording_transport(
+      state, context, {RecordingTransportEvent::tick, 2, 12.0});
+    require(static_cast<bool>(result), "paused loop wait should restart the next take");
+    require(result.state.mode == RecordingTransportMode::preroll,
+            "paused loop wait should restart in preroll when preroll-per-loop is enabled");
+    require(result.actions.move_cursor && result.actions.play,
+            "paused loop restart should move to preroll and start playback");
+    require(result.actions.isolate_recording_track,
+            "paused loop restart should re-isolate the recording track");
+    require(!result.actions.finalize_recorded_takes,
+            "paused loop restart should not finalize the operation between takes");
+  }
+
   std::cout << "recording_shutdown_tests: ok\n";
   return 0;
 }
