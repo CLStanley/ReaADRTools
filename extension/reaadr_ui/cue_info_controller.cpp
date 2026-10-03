@@ -20,7 +20,10 @@ double CueInfoController::timeline_position() const
   if (!api_.get_play_state || !api_.get_play_position || !api_.get_cursor_position)
     return -1.0;
   const int play_state = api_.get_play_state();
-  const double position = (play_state & 1) != 0
+  // A paused transport still has a meaningful play position. Using the edit
+  // cursor while paused can make Cue Info jump to a different cue than the one
+  // currently under the transport.
+  const double position = (play_state & (1 | 2)) != 0
     ? api_.get_play_position() : api_.get_cursor_position();
   return std::isfinite(position) ? position : -1.0;
 }
