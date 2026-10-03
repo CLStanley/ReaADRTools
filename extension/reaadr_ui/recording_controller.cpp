@@ -116,6 +116,11 @@ bool RecordingController::record()
 
 bool RecordingController::tick()
 {
+  // A failed workflow transition is intentionally sticky until the user
+  // retries it. The window timer fires every 30 ms; dispatching more ticks
+  // while application cleanup is pending would repeatedly re-enter the
+  // workflow even though RecordingWorkflowService requires an explicit retry.
+  if (!view_.error.empty()) return false;
   return dispatch(core::RecordingTransportEvent::tick);
 }
 
