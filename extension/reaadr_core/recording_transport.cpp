@@ -59,6 +59,11 @@ bool valid_context(const RecordingTransportContext& context)
     context.record_start <= context.cue_start && context.cue_end >= context.cue_start;
 }
 
+bool transport_advancing(int play_state)
+{
+  return (play_state & 1) != 0;
+}
+
 } // namespace
 
 RecordingTransportTransition advance_recording_transport(
@@ -89,7 +94,7 @@ RecordingTransportTransition advance_recording_transport(
 
     case RecordingTransportEvent::tick:
       if (state.mode == RecordingTransportMode::preroll) {
-        if (input.play_state == 0) {
+        if (!transport_advancing(input.play_state)) {
           finalize_operation(transition, false);
         } else if (input.play_position >= context.cue_start) {
           transition.actions.record = true;
@@ -97,7 +102,7 @@ RecordingTransportTransition advance_recording_transport(
           ++transition.state.take_count;
         }
       } else if (state.mode == RecordingTransportMode::recording) {
-        if (input.play_state == 0) {
+        if (!transport_advancing(input.play_state)) {
           finalize_operation(transition, true);
         } else if (input.play_position >= context.cue_end) {
           transition.actions.stop = true;
