@@ -23,6 +23,11 @@ The platform uninstallers remove only the ReaADR native extension and the
 `Scripts/ReaADRTools` program directory. Project files, recordings, and
 project-local Session Model data are not touched.
 
+The repository's `scripts/` directory is intentionally retained as migration
+reference material and may be repurposed independently later. Those Lua sources
+are not part of the supported ReaADR Tools runtime and are not copied into
+release packages.
+
 ## Build Packages
 
 From a Linux development machine:
@@ -49,16 +54,22 @@ published inside an archive labeled for another platform.
 
 Each package is validated before its ZIP is written. Validation checks required
 runtime directories and documentation, requires the correct platform binary,
-rejects wrong-platform binaries, and rejects common development artifacts.
+rejects wrong-platform binaries and common development artifacts, and fails if
+any `.lua` file is present. This makes the native-only runtime boundary an
+enforced release invariant rather than a documentation convention.
 
 ## Native Binary Requirement
 
-The Lua scripts are cross-platform, but the top-level REAPER menu comes from a
-native extension binary. Each release package needs the correct binary:
+ReaADR Tools is distributed as a native REAPER extension. Each release package
+needs the correct binary:
 
 - Linux: `reaper_reaadr*.so`
 - macOS: `reaper_reaadr*.dylib`
 - Windows: `reaper_reaadr*.dll`
+
+Lua is not required by the installed product. Historical Lua implementations
+remain in the source repository only for migration/parity reference and possible
+future reuse.
 
 The current Makefile only creates the Linux `.so`. Windows packages need
 the MSVC-built `reaper_reaadr.dll`, and macOS packages need a platform-native
@@ -147,7 +158,8 @@ from `UserPlugins` and the `Scripts/ReaADRTools` program folder.
 
 ## Release Content Boundary
 
-Release packages include runtime scripts, assets, the correct native extension,
-the README, user guide, third-party notices, and platform install/uninstall
-launchers. They exclude tests, test documents, SRS/roadmap documents, build
-scripts, dependency source, Git metadata, and compiler intermediates.
+Release packages include runtime assets, the correct native extension, the
+README, user guide, third-party notices, and platform install/uninstall
+launchers. They exclude the repository's Lua reference sources, tests, test
+documents, SRS/roadmap documents, build scripts, dependency source, Git
+metadata, and compiler intermediates.
