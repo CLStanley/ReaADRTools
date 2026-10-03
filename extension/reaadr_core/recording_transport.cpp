@@ -112,7 +112,11 @@ RecordingTransportTransition advance_recording_transport(
             finalize_operation(transition, true);
           }
         }
-      } else if (state.mode == RecordingTransportMode::loop_wait && input.play_state == 0) {
+      } else if (state.mode == RecordingTransportMode::loop_wait &&
+                 !transport_advancing(input.play_state)) {
+        // Stop can transiently report REAPER's paused bit while the transport
+        // settles. Treat any non-advancing state as ready for the next loop so
+        // Record Cue cannot remain stranded in loop_wait waiting for exact 0.
         start_take(transition, context);
       }
       return transition;
