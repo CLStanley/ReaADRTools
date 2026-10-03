@@ -94,7 +94,7 @@ RecordingSessionStartResult RecordingCommandContext::begin()
   return session_.begin(current_timeline_position(), options);
 }
 
-RecordingWorkflowDispatchResult RecordingCommandContext::dispatch(RecordingTransportEvent event)
+RecordingWorkflowDispatchResult RecordingCommandContext::dispatch(core::RecordingTransportEvent event)
 {
   return session_.dispatch(event, native_play_state(), native_play_position());
 }
