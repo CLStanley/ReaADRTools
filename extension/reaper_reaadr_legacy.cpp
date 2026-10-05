@@ -792,7 +792,7 @@ void run_native_import_cue_sheet_action(const std::string& mapping_override, boo
       summary << "\nValidation error: " << validation.message;
     } else {
       std::size_t selected_count = validation.cues.size();
-      if (normalized_mode == "selected") {
+      if (normalized_mode == "selected" || normalized_mode == "update") {
         std::vector<std::string> selected_characters;
         std::stringstream values(characters);
         std::string value;
@@ -912,7 +912,7 @@ void run_native_import_cue_sheet_action(const std::string& mapping_override, boo
   reaadr::reaper::CueImportApplicationService importer(
     renderer, native_overlay_frame_rate(), &repository);
   std::vector<std::string> selected_characters;
-  if (normalized_mode == "selected") {
+  if (normalized_mode == "selected" || normalized_mode == "update") {
     std::stringstream values(characters);
     std::string value;
     while (std::getline(values, value, ';')) {
