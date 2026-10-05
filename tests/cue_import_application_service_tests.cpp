@@ -2,6 +2,7 @@
 #include "app/script_identity.hpp"
 #include "reaadr_core/event_log.hpp"
 #include "reaadr_core/model_repository.hpp"
+#include "reaadr_core/session_builder.hpp"
 #include "reaadr_reaper/character_filter_adapter.hpp"
 #include "reaadr_reaper/session_render_service.hpp"
 
