@@ -121,7 +121,7 @@ void test_import_preview_summary()
   check(static_cast<bool>(preview), "preview summary fixture imports");
   const std::string summary = reaadr::reaper::format_cue_import_preview_summary(
     preview, std::nullopt, {"selected", {"Actor"}});
-  check(summary.find("Detected comma") != std::string::npos,
+  check(summary.find("Detected CSV") != std::string::npos,
         "preview summary reports detected delimiter");
   check(summary.find("2 data row(s)") != std::string::npos,
         "preview summary reports row count");
