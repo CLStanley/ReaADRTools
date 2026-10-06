@@ -46,6 +46,7 @@
 #include "app/cue_manager_application_service.hpp"
 #include "app/session_refresh_application_service.hpp"
 #include "app/region_timing_application_service.hpp"
+#include "app/session_export_service.hpp"
 #include "app/cue_import_application_service.hpp"
 #include "reaadr_ui/cue_manager_controller.hpp"
 
@@ -3820,6 +3821,43 @@ void test_session_render_service()
 }
 
 
+void test_session_export_service()
+{
+  reaadr::core::SessionModel model;
+  model.session["id"] = "session-1";
+  model.session["name"] = "Episode, One";
+
+  reaadr::core::Fields cue;
+  cue["id"] = "A1";
+  cue["character"] = "Actor";
+  cue["start_tc"] = "00:00:01:00";
+  cue["end_tc"] = "00:00:02:00";
+  cue["start_time"] = "1";
+  cue["end_time"] = "2.5";
+  cue["line"] = "Hello, \"world\"";
+  cue["notes"] = "Direction";
+  cue["status"] = "Recorded";
+  cue["cue_type"] = "Dialogue";
+  model.cues.push_back(cue);
+
+  const auto sheet = reaadr::reaper::format_session_export(
+    model, reaadr::reaper::SessionExportKind::cue_sheet);
+  check(sheet && sheet.content.find("\"Hello, \"\"world\"\"\"") != std::string::npos &&
+          sheet.content.find("\"Dialogue\"") != std::string::npos,
+        "native cue-sheet export preserves canonical dialogue/type aliases and CSV escaping");
+
+  const auto timing = reaadr::reaper::format_session_export(
+    model, reaadr::reaper::SessionExportKind::timing_report);
+  check(timing && timing.content.find("\"1\",\"2.5\",1.5,\"Recorded\"") != std::string::npos,
+        "native timing report derives duration from canonical time fields");
+
+  const auto metadata = reaadr::reaper::format_session_export(
+    model, reaadr::reaper::SessionExportKind::session_metadata);
+  check(metadata && metadata.content.find("\"name\",\"Episode, One\"") != std::string::npos &&
+          metadata.content.find("\"cue_count\",1") != std::string::npos,
+        "native metadata export includes session fields and cue count");
+}
+
 void test_cue_import_application_success_paths()
 {
   const std::string cue_path = "/tmp/reaadr-cue-import-application-cue.wav";
@@ -4257,6 +4295,7 @@ int main()
   test_extended_render_planner();
   test_complete_render_adapter();
   test_session_render_service();
+  test_session_export_service();
   test_cue_import_application_success_paths();
   test_cue_manager_application_service();
   test_region_timing_render_service();
