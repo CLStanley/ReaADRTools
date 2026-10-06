@@ -111,6 +111,7 @@
 #include "app/cue_cleanup_application_service.hpp"
 #include "app/character_filter_application_service.hpp"
 #include "app/cue_import_application_service.hpp"
+#include "app/cue_import_request.hpp"
 #include "reaadr_reaper/overlay_refresh_adapter.hpp"
 #include "reaadr_reaper/cue_navigation_service.hpp"
 #include "reaadr_reaper/session_render_service.hpp"
@@ -696,22 +697,7 @@ void run_native_cue_manager_action()
 void run_native_import_cue_sheet_action(const std::string& mapping_override, bool preview_only,
                                         const std::string& mode, const std::string& characters)
 {
-  const auto normalize_mode = [](std::string value) {
-    const auto first = value.find_first_not_of(" \t\r\n");
-    const auto last = value.find_last_not_of(" \t\r\n");
-    value = first == std::string::npos ? std::string() : value.substr(first, last - first + 1);
-    std::transform(value.begin(), value.end(), value.begin(), [](unsigned char ch) {
-      return static_cast<char>(std::tolower(ch));
-    });
-    if (value == "1" || value == "all" || value == "import entire script" ||
-        value == "import entire sheet") return std::string("all");
-    if (value == "2" || value == "selected" || value == "import selected characters" ||
-        value == "add selected characters") return std::string("selected");
-    if (value == "3" || value == "update" || value == "update existing import" ||
-        value == "update already imported characters") return std::string("update");
-    return value;
-  };
-  const std::string normalized_mode = normalize_mode(mode.empty() ? "all" : mode);
+  const std::string normalized_mode = reaadr::reaper::normalize_cue_import_mode(mode);
   if (!GetUserFileNameForRead) {
     ShowMessageBox("The native file chooser is unavailable.", "ReaADR Import", 0);
     return;
@@ -751,29 +737,13 @@ void run_native_import_cue_sheet_action(const std::string& mapping_override, boo
     return;
   }
   if (preview_only) {
-    std::optional<reaadr::core::ColumnMapping> requested_mapping;
-    if (!mapping_override.empty()) {
-      reaadr::core::ColumnMapping parsed_mapping;
-      std::stringstream entries(mapping_override);
-      std::string entry;
-      while (std::getline(entries, entry, ';')) {
-        const std::size_t equals = entry.find('=');
-        if (equals == std::string::npos) {
-          ShowMessageBox("Mappings must use key=column pairs separated by semicolons.",
-                         "ReaADR Import Preview", 0);
-          return;
-        }
-        const std::string key = entry.substr(0, equals);
-        const std::string column = entry.substr(equals + 1);
-        if (key.empty() || column.empty()) {
-          ShowMessageBox("Mappings cannot contain empty keys or columns.",
-                         "ReaADR Import Preview", 0);
-          return;
-        }
-        parsed_mapping[key] = column;
-      }
-      if (!parsed_mapping.empty()) requested_mapping = parsed_mapping;
+    const auto mapping_request =
+      reaadr::reaper::parse_cue_import_mapping(mapping_override);
+    if (!mapping_request) {
+      ShowMessageBox(mapping_request.error.c_str(), "ReaADR Import Preview", 0);
+      return;
     }
+    const auto requested_mapping = mapping_request.mapping;
     const auto inferred_mapping = requested_mapping
       ? *requested_mapping : reaadr::core::default_column_mapping(preview.table.headers);
     const auto validation = reaadr::core::import_cues(
@@ -794,14 +764,8 @@ void run_native_import_cue_sheet_action(const std::string& mapping_override, boo
     } else {
       std::size_t selected_count = validation.cues.size();
       if (normalized_mode == "selected" || normalized_mode == "update") {
-        std::vector<std::string> selected_characters;
-        std::stringstream values(characters);
-        std::string value;
-        while (std::getline(values, value, ';')) {
-          const auto first = value.find_first_not_of(" \t\r\n");
-          const auto last = value.find_last_not_of(" \t\r\n");
-          if (first != std::string::npos) selected_characters.push_back(value.substr(first, last - first + 1));
-        }
+        const auto selected_characters =
+          reaadr::reaper::parse_cue_import_characters(characters);
         selected_count = 0;
         for (const auto& cue : validation.cues) {
           const auto found = cue.find("character");
@@ -837,43 +801,18 @@ void run_native_import_cue_sheet_action(const std::string& mapping_override, boo
       has_mapping = true;
     }
     if (has_mapping) {
-      reaadr::core::ColumnMapping parsed_mapping;
-      std::stringstream entries(mapping_input.data());
-      std::string entry;
-      while (std::getline(entries, entry, ';')) {
-        const std::size_t equals = entry.find('=');
-        if (equals == std::string::npos) {
-          ShowMessageBox("Mappings must use key=column pairs separated by semicolons.",
-                         "ReaADR Import", 0);
-          return;
-        }
-        const auto trim = [](const std::string& value) {
-          const auto first = value.find_first_not_of(" \t\r\n");
-          const auto last = value.find_last_not_of(" \t\r\n");
-          return first == std::string::npos ? std::string() : value.substr(first, last - first + 1);
-        };
-        const std::string key = trim(entry.substr(0, equals));
-        const std::string column = trim(entry.substr(equals + 1));
-        if (key.empty() || column.empty()) {
-          ShowMessageBox("Mappings cannot contain empty keys or columns.", "ReaADR Import", 0);
-          return;
-        }
-        parsed_mapping[key] = column;
+      const auto parsed_mapping =
+        reaadr::reaper::parse_cue_import_mapping(mapping_input.data());
+      if (!parsed_mapping) {
+        ShowMessageBox(parsed_mapping.error.c_str(), "ReaADR Import", 0);
+        return;
       }
-      if (!parsed_mapping.empty()) mapping = parsed_mapping;
+      mapping = parsed_mapping.mapping;
     }
     if (!has_mapping && !last_mapping.empty()) {
-      std::stringstream entries(last_mapping);
-      reaadr::core::ColumnMapping parsed_mapping;
-      std::string entry;
-      while (std::getline(entries, entry, ';')) {
-        const std::size_t equals = entry.find('=');
-        if (equals == std::string::npos) continue;
-        const std::string key = entry.substr(0, equals);
-        const std::string column = entry.substr(equals + 1);
-        if (!key.empty() && !column.empty()) parsed_mapping[key] = column;
-      }
-      if (!parsed_mapping.empty()) mapping = parsed_mapping;
+      const auto parsed_mapping =
+        reaadr::reaper::parse_cue_import_mapping(last_mapping, true);
+      mapping = parsed_mapping.mapping;
     }
   }
 
@@ -914,13 +853,7 @@ void run_native_import_cue_sheet_action(const std::string& mapping_override, boo
     renderer, native_overlay_frame_rate(), &repository);
   std::vector<std::string> selected_characters;
   if (normalized_mode == "selected" || normalized_mode == "update") {
-    std::stringstream values(characters);
-    std::string value;
-    while (std::getline(values, value, ';')) {
-      const auto first = value.find_first_not_of(" \t\r\n");
-      const auto last = value.find_last_not_of(" \t\r\n");
-      if (first != std::string::npos) selected_characters.push_back(value.substr(first, last - first + 1));
-    }
+    selected_characters = reaadr::reaper::parse_cue_import_characters(characters);
   }
   const auto result = importer.import_content(content, path.data(), mapping, options,
                                               normalized_mode, selected_characters);
