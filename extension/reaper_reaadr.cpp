@@ -20,12 +20,9 @@
 #include <vector>
 
 #include <reaper_plugin.h>
-#undef REAPER_PLUGIN_ENTRYPOINT
-#define REAPER_PLUGIN_ENTRYPOINT REAPER_PLUGIN_ENTRYPOINT_LEGACY
 #define hook_native_command hook_native_command_legacy
 #include "reaper_reaadr_legacy.cpp"
 #undef hook_native_command
-#undef REAPER_PLUGIN_ENTRYPOINT
 
 #include "app/cue_import_request.hpp"
 #include "app/cue_import_workflow.hpp"
@@ -340,7 +337,18 @@ void deactivate_native_runtime(reaper_plugin_info_t* plugin)
 
 } // namespace
 
-extern "C" REAPER_PLUGIN_DLL_EXPORT int ReaperPluginEntry(REAPER_PLUGIN_HINSTANCE instance,reaper_plugin_info_t* plugin)
+extern "C" REAPER_PLUGIN_DLL_EXPORT int ReaperPluginEntry(
+  REAPER_PLUGIN_HINSTANCE instance, reaper_plugin_info_t* plugin)
 {
-  if(!plugin){deactivate_native_runtime(g_plugin);return REAPER_PLUGIN_ENTRYPOINT_LEGACY(instance,nullptr);}const int loaded=REAPER_PLUGIN_ENTRYPOINT_LEGACY(instance,plugin);if(!loaded)return 0;if(activate_native_runtime(plugin))return 1;REAPER_PLUGIN_ENTRYPOINT_LEGACY(instance,nullptr);return 0;
+  if (!plugin) {
+    deactivate_native_runtime(g_plugin);
+    reaadr::reaper::legacy_host::unload();
+    return 0;
+  }
+
+  if (!reaadr::reaper::legacy_host::load(instance, plugin)) return 0;
+  if (activate_native_runtime(plugin)) return 1;
+
+  reaadr::reaper::legacy_host::unload();
+  return 0;
 }
