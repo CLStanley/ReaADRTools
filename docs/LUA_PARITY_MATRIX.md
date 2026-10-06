@@ -50,7 +50,7 @@ Until all seven gates pass, substantive Lua implementations remain the specifica
 | `ReaADR_Export_Cue_Sheet.lua` | Compatibility launcher / native routed | Routes directly to the native Manager Reports surface; no Lua export implementation remains. Remaining: export-format parity audit and smoke test. |
 | `ReaADR_Export_Reports.lua` | Compatibility launcher / native routed | Routes directly to the native Manager Reports surface; no Lua report implementation remains. Remaining: report-output parity audit and smoke test. |
 | `ReaADR_Generate_Cues.lua` | Compatibility launcher / native routed | Delegates to `_ReaADRUpdateCuesFromRegionsNative`; no Lua generation workflow remains. Native generation includes markers and regions by default. Remaining: marker/region REAPER parity smoke test. |
-| `ReaADR_Import_Cue_Sheet.lua` | Native routed/backend | Mapping/preview/XLSX/error-path parity audit and REAPER smoke test. |
+| `ReaADR_Import_Cue_Sheet.lua` | Native routed/backend | Native CSV/TSV parsing, Full/Add Selected/Update application semantics, canonical commit/render coverage, and first-worksheet XLSX ingestion are implemented in C++. XLSX extraction now lives in `reaadr_reaper/xlsx_import.*`; the historical host API is only a compatibility shim. Remaining: final mapping/preview interaction audit, workbook edge cases, and REAPER smoke test. |
 | `ReaADR_Import_Script.lua` | Compatibility launcher / native routed | Historical import-script entry delegates to the native cue-sheet import command. Remaining: cue-sheet import parity/smoke gate. |
 | `ReaADR_Jump_To_Cue.lua` | Compatibility launcher / native routed | Native action owns navigation; REAPER smoke test remains. |
 | `ReaADR_Jump_To_Selected_Cue.lua` | Compatibility launcher / native routed | Historical selected-cue action delegates to `_ReaADRJumpToCueNative`; smoke test remains. |
@@ -72,6 +72,12 @@ Until all seven gates pass, substantive Lua implementations remain the specifica
 | `ReaADR_Record_Cue.lua` | Compatibility launcher / native routed | The historical file contains only a named-command bridge to `_ReaADRRecordCueNative`; the native workflow/window owns recording. Remaining: final docker/visual/lifecycle parity and cross-platform REAPER smoke testing. |
 | `ReaADR_Start_Recording_Workflow.lua` | Compatibility launcher / native routed | Historical workflow action delegates to `_ReaADRRecordCueNative`; no Lua recording workflow remains in this launcher. |
 | `ReaADR_Set_Cue_Status.lua` | Compatibility launcher / native routed | Six-choice native presentation and registered native action own status updates; REAPER smoke testing remains. |
+
+### Native Import extraction
+
+The persistent native Manager no longer depends on the legacy host implementation for XLSX ingestion. `reaadr_reaper/xlsx_import.*` owns first-worksheet workbook extraction and conversion to TSV, after which the same `cue_import` parser/application service used by CSV/TSV handles mapping, validation, merge/update semantics, canonical model commit, and render synchronization. The historical `ReaADR_ReadXlsxAsTsv` extension API remains registered only as a compatibility wrapper around this native adapter.
+
+Focused application tests cover import preview/repository guards, and the complete fake-REAPER integration harness covers successful Full, Add Selected Characters, distinct-script merge, and Update Existing Import while proving unrelated cues are preserved.
 
 ## Native Manager architecture
 
