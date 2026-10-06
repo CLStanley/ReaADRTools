@@ -270,24 +270,6 @@ bool runtime_host_hook(int command, int)
   return false;
 }
 
-void bind_migrated_action_ids_to_legacy_menu_models()
-{
-  const auto& ids = reaadr::reaper::workflow_action_ids();
-  g_validate_session_action.command_id = ids.validate_session;
-  g_refresh_overlay_action.command_id = ids.refresh_overlay;
-  g_refresh_session_action.command_id = ids.refresh_session;
-  g_update_cues_from_regions_action.command_id = ids.update_cues_from_regions;
-  g_clear_character_cues_action.command_id = ids.clear_character_cues;
-  g_character_filter_action.command_id = ids.character_filter;
-  g_next_cue_action.command_id = ids.next_cue;
-  g_previous_cue_action.command_id = ids.previous_cue;
-  g_jump_to_cue_action.command_id = ids.jump_to_cue;
-  g_cue_manager_action.command_id = ids.cue_manager;
-  g_import_cue_sheet_action.command_id = ids.import_cue_sheet;
-  g_preferences_action.command_id = ids.preferences;
-  g_ui_test_action.command_id = ids.ui_test;
-}
-
 bool activate_native_runtime(reaper_plugin_info_t* plugin)
 {
   // The compatibility entrypoint still performs host/API bootstrap, but it no
@@ -295,12 +277,12 @@ bool activate_native_runtime(reaper_plugin_info_t* plugin)
   // its hook and gaccels first, then atomically recreate the same stable named
   // commands under the native registry so shortcuts and toolbar bindings keep
   // resolving by their persisted command names.
-  unregister_native_actions();
+  reaadr::reaper::legacy_host::release_action_registrations();
   if(!reaadr::reaper::register_migrated_workflow_actions(plugin)){
     log_line("Could not cut workflow Action List registration over to the native registry.");
     return false;
   }
-  bind_migrated_action_ids_to_legacy_menu_models();
+  reaadr::reaper::legacy_host::bind_migrated_action_ids();
   if(!plugin->Register("hookcommand",reinterpret_cast<void*>(runtime_host_hook))){
     log_line("Could not install persistent native runtime command hook.");
     reaadr::reaper::unregister_migrated_workflow_actions(plugin);
