@@ -1,4 +1,5 @@
 #include "reaadr_reaper/reaper_api.hpp"
+#include "reaadr_reaper/legacy_host.hpp"
 
 #ifdef _WIN32
 #ifndef NOMINMAX
@@ -2153,24 +2154,18 @@ void unload()
 
 } // namespace
 
-extern "C" REAPER_PLUGIN_DLL_EXPORT int REAPER_PLUGIN_ENTRYPOINT(REAPER_PLUGIN_HINSTANCE instance, reaper_plugin_info_t* plugin)
-{
-  if (!plugin) {
-    unload();
-    return 0;
-  }
+namespace reaadr::reaper::legacy_host {
 
+bool load(REAPER_PLUGIN_HINSTANCE instance, reaper_plugin_info_t* plugin)
+{
+  if (!plugin) return false;
   g_instance = instance;
-  return load(plugin) ? 1 : 0;
+  return ::load(plugin);
 }
 
-#ifdef _WIN32
-BOOL WINAPI DllMain(HINSTANCE instance, DWORD reason, LPVOID)
+void unload()
 {
-  if (reason == DLL_PROCESS_ATTACH) {
-    g_instance = instance;
-    log_windows_dll_load(instance);
-  }
-  return TRUE;
+  ::unload();
 }
-#endif
+
+} // namespace reaadr::reaper::legacy_host
