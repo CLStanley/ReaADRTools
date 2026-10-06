@@ -70,7 +70,7 @@ REAPER_SOURCES := reaadr_reaper/project_state.cpp reaadr_reaper/project_transact
 	app/cue_cleanup_application_service.cpp app/character_filter_application_service.cpp app/manager_view_application_service.cpp \
 	app/cue_manager_application_service.cpp app/session_refresh_application_service.cpp app/region_timing_application_service.cpp
 REAPER_HEADERS := reaadr_reaper/project_state.hpp reaadr_reaper/project_transaction.hpp reaadr_reaper/track_region_adapter.hpp \
-	reaadr_reaper/render_artifact_adapter.hpp reaadr_reaper/session_render_service.hpp reaadr_reaper/native_host_services.hpp reaadr_reaper/native_action_registry.hpp reaadr_reaper/cue_manager_session.hpp \
+	reaadr_reaper/render_artifact_adapter.hpp reaadr_reaper/session_render_service.hpp reaadr_reaper/legacy_host.hpp reaadr_reaper/native_host_services.hpp reaadr_reaper/native_action_registry.hpp reaadr_reaper/cue_manager_session.hpp \
 	reaadr_reaper/marker_snapshot_adapter.hpp reaadr_reaper/marker_cue_generation_command.hpp reaadr_reaper/dialogue_detection_adapter.hpp \
 	reaadr_reaper/dialogue_detection_command.hpp reaadr_reaper/cue_status_command.hpp reaadr_reaper/cue_take_count_adapter.hpp reaadr_reaper/cue_info_command.hpp reaadr_reaper/cue_info_action.hpp reaadr_reaper/character_filter_adapter.hpp reaadr_reaper/character_filter_command.hpp \
 	reaadr_reaper/cue_navigation_service.hpp reaadr_reaper/record_arm_adapter.hpp reaadr_reaper/recording_setup_adapter.hpp \
