@@ -1,4 +1,5 @@
 #include "app/cue_import_application_service.hpp"
+#include "app/cue_import_request.hpp"
 #include "app/script_identity.hpp"
 #include "reaadr_core/event_log.hpp"
 #include "reaadr_core/model_repository.hpp"
@@ -78,6 +79,39 @@ void seed_session(ImportFixture& fixture, const std::string& source_path)
   check(fixture.repository.save(built.model), "import application fixture saves canonical session");
 }
 
+void test_import_request_parsing()
+{
+  check(reaadr::reaper::normalize_cue_import_mode(" Import Entire Sheet ") == "all",
+        "import request normalizes full-import aliases");
+  check(reaadr::reaper::normalize_cue_import_mode("characters") == "selected",
+        "import request normalizes selected-character aliases");
+  check(reaadr::reaper::normalize_cue_import_mode("merge") == "update",
+        "import request normalizes historical update aliases");
+
+  const auto characters =
+    reaadr::reaper::parse_cue_import_characters(" Actor ; ;Beta;  Gamma ");
+  check(characters.size() == 3 && characters[0] == "Actor" &&
+          characters[1] == "Beta" && characters[2] == "Gamma",
+        "import request trims and discards blank character selections");
+
+  const auto mapping = reaadr::reaper::parse_cue_import_mapping(
+    " cue_id = Cue Number ; character = Actor ; start = In Time ; end = Out Time ");
+  check(mapping && mapping.mapping && mapping.mapping->at("cue_id") == "Cue Number" &&
+          mapping.mapping->at("character") == "Actor",
+        "import request parses trimmed explicit column mappings");
+
+  const auto malformed =
+    reaadr::reaper::parse_cue_import_mapping("cue_id=Cue Number;broken");
+  check(!malformed &&
+          malformed.error == "Mappings must use key=column pairs separated by semicolons.",
+        "import request rejects malformed explicit mappings consistently");
+
+  const auto tolerant =
+    reaadr::reaper::parse_cue_import_mapping("cue_id=Cue Number;broken", true);
+  check(tolerant && tolerant.mapping && tolerant.mapping->size() == 1,
+        "import request can recover valid entries from persisted legacy mappings");
+}
+
 void test_preview_and_repository_guards()
 {
   ImportFixture fixture;
@@ -138,6 +172,7 @@ void test_existing_script_mode_guards()
 
 int main()
 {
+  test_import_request_parsing();
   test_preview_and_repository_guards();
   test_existing_script_mode_guards();
   if (failures != 0) {
