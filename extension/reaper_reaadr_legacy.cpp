@@ -2168,4 +2168,27 @@ void unload()
   ::unload();
 }
 
+void release_action_registrations()
+{
+  unregister_native_actions();
+}
+
+void bind_migrated_action_ids()
+{
+  const auto& ids = workflow_action_ids();
+  g_validate_session_action.command_id = ids.validate_session;
+  g_refresh_overlay_action.command_id = ids.refresh_overlay;
+  g_refresh_session_action.command_id = ids.refresh_session;
+  g_update_cues_from_regions_action.command_id = ids.update_cues_from_regions;
+  g_clear_character_cues_action.command_id = ids.clear_character_cues;
+  g_character_filter_action.command_id = ids.character_filter;
+  g_next_cue_action.command_id = ids.next_cue;
+  g_previous_cue_action.command_id = ids.previous_cue;
+  g_jump_to_cue_action.command_id = ids.jump_to_cue;
+  g_cue_manager_action.command_id = ids.cue_manager;
+  g_import_cue_sheet_action.command_id = ids.import_cue_sheet;
+  g_preferences_action.command_id = ids.preferences;
+  g_ui_test_action.command_id = ids.ui_test;
+}
+
 } // namespace reaadr::reaper::legacy_host
