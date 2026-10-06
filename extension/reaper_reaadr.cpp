@@ -29,6 +29,7 @@
 
 #include "app/cue_import_request.hpp"
 #include "app/cue_import_workflow.hpp"
+#include "app/session_export_service.hpp"
 #include "reaadr_reaper/native_runtime.hpp"
 #include "reaadr_reaper/xlsx_import.hpp"
 #include "reaadr_reaper/workflow_action_ids.hpp"
@@ -60,38 +61,29 @@ void run_persistent_native_export_action(const std::string& action)
                       "ReaADR: Export Session Metadata";
   const std::string output_path = persistent_export_path(title);
   if (output_path.empty()) return;
+
   const auto loaded = reaadr::reaper::cue_manager_session_host().load_session();
-  if (!loaded) { ShowMessageBox(reaadr::core::session_load_error_message(loaded), "ReaADR Export", 0); return; }
-  std::ofstream file(output_path, std::ios::binary | std::ios::trunc);
-  if (!file) { ShowMessageBox("Could not create the selected CSV file.", "ReaADR Export", 0); return; }
-  const auto field = [](const reaadr::core::Fields& values, const char* key) {
-    const auto found = values.find(key); return found == values.end() ? std::string() : found->second;
-  };
-  const auto csv = [](std::string value) {
-    std::string escaped;
-    for (char ch : value) { if (ch == '"') escaped += "\"\""; else escaped += ch; }
-    return '"' + escaped + '"';
-  };
-  if (action == "export_cue_sheet") {
-    file << "id,character,start_tc,end_tc,dialogue,notes,status,type\n";
-    for (const auto& cue : loaded.model.cues)
-      file << csv(field(cue,"id")) << ',' << csv(field(cue,"character")) << ',' << csv(field(cue,"start_tc")) << ',' << csv(field(cue,"end_tc")) << ',' << csv(field(cue,"dialogue")) << ',' << csv(field(cue,"notes")) << ',' << csv(field(cue,"status")) << ',' << csv(field(cue,"type")) << '\n';
-  } else if (action == "export_timing_report") {
-    file << "id,character,start_tc,end_tc,start_seconds,end_seconds,duration_seconds,status\n";
-    for (const auto& cue : loaded.model.cues) {
-      const std::string start = field(cue,"start_seconds");
-      const std::string end = field(cue,"end_seconds");
-      double duration = 0.0;
-      try { if (!start.empty() && !end.empty()) duration = std::stod(end) - std::stod(start); } catch (...) {}
-      file << csv(field(cue,"id")) << ',' << csv(field(cue,"character")) << ',' << csv(field(cue,"start_tc")) << ',' << csv(field(cue,"end_tc")) << ',' << csv(start) << ',' << csv(end) << ',' << duration << ',' << csv(field(cue,"status")) << '\n';
-    }
-  } else {
-    file << "key,value\n";
-    for (const auto& entry : loaded.model.session)
-      file << csv(entry.first) << ',' << csv(entry.second) << '\n';
-    file << csv("cue_count") << ',' << loaded.model.cues.size() << '\n';
+  if (!loaded) {
+    ShowMessageBox(reaadr::core::session_load_error_message(loaded), "ReaADR Export", 0);
+    return;
   }
-  if (!file) { ShowMessageBox("The CSV export could not be completed.", "ReaADR Export", 0); return; }
+
+  const auto kind = action == "export_cue_sheet"
+    ? reaadr::reaper::SessionExportKind::cue_sheet
+    : action == "export_timing_report"
+      ? reaadr::reaper::SessionExportKind::timing_report
+      : reaadr::reaper::SessionExportKind::session_metadata;
+  const auto formatted = reaadr::reaper::format_session_export(loaded.model, kind);
+  if (!formatted) {
+    ShowMessageBox(formatted.error.c_str(), "ReaADR Export", 0);
+    return;
+  }
+
+  std::string error;
+  if (!reaadr::reaper::write_session_export(output_path, formatted.content, &error)) {
+    ShowMessageBox(error.c_str(), "ReaADR Export", 0);
+    return;
+  }
   ShowMessageBox(("Exported to:\n" + output_path).c_str(), "ReaADR Export", 0);
 }
 
