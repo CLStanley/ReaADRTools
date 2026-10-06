@@ -225,7 +225,7 @@ void run_persistent_native_import_action()
   // The public Action List command shares the persistent native session used by
   // the Manager. Open it on demand so import no longer falls back to the legacy
   // command implementation when the Manager has not been shown yet.
-  if (!reaadr::reaper::cue_manager_session_host().active()) {
+  if (!reaadr::reaper::cue_manager_session_host().has_session()) {
     reaadr::reaper::CueManagerSessionConfig config;
     config.project_state_api = {GetProjExtState, SetProjExtState};
     config.global_state_api = {GetExtState, SetExtState};
