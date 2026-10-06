@@ -39,7 +39,7 @@ cl /nologo /EHsc /O2 /LD /std:c++17 ^
   reaadr_reaper\dialogue_detection_adapter.cpp reaadr_reaper\dialogue_detection_command.cpp reaadr_reaper\cue_status_command.cpp reaadr_reaper\cue_take_count_adapter.cpp reaadr_reaper\cue_info_command.cpp reaadr_reaper\cue_info_action.cpp ^
   reaadr_reaper\character_filter_adapter.cpp reaadr_reaper\character_filter_command.cpp reaadr_reaper\cue_navigation_service.cpp reaadr_reaper\record_arm_adapter.cpp ^
   reaadr_reaper\recording_setup_adapter.cpp reaadr_reaper\recording_transport_executor.cpp reaadr_reaper\recording_command_context.cpp reaadr_reaper\recording_command.cpp reaadr_reaper\recording_action.cpp ^
-  reaadr_reaper\overlay_refresh_adapter.cpp reaadr_reaper\cue_cleanup_adapter.cpp reaadr_reaper\window_docking.cpp ^
+  reaadr_reaper\overlay_refresh_adapter.cpp reaadr_reaper\cue_cleanup_adapter.cpp reaadr_reaper\window_docking.cpp reaadr_reaper\xlsx_import.cpp ^
   app\cue_info_application_service.cpp app\cue_status_application_service.cpp app\recording_application_service.cpp app\recording_target_application_service.cpp ^
   app\recording_workflow_service.cpp app\recording_session_service.cpp app\overlay_application_service.cpp ^
   app\cue_import_application_service.cpp app\marker_cue_generation_application_service.cpp ^
