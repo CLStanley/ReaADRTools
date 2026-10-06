@@ -46,6 +46,7 @@
 #include "app/cue_manager_application_service.hpp"
 #include "app/session_refresh_application_service.hpp"
 #include "app/region_timing_application_service.hpp"
+#include "app/cue_import_application_service.hpp"
 #include "reaadr_ui/cue_manager_controller.hpp"
 
 #include <algorithm>
@@ -3818,6 +3819,102 @@ void test_session_render_service()
   std::remove((cue_path + ".reaadr.tmp").c_str());
 }
 
+
+void test_cue_import_application_success_paths()
+{
+  const std::string cue_path = "/tmp/reaadr-cue-import-application-cue.wav";
+  FakeProjectStateStore store;
+  reaadr::core::SessionModelRepository repository(store);
+  reaadr::core::EventLogRepository events(store);
+  reaadr::core::CharacterFilterRepository character_filter(store);
+  render_adapter_probe = {};
+  render_adapter_probe.source_lengths[cue_path] = 3.0;
+  transaction_probe = {};
+
+  reaadr::reaper::SessionRenderOptions options;
+  options.commit.replacement.build.session_id = "cue-import-application";
+  options.commit.replacement.build.frame_rate = "24";
+  options.commit.replacement.last_operation = "native_import";
+  options.commit.utc_timestamp = "2026-10-06T11:00:00Z";
+  options.render.create_dialogue_tracks = false;
+  options.cue_audio_path = cue_path;
+  options.apply_character_filter = false;
+  options.publish_events = false;
+
+  reaadr::reaper::SessionRenderService renderer(
+    repository, events, character_filter, nullptr, fake_render_api(), fake_ruler_lane_api(),
+    fake_cue_audio_api(), fake_transaction_api());
+  reaadr::reaper::CueImportApplicationService importer(renderer, 24.0, &repository);
+
+  const std::string initial =
+    "Cue Number,Actor,In Time,Out Time,Dialogue\n"
+    "A1,Actor,1,2,Original actor line\n";
+  const auto full = importer.import_content(initial, "episode.csv", std::nullopt, options, "all");
+  auto loaded = repository.load();
+  check(full && loaded && loaded.model.cues.size() == 1 &&
+          loaded.model.cues[0].at("line") == "Original actor line",
+        "full native import commits and renders the first canonical script");
+
+  const std::string revised =
+    "Cue Number,Actor,In Time,Out Time,Dialogue\n"
+    "A1,Actor,1,2,Original actor line\n"
+    "B1,Beta,3,4,Beta line\n";
+  const auto selected = importer.import_content(
+    revised, "episode_revision2.csv", std::nullopt, options, "selected", {"Beta"});
+  loaded = repository.load();
+  bool actor_preserved = false;
+  bool beta_added = false;
+  if (loaded) {
+    for (const auto& cue : loaded.model.cues) {
+      if (cue.at("id") == "A1" && cue.at("line") == "Original actor line") actor_preserved = true;
+      if (cue.at("id") == "B1" && cue.at("character") == "Beta") beta_added = true;
+    }
+  }
+  check(selected && loaded && loaded.model.cues.size() == 2 && actor_preserved && beta_added,
+        "selected native import adds only the requested character and preserves existing script cues");
+
+  const std::string unrelated =
+    "Cue Number,Actor,In Time,Out Time,Dialogue\n"
+    "C1,Gamma,5,6,Unrelated line\n";
+  const auto second_script = importer.import_content(
+    unrelated, "other.csv", std::nullopt, options, "all");
+  check(static_cast<bool>(second_script),
+        "full native import merges a distinct script into the canonical session");
+
+  const std::string updated =
+    "Cue Number,Actor,In Time,Out Time,Dialogue\n"
+    "A1,Actor,1.5,2.5,Updated actor line\n"
+    "B1,Beta,3,4,Beta revised source line\n";
+  const auto update = importer.import_content(
+    updated, "episode_revision3.csv", std::nullopt, options, "update", {"Actor"});
+  loaded = repository.load();
+  bool actor_updated = false;
+  bool beta_untouched = false;
+  bool unrelated_preserved = false;
+  if (loaded) {
+    for (const auto& cue : loaded.model.cues) {
+      if (cue.at("id") == "A1" && cue.at("line") == "Updated actor line" &&
+          cue.at("start_time") == "1.5") actor_updated = true;
+      if (cue.at("id") == "B1" && cue.at("line") == "Beta line") beta_untouched = true;
+      if (cue.at("id") == "C1" && cue.at("line") == "Unrelated line") unrelated_preserved = true;
+    }
+  }
+  check(update && loaded && loaded.model.cues.size() == 3 &&
+          actor_updated && beta_untouched && unrelated_preserved,
+        "update native import replaces only the selected script character and preserves all unrelated cues");
+
+  check(transaction_probe.begins == 4 && transaction_probe.ends == 4 &&
+          transaction_probe.undos == 0,
+        "successful native import modes each use the canonical render transaction without rollback");
+
+  for (FakeSource* source : std::vector<FakeSource*>(
+         render_adapter_probe.live_sources.begin(), render_adapter_probe.live_sources.end())) {
+    destroy_fake_source(source);
+  }
+  std::remove(cue_path.c_str());
+  std::remove((cue_path + ".reaadr.tmp").c_str());
+}
+
 void test_cue_manager_application_service()
 {
   const std::string cue_path = "/tmp/reaadr-cue-manager-application-cue.wav";
@@ -4160,6 +4257,7 @@ int main()
   test_extended_render_planner();
   test_complete_render_adapter();
   test_session_render_service();
+  test_cue_import_application_success_paths();
   test_cue_manager_application_service();
   test_region_timing_render_service();
   if (failures != 0) {
