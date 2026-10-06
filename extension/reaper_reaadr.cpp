@@ -28,6 +28,7 @@
 #undef REAPER_PLUGIN_ENTRYPOINT
 
 #include "reaadr_reaper/native_runtime.hpp"
+#include "reaadr_reaper/xlsx_import.hpp"
 #include "reaadr_reaper/workflow_action_ids.hpp"
 
 namespace {
@@ -120,14 +121,25 @@ void run_persistent_native_manager_import(const std::string& serialized_mapping,
   std::array<char,4096> path={}; if(!GetUserInputs(preview_only?"ReaADR: Preview Cue Sheet Import":"ReaADR: Import Cue Sheet",1,"Cue sheet path",path.data(),path.size())) return;
   std::string content;
   const std::string source_path(path.data());
-  if (source_path.size() >= 5 && source_path.substr(source_path.size()-5) == ".xlsx") {
-    std::vector<char> tsv(8 * 1024 * 1024), xlsx_error(4096);
-    if (!read_xlsx_as_tsv(path.data(), tsv.data(), static_cast<int>(tsv.size()), xlsx_error.data(), static_cast<int>(xlsx_error.size()))) {
-      ShowMessageBox(xlsx_error.data(), "ReaADR Import", 0);
+  std::string lower_source_path = source_path;
+  std::transform(lower_source_path.begin(), lower_source_path.end(), lower_source_path.begin(),
+                 [](unsigned char ch) { return static_cast<char>(std::tolower(ch)); });
+  if (lower_source_path.size() >= 5 &&
+      lower_source_path.compare(lower_source_path.size() - 5, 5, ".xlsx") == 0) {
+    const auto xlsx = reaadr::reaper::read_xlsx_first_sheet_as_tsv(source_path);
+    if (!xlsx) {
+      ShowMessageBox(xlsx.error.c_str(), "ReaADR Import", 0);
       return;
     }
-    content = tsv.data();
-  } else { std::ifstream file(source_path,std::ios::binary); if(!file){ShowMessageBox("Could not open the selected cue sheet.","ReaADR Import",0);return;} content.assign(std::istreambuf_iterator<char>(file),{}); }
+    content = xlsx.tsv;
+  } else {
+    std::ifstream file(source_path, std::ios::binary);
+    if (!file) {
+      ShowMessageBox("Could not open the selected cue sheet.", "ReaADR Import", 0);
+      return;
+    }
+    content.assign(std::istreambuf_iterator<char>(file), {});
+  }
   std::optional<reaadr::core::ColumnMapping> mapping;
   if(!serialized_mapping.empty()){ reaadr::core::ColumnMapping parsed; std::stringstream entries(serialized_mapping); std::string entry; while(std::getline(entries,entry,';')){const auto equals=entry.find('=');if(equals!=std::string::npos&&equals>0)parsed[entry.substr(0,equals)]=entry.substr(equals+1);} if(!parsed.empty())mapping=std::move(parsed); }
   if(preview_only){const auto preview=reaadr::reaper::cue_manager_session_host().preview_import_content(content,path.data(),mapping);if(!preview){ShowMessageBox(preview.error.c_str(),"ReaADR Import Preview",0);return;}const std::string summary="Parsed "+std::to_string(preview.imported.cues.size())+" cue(s).\n\nNo project or session changes were made.";ShowMessageBox(summary.c_str(),"ReaADR Import Preview",0);return;}
