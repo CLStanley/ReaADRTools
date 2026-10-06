@@ -118,7 +118,7 @@ void test_import_preview_summary()
   ImportFixture fixture;
   auto service = fixture.service();
   const auto preview = service.preview_content(csv, "episode.csv", std::nullopt);
-  check(preview, "preview summary fixture imports");
+  check(static_cast<bool>(preview), "preview summary fixture imports");
   const std::string summary = reaadr::reaper::format_cue_import_preview_summary(
     preview, std::nullopt, {"selected", {"Actor"}});
   check(summary.find("Detected comma") != std::string::npos,
