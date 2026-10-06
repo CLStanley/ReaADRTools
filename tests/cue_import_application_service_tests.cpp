@@ -1,5 +1,6 @@
 #include "app/cue_import_application_service.hpp"
 #include "app/cue_import_request.hpp"
+#include "app/cue_import_workflow.hpp"
 #include "app/script_identity.hpp"
 #include "reaadr_core/event_log.hpp"
 #include "reaadr_core/model_repository.hpp"
@@ -112,6 +113,24 @@ void test_import_request_parsing()
         "import request can recover valid entries from persisted legacy mappings");
 }
 
+void test_import_preview_summary()
+{
+  ImportFixture fixture;
+  auto service = fixture.service();
+  const auto preview = service.preview_content(import_csv(), "episode.csv", std::nullopt);
+  check(preview, "preview summary fixture imports");
+  const std::string summary = reaadr::reaper::format_cue_import_preview_summary(
+    preview, std::nullopt, {"selected", {"Actor"}});
+  check(summary.find("Detected comma") != std::string::npos,
+        "preview summary reports detected delimiter");
+  check(summary.find("2 data row(s)") != std::string::npos,
+        "preview summary reports row count");
+  check(summary.find("1 cue(s) ready to import (mode: selected characters)") != std::string::npos,
+        "preview summary applies selected-character filtering");
+  check(summary.find("Resolved mapping:") != std::string::npos,
+        "preview summary exposes resolved mapping");
+}
+
 void test_preview_and_repository_guards()
 {
   ImportFixture fixture;
@@ -173,6 +192,7 @@ void test_existing_script_mode_guards()
 int main()
 {
   test_import_request_parsing();
+  test_import_preview_summary();
   test_preview_and_repository_guards();
   test_existing_script_mode_guards();
   if (failures != 0) {
