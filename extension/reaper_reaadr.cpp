@@ -171,6 +171,80 @@ void run_persistent_native_manager_import(
   reaadr::reaper::run_cue_import_workflow(request, ui, callbacks);
 }
 
+void run_persistent_native_import_action()
+{
+  reaadr::reaper::CueImportWorkflowRequest request;
+
+  reaadr::reaper::ProjectStateStore project_state(nullptr, {GetProjExtState, SetProjExtState});
+  std::array<char, 4096> saved = {};
+  if (GetProjExtState &&
+      GetProjExtState(nullptr, "ReaADRTools", "import_mapping_last",
+                      saved.data(), saved.size()) > 0) {
+    request.persisted_mapping = saved.data();
+  }
+
+  reaadr::reaper::CueImportHostUi ui;
+  ui.choose_source = [](std::string& source_path) {
+    if (!GetUserFileNameForRead) return false;
+    std::array<char, 4096> path = {};
+    if (!GetUserFileNameForRead(path.data(), "ReaADR: Import Cue Sheet",
+                                "csv;tsv;tab;txt;xlsx")) {
+      return false;
+    }
+    source_path = path.data();
+    return true;
+  };
+  ui.prompt = [](const std::string& title, const std::string& caption,
+                 std::string& value) {
+    if (!GetUserInputs) return false;
+    std::array<char, 2048> input = {};
+    if (!value.empty()) std::strncpy(input.data(), value.c_str(), input.size() - 1);
+    if (!GetUserInputs(title.c_str(), 1, caption.c_str(), input.data(), input.size()))
+      return false;
+    value = input.data();
+    return true;
+  };
+  ui.message = [](const std::string& title, const std::string& message) {
+    if (ShowMessageBox) ShowMessageBox(message.c_str(), title.c_str(), 0);
+  };
+
+  reaadr::reaper::CueImportWorkflowCallbacks callbacks;
+  callbacks.preview = [](const std::string& content, const std::string& source_path,
+                         const std::optional<reaadr::core::ColumnMapping>& mapping) {
+    return reaadr::reaper::cue_manager_session_host().preview_import_content(
+      content, source_path, mapping);
+  };
+  callbacks.import = [](const std::string& content, const std::string& source_path,
+                        const std::optional<reaadr::core::ColumnMapping>& mapping,
+                        const std::string& import_mode,
+                        const std::vector<std::string>& characters) {
+    return reaadr::reaper::cue_manager_session_host().import_content(
+      content, source_path, mapping, import_mode, characters);
+  };
+
+  // The public Action List command shares the persistent native session used by
+  // the Manager. Open it on demand so import no longer falls back to the legacy
+  // command implementation when the Manager has not been shown yet.
+  if (!reaadr::reaper::cue_manager_session_host().active()) {
+    reaadr::reaper::CueManagerSessionConfig config;
+    config.project_state_api = {GetProjExtState, SetProjExtState};
+    config.global_state_api = {GetExtState, SetExtState};
+    config.cleanup_api = {native_cleanup_inspect, native_cleanup_apply, native_utc_timestamp()};
+    config.callbacks.trigger_import =
+      [](const std::string& mapping, bool preview, const std::string& mode,
+         const std::string& characters) {
+        run_persistent_native_manager_import(mapping, preview, mode, characters);
+      };
+    std::string error;
+    if (!reaadr::reaper::open_native_cue_manager(std::move(config), error)) {
+      if (!error.empty()) ShowMessageBox(error.c_str(), "ReaADR Import", 0);
+      return;
+    }
+  }
+
+  reaadr::reaper::run_cue_import_workflow(request, ui, callbacks);
+}
+
 void run_persistent_native_cue_manager_action()
 {
   reaadr::reaper::CueManagerSessionConfig config;
@@ -201,7 +275,7 @@ bool runtime_host_hook(int command, int)
   if (command == ids.previous_cue && command != 0) { run_cue_navigation_action(false); return true; }
   if (command == ids.jump_to_cue && command != 0) { run_jump_to_cue_action(); return true; }
   if (command == ids.cue_manager && command != 0) { run_persistent_native_cue_manager_action(); return true; }
-  if (command == ids.import_cue_sheet && command != 0) { run_native_import_cue_sheet_action(); return true; }
+  if (command == ids.import_cue_sheet && command != 0) { run_persistent_native_import_action(); return true; }
   if (command == ids.preferences && command != 0) { run_native_preferences_action(); return true; }
   if (command == ids.ui_test && command != 0) { reaadr::ui::show_test_window(); return true; }
   return false;
