@@ -28,6 +28,7 @@
 #undef REAPER_PLUGIN_ENTRYPOINT
 
 #include "app/cue_import_request.hpp"
+#include "app/cue_import_workflow.hpp"
 #include "reaadr_reaper/native_runtime.hpp"
 #include "reaadr_reaper/xlsx_import.hpp"
 #include "reaadr_reaper/workflow_action_ids.hpp"
@@ -107,45 +108,67 @@ void run_persistent_native_clear_character_cues_action()
   ShowMessageBox(summary.c_str(), "ReaADR Clear Character Cues", 0);
 }
 
-void run_persistent_native_manager_import(const std::string& serialized_mapping, bool preview_only, const std::string& mode, const std::string& serialized_characters)
+void run_persistent_native_manager_import(
+  const std::string& serialized_mapping, bool preview_only,
+  const std::string& mode, const std::string& serialized_characters)
 {
-  if (!GetUserInputs) return;
-  std::array<char,4096> path={}; if(!GetUserInputs(preview_only?"ReaADR: Preview Cue Sheet Import":"ReaADR: Import Cue Sheet",1,"Cue sheet path",path.data(),path.size())) return;
-  std::string content;
-  const std::string source_path(path.data());
-  std::string lower_source_path = source_path;
-  std::transform(lower_source_path.begin(), lower_source_path.end(), lower_source_path.begin(),
-                 [](unsigned char ch) { return static_cast<char>(std::tolower(ch)); });
-  if (lower_source_path.size() >= 5 &&
-      lower_source_path.compare(lower_source_path.size() - 5, 5, ".xlsx") == 0) {
-    const auto xlsx = reaadr::reaper::read_xlsx_first_sheet_as_tsv(source_path);
-    if (!xlsx) {
-      ShowMessageBox(xlsx.error.c_str(), "ReaADR Import", 0);
-      return;
+  reaadr::reaper::CueImportWorkflowRequest request;
+  request.serialized_mapping = serialized_mapping;
+  request.preview_only = preview_only;
+  request.mode = mode;
+  request.serialized_characters = serialized_characters;
+
+  reaadr::reaper::ProjectStateStore project_state(nullptr, {GetProjExtState, SetProjExtState});
+  if (serialized_mapping.empty()) {
+    std::array<char, 4096> saved = {};
+    if (GetProjExtState &&
+        GetProjExtState(nullptr, "ReaADRTools", "import_mapping_last",
+                        saved.data(), saved.size()) > 0) {
+      request.persisted_mapping = saved.data();
     }
-    content = xlsx.tsv;
-  } else {
-    std::ifstream file(source_path, std::ios::binary);
-    if (!file) {
-      ShowMessageBox("Could not open the selected cue sheet.", "ReaADR Import", 0);
-      return;
+  }
+
+  reaadr::reaper::CueImportHostUi ui;
+  ui.choose_source = [preview_only](std::string& source_path) {
+    if (!GetUserInputs) return false;
+    std::array<char, 4096> path = {};
+    if (!GetUserInputs(preview_only ? "ReaADR: Preview Cue Sheet Import"
+                                    : "ReaADR: Import Cue Sheet",
+                       1, "Cue sheet path", path.data(), path.size())) {
+      return false;
     }
-    content.assign(std::istreambuf_iterator<char>(file), {});
-  }
-  const auto mapping_request = reaadr::reaper::parse_cue_import_mapping(serialized_mapping);
-  if (!mapping_request) {
-    ShowMessageBox(mapping_request.error.c_str(), "ReaADR Import", 0);
-    return;
-  }
-  const auto mapping = mapping_request.mapping;
-  if(preview_only){const auto preview=reaadr::reaper::cue_manager_session_host().preview_import_content(content,path.data(),mapping);if(!preview){ShowMessageBox(preview.error.c_str(),"ReaADR Import Preview",0);return;}const std::string summary="Parsed "+std::to_string(preview.imported.cues.size())+" cue(s).\n\nNo project or session changes were made.";ShowMessageBox(summary.c_str(),"ReaADR Import Preview",0);return;}
-  const auto selected_characters =
-    reaadr::reaper::parse_cue_import_characters(serialized_characters);
-  const auto result = reaadr::reaper::cue_manager_session_host().import_content(
-    content, path.data(), mapping, reaadr::reaper::normalize_cue_import_mode(mode),
-    selected_characters);
-  if(!result){ShowMessageBox(result.error.c_str(),"ReaADR Import",0);return;}
-  const std::string summary="Imported "+std::to_string(result.imported.cues.size())+" cue(s) from "+std::string(path.data())+".\n\nTracks created: "+std::to_string(result.rendered.render.tracks_and_regions.tracks_created)+"\nRegions created: "+std::to_string(result.rendered.render.tracks_and_regions.regions_created);ShowMessageBox(summary.c_str(),"ReaADR Import (Native)",0);
+    source_path = path.data();
+    return true;
+  };
+  ui.prompt = [](const std::string& title, const std::string& caption,
+                 std::string& value) {
+    if (!GetUserInputs) return false;
+    std::array<char, 2048> input = {};
+    if (!value.empty()) std::strncpy(input.data(), value.c_str(), input.size() - 1);
+    if (!GetUserInputs(title.c_str(), 1, caption.c_str(), input.data(), input.size()))
+      return false;
+    value = input.data();
+    return true;
+  };
+  ui.message = [](const std::string& title, const std::string& message) {
+    if (ShowMessageBox) ShowMessageBox(message.c_str(), title.c_str(), 0);
+  };
+
+  reaadr::reaper::CueImportWorkflowCallbacks callbacks;
+  callbacks.preview = [](const std::string& content, const std::string& source_path,
+                         const std::optional<reaadr::core::ColumnMapping>& mapping) {
+    return reaadr::reaper::cue_manager_session_host().preview_import_content(
+      content, source_path, mapping);
+  };
+  callbacks.import = [](const std::string& content, const std::string& source_path,
+                        const std::optional<reaadr::core::ColumnMapping>& mapping,
+                        const std::string& import_mode,
+                        const std::vector<std::string>& characters) {
+    return reaadr::reaper::cue_manager_session_host().import_content(
+      content, source_path, mapping, import_mode, characters);
+  };
+
+  reaadr::reaper::run_cue_import_workflow(request, ui, callbacks);
 }
 
 void run_persistent_native_cue_manager_action()
