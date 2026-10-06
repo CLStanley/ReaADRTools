@@ -1,33 +1,10 @@
 #include "cue_import_application_service.hpp"
 #include "script_identity.hpp"
+#include "cue_import_request.hpp"
 
 #include <algorithm>
 #include <cctype>
 #include <set>
-
-namespace {
-
-std::string normalize_import_mode(std::string value)
-{
-  value.erase(value.begin(), std::find_if(value.begin(), value.end(), [](unsigned char ch) {
-    return !std::isspace(ch);
-  }));
-  value.erase(std::find_if(value.rbegin(), value.rend(), [](unsigned char ch) {
-    return !std::isspace(ch);
-  }).base(), value.end());
-  std::transform(value.begin(), value.end(), value.begin(), [](unsigned char ch) {
-    return static_cast<char>(std::tolower(ch));
-  });
-  if (value == "1" || value == "all" || value == "import entire script" ||
-      value == "import entire sheet") return "all";
-  if (value == "2" || value == "selected" || value == "import selected characters" ||
-      value == "add selected characters") return "selected";
-  if (value == "3" || value == "update" || value == "update existing import" ||
-      value == "update already imported characters") return "update";
-  return value;
-}
-
-} // namespace
 
 namespace reaadr::reaper {
 
@@ -70,7 +47,7 @@ CueImportApplicationResult CueImportApplicationService::import_content(
   const ScriptIdentity script = derive_native_script_identity(source_path, result.imported.cues);
   annotate_imported_cues(result.imported.cues, script);
 
-  const std::string normalized_mode = normalize_import_mode(mode.empty() ? "all" : mode);
+  const std::string normalized_mode = normalize_cue_import_mode(mode);
   if (normalized_mode == "all") {
     if (!repository_) {
       result.error = "Native full import requires a canonical session repository.";
