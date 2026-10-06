@@ -1,0 +1,89 @@
+#pragma once
+
+// Shared REAPER API surface required by the native runtime and the temporary
+// legacy compatibility host. Define REAADR_REAPER_API_IMPLEMENT in exactly one
+// translation unit before including this header to instantiate the SDK pointers.
+#ifdef REAADR_REAPER_API_IMPLEMENT
+#define REAPERAPI_IMPLEMENT
+#endif
+#define REAPERAPI_MINIMAL
+#define REAPERAPI_WANT_AddCustomizableMenu
+#define REAPERAPI_WANT_AddMediaItemToTrack
+#define REAPERAPI_WANT_AddProjectMarker2
+#define REAPERAPI_WANT_AddRemoveReaScript
+#define REAPERAPI_WANT_AddTakeToMediaItem
+#define REAPERAPI_WANT_ColorFromNative
+#define REAPERAPI_WANT_ColorToNative
+#define REAPERAPI_WANT_CountProjectMarkers
+#define REAPERAPI_WANT_CountSelectedMediaItems
+#define REAPERAPI_WANT_CountTrackMediaItems
+#define REAPERAPI_WANT_CountTracks
+#define REAPERAPI_WANT_CreateTakeAudioAccessor
+#define REAPERAPI_WANT_DeleteProjectMarker
+#define REAPERAPI_WANT_DeleteTrack
+#define REAPERAPI_WANT_DeleteTrackMediaItem
+#define REAPERAPI_WANT_DestroyAudioAccessor
+#define REAPERAPI_WANT_GetActiveTake
+#define REAPERAPI_WANT_GetAudioAccessorEndTime
+#define REAPERAPI_WANT_GetAudioAccessorSamples
+#define REAPERAPI_WANT_GetAudioAccessorStartTime
+#define REAPERAPI_WANT_GetExtState
+#define REAPERAPI_WANT_GetMediaItemInfo_Value
+#define REAPERAPI_WANT_GetMediaSourceLength
+#define REAPERAPI_WANT_GetMediaTrackInfo_Value
+#define REAPERAPI_WANT_GetProjExtState
+#define REAPERAPI_WANT_GetProjectPathEx
+#define REAPERAPI_WANT_GetRegionOrMarker
+#define REAPERAPI_WANT_GetRegionOrMarkerInfo_Value
+#define REAPERAPI_WANT_GetResourcePath
+#define REAPERAPI_WANT_GetSelectedMediaItem
+#define REAPERAPI_WANT_GetTrack
+#define REAPERAPI_WANT_GetUserInputs
+#define REAPERAPI_WANT_GetUserFileNameForRead
+#define REAPERAPI_WANT_Main_OnCommand
+#define REAPERAPI_WANT_GetSetMediaItemInfo_String
+#define REAPERAPI_WANT_GetSetMediaItemTakeInfo
+#define REAPERAPI_WANT_GetSetMediaItemTakeInfo_String
+#define REAPERAPI_WANT_GetSetMediaTrackInfo_String
+#define REAPERAPI_WANT_GetSetProjectInfo
+#define REAPERAPI_WANT_GetSetProjectInfo_String
+#define REAPERAPI_WANT_GetTrackMediaItem
+#define REAPERAPI_WANT_EnumProjectMarkers3
+#define REAPERAPI_WANT_InsertTrackAtIndex
+#define REAPERAPI_WANT_MoveMediaItemToTrack
+#define REAPERAPI_WANT_PCM_Source_CreateFromFile
+#define REAPERAPI_WANT_PCM_Source_Destroy
+#define REAPERAPI_WANT_PreventUIRefresh
+#define REAPERAPI_WANT_SetMediaItemInfo_Value
+#define REAPERAPI_WANT_SetMediaTrackInfo_Value
+#define REAPERAPI_WANT_SetProjectMarker4
+#define REAPERAPI_WANT_SetProjExtState
+#define REAPERAPI_WANT_SetRegionOrMarkerInfo_Value
+#define REAPERAPI_WANT_SetExtState
+#define REAPERAPI_WANT_ShowMessageBox
+#define REAPERAPI_WANT_TimeMap_curFrameRate
+#define REAPERAPI_WANT_TrackFX_AddByName
+#define REAPERAPI_WANT_TrackFX_Delete
+#define REAPERAPI_WANT_TrackFX_GetCount
+#define REAPERAPI_WANT_TrackFX_GetEnabled
+#define REAPERAPI_WANT_TrackFX_GetNamedConfigParm
+#define REAPERAPI_WANT_TrackFX_SetEnabled
+#define REAPERAPI_WANT_TrackFX_SetNamedConfigParm
+#define REAPERAPI_WANT_TrackList_AdjustWindows
+#define REAPERAPI_WANT_UpdateArrange
+#define REAPERAPI_WANT_Undo_BeginBlock2
+#define REAPERAPI_WANT_Undo_CanUndo2
+#define REAPERAPI_WANT_Undo_DoUndo2
+#define REAPERAPI_WANT_Undo_EndBlock2
+#define REAPERAPI_WANT_ValidatePtr2
+#define REAPERAPI_WANT_GetNumRegionsOrMarkers
+#define REAPERAPI_WANT_GetCursorPosition
+#define REAPERAPI_WANT_GetPlayPosition
+#define REAPERAPI_WANT_GetPlayState
+#define REAPERAPI_WANT_SetEditCurPos
+
+#include <reaper_plugin_functions.h>
+
+#ifdef REAADR_REAPER_API_IMPLEMENT
+#undef REAPERAPI_IMPLEMENT
+#endif
