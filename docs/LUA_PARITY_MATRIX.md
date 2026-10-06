@@ -2,6 +2,10 @@
 
 This document is the migration acceptance checklist for the Lua-to-native-C++ transition. It is updated alongside migration work so the repository describes the current native implementation rather than an earlier transition state.
 
+## Native host decomposition
+
+The migration runtime no longer relies on `reaper_reaadr_legacy.cpp` to instantiate REAPER SDK API pointers. `reaadr_reaper/reaper_api.*` owns that process-wide host API surface, and the retained legacy host consumes the same declarations as a compatibility client. This is the first host-decomposition gate toward removing the monolithic source include entirely; feature parity rows below remain unchanged until REAPER smoke testing.
+
 ## Retention rule
 
 **Keep substantive Lua reference implementations in `scripts/` until native C++ has reached full behavioral parity for the workflow they specify.**
