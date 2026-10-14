@@ -1,5 +1,6 @@
 #include "reaadr_reaper/reaper_api.hpp"
 #include "reaadr_reaper/legacy_host.hpp"
+#include "reaadr_reaper/workflow_action_ids.hpp"
 
 #ifdef _WIN32
 #ifndef NOMINMAX
@@ -2199,7 +2200,7 @@ void release_action_registrations()
 
 void bind_migrated_action_ids()
 {
-  const auto& ids = workflow_action_ids();
+  const auto& ids = reaadr::reaper::workflow_action_ids();
   g_validate_session_action.command_id = ids.validate_session;
   g_refresh_overlay_action.command_id = ids.refresh_overlay;
   g_refresh_session_action.command_id = ids.refresh_session;
