@@ -243,14 +243,6 @@ void run_persistent_native_cue_manager_action()
   std::string error;if(!reaadr::reaper::open_native_cue_manager(std::move(config),error)&&!error.empty())ShowMessageBox(error.c_str(),"ReaADR Cue Manager",0);
 }
 
-bool promote_native_quick_actions(reaper_plugin_info_t* plugin)
-{
-  if(!plugin||!plugin->GetFunc)return false;using NamedCommandLookupFn=int(*)(const char*);auto named_command_lookup=reinterpret_cast<NamedCommandLookupFn>(plugin->GetFunc("NamedCommandLookup"));if(!named_command_lookup)return false;
-  constexpr std::array<const char*,4> command_names={{"_ReaADRQuickAction1Native","_ReaADRQuickAction2Native","_ReaADRQuickAction3Native","_ReaADRQuickAction4Native"}};std::array<int,4> command_ids={};
-  for(std::size_t index=0;index<command_names.size();++index){command_ids[index]=named_command_lookup(command_names[index]);if(!command_ids[index]){log_line(std::string("Native Quick Action command unavailable: ")+command_names[index]);return false;}}
-  for(std::size_t index=0;index<command_ids.size();++index)g_actions[index+1].command_id=command_ids[index];log_line("Promoted all four Quick Actions to native command registrations.");return true;
-}
-
 bool runtime_host_hook(int command, int)
 {
   const auto& ids = reaadr::reaper::workflow_action_ids();
@@ -297,7 +289,7 @@ bool activate_native_runtime(reaper_plugin_info_t* plugin)
     reaadr::reaper::unregister_migrated_workflow_actions(plugin);
     return false;
   }
-  if(!promote_native_quick_actions(plugin)){
+  if(!reaadr::reaper::legacy_host::promote_native_quick_actions(plugin)){
     log_line("Could not promote Quick Actions to native registrations.");
     reaadr::reaper::shutdown_native_runtime(plugin,nullptr);
     plugin->Register("-hookcommand",reinterpret_cast<void*>(runtime_host_hook));
