@@ -315,7 +315,7 @@ extern "C" REAPER_PLUGIN_DLL_EXPORT int ReaperPluginEntry(
   REAPER_PLUGIN_HINSTANCE instance, reaper_plugin_info_t* plugin)
 {
   if (!plugin) {
-    deactivate_native_runtime(g_plugin);
+    deactivate_native_runtime(reaadr::reaper::g_native_runtime_plugin);
     reaadr::reaper::legacy_host::unload();
     return 0;
   }
