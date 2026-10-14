@@ -12,5 +12,6 @@ bool load(REAPER_PLUGIN_HINSTANCE instance, reaper_plugin_info_t* plugin);
 void unload();
 void release_action_registrations();
 void bind_migrated_action_ids();
+bool promote_native_quick_actions(reaper_plugin_info_t* plugin);
 
 } // namespace reaadr::reaper::legacy_host
