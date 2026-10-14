@@ -2168,6 +2168,30 @@ void unload()
   ::unload();
 }
 
+bool promote_native_quick_actions(reaper_plugin_info_t* plugin)
+{
+  if (!plugin || !plugin->GetFunc) return false;
+  using NamedCommandLookupFn = int (*)(const char*);
+  auto lookup = reinterpret_cast<NamedCommandLookupFn>(plugin->GetFunc("NamedCommandLookup"));
+  if (!lookup) return false;
+  constexpr std::array<const char*, 4> names = {{
+    "_ReaADRQuickAction1Native", "_ReaADRQuickAction2Native",
+    "_ReaADRQuickAction3Native", "_ReaADRQuickAction4Native"
+  }};
+  std::array<int, 4> ids = {};
+  for (std::size_t index = 0; index < names.size(); ++index) {
+    ids[index] = lookup(names[index]);
+    if (!ids[index]) {
+      log_line(std::string("Native Quick Action command unavailable: ") + names[index]);
+      return false;
+    }
+  }
+  for (std::size_t index = 0; index < ids.size(); ++index)
+    g_actions[index + 1].command_id = ids[index];
+  log_line("Promoted all four Quick Actions to native command registrations.");
+  return true;
+}
+
 void release_action_registrations()
 {
   unregister_native_actions();
