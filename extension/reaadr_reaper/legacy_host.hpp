@@ -14,4 +14,20 @@ void release_action_registrations();
 void bind_migrated_action_ids();
 bool promote_native_quick_actions(reaper_plugin_info_t* plugin);
 
+// Compatibility command dispatch until these workflows are individually
+// migrated into standalone native command modules.
+enum class Command {
+  validate_session,
+  refresh_overlay,
+  refresh_session,
+  update_cues_from_regions,
+  clear_character_cues,
+  character_filter,
+  next_cue,
+  previous_cue,
+  jump_to_cue,
+  preferences
+};
+void run_command(Command command);
+
 } // namespace reaadr::reaper::legacy_host
