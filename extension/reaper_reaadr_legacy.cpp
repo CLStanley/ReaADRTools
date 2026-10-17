@@ -2193,6 +2193,22 @@ bool promote_native_quick_actions(reaper_plugin_info_t* plugin)
   return true;
 }
 
+void run_command(Command command)
+{
+  switch (command) {
+    case Command::validate_session: run_validate_session_action(); break;
+    case Command::refresh_overlay: run_refresh_overlay_action(); break;
+    case Command::refresh_session: run_refresh_session_action(); break;
+    case Command::update_cues_from_regions: run_update_cues_from_regions_action(); break;
+    case Command::clear_character_cues: run_clear_character_cues_action(); break;
+    case Command::character_filter: run_character_filter_action(); break;
+    case Command::next_cue: run_cue_navigation_action(true); break;
+    case Command::previous_cue: run_cue_navigation_action(false); break;
+    case Command::jump_to_cue: run_jump_to_cue_action(); break;
+    case Command::preferences: run_native_preferences_action(); break;
+  }
+}
+
 void release_action_registrations()
 {
   unregister_native_actions();
