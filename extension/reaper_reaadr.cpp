@@ -246,18 +246,18 @@ void run_persistent_native_cue_manager_action()
 bool runtime_host_hook(int command, int)
 {
   const auto& ids = reaadr::reaper::workflow_action_ids();
-  if (command == ids.validate_session && command != 0) { run_validate_session_action(); return true; }
-  if (command == ids.refresh_overlay && command != 0) { run_refresh_overlay_action(); return true; }
-  if (command == ids.refresh_session && command != 0) { run_refresh_session_action(); return true; }
-  if (command == ids.update_cues_from_regions && command != 0) { run_update_cues_from_regions_action(); return true; }
-  if (command == ids.clear_character_cues && command != 0) { run_clear_character_cues_action(); return true; }
-  if (command == ids.character_filter && command != 0) { run_character_filter_action(); return true; }
-  if (command == ids.next_cue && command != 0) { run_cue_navigation_action(true); return true; }
-  if (command == ids.previous_cue && command != 0) { run_cue_navigation_action(false); return true; }
-  if (command == ids.jump_to_cue && command != 0) { run_jump_to_cue_action(); return true; }
+  if (command == ids.validate_session && command != 0) { reaadr::reaper::legacy_host::run_command(reaadr::reaper::legacy_host::Command::validate_session); return true; }
+  if (command == ids.refresh_overlay && command != 0) { reaadr::reaper::legacy_host::run_command(reaadr::reaper::legacy_host::Command::refresh_overlay); return true; }
+  if (command == ids.refresh_session && command != 0) { reaadr::reaper::legacy_host::run_command(reaadr::reaper::legacy_host::Command::refresh_session); return true; }
+  if (command == ids.update_cues_from_regions && command != 0) { reaadr::reaper::legacy_host::run_command(reaadr::reaper::legacy_host::Command::update_cues_from_regions); return true; }
+  if (command == ids.clear_character_cues && command != 0) { reaadr::reaper::legacy_host::run_command(reaadr::reaper::legacy_host::Command::clear_character_cues); return true; }
+  if (command == ids.character_filter && command != 0) { reaadr::reaper::legacy_host::run_command(reaadr::reaper::legacy_host::Command::character_filter); return true; }
+  if (command == ids.next_cue && command != 0) { reaadr::reaper::legacy_host::run_command(reaadr::reaper::legacy_host::Command::next_cue); return true; }
+  if (command == ids.previous_cue && command != 0) { reaadr::reaper::legacy_host::run_command(reaadr::reaper::legacy_host::Command::previous_cue); return true; }
+  if (command == ids.jump_to_cue && command != 0) { reaadr::reaper::legacy_host::run_command(reaadr::reaper::legacy_host::Command::jump_to_cue); return true; }
   if (command == ids.cue_manager && command != 0) { run_persistent_native_cue_manager_action(); return true; }
   if (command == ids.import_cue_sheet && command != 0) { run_persistent_native_import_action(); return true; }
-  if (command == ids.preferences && command != 0) { run_native_preferences_action(); return true; }
+  if (command == ids.preferences && command != 0) { reaadr::reaper::legacy_host::run_command(reaadr::reaper::legacy_host::Command::preferences); return true; }
   if (command == ids.ui_test && command != 0) { reaadr::ui::show_test_window(); return true; }
   return false;
 }
