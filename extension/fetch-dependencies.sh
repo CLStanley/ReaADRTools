@@ -19,7 +19,16 @@ fetch_at_commit() {
   fi
   git init -q "$destination"
   git -C "$destination" remote add origin "$url"
-  git -C "$destination" fetch -q --depth 1 origin "$commit"
+  attempt=1
+  while ! git -C "$destination" fetch -q --depth 1 origin "$commit"; do
+    if [ "$attempt" -ge 3 ]; then
+      echo "Failed to fetch pinned revision $commit from $url after $attempt attempts." >&2
+      exit 1
+    fi
+    echo "Pinned dependency fetch failed (attempt $attempt); retrying..." >&2
+    attempt=$((attempt + 1))
+    sleep 5
+  done
   git -C "$destination" checkout -q --detach FETCH_HEAD
   actual=$(git -C "$destination" rev-parse HEAD)
   if [ "$actual" != "$commit" ]; then
