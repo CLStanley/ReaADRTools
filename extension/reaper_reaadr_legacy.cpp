@@ -2193,6 +2193,18 @@ bool promote_native_quick_actions(reaper_plugin_info_t* plugin)
   return true;
 }
 
+void log(const std::string& message)
+{
+  log_line(message);
+}
+
+void configure_session(reaadr::reaper::CueManagerSessionConfig& config)
+{
+  config.cleanup_api = {
+    native_cleanup_inspect, native_cleanup_apply, native_utc_timestamp()
+  };
+}
+
 void run_command(Command command)
 {
   switch (command) {
