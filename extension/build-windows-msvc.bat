@@ -23,7 +23,7 @@ cl /nologo /EHsc /O2 /LD /std:c++17 ^
   /DREAPERAPI_WANT_DockWindowRefreshForHWND /DREAPERAPI_WANT_DockWindowRemove ^
   /DREAPERAPI_WANT_Dock_UpdateDockID ^
   /I. /I"%REAPER_SDK%\sdk" /I"%WDL%" ^
-  reaper_reaadr.cpp ^
+  reaper_reaadr.cpp reaper_reaadr_legacy.cpp ^
   reaadr_core\session_model.cpp reaadr_core\model_repository.cpp reaadr_core\domain_utils.cpp reaadr_core\cue_info.cpp ^
   reaadr_core\cue_import.cpp reaadr_core\marker_cue_generation.cpp reaadr_core\dialogue_cue_generation.cpp ^
   reaadr_core\session_builder.cpp reaadr_core\session_mutation.cpp reaadr_core\session_commit.cpp ^
