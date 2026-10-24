@@ -1,6 +1,9 @@
 #pragma once
 
 #include <reaper_plugin.h>
+#include <string>
+
+namespace reaadr::reaper { struct CueManagerSessionConfig; }
 
 // Temporary compatibility-host lifecycle. The native migration shell calls this
 // explicit boundary instead of macro-renaming and invoking a second plug-in
@@ -29,5 +32,7 @@ enum class Command {
   preferences
 };
 void run_command(Command command);
+void log(const std::string& message);
+void configure_session(CueManagerSessionConfig& config);
 
 } // namespace reaadr::reaper::legacy_host
