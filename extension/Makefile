@@ -84,7 +84,7 @@ REAPER_HEADERS := reaadr_reaper/project_state.hpp reaadr_reaper/project_transact
 	reaadr_ui/character_filter_window.hpp reaadr_ui/cue_info_controller.hpp reaadr_ui/cue_info_window.hpp reaadr_ui/cue_status_window.hpp reaadr_ui/win32_utf8.hpp
 NATIVE_SOURCES := $(CORE_SOURCES) $(REAPER_SOURCES) $(UI_SOURCES)
 NATIVE_HEADERS := $(CORE_HEADERS) $(REAPER_HEADERS)
-EXTENSION_SOURCES := reaper_reaadr.cpp $(NATIVE_SOURCES)
+EXTENSION_SOURCES := reaper_reaadr.cpp reaper_reaadr_legacy.cpp $(NATIVE_SOURCES)
 .PHONY: all clean dist prepare-sdk test
 all: $(BUILD_DIR)/$(TARGET)
 prepare-sdk:
