@@ -1,7 +1,5 @@
-// Migration host shell: keep the legacy monolithic host implementation intact
-// while replacing its entrypoint and command hook with the persistent native
-// runtime. This lets migration complete without duplicating or partially
-// rewriting the 100KB legacy host; cleanup can split that host after parity.
+// Native REAPER extension entrypoint. Legacy behavior is isolated behind
+// the compatibility-host interface and compiled separately.
 #include <algorithm>
 #include <array>
 #include <cmath>
@@ -20,9 +18,10 @@
 #include <vector>
 
 #include <reaper_plugin.h>
-#define hook_native_command hook_native_command_legacy
-#include "reaper_reaadr_legacy.cpp"
-#undef hook_native_command
+#include "reaadr_reaper/reaper_api.hpp"
+#include "reaadr_reaper/legacy_host.hpp"
+#include "reaadr_reaper/project_state.hpp"
+#include "reaadr_ui/reaadr_ui.hpp"
 
 #include "app/cue_import_request.hpp"
 #include "app/cue_import_workflow.hpp"
@@ -218,7 +217,7 @@ void run_persistent_native_import_action()
     reaadr::reaper::CueManagerSessionConfig config;
     config.project_state_api = {GetProjExtState, SetProjExtState};
     config.global_state_api = {GetExtState, SetExtState};
-    config.cleanup_api = {native_cleanup_inspect, native_cleanup_apply, native_utc_timestamp()};
+    reaadr::reaper::legacy_host::configure_session(config);
     config.callbacks.trigger_import =
       [](const std::string& mapping, bool preview, const std::string& mode,
          const std::string& characters) {
@@ -237,7 +236,7 @@ void run_persistent_native_import_action()
 void run_persistent_native_cue_manager_action()
 {
   reaadr::reaper::CueManagerSessionConfig config;
-  config.project_state_api={GetProjExtState,SetProjExtState};config.global_state_api={GetExtState,SetExtState};config.cleanup_api={native_cleanup_inspect,native_cleanup_apply,native_utc_timestamp()};
+  config.project_state_api={GetProjExtState,SetProjExtState};config.global_state_api={GetExtState,SetExtState};reaadr::reaper::legacy_host::configure_session(config);
   config.callbacks.trigger_import=[](const std::string& mapping,bool preview,const std::string& mode,const std::string& characters){run_persistent_native_manager_import(mapping,preview,mode,characters);};
   config.callbacks.trigger_action=[](const std::string& action){if(action=="sync_regions"){std::string error;if(!reaadr::reaper::cue_manager_session_host().sync_regions(error)&&!error.empty())ShowMessageBox(error.c_str(),"ReaADR Cue Manager",0);}else if(action=="clear_character_cues")run_persistent_native_clear_character_cues_action();else if(action=="export_cue_sheet"||action=="export_timing_report"||action=="export_session_metadata")run_persistent_native_export_action(action);};
   std::string error;if(!reaadr::reaper::open_native_cue_manager(std::move(config),error)&&!error.empty())ShowMessageBox(error.c_str(),"ReaADR Cue Manager",0);
@@ -271,40 +270,40 @@ bool activate_native_runtime(reaper_plugin_info_t* plugin)
   // resolving by their persisted command names.
   reaadr::reaper::legacy_host::release_action_registrations();
   if(!reaadr::reaper::register_migrated_workflow_actions(plugin)){
-    log_line("Could not cut workflow Action List registration over to the native registry.");
+    reaadr::reaper::legacy_host::log("Could not cut workflow Action List registration over to the native registry.");
     return false;
   }
   reaadr::reaper::legacy_host::bind_migrated_action_ids();
   if(!plugin->Register("hookcommand",reinterpret_cast<void*>(runtime_host_hook))){
-    log_line("Could not install persistent native runtime command hook.");
+    reaadr::reaper::legacy_host::log("Could not install persistent native runtime command hook.");
     reaadr::reaper::unregister_migrated_workflow_actions(plugin);
     return false;
   }
   g_runtime_host_hook_registered=true;
   std::string error;
   if(!reaadr::reaper::initialize_native_runtime(plugin,&error)){
-    if(!error.empty())log_line(error);
+    if(!error.empty())reaadr::reaper::legacy_host::log(error);
     plugin->Register("-hookcommand",reinterpret_cast<void*>(runtime_host_hook));
     g_runtime_host_hook_registered=false;
     reaadr::reaper::unregister_migrated_workflow_actions(plugin);
     return false;
   }
   if(!reaadr::reaper::legacy_host::promote_native_quick_actions(plugin)){
-    log_line("Could not promote Quick Actions to native registrations.");
+    reaadr::reaper::legacy_host::log("Could not promote Quick Actions to native registrations.");
     reaadr::reaper::shutdown_native_runtime(plugin,nullptr);
     plugin->Register("-hookcommand",reinterpret_cast<void*>(runtime_host_hook));
     g_runtime_host_hook_registered=false;
     reaadr::reaper::unregister_migrated_workflow_actions(plugin);
     return false;
   }
-  log_line("Persistent native workflow runtime activated with native Action List ownership.");
+  reaadr::reaper::legacy_host::log("Persistent native workflow runtime activated with native Action List ownership.");
   return true;
 }
 
 void deactivate_native_runtime(reaper_plugin_info_t* plugin)
 {
   std::string error;
-  if(!reaadr::reaper::shutdown_native_runtime(plugin,&error)&&!error.empty())log_line(error);
+  if(!reaadr::reaper::shutdown_native_runtime(plugin,&error)&&!error.empty())reaadr::reaper::legacy_host::log(error);
   if(plugin&&g_runtime_host_hook_registered){plugin->Register("-hookcommand",reinterpret_cast<void*>(runtime_host_hook));g_runtime_host_hook_registered=false;}
   reaadr::reaper::unregister_migrated_workflow_actions(plugin);
 }
