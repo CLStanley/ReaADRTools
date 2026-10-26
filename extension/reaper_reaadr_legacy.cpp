@@ -4,6 +4,24 @@
 #endif
 #endif
 
+// SWELL defines min/max as function-like macros on non-Windows hosts.
+// Load standard library headers before the REAPER/SWELL API declarations.
+#include <algorithm>
+#include <array>
+#include <cmath>
+#include <cctype>
+#include <cstdio>
+#include <cstdlib>
+#include <cstring>
+#include <ctime>
+#include <fstream>
+#include <functional>
+#include <map>
+#include <regex>
+#include <sstream>
+#include <string>
+#include <vector>
+
 #include "reaadr_reaper/reaper_api.hpp"
 #include "reaadr_reaper/legacy_host.hpp"
 #include "reaadr_reaper/workflow_action_ids.hpp"
