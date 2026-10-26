@@ -1,12 +1,13 @@
-#include "reaadr_reaper/reaper_api.hpp"
-#include "reaadr_reaper/legacy_host.hpp"
-#include "reaadr_reaper/workflow_action_ids.hpp"
-
 #ifdef _WIN32
 #ifndef NOMINMAX
 #define NOMINMAX
 #endif
 #endif
+
+#include "reaadr_reaper/reaper_api.hpp"
+#include "reaadr_reaper/legacy_host.hpp"
+#include "reaadr_reaper/workflow_action_ids.hpp"
+#include "reaadr_reaper/cue_manager_session.hpp"
 
 #include <algorithm>
 #include <array>
