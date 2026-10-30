@@ -23,6 +23,7 @@
 #include "reaadr_reaper/project_state.hpp"
 #include "reaadr_ui/reaadr_ui.hpp"
 
+#include "reaadr_core/model_repository.hpp"
 #include "app/cue_import_request.hpp"
 #include "app/cue_import_workflow.hpp"
 #include "app/session_export_service.hpp"
@@ -242,10 +243,36 @@ void run_persistent_native_cue_manager_action()
   std::string error;if(!reaadr::reaper::open_native_cue_manager(std::move(config),error)&&!error.empty())ShowMessageBox(error.c_str(),"ReaADR Cue Manager",0);
 }
 
+void run_native_validate_session_action()
+{
+  reaadr::reaper::ProjectStateStore state(nullptr, {GetProjExtState, SetProjExtState});
+  reaadr::core::SessionModelRepository repository(state);
+  const auto result = repository.load();
+  if (!result) {
+    ShowMessageBox(reaadr::core::session_load_error_message(result), "ReaADR Session Model", 0);
+    return;
+  }
+  const auto& model = result.model;
+  const auto revision = repository.revision();
+  const auto name = model.session.find("session_name");
+  std::ostringstream summary;
+  summary << "The ADR Session Model is valid.\\n\\n";
+  summary << "Session ID: " << model.session_id() << '\\n';
+  if (name != model.session.end() && !name->second.empty()) summary << "Session: " << name->second << '\\n';
+  if (revision) summary << "Revision: " << revision.revision << '\\n';
+  summary << "Scripts: " << model.scripts.size() << '\\n';
+  summary << "Characters: " << model.characters.size() << '\\n';
+  summary << "Cues: " << model.cues.size() << '\\n';
+  summary << "Tracks: " << model.tracks.size() << '\\n';
+  summary << "Regions: " << model.regions.size();
+  const std::string message = summary.str();
+  ShowMessageBox(message.c_str(), "ReaADR Session Model", 0);
+}
+
 bool runtime_host_hook(int command, int)
 {
   const auto& ids = reaadr::reaper::workflow_action_ids();
-  if (command == ids.validate_session && command != 0) { reaadr::reaper::legacy_host::run_command(reaadr::reaper::legacy_host::Command::validate_session); return true; }
+  if (command == ids.validate_session && command != 0) { run_native_validate_session_action(); return true; }
   if (command == ids.refresh_overlay && command != 0) { reaadr::reaper::legacy_host::run_command(reaadr::reaper::legacy_host::Command::refresh_overlay); return true; }
   if (command == ids.refresh_session && command != 0) { reaadr::reaper::legacy_host::run_command(reaadr::reaper::legacy_host::Command::refresh_session); return true; }
   if (command == ids.update_cues_from_regions && command != 0) { reaadr::reaper::legacy_host::run_command(reaadr::reaper::legacy_host::Command::update_cues_from_regions); return true; }
