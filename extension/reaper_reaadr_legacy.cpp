@@ -412,36 +412,6 @@ bool validate_session_model(const char* model, char* error_out, int error_out_sz
   return false;
 }
 
-void run_validate_session_action()
-{
-  reaadr::reaper::ProjectStateStore project_state(
-    nullptr,
-    {GetProjExtState, SetProjExtState});
-  reaadr::core::SessionModelRepository repository(project_state);
-  const reaadr::core::SessionLoadResult result = repository.load();
-
-  if (!result) {
-    ShowMessageBox(reaadr::core::session_load_error_message(result), "ReaADR Session Model", 0);
-    return;
-  }
-
-  const reaadr::core::SessionModel& model = result.model;
-  const reaadr::core::RevisionResult revision = repository.revision();
-  const auto name = model.session.find("session_name");
-  std::ostringstream summary;
-  summary << "The ADR Session Model is valid.\n\n";
-  summary << "Session ID: " << model.session_id() << '\n';
-  if (name != model.session.end() && !name->second.empty()) summary << "Session: " << name->second << '\n';
-  if (revision) summary << "Revision: " << revision.revision << '\n';
-  summary << "Scripts: " << model.scripts.size() << '\n';
-  summary << "Characters: " << model.characters.size() << '\n';
-  summary << "Cues: " << model.cues.size() << '\n';
-  summary << "Tracks: " << model.tracks.size() << '\n';
-  summary << "Regions: " << model.regions.size();
-  const std::string message = summary.str();
-  ShowMessageBox(message.c_str(), "ReaADR Session Model", 0);
-}
-
 std::string native_utc_timestamp()
 {
   const std::time_t now = std::time(nullptr);
@@ -2227,7 +2197,6 @@ void configure_session(reaadr::reaper::CueManagerSessionConfig& config)
 void run_command(Command command)
 {
   switch (command) {
-    case Command::validate_session: run_validate_session_action(); break;
     case Command::refresh_overlay: run_refresh_overlay_action(); break;
     case Command::refresh_session: run_refresh_session_action(); break;
     case Command::update_cues_from_regions: run_update_cues_from_regions_action(); break;
