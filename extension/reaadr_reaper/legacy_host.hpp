@@ -20,7 +20,6 @@ bool promote_native_quick_actions(reaper_plugin_info_t* plugin);
 // Compatibility command dispatch until these workflows are individually
 // migrated into standalone native command modules.
 enum class Command {
-  validate_session,
   refresh_overlay,
   refresh_session,
   update_cues_from_regions,
