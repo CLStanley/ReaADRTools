@@ -3,7 +3,7 @@
 #include <reaper_plugin.h>
 #include <string>
 
-namespace reaadr::reaper { struct CueManagerSessionConfig; }
+namespace reaadr::reaper { struct CueManagerSessionConfig; struct OverlayApplicationApi; }
 
 // Temporary compatibility-host lifecycle. The native migration shell calls this
 // explicit boundary instead of macro-renaming and invoking a second plug-in
@@ -32,7 +32,7 @@ enum class Command {
 void run_command(Command command);
 void log(const std::string& message);
 void configure_session(CueManagerSessionConfig& config);
-// Host-provided overlay callbacks retained until the overlay adapter is migrated.
-void refresh_overlay();
+// Compatibility callbacks; orchestration belongs to the native runtime.
+OverlayApplicationApi overlay_api();
 
 } // namespace reaadr::reaper::legacy_host
