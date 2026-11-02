@@ -1529,10 +1529,6 @@ void run_jump_to_cue_action()
 
 bool hook_native_command(int command, int)
 {
-  if (command == g_validate_session_command_id && command != 0) {
-    run_validate_session_action();
-    return true;
-  }
   if (command == g_refresh_overlay_command_id && command != 0) {
     run_refresh_overlay_action();
     return true;
