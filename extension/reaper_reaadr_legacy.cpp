@@ -1229,27 +1229,6 @@ bool native_overlay_refresh_callback(
   return static_cast<bool>(applied);
 }
 
-void run_refresh_overlay_action()
-{
-  reaadr::reaper::ProjectStateStore project_state(
-    nullptr, {GetProjExtState, SetProjExtState});
-  reaadr::core::SessionModelRepository sessions(project_state);
-  reaadr::core::OverlaySettingsRepository settings(project_state);
-  reaadr::core::CueSelectionRepository selections(project_state);
-  reaadr::core::CharacterFilterRepository filters(project_state);
-  const reaadr::reaper::OverlayApplicationApi api = {
-    native_overlay_frame_rate, native_overlay_selection, native_overlay_refresh_callback,
-  };
-  reaadr::reaper::OverlayApplicationService service(sessions, settings, selections, filters, api);
-  const auto result = service.refresh();
-  if (!result) {
-    ShowMessageBox(result.error.c_str(), "ReaADR Video Overlay", 0);
-    return;
-  }
-  log_line("Native overlay refresh completed; displayed cues=" +
-    std::to_string(result.displayed_cue_count));
-}
-
 void run_refresh_session_action()
 {
   reaadr::reaper::ProjectStateStore project_state(
@@ -1529,10 +1508,6 @@ void run_jump_to_cue_action()
 
 bool hook_native_command(int command, int)
 {
-  if (command == g_refresh_overlay_command_id && command != 0) {
-    run_refresh_overlay_action();
-    return true;
-  }
   if (command == g_refresh_session_command_id && command != 0) {
     run_refresh_session_action();
     return true;
@@ -2190,9 +2165,10 @@ void configure_session(reaadr::reaper::CueManagerSessionConfig& config)
   };
 }
 
-void refresh_overlay()
+reaadr::reaper::OverlayApplicationApi overlay_api()
 {
-  run_refresh_overlay_action();
+  return {native_overlay_frame_rate, native_overlay_selection,
+          native_overlay_refresh_callback};
 }
 
 void run_command(Command command)
