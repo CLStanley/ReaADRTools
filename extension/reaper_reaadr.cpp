@@ -24,6 +24,9 @@
 #include "reaadr_ui/reaadr_ui.hpp"
 
 #include "reaadr_core/model_repository.hpp"
+#include "reaadr_core/overlay_settings.hpp"
+#include "reaadr_core/character_filter.hpp"
+#include "app/overlay_application_service.hpp"
 #include "app/cue_import_request.hpp"
 #include "app/cue_import_workflow.hpp"
 #include "app/session_export_service.hpp"
@@ -243,6 +246,26 @@ void run_persistent_native_cue_manager_action()
   std::string error;if(!reaadr::reaper::open_native_cue_manager(std::move(config),error)&&!error.empty())ShowMessageBox(error.c_str(),"ReaADR Cue Manager",0);
 }
 
+void run_native_refresh_overlay_action()
+{
+  reaadr::reaper::ProjectStateStore state(nullptr, {GetProjExtState, SetProjExtState});
+  reaadr::core::SessionModelRepository sessions(state);
+  reaadr::core::OverlaySettingsRepository settings(state);
+  reaadr::core::CueSelectionRepository selections(state);
+  reaadr::core::CharacterFilterRepository filters(state);
+  reaadr::reaper::OverlayApplicationService service(
+    sessions, settings, selections, filters,
+    reaadr::reaper::legacy_host::overlay_api());
+  const auto result = service.refresh();
+  if (!result) {
+    ShowMessageBox(result.error.c_str(), "ReaADR Video Overlay", 0);
+    return;
+  }
+  reaadr::reaper::legacy_host::log(
+    "Native overlay refresh completed; displayed cues=" +
+    std::to_string(result.displayed_cue_count));
+}
+
 void run_native_validate_session_action()
 {
   reaadr::reaper::ProjectStateStore state(nullptr, {GetProjExtState, SetProjExtState});
@@ -273,7 +296,7 @@ bool runtime_host_hook(int command, int)
 {
   const auto& ids = reaadr::reaper::workflow_action_ids();
   if (command == ids.validate_session && command != 0) { run_native_validate_session_action(); return true; }
-  if (command == ids.refresh_overlay && command != 0) { reaadr::reaper::legacy_host::refresh_overlay(); return true; }
+  if (command == ids.refresh_overlay && command != 0) { run_native_refresh_overlay_action(); return true; }
   if (command == ids.refresh_session && command != 0) { reaadr::reaper::legacy_host::run_command(reaadr::reaper::legacy_host::Command::refresh_session); return true; }
   if (command == ids.update_cues_from_regions && command != 0) { reaadr::reaper::legacy_host::run_command(reaadr::reaper::legacy_host::Command::update_cues_from_regions); return true; }
   if (command == ids.clear_character_cues && command != 0) { reaadr::reaper::legacy_host::run_command(reaadr::reaper::legacy_host::Command::clear_character_cues); return true; }
