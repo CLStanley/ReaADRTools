@@ -297,7 +297,7 @@ bool runtime_host_hook(int command, int)
   const auto& ids = reaadr::reaper::workflow_action_ids();
   if (command == ids.validate_session && command != 0) { run_native_validate_session_action(); return true; }
   if (command == ids.refresh_overlay && command != 0) { run_native_refresh_overlay_action(); return true; }
-  if (command == ids.refresh_session && command != 0) { reaadr::reaper::legacy_host::run_command(reaadr::reaper::legacy_host::Command::refresh_session); return true; }
+  if (command == ids.refresh_session && command != 0) { reaadr::reaper::legacy_host::refresh_session(); return true; }
   if (command == ids.update_cues_from_regions && command != 0) { reaadr::reaper::legacy_host::run_command(reaadr::reaper::legacy_host::Command::update_cues_from_regions); return true; }
   if (command == ids.clear_character_cues && command != 0) { reaadr::reaper::legacy_host::run_command(reaadr::reaper::legacy_host::Command::clear_character_cues); return true; }
   if (command == ids.character_filter && command != 0) { reaadr::reaper::legacy_host::run_command(reaadr::reaper::legacy_host::Command::character_filter); return true; }
