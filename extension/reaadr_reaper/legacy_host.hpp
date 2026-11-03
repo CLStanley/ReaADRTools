@@ -22,7 +22,6 @@ bool promote_native_quick_actions(reaper_plugin_info_t* plugin);
 // Compatibility command dispatch until these workflows are individually
 // migrated into standalone native command modules.
 enum class Command {
-  clear_character_cues,
   character_filter,
   next_cue,
   previous_cue,
