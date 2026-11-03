@@ -2079,6 +2079,11 @@ reaadr::reaper::OverlayApplicationApi overlay_api()
           native_overlay_refresh_callback};
 }
 
+CueCleanupApplicationApi cue_cleanup_api()
+{
+  return {native_cleanup_inspect, native_cleanup_apply, native_utc_timestamp()};
+}
+
 SessionRefreshHost session_refresh_host()
 {
   return {native_track_region_api(), native_ruler_lane_api(),
