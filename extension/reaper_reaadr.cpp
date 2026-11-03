@@ -28,6 +28,7 @@
 #include "reaadr_core/character_filter.hpp"
 #include "app/overlay_application_service.hpp"
 #include "app/session_refresh_application_service.hpp"
+#include "app/region_timing_application_service.hpp"
 #include "reaadr_reaper/session_render_service.hpp"
 #include "app/cue_import_request.hpp"
 #include "app/cue_import_workflow.hpp"
@@ -248,6 +249,41 @@ void run_persistent_native_cue_manager_action()
   std::string error;if(!reaadr::reaper::open_native_cue_manager(std::move(config),error)&&!error.empty())ShowMessageBox(error.c_str(),"ReaADR Cue Manager",0);
 }
 
+void run_native_update_cues_from_regions_action()
+{
+  reaadr::reaper::ProjectStateStore state(nullptr, {GetProjExtState, SetProjExtState});
+  reaadr::core::SessionModelRepository repository(state);
+  reaadr::core::EventLogRepository events(state);
+  reaadr::core::CharacterFilterRepository filters(state);
+  reaadr::core::OverlaySettingsRepository settings(state);
+  reaadr::core::CueSelectionRepository selections(state);
+  reaadr::reaper::OverlayApplicationService overlay(
+    repository, settings, selections, filters,
+    reaadr::reaper::legacy_host::overlay_api());
+  const auto host = reaadr::reaper::legacy_host::session_refresh_host();
+  reaadr::reaper::SessionRenderService renderer(
+    repository, events, filters, nullptr, host.tracks, host.ruler,
+    host.audio, host.transaction);
+  reaadr::reaper::RegionTimingRenderOptions options;
+  options.session.cue_audio_path = host.cue_audio_path;
+  options.session.event.source = "native_region_timing";
+  options.session.refresh_overlay = [&overlay](std::string* error) {
+    const auto refreshed = overlay.refresh();
+    if (!refreshed && error) *error = refreshed.error;
+    return static_cast<bool>(refreshed);
+  };
+  reaadr::reaper::RegionTimingApplicationService service(renderer, std::move(options));
+  const auto result = service.update();
+  if (!result) {
+    ShowMessageBox(result.error.c_str(), "ReaADR Region Timing", 0);
+    return;
+  }
+  const std::string summary = "Updated " + std::to_string(result.timing.changed_cues) +
+    " cue(s) from current region timing.\n\nMissing ReaADR regions: " +
+    std::to_string(result.timing.missing_regions);
+  ShowMessageBox(summary.c_str(), "ReaADR Region Timing", 0);
+}
+
 void run_native_refresh_session_action()
 {
   reaadr::reaper::ProjectStateStore state(nullptr, {GetProjExtState, SetProjExtState});
@@ -345,7 +381,7 @@ bool runtime_host_hook(int command, int)
   if (command == ids.validate_session && command != 0) { run_native_validate_session_action(); return true; }
   if (command == ids.refresh_overlay && command != 0) { run_native_refresh_overlay_action(); return true; }
   if (command == ids.refresh_session && command != 0) { run_native_refresh_session_action(); return true; }
-  if (command == ids.update_cues_from_regions && command != 0) { reaadr::reaper::legacy_host::run_command(reaadr::reaper::legacy_host::Command::update_cues_from_regions); return true; }
+  if (command == ids.update_cues_from_regions && command != 0) { run_native_update_cues_from_regions_action(); return true; }
   if (command == ids.clear_character_cues && command != 0) { reaadr::reaper::legacy_host::run_command(reaadr::reaper::legacy_host::Command::clear_character_cues); return true; }
   if (command == ids.character_filter && command != 0) { reaadr::reaper::legacy_host::run_command(reaadr::reaper::legacy_host::Command::character_filter); return true; }
   if (command == ids.next_cue && command != 0) { reaadr::reaper::legacy_host::run_command(reaadr::reaper::legacy_host::Command::next_cue); return true; }
