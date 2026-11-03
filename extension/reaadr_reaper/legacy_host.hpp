@@ -3,6 +3,7 @@
 #include <reaper_plugin.h>
 #include <string>
 #include "render_artifact_adapter.hpp"
+#include "app/cue_cleanup_application_service.hpp"
 
 namespace reaadr::reaper { struct CueManagerSessionConfig; struct OverlayApplicationApi; }
 
@@ -43,5 +44,6 @@ struct SessionRefreshHost {
   std::string timestamp;
 };
 SessionRefreshHost session_refresh_host();
+CueCleanupApplicationApi cue_cleanup_api();
 
 } // namespace reaadr::reaper::legacy_host
