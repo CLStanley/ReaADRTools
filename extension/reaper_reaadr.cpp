@@ -27,6 +27,8 @@
 #include "reaadr_core/overlay_settings.hpp"
 #include "reaadr_core/character_filter.hpp"
 #include "app/overlay_application_service.hpp"
+#include "app/session_refresh_application_service.hpp"
+#include "reaadr_reaper/session_render_service.hpp"
 #include "app/cue_import_request.hpp"
 #include "app/cue_import_workflow.hpp"
 #include "app/session_export_service.hpp"
@@ -246,6 +248,51 @@ void run_persistent_native_cue_manager_action()
   std::string error;if(!reaadr::reaper::open_native_cue_manager(std::move(config),error)&&!error.empty())ShowMessageBox(error.c_str(),"ReaADR Cue Manager",0);
 }
 
+void run_native_refresh_session_action()
+{
+  reaadr::reaper::ProjectStateStore state(nullptr, {GetProjExtState, SetProjExtState});
+  reaadr::core::SessionModelRepository repository(state);
+  reaadr::core::EventLogRepository events(state);
+  reaadr::core::CharacterFilterRepository filters(state);
+  reaadr::core::OverlaySettingsRepository settings(state);
+  reaadr::core::CueSelectionRepository selections(state);
+  reaadr::reaper::OverlayApplicationService overlay(
+    repository, settings, selections, filters,
+    reaadr::reaper::legacy_host::overlay_api());
+  const auto host = reaadr::reaper::legacy_host::session_refresh_host();
+  reaadr::reaper::SessionRenderService renderer(
+    repository, events, filters, nullptr, host.tracks, host.ruler,
+    host.audio, host.transaction);
+  reaadr::reaper::SessionRenderOptions options;
+  options.cue_audio_path = host.cue_audio_path;
+  options.event.source = "native_refresh_session";
+  options.refresh_overlay = [&overlay](std::string* error) {
+    const auto result = overlay.refresh();
+    if (!result && error) *error = result.error;
+    return static_cast<bool>(result);
+  };
+  reaadr::reaper::SessionRefreshApplicationService refresh(
+    repository, renderer, options, host.timestamp);
+  const auto result = refresh.refresh(
+    [tracks = host.tracks] {
+      return reaadr::reaper::TrackRegionAdapter(nullptr, tracks).inspect();
+    },
+    [](std::size_t modified) {
+      const std::string message = "Detected " + std::to_string(modified) +
+        " cue region(s) whose timing differs from the saved session.\\n\\n"
+        "Refresh Session will overwrite those moved regions. Use Update Cues From Regions "
+        "first if the moved regions are correct.\\n\\nContinue with Refresh Session?";
+      return ShowMessageBox(message.c_str(), "ReaADR Refresh Session", 4) == 6;
+    });
+  if (result.cancelled) return;
+  if (!result) {
+    ShowMessageBox(result.error.c_str(), "ReaADR Session Refresh", 0);
+    return;
+  }
+  ShowMessageBox("The canonical session and ReaADR-owned project artifacts were refreshed.",
+                 "ReaADR Session Refresh", 0);
+}
+
 void run_native_refresh_overlay_action()
 {
   reaadr::reaper::ProjectStateStore state(nullptr, {GetProjExtState, SetProjExtState});
@@ -297,7 +344,7 @@ bool runtime_host_hook(int command, int)
   const auto& ids = reaadr::reaper::workflow_action_ids();
   if (command == ids.validate_session && command != 0) { run_native_validate_session_action(); return true; }
   if (command == ids.refresh_overlay && command != 0) { run_native_refresh_overlay_action(); return true; }
-  if (command == ids.refresh_session && command != 0) { reaadr::reaper::legacy_host::refresh_session(); return true; }
+  if (command == ids.refresh_session && command != 0) { run_native_refresh_session_action(); return true; }
   if (command == ids.update_cues_from_regions && command != 0) { reaadr::reaper::legacy_host::run_command(reaadr::reaper::legacy_host::Command::update_cues_from_regions); return true; }
   if (command == ids.clear_character_cues && command != 0) { reaadr::reaper::legacy_host::run_command(reaadr::reaper::legacy_host::Command::clear_character_cues); return true; }
   if (command == ids.character_filter && command != 0) { reaadr::reaper::legacy_host::run_command(reaadr::reaper::legacy_host::Command::character_filter); return true; }
