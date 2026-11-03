@@ -1229,44 +1229,6 @@ bool native_overlay_refresh_callback(
   return static_cast<bool>(applied);
 }
 
-void run_update_cues_from_regions_action()
-{
-  reaadr::reaper::ProjectStateStore project_state(
-    nullptr, {GetProjExtState, SetProjExtState});
-  reaadr::core::SessionModelRepository repository(project_state);
-  reaadr::core::EventLogRepository event_log(project_state);
-  reaadr::core::CharacterFilterRepository character_filter(project_state);
-  reaadr::core::OverlaySettingsRepository overlay_settings(project_state);
-  reaadr::core::CueSelectionRepository cue_selection(project_state);
-  const reaadr::reaper::OverlayApplicationApi overlay_api = {
-    native_overlay_frame_rate, native_overlay_selection,
-    native_overlay_refresh_callback,
-  };
-  reaadr::reaper::OverlayApplicationService overlay_application(
-    repository, overlay_settings, cue_selection, character_filter, overlay_api);
-  reaadr::reaper::SessionRenderService renderer(
-    repository, event_log, character_filter, nullptr, native_track_region_api(),
-    native_ruler_lane_api(), native_cue_audio_api(), native_session_transaction_api());
-  reaadr::reaper::RegionTimingRenderOptions options;
-  options.session.cue_audio_path = native_cue_audio_path();
-  options.session.event.source = "native_region_timing";
-  options.session.refresh_overlay = [&overlay_application](std::string* error) {
-    const auto refreshed = overlay_application.refresh();
-    if (!refreshed && error) *error = refreshed.error;
-    return static_cast<bool>(refreshed);
-  };
-  reaadr::reaper::RegionTimingApplicationService service(renderer, std::move(options));
-  const auto result = service.update();
-  if (!result) {
-    ShowMessageBox(result.error.c_str(), "ReaADR Region Timing", 0);
-    return;
-  }
-  const std::string summary = "Updated " + std::to_string(result.timing.changed_cues) +
-    " cue(s) from current region timing.\n\nMissing ReaADR regions: " +
-    std::to_string(result.timing.missing_regions);
-  ShowMessageBox(summary.c_str(), "ReaADR Region Timing", 0);
-}
-
 reaadr::core::ProjectRenderState native_cleanup_inspect(std::string* error)
 {
   const auto inspected = reaadr::reaper::inspect_complete_render_state(
@@ -1462,10 +1424,6 @@ void run_jump_to_cue_action()
 
 bool hook_native_command(int command, int)
 {
-  if (command == g_update_cues_from_regions_command_id && command != 0) {
-    run_update_cues_from_regions_action();
-    return true;
-  }
   if (command == g_clear_character_cues_command_id && command != 0) {
     run_clear_character_cues_action();
     return true;
@@ -2131,7 +2089,6 @@ SessionRefreshHost session_refresh_host()
 void run_command(Command command)
 {
   switch (command) {
-    case Command::update_cues_from_regions: run_update_cues_from_regions_action(); break;
     case Command::clear_character_cues: run_clear_character_cues_action(); break;
     case Command::character_filter: run_character_filter_action(); break;
     case Command::next_cue: run_cue_navigation_action(true); break;
