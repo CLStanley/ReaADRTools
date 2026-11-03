@@ -1229,52 +1229,6 @@ bool native_overlay_refresh_callback(
   return static_cast<bool>(applied);
 }
 
-void run_refresh_session_action()
-{
-  reaadr::reaper::ProjectStateStore project_state(
-    nullptr, {GetProjExtState, SetProjExtState});
-  reaadr::core::SessionModelRepository repository(project_state);
-  reaadr::core::EventLogRepository event_log(project_state);
-  reaadr::core::CharacterFilterRepository character_filter(project_state);
-  reaadr::core::OverlaySettingsRepository overlay_settings(project_state);
-  reaadr::core::CueSelectionRepository cue_selection(project_state);
-  const reaadr::reaper::OverlayApplicationApi overlay_api = {
-    native_overlay_frame_rate, native_overlay_selection,
-    native_overlay_refresh_callback,
-  };
-  reaadr::reaper::OverlayApplicationService overlay_application(
-    repository, overlay_settings, cue_selection, character_filter, overlay_api);
-  reaadr::reaper::SessionRenderService renderer(
-    repository, event_log, character_filter, nullptr, native_track_region_api(),
-    native_ruler_lane_api(), native_cue_audio_api(), native_session_transaction_api());
-  reaadr::reaper::SessionRenderOptions render_options;
-  render_options.cue_audio_path = native_cue_audio_path();
-  render_options.event.source = "native_refresh_session";
-  render_options.refresh_overlay = [&overlay_application](std::string* error) {
-    const auto refreshed = overlay_application.refresh();
-    if (!refreshed && error) *error = refreshed.error;
-    return static_cast<bool>(refreshed);
-  };
-  reaadr::reaper::SessionRefreshApplicationService refresh(
-    repository, renderer, render_options, native_utc_timestamp());
-  const auto result = refresh.refresh(
-    [] { return reaadr::reaper::TrackRegionAdapter(nullptr, native_track_region_api()).inspect(); },
-    [](std::size_t modified) {
-      const std::string message = "Detected " + std::to_string(modified) +
-        " cue region(s) whose timing differs from the saved session.\n\n"
-        "Refresh Session will overwrite those moved regions. Use Update Cues From Regions "
-        "first if the moved regions are correct.\n\nContinue with Refresh Session?";
-      return ShowMessageBox(message.c_str(), "ReaADR Refresh Session", 4) == 6;
-    });
-  if (result.cancelled) return;
-  if (!result) {
-    ShowMessageBox(result.error.c_str(), "ReaADR Session Refresh", 0);
-    return;
-  }
-  ShowMessageBox("The canonical session and ReaADR-owned project artifacts were refreshed.",
-                 "ReaADR Session Refresh", 0);
-}
-
 void run_update_cues_from_regions_action()
 {
   reaadr::reaper::ProjectStateStore project_state(
@@ -1508,10 +1462,6 @@ void run_jump_to_cue_action()
 
 bool hook_native_command(int command, int)
 {
-  if (command == g_refresh_session_command_id && command != 0) {
-    run_refresh_session_action();
-    return true;
-  }
   if (command == g_update_cues_from_regions_command_id && command != 0) {
     run_update_cues_from_regions_action();
     return true;
@@ -2171,9 +2121,11 @@ reaadr::reaper::OverlayApplicationApi overlay_api()
           native_overlay_refresh_callback};
 }
 
-void refresh_session()
+SessionRefreshHost session_refresh_host()
 {
-  run_refresh_session_action();
+  return {native_track_region_api(), native_ruler_lane_api(),
+          native_cue_audio_api(), native_session_transaction_api(),
+          native_cue_audio_path(), native_utc_timestamp()};
 }
 
 void run_command(Command command)
