@@ -1258,47 +1258,6 @@ reaadr::reaper::CueCleanupApplyResult native_cleanup_apply(
   return applied;
 }
 
-void run_clear_character_cues_action()
-{
-  if (!GetUserInputs) {
-    ShowMessageBox("The character input API is unavailable.", "ReaADR Cue Cleanup", 0);
-    return;
-  }
-  std::array<char, 1024> input = {};
-  if (!GetUserInputs("ReaADR: Clear Character Cues", 1,
-                    "Characters (comma-separated):", input.data(), input.size())) return;
-  std::vector<std::string> characters;
-  std::stringstream values(input.data());
-  std::string value;
-  while (std::getline(values, value, ',')) {
-    const auto first = value.find_first_not_of(" \t\r\n");
-    const auto last = value.find_last_not_of(" \t\r\n");
-    if (first != std::string::npos) characters.push_back(value.substr(first, last - first + 1));
-  }
-  if (characters.empty()) {
-    ShowMessageBox("Select at least one character.", "ReaADR Cue Cleanup", 0);
-    return;
-  }
-  const std::string prompt = "Remove generated cues, regions, cue audio, and cue tracks for " +
-    std::to_string(characters.size()) + " character(s)? Recording tracks and takes are preserved.";
-  if (ShowMessageBox(prompt.c_str(), "ReaADR Cue Cleanup", 4) != 6) return;
-
-  reaadr::reaper::ProjectStateStore project_state(nullptr, {GetProjExtState, SetProjExtState});
-  reaadr::core::SessionModelRepository repository(project_state);
-  reaadr::reaper::CueCleanupApplicationService service(
-    repository, native_session_transaction_api(), {native_cleanup_inspect, native_cleanup_apply, native_utc_timestamp()});
-  const auto result = service.clear_characters(characters);
-  if (!result) {
-    ShowMessageBox(result.error.c_str(), "ReaADR Cue Cleanup", 0);
-    return;
-  }
-  const std::string summary = "Removed " + std::to_string(result.cues_removed) +
-    " cue(s), " + std::to_string(result.regions_removed) + " region(s), and " +
-    std::to_string(result.cue_audio_removed) + " cue-audio item(s).\n\nCue tracks removed: " +
-    std::to_string(result.tracks_removed);
-  ShowMessageBox(summary.c_str(), "ReaADR Cue Cleanup", 0);
-}
-
 reaadr::reaper::CharacterFilterInspectionResult native_character_filter_inspect(
   std::string* error)
 {
@@ -1424,10 +1383,6 @@ void run_jump_to_cue_action()
 
 bool hook_native_command(int command, int)
 {
-  if (command == g_clear_character_cues_command_id && command != 0) {
-    run_clear_character_cues_action();
-    return true;
-  }
   if (command == g_character_filter_command_id && command != 0) {
     run_character_filter_action();
     return true;
@@ -2094,7 +2049,6 @@ SessionRefreshHost session_refresh_host()
 void run_command(Command command)
 {
   switch (command) {
-    case Command::clear_character_cues: run_clear_character_cues_action(); break;
     case Command::character_filter: run_character_filter_action(); break;
     case Command::next_cue: run_cue_navigation_action(true); break;
     case Command::previous_cue: run_cue_navigation_action(false); break;
