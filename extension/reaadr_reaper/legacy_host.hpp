@@ -20,7 +20,6 @@ bool promote_native_quick_actions(reaper_plugin_info_t* plugin);
 // Compatibility command dispatch until these workflows are individually
 // migrated into standalone native command modules.
 enum class Command {
-  refresh_session,
   update_cues_from_regions,
   clear_character_cues,
   character_filter,
@@ -34,5 +33,7 @@ void log(const std::string& message);
 void configure_session(CueManagerSessionConfig& config);
 // Compatibility callbacks; orchestration belongs to the native runtime.
 OverlayApplicationApi overlay_api();
+// Invoke the existing host-bound session refresh while native adapters are extracted.
+void refresh_session();
 
 } // namespace reaadr::reaper::legacy_host
