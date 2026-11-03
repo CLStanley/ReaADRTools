@@ -2171,10 +2171,14 @@ reaadr::reaper::OverlayApplicationApi overlay_api()
           native_overlay_refresh_callback};
 }
 
+void refresh_session()
+{
+  run_refresh_session_action();
+}
+
 void run_command(Command command)
 {
   switch (command) {
-    case Command::refresh_session: run_refresh_session_action(); break;
     case Command::update_cues_from_regions: run_update_cues_from_regions_action(); break;
     case Command::clear_character_cues: run_clear_character_cues_action(); break;
     case Command::character_filter: run_character_filter_action(); break;
