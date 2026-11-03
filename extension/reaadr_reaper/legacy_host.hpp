@@ -2,6 +2,7 @@
 
 #include <reaper_plugin.h>
 #include <string>
+#include "render_artifact_adapter.hpp"
 
 namespace reaadr::reaper { struct CueManagerSessionConfig; struct OverlayApplicationApi; }
 
@@ -34,6 +35,14 @@ void configure_session(CueManagerSessionConfig& config);
 // Compatibility callbacks; orchestration belongs to the native runtime.
 OverlayApplicationApi overlay_api();
 // Invoke the existing host-bound session refresh while native adapters are extracted.
-void refresh_session();
+struct SessionRefreshHost {
+  TrackRegionApi tracks;
+  RulerLaneApi ruler;
+  CueAudioApi audio;
+  TransactionApi transaction;
+  std::string cue_audio_path;
+  std::string timestamp;
+};
+SessionRefreshHost session_refresh_host();
 
 } // namespace reaadr::reaper::legacy_host
