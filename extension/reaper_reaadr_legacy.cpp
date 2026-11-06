@@ -2034,6 +2034,11 @@ reaadr::reaper::OverlayApplicationApi overlay_api()
           native_overlay_refresh_callback};
 }
 
+CharacterFilterApplicationApi character_filter_api()
+{
+  return {native_character_filter_inspect, native_character_filter_apply};
+}
+
 CueCleanupApplicationApi cue_cleanup_api()
 {
   return {native_cleanup_inspect, native_cleanup_apply, native_utc_timestamp()};
