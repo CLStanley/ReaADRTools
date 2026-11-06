@@ -30,6 +30,7 @@
 #include "app/session_refresh_application_service.hpp"
 #include "app/region_timing_application_service.hpp"
 #include "app/cue_cleanup_application_service.hpp"
+#include "app/character_filter_application_service.hpp"
 #include "reaadr_reaper/session_render_service.hpp"
 #include "app/cue_import_request.hpp"
 #include "app/cue_import_workflow.hpp"
@@ -250,6 +251,53 @@ void run_persistent_native_cue_manager_action()
   std::string error;if(!reaadr::reaper::open_native_cue_manager(std::move(config),error)&&!error.empty())ShowMessageBox(error.c_str(),"ReaADR Cue Manager",0);
 }
 
+void run_native_character_filter_action()
+{
+  if (!GetUserInputs) {
+    ShowMessageBox("The character input API is unavailable.", "ReaADR Character Filter", 0);
+    return;
+  }
+  std::array<char, 1024> input = {};
+  if (!GetUserInputs("ReaADR: Character Filter", 2,
+                     "Characters (; separated, blank=all),Hide inactive regions (0/1):",
+                     input.data(), input.size())) return;
+  char* separator = std::strchr(input.data(), ',');
+  if (!separator) {
+    ShowMessageBox("Enter characters and 0/1 separated by a comma.", "ReaADR Character Filter", 0);
+    return;
+  }
+  *separator = '\0';
+  std::vector<std::string> characters;
+  std::stringstream values(input.data());
+  std::string value;
+  while (std::getline(values, value, ';')) {
+    const auto first = value.find_first_not_of(" \\t\\r\\n");
+    const auto last = value.find_last_not_of(" \\t\\r\\n");
+    if (first != std::string::npos)
+      characters.push_back(value.substr(first, last - first + 1));
+  }
+  const std::string hide_value = separator + 1;
+  const bool hide_regions = hide_value == "1" || hide_value == "true";
+
+  reaadr::reaper::ProjectStateStore state(nullptr, {GetProjExtState, SetProjExtState});
+  reaadr::core::SessionModelRepository repository(state);
+  reaadr::core::CharacterFilterRepository filters(state);
+  const auto host = reaadr::reaper::legacy_host::session_refresh_host();
+  reaadr::reaper::CharacterFilterApplicationService service(
+    repository, filters, host.transaction,
+    reaadr::reaper::legacy_host::character_filter_api());
+  const auto result = service.apply(characters, hide_regions);
+  if (!result) {
+    ShowMessageBox(result.error.c_str(), "ReaADR Character Filter", 0);
+    return;
+  }
+  const std::string summary = "Muted " + std::to_string(result.applied.tracks_muted) +
+    " track(s), unmuted " + std::to_string(result.applied.tracks_unmuted) +
+    ".\\n\\nHidden regions: " + std::to_string(result.applied.regions_hidden) +
+    "\\nShown regions: " + std::to_string(result.applied.regions_shown);
+  ShowMessageBox(summary.c_str(), "ReaADR Character Filter", 0);
+}
+
 void run_native_clear_character_cues_action()
 {
   if (!GetUserInputs) {
@@ -427,7 +475,7 @@ bool runtime_host_hook(int command, int)
   if (command == ids.refresh_session && command != 0) { run_native_refresh_session_action(); return true; }
   if (command == ids.update_cues_from_regions && command != 0) { run_native_update_cues_from_regions_action(); return true; }
   if (command == ids.clear_character_cues && command != 0) { run_native_clear_character_cues_action(); return true; }
-  if (command == ids.character_filter && command != 0) { reaadr::reaper::legacy_host::run_command(reaadr::reaper::legacy_host::Command::character_filter); return true; }
+  if (command == ids.character_filter && command != 0) { run_native_character_filter_action(); return true; }
   if (command == ids.next_cue && command != 0) { reaadr::reaper::legacy_host::run_command(reaadr::reaper::legacy_host::Command::next_cue); return true; }
   if (command == ids.previous_cue && command != 0) { reaadr::reaper::legacy_host::run_command(reaadr::reaper::legacy_host::Command::previous_cue); return true; }
   if (command == ids.jump_to_cue && command != 0) { reaadr::reaper::legacy_host::run_command(reaadr::reaper::legacy_host::Command::jump_to_cue); return true; }
