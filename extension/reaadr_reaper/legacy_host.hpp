@@ -4,6 +4,7 @@
 #include <string>
 #include "render_artifact_adapter.hpp"
 #include "app/cue_cleanup_application_service.hpp"
+#include "app/character_filter_application_service.hpp"
 
 namespace reaadr::reaper { struct CueManagerSessionConfig; struct OverlayApplicationApi; }
 
@@ -44,5 +45,6 @@ struct SessionRefreshHost {
 };
 SessionRefreshHost session_refresh_host();
 CueCleanupApplicationApi cue_cleanup_api();
+CharacterFilterApplicationApi character_filter_api();
 
 } // namespace reaadr::reaper::legacy_host
