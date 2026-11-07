@@ -24,6 +24,8 @@
 #include "reaadr_ui/reaadr_ui.hpp"
 
 #include "reaadr_core/model_repository.hpp"
+#include "reaadr_core/manager_preferences.hpp"
+#include "reaadr_reaper/project_transaction.hpp"
 #include "reaadr_core/overlay_settings.hpp"
 #include "reaadr_core/character_filter.hpp"
 #include "app/overlay_application_service.hpp"
