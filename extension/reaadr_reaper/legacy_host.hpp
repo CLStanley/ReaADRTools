@@ -23,9 +23,7 @@ bool promote_native_quick_actions(reaper_plugin_info_t* plugin);
 
 // Compatibility command dispatch until these workflows are individually
 // migrated into standalone native command modules.
-enum class Command {
-  preferences
-};
+enum class Command {};
 void run_command(Command command);
 void log(const std::string& message);
 void configure_session(CueManagerSessionConfig& config);
