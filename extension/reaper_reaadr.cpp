@@ -32,6 +32,7 @@
 #include "app/cue_cleanup_application_service.hpp"
 #include "app/character_filter_application_service.hpp"
 #include "reaadr_reaper/session_render_service.hpp"
+#include "reaadr_reaper/cue_navigation_service.hpp"
 #include "app/cue_import_request.hpp"
 #include "app/cue_import_workflow.hpp"
 #include "app/session_export_service.hpp"
@@ -249,6 +250,60 @@ void run_persistent_native_cue_manager_action()
   config.callbacks.trigger_import=[](const std::string& mapping,bool preview,const std::string& mode,const std::string& characters){run_persistent_native_manager_import(mapping,preview,mode,characters);};
   config.callbacks.trigger_action=[](const std::string& action){if(action=="sync_regions"){std::string error;if(!reaadr::reaper::cue_manager_session_host().sync_regions(error)&&!error.empty())ShowMessageBox(error.c_str(),"ReaADR Cue Manager",0);}else if(action=="clear_character_cues")run_persistent_native_clear_character_cues_action();else if(action=="export_cue_sheet"||action=="export_timing_report"||action=="export_session_metadata")run_persistent_native_export_action(action);};
   std::string error;if(!reaadr::reaper::open_native_cue_manager(std::move(config),error)&&!error.empty())ShowMessageBox(error.c_str(),"ReaADR Cue Manager",0);
+}
+
+bool refresh_native_navigation_overlay(std::string* error)
+{
+  reaadr::reaper::ProjectStateStore state(nullptr, {GetProjExtState, SetProjExtState});
+  reaadr::core::SessionModelRepository sessions(state);
+  reaadr::core::OverlaySettingsRepository settings(state);
+  reaadr::core::CueSelectionRepository selections(state);
+  reaadr::core::CharacterFilterRepository filters(state);
+  reaadr::reaper::OverlayApplicationService service(
+    sessions, settings, selections, filters, reaadr::reaper::legacy_host::overlay_api());
+  const auto result = service.refresh();
+  if (!result && error) *error = result.error;
+  return static_cast<bool>(result);
+}
+
+void run_native_cue_navigation_action(bool next)
+{
+  reaadr::reaper::ProjectStateStore state(nullptr, {GetProjExtState, SetProjExtState});
+  reaadr::core::SessionModelRepository sessions(state);
+  reaadr::core::CueSelectionRepository selections(state);
+  reaadr::reaper::CueNavigationService service(
+    sessions, selections, reaadr::reaper::legacy_host::cue_navigation_api(),
+    refresh_native_navigation_overlay);
+  const auto result = next ? service.navigate_next() : service.navigate_previous();
+  if (!result) {
+    ShowMessageBox(result.error.c_str(), "ReaADR Cue Navigation", 0);
+    return;
+  }
+  reaadr::reaper::legacy_host::log(
+    std::string("Native cue navigation moved to ") + result.selection.state.active_overlay_cue_key);
+}
+
+void run_native_jump_to_cue_action()
+{
+  if (!GetUserInputs) {
+    ShowMessageBox("The REAPER cue-ID input API is unavailable.", "ReaADR Cue Navigation", 0);
+    return;
+  }
+  std::array<char, 1024> input = {};
+  if (!GetUserInputs("ReaADR: Jump To Cue", 1, "Cue ID:", input.data(), input.size())) return;
+  reaadr::reaper::ProjectStateStore state(nullptr, {GetProjExtState, SetProjExtState});
+  reaadr::core::SessionModelRepository sessions(state);
+  reaadr::core::CueSelectionRepository selections(state);
+  reaadr::reaper::CueNavigationService service(
+    sessions, selections, reaadr::reaper::legacy_host::cue_navigation_api(),
+    refresh_native_navigation_overlay);
+  const auto result = service.navigate_to_id(input.data());
+  if (!result) {
+    ShowMessageBox(result.error.c_str(), "ReaADR Cue Navigation", 0);
+    return;
+  }
+  reaadr::reaper::legacy_host::log(
+    "Native cue navigation jumped to " + result.selection.state.active_overlay_cue_key);
 }
 
 void run_native_character_filter_action()
@@ -476,9 +531,9 @@ bool runtime_host_hook(int command, int)
   if (command == ids.update_cues_from_regions && command != 0) { run_native_update_cues_from_regions_action(); return true; }
   if (command == ids.clear_character_cues && command != 0) { run_native_clear_character_cues_action(); return true; }
   if (command == ids.character_filter && command != 0) { run_native_character_filter_action(); return true; }
-  if (command == ids.next_cue && command != 0) { reaadr::reaper::legacy_host::run_command(reaadr::reaper::legacy_host::Command::next_cue); return true; }
-  if (command == ids.previous_cue && command != 0) { reaadr::reaper::legacy_host::run_command(reaadr::reaper::legacy_host::Command::previous_cue); return true; }
-  if (command == ids.jump_to_cue && command != 0) { reaadr::reaper::legacy_host::run_command(reaadr::reaper::legacy_host::Command::jump_to_cue); return true; }
+  if (command == ids.next_cue && command != 0) { run_native_cue_navigation_action(true); return true; }
+  if (command == ids.previous_cue && command != 0) { run_native_cue_navigation_action(false); return true; }
+  if (command == ids.jump_to_cue && command != 0) { run_native_jump_to_cue_action(); return true; }
   if (command == ids.cue_manager && command != 0) { run_persistent_native_cue_manager_action(); return true; }
   if (command == ids.import_cue_sheet && command != 0) { run_persistent_native_import_action(); return true; }
   if (command == ids.preferences && command != 0) { reaadr::reaper::legacy_host::run_command(reaadr::reaper::legacy_host::Command::preferences); return true; }
