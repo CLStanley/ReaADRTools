@@ -1985,6 +1985,11 @@ reaadr::reaper::OverlayApplicationApi overlay_api()
           native_overlay_refresh_callback};
 }
 
+CueNavigationApi cue_navigation_api()
+{
+  return {GetPlayState, GetPlayPosition, GetCursorPosition, SetEditCurPos};
+}
+
 CharacterFilterApplicationApi character_filter_api()
 {
   return {native_character_filter_inspect, native_character_filter_apply};
