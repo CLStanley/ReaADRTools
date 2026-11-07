@@ -24,9 +24,6 @@ bool promote_native_quick_actions(reaper_plugin_info_t* plugin);
 // Compatibility command dispatch until these workflows are individually
 // migrated into standalone native command modules.
 enum class Command {
-  next_cue,
-  previous_cue,
-  jump_to_cue,
   preferences
 };
 void run_command(Command command);
