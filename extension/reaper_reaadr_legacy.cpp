@@ -182,39 +182,23 @@ std::vector<NativeMenuAction> g_actions = {
 
 // This action is native; the shared menu helpers only require its label and
 // command ID, so there is intentionally no script path.
-ScriptAction g_validate_session_action = {
-  "Validate Session Model (Native Preview)",
-  nullptr,
-  0,
-};
+NativeMenuAction g_validate_session_action = {"Validate Session Model (Native Preview)", 0};
 
-ScriptAction g_refresh_overlay_action = {
-  "Refresh Video Overlay (Native)",
-  nullptr,
-  0,
-};
-ScriptAction g_refresh_session_action = {
-  "Refresh Session (Native)", nullptr, 0,
-};
-ScriptAction g_update_cues_from_regions_action = {
-  "Update Cues From Regions (Native)", nullptr, 0,
-};
-ScriptAction g_clear_character_cues_action = {
-  "Clear Character Cues (Native)", nullptr, 0,
-};
-ScriptAction g_character_filter_action = {
-  "Character Filter (Native)", nullptr, 0,
-};
-ScriptAction g_next_cue_action = {"Next Cue (Native)", nullptr, 0};
-ScriptAction g_previous_cue_action = {"Previous Cue (Native)", nullptr, 0};
-ScriptAction g_jump_to_cue_action = {"Jump To Cue (Native)", nullptr, 0};
+NativeMenuAction g_refresh_overlay_action = {"Refresh Video Overlay (Native)", 0};
+NativeMenuAction g_refresh_session_action = {"Refresh Session (Native)", 0};
+NativeMenuAction g_update_cues_from_regions_action = {"Update Cues From Regions (Native)", 0};
+NativeMenuAction g_clear_character_cues_action = {"Clear Character Cues (Native)", 0};
+NativeMenuAction g_character_filter_action = {"Character Filter (Native)", 0};
+NativeMenuAction g_next_cue_action = {"Next Cue (Native)", 0};
+NativeMenuAction g_previous_cue_action = {"Previous Cue (Native)", 0};
+NativeMenuAction g_jump_to_cue_action = {"Jump To Cue (Native)", 0};
 // The stable native command now owns the public Manager launch. The Lua
 // launcher remains in the repository as a parity reference and upgrade target,
 // but is no longer registered as the active Open Manager action.
-ScriptAction g_cue_manager_action = {"Open Manager", nullptr, 0};
-ScriptAction g_import_cue_sheet_action = {"Import Cue Sheet (Native)", nullptr, 0};
-ScriptAction g_preferences_action = {"Preferences (Native Preview)", nullptr, 0};
-ScriptAction g_ui_test_action = {"Native UI Test Window (C++)", nullptr, 0};
+NativeMenuAction g_cue_manager_action = {"Open Manager", 0};
+NativeMenuAction g_import_cue_sheet_action = {"Import Cue Sheet (Native)", 0};
+NativeMenuAction g_preferences_action = {"Preferences (Native Preview)", 0};
+NativeMenuAction g_ui_test_action = {"Native UI Test Window (C++)", 0};
 
 // Upgrade-only paths used to remove ReaScript registrations left by older
 // ReaADR releases. These files are not registered or executed by the native
@@ -226,21 +210,21 @@ std::vector<LegacyScriptRegistration> g_legacy_registration_cleanup = {
   {"Scripts/ReaADRTools/scripts/ReaADR_Quick_Action_3.lua"},
   {"Scripts/ReaADRTools/scripts/ReaADR_Quick_Action_4.lua"},
   {"Scripts/ReaADRTools/scripts/ReaADR_Import_Script.lua"},
-  {"Export Reports", "Scripts/ReaADRTools/scripts/ReaADR_Export_Reports.lua", 0},
-  {"Preferences", "Scripts/ReaADRTools/scripts/ReaADR_Preferences.lua", 0},
-  {"Import Cue Sheet", "Scripts/ReaADRTools/scripts/ReaADR_Import_Cue_Sheet.lua", 0},
-  {"Export Cue Sheet", "Scripts/ReaADRTools/scripts/ReaADR_Export_Cue_Sheet.lua", 0},
-  {"Next Cue", "Scripts/ReaADRTools/scripts/ReaADR_Next_Cue.lua", 0},
-  {"Previous Cue", "Scripts/ReaADRTools/scripts/ReaADR_Previous_Cue.lua", 0},
-  {"Jump To Cue", "Scripts/ReaADRTools/scripts/ReaADR_Jump_To_Cue.lua", 0},
-  {"Set Cue Status", "Scripts/ReaADRTools/scripts/ReaADR_Set_Cue_Status.lua", 0},
-  {"Character Filter", "Scripts/ReaADRTools/scripts/ReaADR_Character_Filter.lua", 0},
-  {"Generate Cues from Markers/Regions", "Scripts/ReaADRTools/scripts/ReaADR_Generate_Cues.lua", 0},
-  {"Clear Character Cues", "Scripts/ReaADRTools/scripts/ReaADR_Clean_Generated_Cues.lua", 0},
-  {"Overlay Settings", "Scripts/ReaADRTools/scripts/ReaADR_Overlay_Settings.lua", 0},
-  {"Open ReaADR Menu", "Scripts/ReaADRTools/scripts/ReaADR_Menu.lua", 0},
-  {"Start Recording Workflow", "Scripts/ReaADRTools/scripts/ReaADR_Start_Recording_Workflow.lua", 0},
-  {"Jump To Selected Cue", "Scripts/ReaADRTools/scripts/ReaADR_Jump_To_Selected_Cue.lua", 0},
+  {"Scripts/ReaADRTools/scripts/ReaADR_Export_Reports.lua"},
+  {"Scripts/ReaADRTools/scripts/ReaADR_Preferences.lua"},
+  {"Scripts/ReaADRTools/scripts/ReaADR_Import_Cue_Sheet.lua"},
+  {"Scripts/ReaADRTools/scripts/ReaADR_Export_Cue_Sheet.lua"},
+  {"Scripts/ReaADRTools/scripts/ReaADR_Next_Cue.lua"},
+  {"Scripts/ReaADRTools/scripts/ReaADR_Previous_Cue.lua"},
+  {"Scripts/ReaADRTools/scripts/ReaADR_Jump_To_Cue.lua"},
+  {"Scripts/ReaADRTools/scripts/ReaADR_Set_Cue_Status.lua"},
+  {"Scripts/ReaADRTools/scripts/ReaADR_Character_Filter.lua"},
+  {"Scripts/ReaADRTools/scripts/ReaADR_Generate_Cues.lua"},
+  {"Scripts/ReaADRTools/scripts/ReaADR_Clean_Generated_Cues.lua"},
+  {"Scripts/ReaADRTools/scripts/ReaADR_Overlay_Settings.lua"},
+  {"Scripts/ReaADRTools/scripts/ReaADR_Menu.lua"},
+  {"Scripts/ReaADRTools/scripts/ReaADR_Start_Recording_Workflow.lua"},
+  {"Scripts/ReaADRTools/scripts/ReaADR_Jump_To_Selected_Cue.lua"},
 };
 
 std::string parent_path(const std::string& path)
@@ -1261,7 +1245,7 @@ bool register_native_actions()
                                               const char* label,
                                               int& command_id,
                                               gaccel_register_t& accel,
-                                              ScriptAction& action) {
+                                              NativeMenuAction& action) {
     command_id = g_plugin->Register(
       "command_id", reinterpret_cast<void*>(const_cast<char*>(command_name)));
     if (!command_id) {
@@ -1549,7 +1533,7 @@ bool detect_dialogue_segments(double threshold_db,
   return true;
 }
 
-void add_menu_item_with_label(HMENU menu, int position, const ScriptAction& action, const std::string& label)
+void add_menu_item_with_label(HMENU menu, int position, const NativeMenuAction& action, const std::string& label)
 {
   if (!action.command_id || !g_insert_menu_item) return;
 
@@ -1562,7 +1546,7 @@ void add_menu_item_with_label(HMENU menu, int position, const ScriptAction& acti
   g_insert_menu_item(menu, position, TRUE, &item);
 }
 
-void update_menu_item_label(HMENU menu, int position, const ScriptAction& action, const std::string& label)
+void update_menu_item_label(HMENU menu, int position, const NativeMenuAction& action, const std::string& label)
 {
   if (!action.command_id || !g_set_menu_item_info) return;
 
