@@ -1715,12 +1715,6 @@ SessionRefreshHost session_refresh_host()
           native_cue_audio_path(), native_utc_timestamp()};
 }
 
-void run_command(Command command)
-{
-  switch (command) {
-  }
-}
-
 void release_action_registrations()
 {
   unregister_native_actions();
