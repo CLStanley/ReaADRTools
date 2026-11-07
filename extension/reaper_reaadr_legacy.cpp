@@ -163,18 +163,21 @@ const char kValidateSessionModelDef[] =
   "model,errorOut,errorOut_sz\0"
   "Validate an adr_session_model_v1 blob using the native C++ session-model codec.";
 
-struct ScriptAction {
+struct NativeMenuAction {
   const char* label;
-  const char* relative_path;
   int command_id = 0;
 };
 
-std::vector<ScriptAction> g_actions = {
-  {"Open Manager", "Scripts/ReaADRTools/scripts/ReaADR_Open_Manager.lua", 0},
-  {"Quick Action 1", "Scripts/ReaADRTools/scripts/ReaADR_Quick_Action_1.lua", 0},
-  {"Quick Action 2", "Scripts/ReaADRTools/scripts/ReaADR_Quick_Action_2.lua", 0},
-  {"Quick Action 3", "Scripts/ReaADRTools/scripts/ReaADR_Quick_Action_3.lua", 0},
-  {"Quick Action 4", "Scripts/ReaADRTools/scripts/ReaADR_Quick_Action_4.lua", 0},
+struct LegacyScriptRegistration {
+  const char* relative_path;
+};
+
+std::vector<NativeMenuAction> g_actions = {
+  {"Open Manager", 0},
+  {"Quick Action 1", 0},
+  {"Quick Action 2", 0},
+  {"Quick Action 3", 0},
+  {"Quick Action 4", 0},
 };
 
 // This action is native; the shared menu helpers only require its label and
@@ -216,8 +219,13 @@ ScriptAction g_ui_test_action = {"Native UI Test Window (C++)", nullptr, 0};
 // Upgrade-only paths used to remove ReaScript registrations left by older
 // ReaADR releases. These files are not registered or executed by the native
 // extension; keep this list only while in-place upgrades need cleanup.
-std::vector<ScriptAction> g_legacy_registration_cleanup = {
-  {"Import Script", "Scripts/ReaADRTools/scripts/ReaADR_Import_Script.lua", 0},
+std::vector<LegacyScriptRegistration> g_legacy_registration_cleanup = {
+  {"Scripts/ReaADRTools/scripts/ReaADR_Open_Manager.lua"},
+  {"Scripts/ReaADRTools/scripts/ReaADR_Quick_Action_1.lua"},
+  {"Scripts/ReaADRTools/scripts/ReaADR_Quick_Action_2.lua"},
+  {"Scripts/ReaADRTools/scripts/ReaADR_Quick_Action_3.lua"},
+  {"Scripts/ReaADRTools/scripts/ReaADR_Quick_Action_4.lua"},
+  {"Scripts/ReaADRTools/scripts/ReaADR_Import_Script.lua"},
   {"Export Reports", "Scripts/ReaADRTools/scripts/ReaADR_Export_Reports.lua", 0},
   {"Preferences", "Scripts/ReaADRTools/scripts/ReaADR_Preferences.lua", 0},
   {"Import Cue Sheet", "Scripts/ReaADRTools/scripts/ReaADR_Import_Cue_Sheet.lua", 0},
@@ -323,47 +331,23 @@ void initialize_log_path()
 void retire_legacy_script_registrations()
 {
   if (!AddRemoveReaScript) {
-    log_line("AddRemoveReaScript API unavailable; skipping legacy Lua action cleanup.");
+    log_line("REAPER script-registration cleanup API unavailable; skipping historical action retirement.");
     return;
   }
 
   const std::string root = resource_directory();
   const std::string old_root = plugin_directory();
-  log_line("Retiring historical Lua action registrations under: " + root);
+  log_line("Retiring historical ReaADR ReaScript registrations.");
 
-  for (const ScriptAction& legacy_action : g_legacy_registration_cleanup) {
+  for (const LegacyScriptRegistration& legacy_action : g_legacy_registration_cleanup) {
     const std::string old_script_path = join_path(old_root, legacy_action.relative_path + 8);
     AddRemoveReaScript(false, kMainSection, old_script_path.c_str(), false);
     const std::string script_path = join_path(root, legacy_action.relative_path);
     AddRemoveReaScript(false, kMainSection, script_path.c_str(), false);
   }
-
-  // Retire an existing Lua Open Manager registration without deleting its
-  // wrapper. The native command registered before this function is now the
-  // single public owner of that action and top-level menu entry.
-  const std::string old_manager_path =
-    join_path(old_root, g_actions.front().relative_path + 8);
-  const std::string manager_path =
-    join_path(root, g_actions.front().relative_path);
-  AddRemoveReaScript(false, kMainSection, old_manager_path.c_str(), false);
-  AddRemoveReaScript(false, kMainSection, manager_path.c_str(), false);
-
-  // Quick Action slots are native workflow commands. Remove historical Lua
-  // registrations here, then let the persistent native runtime bind the menu
-  // slots to _ReaADRQuickAction{1..4}Native. This avoids briefly restoring Lua
-  // ownership during every extension load.
-  for (std::size_t i = 1; i < g_actions.size(); ++i) {
-    const bool commit = i + 1 == g_actions.size();
-    const std::string old_script_path = join_path(old_root, g_actions[i].relative_path + 8);
-    AddRemoveReaScript(false, kMainSection, old_script_path.c_str(), false);
-    const std::string script_path = join_path(root, g_actions[i].relative_path);
-    AddRemoveReaScript(false, kMainSection, script_path.c_str(), commit);
-    g_actions[i].command_id = 0;
-  }
 }
 
-
-void add_menu_item(HMENU menu, int position, const ScriptAction& action)
+void add_menu_item(HMENU menu, int position, const NativeMenuAction& action)
 {
   if (!action.command_id || !g_insert_menu_item) return;
 
