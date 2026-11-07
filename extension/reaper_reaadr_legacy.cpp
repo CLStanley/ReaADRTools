@@ -1277,79 +1277,8 @@ reaadr::reaper::CharacterFilterApplyResult native_character_filter_apply(
   return applied;
 }
 
-bool refresh_navigation_overlay(std::string* error)
-{
-  reaadr::reaper::ProjectStateStore project_state(nullptr, {GetProjExtState, SetProjExtState});
-  reaadr::core::SessionModelRepository sessions(project_state);
-  reaadr::core::OverlaySettingsRepository settings(project_state);
-  reaadr::core::CueSelectionRepository selections(project_state);
-  reaadr::core::CharacterFilterRepository filters(project_state);
-  const reaadr::reaper::OverlayApplicationApi api = {
-    native_overlay_frame_rate, native_overlay_selection, native_overlay_refresh_callback,
-  };
-  reaadr::reaper::OverlayApplicationService service(sessions, settings, selections, filters, api);
-  const auto result = service.refresh();
-  if (!result && error) *error = result.error;
-  return static_cast<bool>(result);
-}
-
-void run_cue_navigation_action(bool next)
-{
-  reaadr::reaper::ProjectStateStore project_state(
-    nullptr, {GetProjExtState, SetProjExtState});
-  reaadr::core::SessionModelRepository sessions(project_state);
-  reaadr::core::CueSelectionRepository selections(project_state);
-  const reaadr::reaper::CueNavigationApi api = {
-    GetPlayState, GetPlayPosition, GetCursorPosition, SetEditCurPos,
-  };
-  reaadr::reaper::CueNavigationService service(sessions, selections, api, refresh_navigation_overlay);
-  const auto result = next ? service.navigate_next() : service.navigate_previous();
-  if (!result) {
-    ShowMessageBox(result.error.c_str(), "ReaADR Cue Navigation", 0);
-    return;
-  }
-  log_line(std::string("Native cue navigation moved to ") + result.selection.state.active_overlay_cue_key);
-}
-
-void run_jump_to_cue_action()
-{
-  if (!GetUserInputs) {
-    ShowMessageBox("The REAPER cue-ID input API is unavailable.", "ReaADR Cue Navigation", 0);
-    return;
-  }
-  std::array<char, 1024> input = {};
-  if (!GetUserInputs("ReaADR: Jump To Cue", 1, "Cue ID:", input.data(), input.size())) return;
-
-  reaadr::reaper::ProjectStateStore project_state(
-    nullptr, {GetProjExtState, SetProjExtState});
-  reaadr::core::SessionModelRepository sessions(project_state);
-  reaadr::core::CueSelectionRepository selections(project_state);
-  const reaadr::reaper::CueNavigationApi api = {
-    GetPlayState, GetPlayPosition, GetCursorPosition, SetEditCurPos,
-  };
-  reaadr::reaper::CueNavigationService service(sessions, selections, api, refresh_navigation_overlay);
-  const auto result = service.navigate_to_id(input.data());
-  if (!result) {
-    ShowMessageBox(result.error.c_str(), "ReaADR Cue Navigation", 0);
-    return;
-  }
-  log_line("Native cue navigation jumped to " + result.selection.state.active_overlay_cue_key);
-}
-
 bool hook_native_command(int command, int)
 {
-  if (command == g_next_cue_command_id && command != 0) {
-    run_cue_navigation_action(true);
-    return true;
-  }
-  if (command == g_previous_cue_command_id && command != 0) {
-    run_cue_navigation_action(false);
-    return true;
-  }
-  if (command == g_jump_to_cue_command_id && command != 0) {
-    run_jump_to_cue_action();
-    return true;
-  }
   if (command == g_cue_manager_command_id && command != 0) {
     run_native_cue_manager_action();
     return true;
@@ -2010,9 +1939,6 @@ SessionRefreshHost session_refresh_host()
 void run_command(Command command)
 {
   switch (command) {
-    case Command::next_cue: run_cue_navigation_action(true); break;
-    case Command::previous_cue: run_cue_navigation_action(false); break;
-    case Command::jump_to_cue: run_jump_to_cue_action(); break;
     case Command::preferences: run_native_preferences_action(); break;
   }
 }
