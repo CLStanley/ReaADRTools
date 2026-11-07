@@ -1066,10 +1066,6 @@ bool hook_native_command(int command, int)
     run_native_import_cue_sheet_action();
     return true;
   }
-  if (command == g_preferences_command_id && command != 0) {
-    run_native_preferences_action();
-    return true;
-  }
   if (command == g_ui_test_command_id && command != 0) {
     reaadr::ui::show_test_window();
     return true;
