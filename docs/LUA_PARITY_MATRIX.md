@@ -123,6 +123,10 @@ The stale compatibility registration for `Scripts/ReaADRTools/scripts/ReaADR_Mon
 
 `CountTakes` and `GetSet_LoopTimeRange2` are required by the native take-count and recording-loop services. Because the extension uses `REAPERAPI_MINIMAL`, native Make/MSVC build paths request those APIs before the host translation unit is preprocessed. Runtime smoke testing in REAPER is still required before parity approval.
 
+## Runtime packaging boundary
+
+The release-package validator rejects `.lua` files in the distributable payload, and CI independently asserts that the assembled Linux and Windows distributions contain no Lua files. The source-of-truth Lua references remain in the repository under `scripts/`; they are intentionally not copied into runtime packages. This verifies the packaging boundary (no Lua script payload), but does not by itself prove every historical workflow has native behavioral parity. REAPER smoke testing remains the final acceptance gate.
+
 ## Cross-platform CI state
 
 Native CI covers:
