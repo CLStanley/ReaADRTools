@@ -4,7 +4,7 @@ This document is the migration acceptance checklist for the Lua-to-native-C++ tr
 
 ## Native host decomposition
 
-The migration runtime no longer relies on `reaper_reaadr_legacy.cpp` to instantiate REAPER SDK API pointers. `reaadr_reaper/reaper_api.*` owns that process-wide host API surface, and the retained legacy host consumes the same declarations as a compatibility client. The native entrypoint now talks to that compatibility layer through `reaadr_reaper/legacy_host.hpp`: load/unload and Action List handoff are explicit operations, so the native shell no longer macro-renames a second plug-in entrypoint or directly mutates legacy action globals. The monolithic source is now compiled as an independent translation unit rather than source-included by the native entrypoint. Logging, Cue Manager cleanup wiring, and legacy command dispatch cross the explicit `legacy_host.hpp` interface. The retained compatibility implementation is still large and must be migrated command by command before deletion. Feature parity rows below remain unchanged until REAPER smoke testing.
+The migration runtime no longer relies on `reaper_reaadr_legacy.cpp` to instantiate REAPER SDK API pointers. `reaadr_reaper/reaper_api.*` owns that process-wide host API surface, and the retained legacy host consumes the same declarations as a compatibility client. The native entrypoint now talks to that compatibility layer through `reaadr_reaper/legacy_host.hpp`: load/unload and Action List handoff are explicit operations, so the native shell no longer macro-renames a second plug-in entrypoint or directly mutates legacy action globals. The monolithic source is now compiled as an independent translation unit rather than source-included by the native entrypoint. Logging, Cue Manager cleanup wiring, and typed REAPER adapter callbacks cross the explicit `legacy_host.hpp` interface. The generic legacy command dispatcher has been removed; native entrypoint dispatch owns the migrated workflows. The retained compatibility implementation is still large and must be migrated command by command before deletion. Feature parity rows below remain unchanged until REAPER smoke testing.
 
 ## Retention rule
 
@@ -59,15 +59,15 @@ Until all seven gates pass, substantive Lua implementations remain the specifica
 | `ReaADR_Jump_To_Cue.lua` | Compatibility launcher / native routed | Native action owns navigation; REAPER smoke test remains. |
 | `ReaADR_Jump_To_Selected_Cue.lua` | Compatibility launcher / native routed | Historical selected-cue action delegates to `_ReaADRJumpToCueNative`; smoke test remains. |
 | `ReaADR_Menu.lua` | Native routed/backend | Public Manager/menu routing has been cut over to native registrations. Remaining: REAPER menu/quick-action smoke test and legacy-registration cleanup. |
-| `ReaADR_Next_Cue.lua` | Compatibility launcher / native routed | Native action owns navigation; wrap/filter smoke test remains. |
+| `ReaADR_Next_Cue.lua` | Compatibility launcher / native routed | Native C++ navigation service owns selection persistence, overlay synchronization, and cursor movement; wrap/filter smoke test remains. |
 | `ReaADR_Open_Manager.lua` | Compatibility launcher / native routed | Native Manager owns the UI; keep wrapper until Manager parity is approved. |
 | `ReaADR_Open_Manager_1.lua` | Compatibility launcher / native routed | Native Manager startup-tab bridge owns behavior; smoke test remains. |
 | `ReaADR_Open_Manager_2.lua` | Compatibility launcher / native routed | Native Manager startup-tab bridge owns behavior; smoke test remains. |
 | `ReaADR_Open_Manager_3.lua` | Compatibility launcher / native routed | Native Manager startup-tab bridge owns behavior; smoke test remains. |
 | `ReaADR_Overlay.lua` | Compatibility launcher / native routed | Delegates directly to `_ReaADRRefreshVideoOverlayNative`; no Lua overlay workflow remains in this launcher. Native overlay refresh/settings/profile behavior still requires REAPER smoke testing before parity approval. |
 | `ReaADR_Overlay_Settings.lua` | Compatibility launcher / native routed | Native Manager/settings path owns behavior; settings UI smoke test remains. |
-| `ReaADR_Preferences.lua` | Compatibility launcher / native routed | Native preferences command owns behavior; smoke test remains. |
-| `ReaADR_Previous_Cue.lua` | Compatibility launcher / native routed | Native action owns navigation; wrap/filter smoke test remains. |
+| `ReaADR_Preferences.lua` | Compatibility launcher / native routed | Native preferences command now owns loading, validation, updates, and transactional persistence; REAPER settings UI smoke test remains. |
+| `ReaADR_Previous_Cue.lua` | Compatibility launcher / native routed | Native C++ navigation service owns selection persistence, overlay synchronization, and cursor movement; wrap/filter smoke test remains. |
 | `ReaADR_Quick_Action_1.lua` | Compatibility launcher / native routed | Public host action is promoted to `_ReaADRQuickAction1Native`; REAPER smoke test remains. |
 | `ReaADR_Quick_Action_2.lua` | Compatibility launcher / native routed | Public host action is promoted to `_ReaADRQuickAction2Native`; REAPER smoke test remains. |
 | `ReaADR_Quick_Action_3.lua` | Compatibility launcher / native routed | Public host action is promoted to `_ReaADRQuickAction3Native`; REAPER smoke test remains. |
