@@ -157,12 +157,6 @@ const char kReadXlsxAsTsvDef[] =
   "const char*,char*,int,char*,int\0"
   "path,tsvOut,tsvOut_sz,errorOut,errorOut_sz\0"
   "Read the first worksheet from an XLSX file and return tab-delimited text.";
-const char kValidateSessionModelDef[] =
-  "bool\0"
-  "const char*,char*,int\0"
-  "model,errorOut,errorOut_sz\0"
-  "Validate an adr_session_model_v1 blob using the native C++ session-model codec.";
-
 struct NativeMenuAction {
   const char* label;
   int command_id = 0;
@@ -366,18 +360,6 @@ void copy_to_buffer(const std::string& value, char* buffer, int buffer_size)
 {
   if (!buffer || buffer_size <= 0) return;
   std::snprintf(buffer, static_cast<std::size_t>(buffer_size), "%s", value.c_str());
-}
-
-bool validate_session_model(const char* model, char* error_out, int error_out_sz)
-{
-  // Transitional bridge: Lua can ask the new native core to validate a blob
-  // while Lua remains the writer. Remove this API after the native repository
-  // and all model consumers have moved into the extension.
-  copy_to_buffer("", error_out, error_out_sz);
-  const reaadr::core::ParseResult result = reaadr::core::parse_session_model(model ? model : "");
-  if (result) return true;
-  copy_to_buffer(reaadr::core::parse_error_message(result.error), error_out, error_out_sz);
-  return false;
 }
 
 std::string native_utc_timestamp()
@@ -1722,8 +1704,6 @@ bool load(reaper_plugin_info_t* plugin)
   plugin->Register("APIdef_ReaADR_DetectDialogueSegments", reinterpret_cast<void*>(const_cast<char*>(kDetectDialogueSegmentsDef)));
   plugin->Register("API_ReaADR_ReadXlsxAsTsv", reinterpret_cast<void*>(read_xlsx_as_tsv));
   plugin->Register("APIdef_ReaADR_ReadXlsxAsTsv", reinterpret_cast<void*>(const_cast<char*>(kReadXlsxAsTsvDef)));
-  plugin->Register("API_ReaADR_ValidateSessionModel", reinterpret_cast<void*>(validate_session_model));
-  plugin->Register("APIdef_ReaADR_ValidateSessionModel", reinterpret_cast<void*>(const_cast<char*>(kValidateSessionModelDef)));
   register_native_actions();
   retire_legacy_script_registrations();
   load_menu_functions();
@@ -1749,8 +1729,6 @@ void unload()
     g_plugin->Register("-APIdef_ReaADR_DetectDialogueSegments", reinterpret_cast<void*>(const_cast<char*>(kDetectDialogueSegmentsDef)));
     g_plugin->Register("-API_ReaADR_ReadXlsxAsTsv", reinterpret_cast<void*>(read_xlsx_as_tsv));
     g_plugin->Register("-APIdef_ReaADR_ReadXlsxAsTsv", reinterpret_cast<void*>(const_cast<char*>(kReadXlsxAsTsvDef)));
-    g_plugin->Register("-API_ReaADR_ValidateSessionModel", reinterpret_cast<void*>(validate_session_model));
-    g_plugin->Register("-APIdef_ReaADR_ValidateSessionModel", reinterpret_cast<void*>(const_cast<char*>(kValidateSessionModelDef)));
   }
   g_plugin = nullptr;
 }
