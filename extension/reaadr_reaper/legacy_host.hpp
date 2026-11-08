@@ -17,7 +17,6 @@ namespace reaadr::reaper::legacy_host {
 
 bool load(REAPER_PLUGIN_HINSTANCE instance, reaper_plugin_info_t* plugin);
 void unload();
-void release_action_registrations();
 bool bind_migrated_action_ids(reaper_plugin_info_t* plugin);
 
 void log(const std::string& message);
