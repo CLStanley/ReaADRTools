@@ -83,6 +83,19 @@ The persistent native Manager no longer depends on the legacy host implementatio
 
 Focused application tests cover import preview/repository guards, and the complete fake-REAPER integration harness covers successful Full, Add Selected Characters, distinct-script merge, and Update Existing Import while proving unrelated cues are preserved.
 
+## Persistent Cue Manager host-action extraction
+
+Persistent Cue Manager and Import Action List orchestration now lives in
+`reaadr_reaper/cue_manager_host_actions.cpp`, behind the declarations in
+`cue_manager_host_actions.hpp`. The main extension entrypoint delegates those
+actions instead of owning their dialog, import-workflow, export, and session
+callback setup. The long-lived service/controller graph remains owned by
+`CueManagerSessionHost` in `cue_manager_session.cpp`; this extraction does
+not change that lifetime or the UI contract. The Lua reference scripts and
+distribution payload are unchanged. Verify the Action List commands, import
+workflow, export paths, clear-character action, and Manager callbacks in REAPER
+before claiming behavioral parity.
+
 ## Cue Manager action dispatch extraction
 
 The Cue Manager callback now routes its action vocabulary through
