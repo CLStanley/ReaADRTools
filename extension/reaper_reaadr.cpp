@@ -229,7 +229,7 @@ void run_persistent_native_import_action()
     reaadr::reaper::CueManagerSessionConfig config;
     config.project_state_api = {GetProjExtState, SetProjExtState};
     config.global_state_api = {GetExtState, SetExtState};
-    reaadr::reaper::legacy_host::configure_session(config);
+    config.cleanup_api = reaadr::reaper::legacy_host::cue_cleanup_api();
     config.callbacks.trigger_import =
       [](const std::string& mapping, bool preview, const std::string& mode,
          const std::string& characters) {
@@ -248,7 +248,7 @@ void run_persistent_native_import_action()
 void run_persistent_native_cue_manager_action()
 {
   reaadr::reaper::CueManagerSessionConfig config;
-  config.project_state_api={GetProjExtState,SetProjExtState};config.global_state_api={GetExtState,SetExtState};reaadr::reaper::legacy_host::configure_session(config);
+  config.project_state_api={GetProjExtState,SetProjExtState};config.global_state_api={GetExtState,SetExtState};config.cleanup_api = reaadr::reaper::legacy_host::cue_cleanup_api();
   config.callbacks.trigger_import=[](const std::string& mapping,bool preview,const std::string& mode,const std::string& characters){run_persistent_native_manager_import(mapping,preview,mode,characters);};
   config.callbacks.trigger_action=[](const std::string& action){if(action=="sync_regions"){std::string error;if(!reaadr::reaper::cue_manager_session_host().sync_regions(error)&&!error.empty())ShowMessageBox(error.c_str(),"ReaADR Cue Manager",0);}else if(action=="clear_character_cues")run_persistent_native_clear_character_cues_action();else if(action=="export_cue_sheet"||action=="export_timing_report"||action=="export_session_metadata")run_persistent_native_export_action(action);};
   std::string error;if(!reaadr::reaper::open_native_cue_manager(std::move(config),error)&&!error.empty())ShowMessageBox(error.c_str(),"ReaADR Cue Manager",0);
