@@ -8,6 +8,7 @@
 #include "session_export_service.hpp"
 #include <array>
 #include <cstring>
+#include <optional>
 #include <sstream>
 #include <string>
 #include <utility>
