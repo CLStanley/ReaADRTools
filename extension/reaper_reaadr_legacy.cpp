@@ -26,6 +26,7 @@
 #include "reaadr_reaper/legacy_host.hpp"
 #include "reaadr_reaper/workflow_action_ids.hpp"
 #include "reaadr_reaper/cue_manager_session.hpp"
+#include "reaadr_reaper/native_host_services.hpp"
 
 #include <algorithm>
 #include <array>
@@ -418,77 +419,6 @@ reaadr::reaper::TransactionApi native_session_transaction_api()
     Undo_BeginBlock2, Undo_EndBlock2, Undo_CanUndo2, Undo_DoUndo2,
     PreventUIRefresh,
   };
-}
-
-reaadr::reaper::OverlaySelectionInput native_overlay_selection();
-double native_overlay_frame_rate();
-bool native_overlay_refresh_callback(
-  const reaadr::core::OverlayRefreshOptions& options, std::string* error);
-reaadr::reaper::OverlaySelectionInput native_overlay_selection()
-{
-  reaadr::reaper::OverlaySelectionInput selection;
-  selection.selected_region_cue_key = selected_overlay_cue_key_from_regions();
-  if (CountSelectedMediaItems && GetSelectedMediaItem && GetSetMediaItemInfo_String) {
-    const int count = CountSelectedMediaItems(nullptr);
-    std::array<char, 4096> value = {};
-    for (int index = 0; index < count; ++index) {
-      MediaItem* item = GetSelectedMediaItem(nullptr, index);
-      if (item && GetSetMediaItemInfo_String(item, "P_EXT:ReaADR.cue_key", value.data(), false) &&
-          value[0] != '\0') {
-        selection.selected_item_cue_key = value.data();
-        break;
-      }
-    }
-  }
-  return selection;
-}
-
-double native_overlay_frame_rate()
-{
-  bool drop_frame = false;
-  const double frame_rate = TimeMap_curFrameRate
-    ? TimeMap_curFrameRate(nullptr, &drop_frame) : 24.0;
-  return std::isfinite(frame_rate) && frame_rate > 0.0 ? frame_rate : 24.0;
-}
-
-reaadr::reaper::OverlayRefreshApi native_overlay_refresh_api()
-{
-  return {
-    CountTracks,
-    native_overlay_get_track,
-    native_overlay_validate_track,
-    native_overlay_get_set_track_string,
-    TrackFX_GetCount,
-    TrackFX_GetNamedConfigParm,
-    TrackFX_GetEnabled,
-    TrackFX_AddByName,
-    TrackFX_Delete,
-    TrackFX_SetNamedConfigParm,
-    TrackFX_SetEnabled,
-    TrackList_AdjustWindows,
-    UpdateArrange,
-  };
-}
-
-reaadr::reaper::TransactionApi native_overlay_transaction_api()
-{
-  return {
-    Undo_BeginBlock2,
-    Undo_EndBlock2,
-    Undo_CanUndo2,
-    Undo_DoUndo2,
-    PreventUIRefresh,
-  };
-}
-
-bool native_overlay_refresh_callback(
-  const reaadr::core::OverlayRefreshOptions& options, std::string* error)
-{
-  const auto applied = reaadr::reaper::refresh_generated_overlay_transactionally(
-    nullptr, native_overlay_refresh_api(), native_overlay_transaction_api(), options,
-    "ReaADR: refresh video overlay");
-  if (!applied && error) *error = applied.error;
-  return static_cast<bool>(applied);
 }
 
 reaadr::core::ProjectRenderState native_cleanup_inspect(std::string* error)
@@ -1126,8 +1056,7 @@ void log(const std::string& message)
 
 reaadr::reaper::OverlayApplicationApi overlay_api()
 {
-  return {native_overlay_frame_rate, native_overlay_selection,
-          native_overlay_refresh_callback};
+  return reaadr::reaper::native_overlay_application_api();
 }
 
 CueNavigationApi cue_navigation_api()
