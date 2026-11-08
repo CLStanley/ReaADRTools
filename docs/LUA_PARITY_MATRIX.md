@@ -106,6 +106,17 @@ Focused native tests cover action classification, unknown actions and
 colon-containing setting values. The old compatibility fallback dialog is no
 longer part of the active Manager execution path.
 
+## REAPER API export lifecycle
+
+REAPER API export registration and unregistration now use
+`reaadr_reaper/host_api_registration.hpp`. The compatibility host still owns
+the dialogue-detection and XLSX callback implementations and their stable
+`API_` / `APIdef_` names, but the common registration sequence is symmetric
+and rolls back previously registered entries if a later registration fails.
+`tests/host_api_registration_tests.cpp` covers registration order, reverse
+unregistration, failure rollback, and invalid entries. This is a registration
+boundary extraction, not an in-REAPER API compatibility certification.
+
 ## Remaining compatibility-host ownership
 
 The legacy translation unit remains compiled as a compatibility host for REAPER
