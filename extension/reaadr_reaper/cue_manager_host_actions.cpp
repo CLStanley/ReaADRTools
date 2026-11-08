@@ -9,6 +9,7 @@
 #include <array>
 #include <cstring>
 #include <optional>
+#include <optional>
 #include <sstream>
 #include <string>
 #include <utility>
