@@ -1,19 +1,21 @@
-#include "cue_manager_host_actions.hpp"
-#include "app/cue_import_request.hpp"
-#include "app/cue_import_workflow.hpp"
-#include "legacy_host.hpp"
-#include "native_runtime.hpp"
-#include "project_state.hpp"
-#include "cue_manager_session.hpp"
-#include "app/session_export_service.hpp"
+// Load standard headers before REAPER/WDL declarations: SWELL defines
+// min/max macros on non-Windows platforms.
 #include <array>
 #include <cstring>
-#include <optional>
 #include <optional>
 #include <sstream>
 #include <string>
 #include <utility>
 #include <vector>
+
+#include "cue_manager_host_actions.hpp"
+#include "app/cue_import_request.hpp"
+#include "app/cue_import_workflow.hpp"
+#include "app/session_export_service.hpp"
+#include "legacy_host.hpp"
+#include "native_runtime.hpp"
+#include "project_state.hpp"
+#include "cue_manager_session.hpp"
 #include <reaper_plugin.h>
 #include "reaper_api.hpp"
 
