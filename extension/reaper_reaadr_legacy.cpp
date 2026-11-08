@@ -1749,30 +1749,6 @@ void unload()
   ::unload();
 }
 
-bool promote_native_quick_actions(reaper_plugin_info_t* plugin)
-{
-  if (!plugin || !plugin->GetFunc) return false;
-  using NamedCommandLookupFn = int (*)(const char*);
-  auto lookup = reinterpret_cast<NamedCommandLookupFn>(plugin->GetFunc("NamedCommandLookup"));
-  if (!lookup) return false;
-  constexpr std::array<const char*, 4> names = {{
-    "_ReaADRQuickAction1Native", "_ReaADRQuickAction2Native",
-    "_ReaADRQuickAction3Native", "_ReaADRQuickAction4Native"
-  }};
-  std::array<int, 4> ids = {};
-  for (std::size_t index = 0; index < names.size(); ++index) {
-    ids[index] = lookup(names[index]);
-    if (!ids[index]) {
-      log_line(std::string("Native Quick Action command unavailable: ") + names[index]);
-      return false;
-    }
-  }
-  for (std::size_t index = 0; index < ids.size(); ++index)
-    g_actions[index + 1].command_id = ids[index];
-  log_line("Promoted all four Quick Actions to native command registrations.");
-  return true;
-}
-
 void log(const std::string& message)
 {
   log_line(message);
@@ -1811,8 +1787,9 @@ void release_action_registrations()
   unregister_native_actions();
 }
 
-void bind_migrated_action_ids()
+bool bind_migrated_action_ids(reaper_plugin_info_t* plugin)
 {
+  if (!plugin || !plugin->GetFunc) return false;
   const auto& ids = reaadr::reaper::workflow_action_ids();
   g_validate_session_action.command_id = ids.validate_session;
   g_refresh_overlay_action.command_id = ids.refresh_overlay;
@@ -1827,6 +1804,26 @@ void bind_migrated_action_ids()
   g_import_cue_sheet_action.command_id = ids.import_cue_sheet;
   g_preferences_action.command_id = ids.preferences;
   g_ui_test_action.command_id = ids.ui_test;
+
+  using NamedCommandLookupFn = int (*)(const char*);
+  auto lookup = reinterpret_cast<NamedCommandLookupFn>(plugin->GetFunc("NamedCommandLookup"));
+  if (!lookup) return false;
+  constexpr std::array<const char*, 4> names = {{
+    "_ReaADRQuickAction1Native", "_ReaADRQuickAction2Native",
+    "_ReaADRQuickAction3Native", "_ReaADRQuickAction4Native"
+  }};
+  std::array<int, 4> quick_ids = {};
+  for (std::size_t index = 0; index < names.size(); ++index) {
+    quick_ids[index] = lookup(names[index]);
+    if (!quick_ids[index]) {
+      log_line(std::string("Native Quick Action command unavailable: ") + names[index]);
+      return false;
+    }
+  }
+  for (std::size_t index = 0; index < quick_ids.size(); ++index)
+    g_actions[index + 1].command_id = quick_ids[index];
+  log_line("Bound native workflow and Quick Action command IDs to the ReaADR menu.");
+  return true;
 }
 
 } // namespace reaadr::reaper::legacy_host
