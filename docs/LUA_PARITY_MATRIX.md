@@ -98,21 +98,27 @@ before claiming behavioral parity.
 
 ## Cue Manager action dispatch extraction
 
-The Cue Manager callback now routes its action vocabulary through
-`reaadr_reaper/cue_manager_action_dispatch.hpp`, a host-independent typed
-dispatcher. The compatibility host injects command, export and setting
-callbacks; action classification and setting payload splitting no longer live
-in the Manager construction lambda. Focused native tests cover all supported
-actions, unknown actions and colon-containing setting values. The compatibility-only Cue Manager fallback flow now also lives in
-`reaadr_reaper/cue_manager_fallback.hpp`, with REAPER dialog callbacks injected
-by the host. Manager controller construction, REAPER command IDs, export
-execution and host lifecycle still need to move out of
-`reaper_reaadr_legacy.cpp`. No Lua references or runtime packaging changed,
-and no in-REAPER parity claim is made by this refactor.
+The persistent native Cue Manager host callback routes host-owned actions through
+`reaadr_reaper/cue_manager_action_dispatch.hpp`. The host injects the region-sync,
+clear-character and export handlers; the controller itself handles validation,
+navigation, preferences, overlay settings and Quick Action preference updates.
+Focused native tests cover action classification, unknown actions and
+colon-containing setting values. The old compatibility fallback dialog is no
+longer part of the active Manager execution path.
 
 ## Remaining compatibility-host ownership
 
-The compatibility translation unit currently retains REAPER lifecycle/registration support, Manager action wiring, Cue Manager orchestration, cue-sheet import/export actions, and concrete REAPER callback adapters. The native domain/application/UI services already exist for the principal Manager and import paths. The next code-only migration slices should extract those host-facing functions into focused translation units and expose only typed host callbacks; they must not duplicate or rewrite the domain services. Keep the Lua scripts unchanged. A green CI run validates build/test/package integrity only; actual parity approval still requires the REAPER smoke tests listed below.
+The legacy translation unit remains compiled as a compatibility host for REAPER
+API bootstrap, menu registration and adapters still consumed by migrated
+features. Its duplicate Cue Manager controller/service construction, modal
+fallback, independent cue-sheet import path and duplicate CSV export handlers
+have been removed. The active Manager and standalone Import action now share
+`CueManagerSessionHost`, with host-facing dialog and export orchestration in
+`reaadr_reaper/cue_manager_host_actions.cpp`. Do not remove the remaining
+compatibility host wholesale until its API bootstrap, menu registration and
+callback dependencies have been migrated independently. Keep the Lua scripts
+unchanged. A green CI run validates build/test/package integrity only; actual
+parity approval still requires the REAPER smoke tests listed below.
 
 ## Native Manager architecture
 
