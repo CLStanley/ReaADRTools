@@ -622,7 +622,7 @@ bool activate_native_runtime(reaper_plugin_info_t* plugin)
     reaadr::reaper::legacy_host::log("Could not cut workflow Action List registration over to the native registry.");
     return false;
   }
-  if(!plugin->Register("hookcommand",reinterpret_cast<void*>(runtime_host_hook)){
+  if(!plugin->Register("hookcommand",reinterpret_cast<void*>(runtime_host_hook))){
     reaadr::reaper::legacy_host::log("Could not install persistent native runtime command hook.");
     reaadr::reaper::unregister_migrated_workflow_actions(plugin);
     return false;
