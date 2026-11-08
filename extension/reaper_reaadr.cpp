@@ -622,8 +622,7 @@ bool activate_native_runtime(reaper_plugin_info_t* plugin)
     reaadr::reaper::legacy_host::log("Could not cut workflow Action List registration over to the native registry.");
     return false;
   }
-  reaadr::reaper::legacy_host::bind_migrated_action_ids();
-  if(!plugin->Register("hookcommand",reinterpret_cast<void*>(runtime_host_hook))){
+  if(!plugin->Register("hookcommand",reinterpret_cast<void*>(runtime_host_hook)){
     reaadr::reaper::legacy_host::log("Could not install persistent native runtime command hook.");
     reaadr::reaper::unregister_migrated_workflow_actions(plugin);
     return false;
@@ -637,8 +636,8 @@ bool activate_native_runtime(reaper_plugin_info_t* plugin)
     reaadr::reaper::unregister_migrated_workflow_actions(plugin);
     return false;
   }
-  if(!reaadr::reaper::legacy_host::promote_native_quick_actions(plugin)){
-    reaadr::reaper::legacy_host::log("Could not promote Quick Actions to native registrations.");
+  if(!reaadr::reaper::legacy_host::bind_migrated_action_ids(plugin)){
+    reaadr::reaper::legacy_host::log("Could not bind native workflow and Quick Action IDs to the ReaADR menu.");
     reaadr::reaper::shutdown_native_runtime(plugin,nullptr);
     plugin->Register("-hookcommand",reinterpret_cast<void*>(runtime_host_hook));
     g_runtime_host_hook_registered=false;
