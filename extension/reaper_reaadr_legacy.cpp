@@ -516,7 +516,7 @@ void run_native_cue_manager_action()
         }
       };
       reaadr::reaper::dispatch_cue_manager_action(action, host);
-    } render_options.refresh_overlay);
+    }, render_options.refresh_overlay);
   if (!controller.reload()) { ShowMessageBox(controller.view().error.c_str(), "ReaADR Cue Manager", 0); return; }
   if (reaadr::ui::show_cue_manager(controller, native_overlay_frame_rate())) return;
 
