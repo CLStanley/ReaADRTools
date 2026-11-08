@@ -78,26 +78,6 @@ namespace {
 
 constexpr int kMainSection = 0;
 constexpr const char* kReaADRMenuId = "ReaADR Tools";
-constexpr const char* kValidateSessionCommandName = "ReaADRValidateSessionModelNative";
-constexpr const char* kValidateSessionActionLabel = "ReaADR: Validate Session Model (Native Preview)";
-constexpr const char* kRefreshOverlayCommandName = "ReaADRRefreshVideoOverlayNative";
-constexpr const char* kRefreshOverlayActionLabel = "ReaADR: Refresh Video Overlay (Native)";
-constexpr const char* kRefreshSessionCommandName = "ReaADRRefreshSessionNative";
-constexpr const char* kRefreshSessionActionLabel = "ReaADR: Refresh Session (Native)";
-constexpr const char* kUpdateCuesFromRegionsCommandName = "ReaADRUpdateCuesFromRegionsNative";
-constexpr const char* kUpdateCuesFromRegionsActionLabel = "ReaADR: Update Cues From Regions (Native)";
-constexpr const char* kClearCharacterCuesCommandName = "ReaADRClearCharacterCuesNative";
-constexpr const char* kClearCharacterCuesActionLabel = "ReaADR: Clear Character Cues (Native)";
-constexpr const char* kCharacterFilterCommandName = "ReaADRApplyCharacterFilterNative";
-constexpr const char* kCharacterFilterActionLabel = "ReaADR: Character Filter (Native)";
-constexpr const char* kNextCueCommandName = "ReaADRNextCueNative";
-constexpr const char* kPreviousCueCommandName = "ReaADRPreviousCueNative";
-constexpr const char* kJumpToCueCommandName = "ReaADRJumpToCueNative";
-constexpr const char* kCueManagerCommandName = "ReaADRShowCueManagerNative";
-constexpr const char* kImportCueSheetCommandName = "ReaADRImportCueSheetNative";
-constexpr const char* kPreferencesCommandName = "ReaADRShowPreferencesNative";
-constexpr const char* kUiTestCommandName = "ReaADRNativeUiTestWindowV2";
-
 reaper_plugin_info_t* g_plugin = nullptr;
 REAPER_PLUGIN_HINSTANCE g_instance = nullptr;
 
@@ -111,33 +91,6 @@ GetMenuItemCountFn g_get_menu_item_count = nullptr;
 InsertMenuItemFn g_insert_menu_item = nullptr;
 SetMenuItemInfoFn g_set_menu_item_info = nullptr;
 std::string g_log_path;
-int g_validate_session_command_id = 0;
-gaccel_register_t g_validate_session_accel = {};
-int g_refresh_overlay_command_id = 0;
-gaccel_register_t g_refresh_overlay_accel = {};
-int g_refresh_session_command_id = 0;
-gaccel_register_t g_refresh_session_accel = {};
-int g_update_cues_from_regions_command_id = 0;
-gaccel_register_t g_update_cues_from_regions_accel = {};
-int g_clear_character_cues_command_id = 0;
-gaccel_register_t g_clear_character_cues_accel = {};
-int g_character_filter_command_id = 0;
-gaccel_register_t g_character_filter_accel = {};
-int g_next_cue_command_id = 0;
-gaccel_register_t g_next_cue_accel = {};
-int g_previous_cue_command_id = 0;
-gaccel_register_t g_previous_cue_accel = {};
-int g_jump_to_cue_command_id = 0;
-gaccel_register_t g_jump_to_cue_accel = {};
-int g_cue_manager_command_id = 0;
-gaccel_register_t g_cue_manager_accel = {};
-int g_import_cue_sheet_command_id = 0;
-gaccel_register_t g_import_cue_sheet_accel = {};
-int g_preferences_command_id = 0;
-gaccel_register_t g_preferences_accel = {};
-int g_ui_test_command_id = 0;
-gaccel_register_t g_ui_test_accel = {};
-bool g_native_command_hook_registered = false;
 const char kDetectDialogueSegmentsDef[] =
   "bool\0"
   "double,double,double,double,int,char*,int,char*,int\0"
@@ -470,195 +423,6 @@ reaadr::reaper::CharacterFilterApplyResult native_character_filter_apply(
   return applied;
 }
 
-
-bool hook_native_command(int command, int)
-{
-  if (command == g_ui_test_command_id && command != 0) {
-    reaadr::ui::show_test_window();
-    return true;
-  }
-  return false;
-}
-
-bool register_native_actions()
-{
-  if (!g_plugin) return false;
-
-  // The identifier is persisted in REAPER keyboard mappings, so it must never
-  // be renamed after release. The user-facing label may evolve independently.
-  g_validate_session_command_id = g_plugin->Register(
-    "command_id",
-    reinterpret_cast<void*>(const_cast<char*>(kValidateSessionCommandName)));
-  if (!g_validate_session_command_id) {
-    log_line("Could not allocate the native session validation command ID.");
-    return false;
-  }
-
-  g_validate_session_accel.accel.cmd = static_cast<WORD>(g_validate_session_command_id);
-  g_validate_session_accel.desc = kValidateSessionActionLabel;
-  if (!g_plugin->Register("gaccel", reinterpret_cast<void*>(&g_validate_session_accel))) {
-    log_line("Could not add the native session validation command to the Action List.");
-    g_validate_session_command_id = 0;
-    return false;
-  }
-  if (!g_plugin->Register("hookcommand", reinterpret_cast<void*>(hook_native_command))) {
-    g_plugin->Register("-gaccel", reinterpret_cast<void*>(&g_validate_session_accel));
-    g_validate_session_command_id = 0;
-    log_line("Could not register the native command hook.");
-    return false;
-  }
-
-  g_native_command_hook_registered = true;
-  g_validate_session_action.command_id = g_validate_session_command_id;
-  g_refresh_overlay_command_id = g_plugin->Register(
-    "command_id", reinterpret_cast<void*>(const_cast<char*>(kRefreshOverlayCommandName)));
-  if (g_refresh_overlay_command_id) {
-    g_refresh_overlay_accel.accel.cmd = static_cast<WORD>(g_refresh_overlay_command_id);
-    g_refresh_overlay_accel.desc = kRefreshOverlayActionLabel;
-    if (g_plugin->Register("gaccel", reinterpret_cast<void*>(&g_refresh_overlay_accel))) {
-      g_refresh_overlay_action.command_id = g_refresh_overlay_command_id;
-    } else {
-      g_refresh_overlay_command_id = 0;
-      log_line("Could not add the native overlay refresh command to the Action List.");
-    }
-  } else {
-    log_line("Could not allocate the native overlay refresh command ID.");
-  }
-  const auto register_secondary_action = [=](const char* command_name,
-                                              const char* label,
-                                              int& command_id,
-                                              gaccel_register_t& accel,
-                                              NativeMenuAction& action) {
-    command_id = g_plugin->Register(
-      "command_id", reinterpret_cast<void*>(const_cast<char*>(command_name)));
-    if (!command_id) {
-      log_line(std::string("Could not allocate native command: ") + label);
-      return;
-    }
-    accel.accel.cmd = static_cast<WORD>(command_id);
-    accel.desc = label;
-    if (g_plugin->Register("gaccel", reinterpret_cast<void*>(&accel))) {
-      action.command_id = command_id;
-    } else {
-      command_id = 0;
-      log_line(std::string("Could not add native command to the Action List: ") + label);
-    }
-  };
-  register_secondary_action(kNextCueCommandName, "ReaADR: Next Cue (Native)",
-    g_next_cue_command_id, g_next_cue_accel, g_next_cue_action);
-  register_secondary_action(kPreviousCueCommandName, "ReaADR: Previous Cue (Native)",
-    g_previous_cue_command_id, g_previous_cue_accel, g_previous_cue_action);
-  register_secondary_action(kJumpToCueCommandName, "ReaADR: Jump To Cue (Native)",
-    g_jump_to_cue_command_id, g_jump_to_cue_accel, g_jump_to_cue_action);
-  register_secondary_action(kCueManagerCommandName, "ReaADR: Cue Manager (Native)",
-    g_cue_manager_command_id, g_cue_manager_accel, g_cue_manager_action);
-  register_secondary_action(kImportCueSheetCommandName, "ReaADR: Import Cue Sheet (Native)",
-    g_import_cue_sheet_command_id, g_import_cue_sheet_accel, g_import_cue_sheet_action);
-  register_secondary_action(kPreferencesCommandName, "ReaADR: Preferences (Native Preview)",
-    g_preferences_command_id, g_preferences_accel, g_preferences_action);
-  register_secondary_action(kRefreshSessionCommandName, kRefreshSessionActionLabel,
-    g_refresh_session_command_id, g_refresh_session_accel, g_refresh_session_action);
-  register_secondary_action(kUpdateCuesFromRegionsCommandName, kUpdateCuesFromRegionsActionLabel,
-    g_update_cues_from_regions_command_id, g_update_cues_from_regions_accel,
-    g_update_cues_from_regions_action);
-  register_secondary_action(kClearCharacterCuesCommandName, kClearCharacterCuesActionLabel,
-    g_clear_character_cues_command_id, g_clear_character_cues_accel,
-    g_clear_character_cues_action);
-  register_secondary_action(kCharacterFilterCommandName, kCharacterFilterActionLabel,
-    g_character_filter_command_id, g_character_filter_accel, g_character_filter_action);
-  register_secondary_action(kUiTestCommandName, "ReaADR: Native UI Test Window",
-    g_ui_test_command_id, g_ui_test_accel, g_ui_test_action);
-  log_line("Registered native UI test command_id=" + std::to_string(g_ui_test_command_id));
-  log_line("Registered native action: " + std::string(kValidateSessionActionLabel));
-  return true;
-}
-
-void unregister_native_actions()
-{
-  if (!g_plugin) return;
-  if (g_native_command_hook_registered) {
-    g_plugin->Register("-hookcommand", reinterpret_cast<void*>(hook_native_command));
-    g_native_command_hook_registered = false;
-  }
-  if (g_validate_session_command_id) {
-    g_plugin->Register("-gaccel", reinterpret_cast<void*>(&g_validate_session_accel));
-    g_validate_session_command_id = 0;
-    g_validate_session_action.command_id = 0;
-    g_validate_session_accel = {};
-  }
-  if (g_refresh_overlay_command_id) {
-    g_plugin->Register("-gaccel", reinterpret_cast<void*>(&g_refresh_overlay_accel));
-    g_refresh_overlay_command_id = 0;
-    g_refresh_overlay_action.command_id = 0;
-    g_refresh_overlay_accel = {};
-  }
-  if (g_refresh_session_command_id) {
-    g_plugin->Register("-gaccel", reinterpret_cast<void*>(&g_refresh_session_accel));
-    g_refresh_session_command_id = 0;
-    g_refresh_session_action.command_id = 0;
-    g_refresh_session_accel = {};
-  }
-  if (g_update_cues_from_regions_command_id) {
-    g_plugin->Register("-gaccel", reinterpret_cast<void*>(&g_update_cues_from_regions_accel));
-    g_update_cues_from_regions_command_id = 0;
-    g_update_cues_from_regions_action.command_id = 0;
-    g_update_cues_from_regions_accel = {};
-  }
-  if (g_clear_character_cues_command_id) {
-    g_plugin->Register("-gaccel", reinterpret_cast<void*>(&g_clear_character_cues_accel));
-    g_clear_character_cues_command_id = 0;
-    g_clear_character_cues_action.command_id = 0;
-    g_clear_character_cues_accel = {};
-  }
-  if (g_character_filter_command_id) {
-    g_plugin->Register("-gaccel", reinterpret_cast<void*>(&g_character_filter_accel));
-    g_character_filter_command_id = 0;
-    g_character_filter_action.command_id = 0;
-    g_character_filter_accel = {};
-  }
-  if (g_next_cue_command_id) {
-    g_plugin->Register("-gaccel", reinterpret_cast<void*>(&g_next_cue_accel));
-    g_next_cue_command_id = 0;
-    g_next_cue_action.command_id = 0;
-    g_next_cue_accel = {};
-  }
-  if (g_previous_cue_command_id) {
-    g_plugin->Register("-gaccel", reinterpret_cast<void*>(&g_previous_cue_accel));
-    g_previous_cue_command_id = 0;
-    g_previous_cue_action.command_id = 0;
-    g_previous_cue_accel = {};
-  }
-  if (g_jump_to_cue_command_id) {
-    g_plugin->Register("-gaccel", reinterpret_cast<void*>(&g_jump_to_cue_accel));
-    g_jump_to_cue_command_id = 0;
-    g_jump_to_cue_action.command_id = 0;
-    g_jump_to_cue_accel = {};
-  }
-  if (g_cue_manager_command_id) {
-    g_plugin->Register("-gaccel", reinterpret_cast<void*>(&g_cue_manager_accel));
-    g_cue_manager_command_id = 0;
-    g_cue_manager_action.command_id = 0;
-    g_cue_manager_accel = {};
-  }
-  if (g_import_cue_sheet_command_id) {
-    g_plugin->Register("-gaccel", reinterpret_cast<void*>(&g_import_cue_sheet_accel));
-    g_import_cue_sheet_command_id = 0;
-    g_import_cue_sheet_action.command_id = 0;
-    g_import_cue_sheet_accel = {};
-  }
-  if (g_preferences_command_id) {
-    g_plugin->Register("-gaccel", reinterpret_cast<void*>(&g_preferences_accel));
-    g_preferences_command_id = 0;
-    g_preferences_action.command_id = 0;
-    g_preferences_accel = {};
-  }
-  if (g_ui_test_command_id) {
-    g_plugin->Register("-gaccel", reinterpret_cast<void*>(&g_ui_test_accel));
-    g_ui_test_command_id = 0;
-    g_ui_test_action.command_id = 0;
-    g_ui_test_accel = {};
-  }
-}
 
 bool read_xlsx_as_tsv(const char* path, char* tsv_out, int tsv_out_sz, char* error_out, int error_out_sz)
 {
@@ -1040,7 +804,6 @@ void unload()
 {
   log_line("Unloading ReaADR extension.");
   if (g_plugin) {
-    unregister_native_actions();
     g_plugin->Register("-hookcustommenu", reinterpret_cast<void*>(hook_custom_menu));
     reaadr::reaper::unregister_host_api_exports(
       host_api_exports(), [](const char* key, void* value) {
@@ -1096,11 +859,6 @@ SessionRefreshHost session_refresh_host()
   return {native_track_region_api(), native_ruler_lane_api(),
           native_cue_audio_api(), native_session_transaction_api(),
           native_cue_audio_path(), native_utc_timestamp()};
-}
-
-void release_action_registrations()
-{
-  unregister_native_actions();
 }
 
 bool bind_migrated_action_ids(reaper_plugin_info_t* plugin)
