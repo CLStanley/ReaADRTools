@@ -9,6 +9,7 @@
 #include <vector>
 
 #include "cue_manager_host_actions.hpp"
+#include "cue_manager_action_dispatch.hpp"
 #include "app/cue_import_request.hpp"
 #include "app/cue_import_workflow.hpp"
 #include "app/session_export_service.hpp"
@@ -274,16 +275,23 @@ void run_persistent_native_cue_manager_action()
       run_manager_import_workflow(mapping, preview, mode, characters);
     };
   config.callbacks.trigger_action = [](const std::string& action) {
-    if (action == "sync_regions") {
-      std::string error;
-      if (!cue_manager_session_host().sync_regions(error) && !error.empty())
-        ShowMessageBox(error.c_str(), "ReaADR Cue Manager", 0);
-    } else if (action == "clear_character_cues") {
-      clear_character_cues_action();
-    } else if (action == "export_cue_sheet" || action == "export_timing_report" ||
-               action == "export_session_metadata") {
-      export_action(action);
-    }
+    const CueManagerActionHost host{
+      [](const std::string& name) {
+        if (name == "sync_regions") {
+          std::string error;
+          if (!cue_manager_session_host().sync_regions(error) && !error.empty())
+            ShowMessageBox(error.c_str(), "ReaADR Cue Manager", 0);
+        } else if (name == "clear_character_cues") {
+          clear_character_cues_action();
+        }
+      },
+      [](const std::string& name) { export_action(name); },
+      [](const std::string&, const std::string&) {
+        // Preference and overlay-setting actions are handled by the controller
+        // before reaching the host callback.
+      }
+    };
+    dispatch_cue_manager_action(action, host);
   };
 
   std::string error;
