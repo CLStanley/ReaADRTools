@@ -38,10 +38,9 @@ inline bool initialize_native_runtime(
     if (error) *error = "REAPER plug-in host is unavailable.";
     return false;
   }
-  // The migrated workflow registry is implemented in workflow_action_ids.hpp,
-  // but activation remains with the compatibility registrar until the host
-  // relinquishes its gaccels in the same atomic cutover. Registering both here
-  // would create duplicate Action List entries during the transition.
+  // Register the migrated workflow commands and the remaining standalone
+  // native actions from the native runtime. The extension entrypoint owns this
+  // registration lifecycle; no ReaScript launcher participates in dispatch.
   if (!register_native_workflow_actions(plugin)) {
     if (error) *error = "Native ReaADR workflow actions could not be registered.";
     return false;
