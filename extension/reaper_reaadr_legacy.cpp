@@ -26,6 +26,7 @@
 #include "reaadr_reaper/legacy_host.hpp"
 #include "reaadr_reaper/workflow_action_ids.hpp"
 #include "reaadr_reaper/cue_manager_session.hpp"
+#include "reaadr_reaper/cue_manager_action_dispatch.hpp"
 
 #include <algorithm>
 #include <array>
@@ -488,31 +489,34 @@ void run_native_cue_manager_action()
         run_native_import_cue_sheet_action(mapping, preview, mode, characters);
     },
     [](const std::string& action) {
-      int command = 0;
-      if (action == "validate_session") command = g_validate_session_command_id;
-      else if (action == "refresh_session") command = g_refresh_session_command_id;
-      else if (action == "sync_regions") command = g_update_cues_from_regions_command_id;
-      else if (action == "clear_character_cues") command = g_clear_character_cues_command_id;
-      else if (action == "character_filter") command = g_character_filter_command_id;
-      else if (action == "refresh_overlay") command = g_refresh_overlay_command_id;
-      else if (action == "preferences") command = g_preferences_command_id;
-      if (command && Main_OnCommand) Main_OnCommand(command, 0);
-      else if (action == "export_cue_sheet") run_native_export_cue_sheet_action();
-      else if (action == "export_timing_report") run_native_export_timing_report_action();
-      else if (action == "export_session_metadata") run_native_export_session_metadata_action();
-      else if (action.rfind("overlay_profile:", 0) == 0)
-        run_native_overlay_profile_action(action.substr(16));
-      else if (action.rfind("overlay_toggle:", 0) == 0)
-        run_native_overlay_toggle_action(action.substr(15));
-      else if (action.rfind("overlay_text_color:", 0) == 0)
-        run_native_overlay_text_color_action(action.substr(19));
-      else if (action.rfind("overlay_settings:", 0) == 0)
-        run_native_overlay_settings_action(action.substr(17));
-      else if (action.rfind("quick_actions:", 0) == 0)
-        run_native_quick_actions_action(action.substr(14));
-      else if (action.rfind("preference_toggles:", 0) == 0)
-        run_native_preference_toggles_action(action.substr(19));
-    }, render_options.refresh_overlay);
+      const reaadr::reaper::CueManagerActionHost host{
+        [](const std::string& name) {
+          int command = 0;
+          if (name == "validate_session") command = g_validate_session_command_id;
+          else if (name == "refresh_session") command = g_refresh_session_command_id;
+          else if (name == "sync_regions") command = g_update_cues_from_regions_command_id;
+          else if (name == "clear_character_cues") command = g_clear_character_cues_command_id;
+          else if (name == "character_filter") command = g_character_filter_command_id;
+          else if (name == "refresh_overlay") command = g_refresh_overlay_command_id;
+          else if (name == "preferences") command = g_preferences_command_id;
+          if (command && Main_OnCommand) Main_OnCommand(command, 0);
+        },
+        [](const std::string& name) {
+          if (name == "export_cue_sheet") run_native_export_cue_sheet_action();
+          else if (name == "export_timing_report") run_native_export_timing_report_action();
+          else if (name == "export_session_metadata") run_native_export_session_metadata_action();
+        },
+        [](const std::string& name, const std::string& value) {
+          if (name == "overlay_profile") run_native_overlay_profile_action(value);
+          else if (name == "overlay_toggle") run_native_overlay_toggle_action(value);
+          else if (name == "overlay_text_color") run_native_overlay_text_color_action(value);
+          else if (name == "overlay_settings") run_native_overlay_settings_action(value);
+          else if (name == "quick_actions") run_native_quick_actions_action(value);
+          else if (name == "preference_toggles") run_native_preference_toggles_action(value);
+        }
+      };
+      reaadr::reaper::dispatch_cue_manager_action(action, host);
+    } render_options.refresh_overlay);
   if (!controller.reload()) { ShowMessageBox(controller.view().error.c_str(), "ReaADR Cue Manager", 0); return; }
   if (reaadr::ui::show_cue_manager(controller, native_overlay_frame_rate())) return;
 
