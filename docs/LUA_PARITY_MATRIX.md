@@ -90,9 +90,10 @@ The Cue Manager callback now routes its action vocabulary through
 dispatcher. The compatibility host injects command, export and setting
 callbacks; action classification and setting payload splitting no longer live
 in the Manager construction lambda. Focused native tests cover all supported
-actions, unknown actions and colon-containing setting values. This is the
-first extraction slice only: Manager controller construction, REAPER command
-IDs, dialogs, export execution and host lifecycle still need to move out of
+actions, unknown actions and colon-containing setting values. The compatibility-only Cue Manager fallback flow now also lives in
+`reaadr_reaper/cue_manager_fallback.hpp`, with REAPER dialog callbacks injected
+by the host. Manager controller construction, REAPER command IDs, export
+execution and host lifecycle still need to move out of
 `reaper_reaadr_legacy.cpp`. No Lua references or runtime packaging changed,
 and no in-REAPER parity claim is made by this refactor.
 
