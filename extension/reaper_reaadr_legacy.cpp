@@ -1778,13 +1778,6 @@ void log(const std::string& message)
   log_line(message);
 }
 
-void configure_session(reaadr::reaper::CueManagerSessionConfig& config)
-{
-  config.cleanup_api = {
-    native_cleanup_inspect, native_cleanup_apply, native_utc_timestamp()
-  };
-}
-
 reaadr::reaper::OverlayApplicationApi overlay_api()
 {
   return {native_overlay_frame_rate, native_overlay_selection,
