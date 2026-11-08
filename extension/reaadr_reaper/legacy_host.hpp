@@ -22,7 +22,6 @@ void bind_migrated_action_ids();
 bool promote_native_quick_actions(reaper_plugin_info_t* plugin);
 
 void log(const std::string& message);
-void configure_session(CueManagerSessionConfig& config);
 // Compatibility callbacks; orchestration belongs to the native runtime.
 OverlayApplicationApi overlay_api();
 // Invoke the existing host-bound session refresh while native adapters are extracted.
