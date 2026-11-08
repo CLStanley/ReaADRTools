@@ -7,7 +7,7 @@
 #include "app/character_filter_application_service.hpp"
 #include "cue_navigation_service.hpp"
 
-namespace reaadr::reaper { struct CueManagerSessionConfig; struct OverlayApplicationApi; }
+namespace reaadr::reaper { struct OverlayApplicationApi; }
 
 // Temporary compatibility-host lifecycle. The native migration shell calls this
 // explicit boundary instead of macro-renaming and invoking a second plug-in
