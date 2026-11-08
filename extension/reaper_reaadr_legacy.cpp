@@ -27,6 +27,7 @@
 #include "reaadr_reaper/workflow_action_ids.hpp"
 #include "reaadr_reaper/cue_manager_session.hpp"
 #include "reaadr_reaper/native_host_services.hpp"
+#include "reaadr_reaper/host_api_registration.hpp"
 
 #include <algorithm>
 #include <array>
@@ -990,6 +991,18 @@ void load_menu_functions()
   log_line(std::string("SetMenuItemInfo available: ") + (g_set_menu_item_info ? "yes" : "no"));
 }
 
+std::array<reaadr::reaper::HostApiExport, 4> host_api_exports()
+{
+  return {{
+    {"API_ReaADR_DetectDialogueSegments", reinterpret_cast<void*>(detect_dialogue_segments)},
+    {"APIdef_ReaADR_DetectDialogueSegments",
+     reinterpret_cast<void*>(const_cast<char*>(kDetectDialogueSegmentsDef))},
+    {"API_ReaADR_ReadXlsxAsTsv", reinterpret_cast<void*>(read_xlsx_as_tsv)},
+    {"APIdef_ReaADR_ReadXlsxAsTsv",
+     reinterpret_cast<void*>(const_cast<char*>(kReadXlsxAsTsvDef))},
+  }};
+}
+
 bool load(reaper_plugin_info_t* plugin)
 {
   g_plugin = plugin;
@@ -1000,10 +1013,14 @@ bool load(reaper_plugin_info_t* plugin)
     return false;
   }
   reaadr::ui::initialize(ShowMessageBox);
-  plugin->Register("API_ReaADR_DetectDialogueSegments", reinterpret_cast<void*>(detect_dialogue_segments));
-  plugin->Register("APIdef_ReaADR_DetectDialogueSegments", reinterpret_cast<void*>(const_cast<char*>(kDetectDialogueSegmentsDef)));
-  plugin->Register("API_ReaADR_ReadXlsxAsTsv", reinterpret_cast<void*>(read_xlsx_as_tsv));
-  plugin->Register("APIdef_ReaADR_ReadXlsxAsTsv", reinterpret_cast<void*>(const_cast<char*>(kReadXlsxAsTsvDef)));
+  const auto exports = host_api_exports();
+  if (!reaadr::reaper::register_host_api_exports(
+        exports, [plugin](const char* key, void* value) {
+          return plugin->Register(key, value) != 0;
+        })) {
+    log_line("Failed to register REAPER API exports.");
+    return false;
+  }
   register_native_actions();
   retire_legacy_script_registrations();
   load_menu_functions();
@@ -1025,10 +1042,10 @@ void unload()
   if (g_plugin) {
     unregister_native_actions();
     g_plugin->Register("-hookcustommenu", reinterpret_cast<void*>(hook_custom_menu));
-    g_plugin->Register("-API_ReaADR_DetectDialogueSegments", reinterpret_cast<void*>(detect_dialogue_segments));
-    g_plugin->Register("-APIdef_ReaADR_DetectDialogueSegments", reinterpret_cast<void*>(const_cast<char*>(kDetectDialogueSegmentsDef)));
-    g_plugin->Register("-API_ReaADR_ReadXlsxAsTsv", reinterpret_cast<void*>(read_xlsx_as_tsv));
-    g_plugin->Register("-APIdef_ReaADR_ReadXlsxAsTsv", reinterpret_cast<void*>(const_cast<char*>(kReadXlsxAsTsvDef)));
+    reaadr::reaper::unregister_host_api_exports(
+      host_api_exports(), [](const char* key, void* value) {
+        return g_plugin->Register(key, value) != 0;
+      });
   }
   g_plugin = nullptr;
 }
