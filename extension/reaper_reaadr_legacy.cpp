@@ -1021,7 +1021,7 @@ bool load(reaper_plugin_info_t* plugin)
     log_line("Failed to register REAPER API exports.");
     return false;
   }
-  register_native_actions();
+  // Public workflow commands are registered once by the native runtime.
   retire_legacy_script_registrations();
   load_menu_functions();
   if (AddCustomizableMenu) {
