@@ -405,13 +405,7 @@ bool runtime_host_hook(int command, int)
 
 bool activate_native_runtime(reaper_plugin_info_t* plugin)
 {
-  // The compatibility entrypoint still performs host/API bootstrap, but it no
-  // longer owns these public workflow registrations after this point. Remove
-  // its hook and gaccels first, then atomically recreate the same stable named
-  // commands under the native registry so shortcuts and toolbar bindings keep
-  // resolving by their persisted command names.
-  reaadr::reaper::legacy_host::release_action_registrations();
-  if(!reaadr::reaper::register_migrated_workflow_actions(plugin)){
+  // The native registry is the sole owner of public workflow commands.\n  if(!reaadr::reaper::register_migrated_workflow_actions(plugin)){
     reaadr::reaper::legacy_host::log("Could not cut workflow Action List registration over to the native registry.");
     return false;
   }
