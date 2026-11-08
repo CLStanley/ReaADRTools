@@ -74,17 +74,6 @@
 
 namespace {
 
-std::string native_csv_escape(const std::string& value)
-{
-  std::string escaped = "\"";
-  for (const char ch : value) {
-    if (ch == '"') escaped += "\"\"";
-    else escaped += ch;
-  }
-  escaped += '"';
-  return escaped;
-}
-
 constexpr int kMainSection = 0;
 constexpr const char* kReaADRMenuId = "ReaADR Tools";
 constexpr const char* kValidateSessionCommandName = "ReaADRValidateSessionModelNative";
