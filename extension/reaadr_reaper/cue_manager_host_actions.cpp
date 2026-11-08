@@ -38,7 +38,7 @@ void export_action(const std::string& action) {
     action=="export_timing_report"?"ReaADR: Export Timing Report":"ReaADR: Export Session Metadata";
   const auto path=export_path(title); if(path.empty())return;
   const auto loaded=cue_manager_session_host().load_session();
-  if(!loaded){ShowMessageBox(core::session_load_error_message(loaded).c_str(),"ReaADR Export",0);return;}
+  if(!loaded){ShowMessageBox(core::session_load_error_message(loaded),"ReaADR Export",0);return;}
   const auto kind=action=="export_cue_sheet"?SessionExportKind::cue_sheet:
     action=="export_timing_report"?SessionExportKind::timing_report:SessionExportKind::session_metadata;
   const auto formatted=format_session_export(loaded.model,kind);
