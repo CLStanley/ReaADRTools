@@ -27,6 +27,7 @@
 #include "reaadr_reaper/workflow_action_ids.hpp"
 #include "reaadr_reaper/cue_manager_session.hpp"
 #include "reaadr_reaper/cue_manager_action_dispatch.hpp"
+#include "reaadr_reaper/cue_manager_fallback.hpp"
 
 #include <algorithm>
 #include <array>
@@ -453,7 +454,6 @@ void run_native_cue_manager_action()
 {
   reaadr::reaper::ProjectStateStore project_state(nullptr, {GetProjExtState, SetProjExtState});
   reaadr::core::SessionModelRepository repository(project_state);
-  reaadr::core::CueManagerViewOptions view_options;
   reaadr::reaper::GlobalStateStore global_state({GetExtState, SetExtState});
   reaadr::reaper::ManagerViewApplicationService service(project_state, &global_state);
   reaadr::core::EventLogRepository event_log(project_state);
@@ -520,47 +520,18 @@ void run_native_cue_manager_action()
   if (!controller.reload()) { ShowMessageBox(controller.view().error.c_str(), "ReaADR Cue Manager", 0); return; }
   if (reaadr::ui::show_cue_manager(controller, native_overlay_frame_rate())) return;
 
-  // Builds without a native dialog resource retain a compact compatibility
-  // prompt, but supported native windows keep filtering inside the Manager.
-  if (GetUserInputs) {
-    std::array<char, 1024> filter_input = {};
-    if (GetUserInputs("ReaADR Cue Manager: Filter", 3, "Search,Character,Status",
-                      filter_input.data(), filter_input.size())) {
-      char* first = std::strchr(filter_input.data(), ',');
-      char* second = first ? std::strchr(first + 1, ',') : nullptr;
-      if (first && second) {
-        *first = '\0'; *second = '\0';
-        view_options.query = filter_input.data();
-        view_options.character = first + 1;
-        view_options.status = second + 1;
+  // The compatibility prompt remains available if the native SWELL window
+  // cannot open. REAPER dialog functions stay at the host boundary.
+  reaadr::reaper::show_cue_manager_fallback(
+    service, mutations,
+    {
+      [](const char* title, int count, const char* captions, char* output, int size) {
+        return GetUserInputs && GetUserInputs(title, count, captions, output, size);
+      },
+      [](const std::string& message, const std::string& title) {
+        ShowMessageBox(message.c_str(), title.c_str(), 0);
       }
-    }
-  }
-  const auto loaded = service.load(view_options, "cues");
-  if (!loaded) { ShowMessageBox(loaded.error.c_str(), "ReaADR Cue Manager", 0); return; }
-  const auto& view = loaded.view.cues;
-  std::ostringstream summary;
-  summary << "Session: " << view.session_id << "\n"
-          << "Showing " << view.rows.size() << " of " << loaded.view.total_cues << " cues\n\n";
-  for (const auto& row : view.rows) {
-    summary << (row.selected ? "> " : "  ") << row.cue_key << "  " << row.character
-            << "  [" << row.status << "]  " << row.dialogue << "\n";
-  }
-  ShowMessageBox(summary.str().c_str(), "ReaADR Cue Manager (Native)", 0);
-  if (!GetUserInputs) return;
-  std::array<char, 1024> input = {};
-  if (!GetUserInputs("ReaADR Cue Manager: Set Status", 2, "Cue ID,Status", input.data(), input.size())) return;
-  char* comma = std::strchr(input.data(), ',');
-  if (!comma || comma == input.data() || *(comma + 1) == '\0') {
-    ShowMessageBox("Enter a cue ID and status separated by a comma.", "ReaADR Cue Manager", 0);
-    return;
-  }
-  *comma = '\0';
-  reaadr::core::CueManagerEditOptions options;
-  options.cue_key = input.data();
-  options.status = comma + 1;
-  const auto updated = mutations.edit(options);
-  if (!updated) ShowMessageBox(updated.error.c_str(), "ReaADR Cue Manager", 0);
+    });
 }
 
 void run_native_import_cue_sheet_action(const std::string& mapping_override, bool preview_only,
