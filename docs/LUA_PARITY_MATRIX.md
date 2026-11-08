@@ -117,6 +117,20 @@ and rolls back previously registered entries if a later registration fails.
 unregistration, failure rollback, and invalid entries. This is a registration
 boundary extraction, not an in-REAPER API compatibility certification.
 
+## Single-owner native workflow registration
+
+The compatibility bootstrap no longer registers a temporary duplicate set of
+workflow command IDs, accelerator entries, or a redundant command hook before
+native activation. `register_migrated_workflow_actions` now registers the
+stable named commands directly, and the native runtime owns their lifecycle.
+The obsolete compatibility registration table, registration and teardown
+functions, and `release_action_registrations` bridge have been removed.
+`bind_migrated_action_ids` still maps the native IDs into the existing
+REAPER menu so saved shortcuts and the custom menu retain their command names.
+This eliminates the registration-cutover phase; it does not yet eliminate the
+menu and API compatibility adapter. Validate REAPER Action List entries,
+shortcuts, Quick Actions and menu labels on an installed build.
+
 ## Remaining compatibility-host ownership
 
 The legacy translation unit remains compiled as a compatibility host for REAPER
