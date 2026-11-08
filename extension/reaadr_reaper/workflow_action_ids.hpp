@@ -43,29 +43,6 @@ struct WorkflowActionIds {
   int ui_test = 0;
 };
 
-// Temporary construction helper used only while the compatibility bootstrap is
-// still the first registrar. It disappears when reaper_reaadr.cpp stops loading
-// that bootstrap entirely.
-inline WorkflowActionIds migrated_workflow_action_ids(int validate_session,
-                                                       int refresh_overlay,
-                                                       int refresh_session,
-                                                       int update_cues_from_regions,
-                                                       int clear_character_cues,
-                                                       int character_filter,
-                                                       int next_cue,
-                                                       int previous_cue,
-                                                       int jump_to_cue,
-                                                       int cue_manager,
-                                                       int import_cue_sheet,
-                                                       int preferences,
-                                                       int ui_test)
-{
-  return {validate_session, refresh_overlay, refresh_session,
-          update_cues_from_regions, clear_character_cues, character_filter,
-          next_cue, previous_cue, jump_to_cue, cue_manager, import_cue_sheet,
-          preferences, ui_test};
-}
-
 struct WorkflowActionDefinition {
   const char* command_name;
   const char* label;
