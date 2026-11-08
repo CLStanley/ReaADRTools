@@ -64,7 +64,6 @@ void manager_import(const std::string& serialized_mapping,bool preview_only,
                     const std::string& mode,const std::string& serialized_characters) {
   CueImportWorkflowRequest request;request.serialized_mapping=serialized_mapping;
   request.preview_only=preview_only;request.mode=mode;request.serialized_characters=serialized_characters;
-  ProjectStateStore state(nullptr,{GetProjExtState,SetProjExtState});
   if(serialized_mapping.empty()){
     std::array<char,4096> saved{};
     if(GetProjExtState&&GetProjExtState(nullptr,"ReaADRTools","import_mapping_last",saved.data(),saved.size())>0)
@@ -97,7 +96,6 @@ void manager_import(const std::string& serialized_mapping,bool preview_only,
 
 void run_persistent_native_import_action() {
   CueImportWorkflowRequest request;
-  ProjectStateStore state(nullptr,{GetProjExtState,SetProjExtState});
   std::array<char,4096> saved{};
   if(GetProjExtState&&GetProjExtState(nullptr,"ReaADRTools","import_mapping_last",saved.data(),saved.size())>0)
     request.persisted_mapping=saved.data();
