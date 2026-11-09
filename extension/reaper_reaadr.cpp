@@ -405,7 +405,8 @@ bool runtime_host_hook(int command, int)
 
 bool activate_native_runtime(reaper_plugin_info_t* plugin)
 {
-  // The native registry is the sole owner of public workflow commands.\n  if(!reaadr::reaper::register_migrated_workflow_actions(plugin)){
+  // The native registry is the sole owner of public workflow commands.
+  if(!reaadr::reaper::register_migrated_workflow_actions(plugin)){
     reaadr::reaper::legacy_host::log("Could not cut workflow Action List registration over to the native registry.");
     return false;
   }
