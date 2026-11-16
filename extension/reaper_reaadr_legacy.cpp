@@ -79,6 +79,8 @@ namespace {
 constexpr int kMainSection = 0;
 constexpr const char* kReaADRMenuId = "ReaADR Tools";
 reaper_plugin_info_t* g_plugin = nullptr;
+bool g_api_exports_registered = false;
+bool g_custom_menu_hook_registered = false;
 REAPER_PLUGIN_HINSTANCE g_instance = nullptr;
 
 using CreatePopupMenuFn = HMENU (*)();
@@ -774,6 +776,7 @@ bool load(reaper_plugin_info_t* plugin)
   log_line("Loading ReaADR extension.");
   if (REAPERAPI_LoadAPI(plugin->GetFunc) != 0) {
     log_line("REAPERAPI_LoadAPI failed.");
+    g_plugin = nullptr;
     return false;
   }
   reaadr::ui::initialize(ShowMessageBox);
@@ -783,8 +786,10 @@ bool load(reaper_plugin_info_t* plugin)
           return plugin->Register(key, value) != 0;
         })) {
     log_line("Failed to register REAPER API exports.");
+    g_plugin = nullptr;
     return false;
   }
+  g_api_exports_registered = true;
   // Public workflow commands are registered once by the native runtime.
   retire_legacy_script_registrations();
   load_menu_functions();
@@ -793,7 +798,12 @@ bool load(reaper_plugin_info_t* plugin)
     // and discard this custom top-level entry during action registration.
     const bool added = AddCustomizableMenu(kReaADRMenuId, kReaADRMenuId, nullptr, true);
     log_line(std::string("AddCustomizableMenu result: ") + (added ? "success" : "failure"));
-    plugin->Register("hookcustommenu", reinterpret_cast<void*>(hook_custom_menu));
+    if (added) {
+      g_custom_menu_hook_registered =
+        plugin->Register("hookcustommenu", reinterpret_cast<void*>(hook_custom_menu)) != 0;
+      if (!g_custom_menu_hook_registered)
+        log_line("Failed to register ReaADR custom-menu hook; Action List commands remain available.");
+    }
   } else {
     log_line("AddCustomizableMenu API unavailable; actions will register without the top-level menu.");
   }
@@ -804,11 +814,17 @@ void unload()
 {
   log_line("Unloading ReaADR extension.");
   if (g_plugin) {
-    g_plugin->Register("-hookcustommenu", reinterpret_cast<void*>(hook_custom_menu));
-    reaadr::reaper::unregister_host_api_exports(
-      host_api_exports(), [](const char* key, void* value) {
-        return g_plugin->Register(key, value) != 0;
-      });
+    if (g_custom_menu_hook_registered) {
+      g_plugin->Register("-hookcustommenu", reinterpret_cast<void*>(hook_custom_menu));
+      g_custom_menu_hook_registered = false;
+    }
+    if (g_api_exports_registered) {
+      reaadr::reaper::unregister_host_api_exports(
+        host_api_exports(), [](const char* key, void* value) {
+          return g_plugin->Register(key, value) != 0;
+        });
+      g_api_exports_registered = false;
+    }
   }
   g_plugin = nullptr;
 }
