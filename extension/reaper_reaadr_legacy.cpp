@@ -63,6 +63,7 @@
 #include "reaadr_reaper/cue_navigation_service.hpp"
 #include "reaadr_reaper/session_render_service.hpp"
 #include "reaadr_reaper/xlsx_import.hpp"
+#include "reaadr_reaper/native_menu_plan.hpp"
 #include "reaadr_reaper/project_state.hpp"
 #include "reaadr_reaper/project_transaction.hpp"
 #include "reaadr_ui/reaadr_ui.hpp"
@@ -624,17 +625,13 @@ void hook_custom_menu(const char* menu_id, void* menu, int flag)
     return;
   }
 
-  // Keep this order stable: existing customized REAPER menus and Quick Action
-  // positions depend on it. Only append at the current end of the menu.
-  struct MenuEntry {
-    const NativeMenuAction* action;
-    std::string label;
-  };
-  std::vector<MenuEntry> entries;
+  // Preserve the existing REAPER menu order and delegate position decisions
+  // to the platform-independent native menu planner.
+  std::vector<reaadr::reaper::NativeMenuEntry> entries;
   entries.reserve(g_actions.size() + 11);
-  entries.push_back({&g_cue_manager_action, g_cue_manager_action.label});
+  entries.push_back({g_cue_manager_action.command_id, g_cue_manager_action.label});
   for (std::size_t slot = 1; slot < g_actions.size(); ++slot)
-    entries.push_back({&g_actions[slot], quick_action_label(static_cast<int>(slot))});
+    entries.push_back({g_actions[slot].command_id, quick_action_label(static_cast<int>(slot))});
   const std::array<const NativeMenuAction*, 11> workflow_actions = {{
     &g_validate_session_action,
     &g_refresh_overlay_action,
@@ -649,18 +646,16 @@ void hook_custom_menu(const char* menu_id, void* menu, int flag)
     &g_preferences_action,
   }};
   for (const NativeMenuAction* action : workflow_actions)
-    entries.push_back({action, action->label});
+    entries.push_back({action->command_id, action->label});
 
-  int position = 0;
-  for (const MenuEntry& entry : entries) {
-    if (!entry.action->command_id) continue;
-    if (position < existing_items) {
-      if (g_set_menu_item_info)
-        update_menu_item_label(hmenu, position, *entry.action, entry.label);
-    } else {
-      add_menu_item_with_label(hmenu, position, *entry.action, entry.label);
-    }
-    ++position;
+  const auto steps = reaadr::reaper::plan_native_menu(
+    entries, existing_items, g_set_menu_item_info != nullptr);
+  for (const auto& step : steps) {
+    NativeMenuAction action = {step.entry.label.c_str(), step.entry.command_id};
+    if (step.operation == reaadr::reaper::NativeMenuOperation::update)
+      update_menu_item_label(hmenu, step.position, action, step.entry.label);
+    else
+      add_menu_item_with_label(hmenu, step.position, action, step.entry.label);
   }
 }
 
