@@ -131,6 +131,16 @@ This eliminates the registration-cutover phase; it does not yet eliminate the
 menu and API compatibility adapter. Validate REAPER Action List entries,
 shortcuts, Quick Actions and menu labels on an installed build.
 
+## Bootstrap and custom-menu lifecycle
+
+The compatibility bootstrap now records successful API-export and
+`hookcustommenu` registrations independently. Shutdown only unregisters
+resources actually installed, and a failed REAPER API bootstrap clears its
+stored plugin pointer. If the customizable menu cannot be created or its
+hook cannot be registered, the native Action List commands remain available.
+The menu callback and host adapters are still in the compatibility
+translation unit; a green compile is not proof of in-REAPER menu parity.
+
 ## Remaining compatibility-host ownership
 
 The legacy translation unit remains compiled as a compatibility host for REAPER
