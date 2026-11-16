@@ -609,127 +609,59 @@ void update_menu_item_label(HMENU menu, int position, const NativeMenuAction& ac
 }
 
 void hook_custom_menu(const char* menu_id, void* menu, int flag)
-
 {
-  log_line(std::string("hookcustommenu id=") + (menu_id ? menu_id : "(null)") + " flag=" + std::to_string(flag));
   if ((flag != 0 && flag != 1) || !menu_id || !menu) return;
   if (std::strcmp(menu_id, kReaADRMenuId) != 0) return;
-  if (!g_create_popup_menu || !g_get_menu_item_count || !g_insert_menu_item) {
+  if (!g_get_menu_item_count || !g_insert_menu_item) {
     log_line("Menu helpers unavailable; skipping ReaADR Tools menu creation.");
     return;
   }
 
   HMENU hmenu = static_cast<HMENU>(menu);
-  const int existing_items = g_get_menu_item_count ? g_get_menu_item_count(hmenu) : 0;
-  int position = existing_items > 0 ? existing_items : 0;
-
-  if (existing_items <= 0) {
-    add_menu_item(hmenu, position++, g_cue_manager_action);
-    for (std::size_t i = 1; i < g_actions.size(); ++i) {
-      add_menu_item_with_label(hmenu, position++, g_actions[i], quick_action_label(static_cast<int>(i)));
-    }
-    add_menu_item(hmenu, position, g_validate_session_action);
-    add_menu_item(hmenu, position + 1, g_refresh_overlay_action);
-    add_menu_item(hmenu, position + 2, g_refresh_session_action);
-    add_menu_item(hmenu, position + 3, g_update_cues_from_regions_action);
-    add_menu_item(hmenu, position + 4, g_clear_character_cues_action);
-    add_menu_item(hmenu, position + 5, g_character_filter_action);
-    add_menu_item(hmenu, position + 6, g_next_cue_action);
-    add_menu_item(hmenu, position + 7, g_previous_cue_action);
-    add_menu_item(hmenu, position + 8, g_jump_to_cue_action);
-    add_menu_item(hmenu, position + 9, g_import_cue_sheet_action);
-    add_menu_item(hmenu, position + 10, g_preferences_action);
-    log_line("Added top-level ReaADR Tools menu.");
+  const int existing_items = g_get_menu_item_count(hmenu);
+  if (existing_items < 0) {
+    log_line("Could not read ReaADR Tools menu item count.");
     return;
   }
 
-  update_menu_item_label(hmenu, 0, g_cue_manager_action, g_cue_manager_action.label);
+  // Keep this order stable: existing customized REAPER menus and Quick Action
+  // positions depend on it. Only append at the current end of the menu.
+  struct MenuEntry {
+    const NativeMenuAction* action;
+    std::string label;
+  };
+  std::vector<MenuEntry> entries;
+  entries.reserve(g_actions.size() + 11);
+  entries.push_back({&g_cue_manager_action, g_cue_manager_action.label});
+  for (std::size_t slot = 1; slot < g_actions.size(); ++slot)
+    entries.push_back({&g_actions[slot], quick_action_label(static_cast<int>(slot))});
+  const std::array<const NativeMenuAction*, 11> workflow_actions = {{
+    &g_validate_session_action,
+    &g_refresh_overlay_action,
+    &g_refresh_session_action,
+    &g_update_cues_from_regions_action,
+    &g_clear_character_cues_action,
+    &g_character_filter_action,
+    &g_next_cue_action,
+    &g_previous_cue_action,
+    &g_jump_to_cue_action,
+    &g_import_cue_sheet_action,
+    &g_preferences_action,
+  }};
+  for (const NativeMenuAction* action : workflow_actions)
+    entries.push_back({action, action->label});
 
-  for (std::size_t i = 1; i < g_actions.size(); ++i) {
-    if (static_cast<int>(i) < existing_items) {
-      update_menu_item_label(hmenu, static_cast<int>(i), g_actions[i], quick_action_label(static_cast<int>(i)));
+  int position = 0;
+  for (const MenuEntry& entry : entries) {
+    if (!entry.action->command_id) continue;
+    if (position < existing_items) {
+      if (g_set_menu_item_info)
+        update_menu_item_label(hmenu, position, *entry.action, entry.label);
     } else {
-      add_menu_item_with_label(hmenu, position++, g_actions[i], quick_action_label(static_cast<int>(i)));
+      add_menu_item_with_label(hmenu, position, *entry.action, entry.label);
     }
+    ++position;
   }
-  const int validation_position = static_cast<int>(g_actions.size());
-  if (validation_position < existing_items) {
-    update_menu_item_label(
-      hmenu,
-      validation_position,
-      g_validate_session_action,
-      g_validate_session_action.label);
-  } else {
-    add_menu_item(hmenu, position, g_validate_session_action);
-  }
-  const int refresh_position = validation_position + 1;
-  if (refresh_position < existing_items) {
-    update_menu_item_label(hmenu, refresh_position, g_refresh_overlay_action,
-      g_refresh_overlay_action.label);
-  } else {
-    add_menu_item(hmenu, position + 1, g_refresh_overlay_action);
-  }
-  const int refresh_session_position = validation_position + 2;
-  if (refresh_session_position < existing_items) {
-    update_menu_item_label(hmenu, refresh_session_position, g_refresh_session_action,
-      g_refresh_session_action.label);
-  } else {
-    add_menu_item(hmenu, position + 2, g_refresh_session_action);
-  }
-  const int update_regions_position = validation_position + 3;
-  if (update_regions_position < existing_items) {
-    update_menu_item_label(hmenu, update_regions_position, g_update_cues_from_regions_action,
-      g_update_cues_from_regions_action.label);
-  } else {
-    add_menu_item(hmenu, position + 3, g_update_cues_from_regions_action);
-  }
-  const int clear_character_position = validation_position + 4;
-  if (clear_character_position < existing_items) {
-    update_menu_item_label(hmenu, clear_character_position, g_clear_character_cues_action,
-      g_clear_character_cues_action.label);
-  } else {
-    add_menu_item(hmenu, position + 4, g_clear_character_cues_action);
-  }
-  const int character_filter_position = validation_position + 5;
-  if (character_filter_position < existing_items) {
-    update_menu_item_label(hmenu, character_filter_position, g_character_filter_action,
-      g_character_filter_action.label);
-  } else {
-    add_menu_item(hmenu, position + 5, g_character_filter_action);
-  }
-  const int next_position = validation_position + 6;
-  if (next_position < existing_items) {
-    update_menu_item_label(hmenu, next_position, g_next_cue_action, g_next_cue_action.label);
-  } else {
-    add_menu_item(hmenu, position + 6, g_next_cue_action);
-  }
-  const int previous_position = validation_position + 7;
-  if (previous_position < existing_items) {
-    update_menu_item_label(hmenu, previous_position, g_previous_cue_action, g_previous_cue_action.label);
-  } else {
-    add_menu_item(hmenu, position + 7, g_previous_cue_action);
-  }
-  const int jump_position = validation_position + 8;
-  if (jump_position < existing_items) {
-    update_menu_item_label(hmenu, jump_position, g_jump_to_cue_action, g_jump_to_cue_action.label);
-  } else {
-    add_menu_item(hmenu, position + 8, g_jump_to_cue_action);
-  }
-  const int import_position = validation_position + 9;
-  if (import_position < existing_items) {
-    update_menu_item_label(hmenu, import_position, g_import_cue_sheet_action,
-      g_import_cue_sheet_action.label);
-  } else {
-    add_menu_item(hmenu, position + 9, g_import_cue_sheet_action);
-  }
-  const int preferences_position = validation_position + 10;
-  if (preferences_position < existing_items) {
-    update_menu_item_label(hmenu, preferences_position, g_preferences_action,
-      g_preferences_action.label);
-  } else {
-    add_menu_item(hmenu, position + 10, g_preferences_action);
-  }
-  log_line("Updated top-level ReaADR quick-action labels.");
 }
 
 void load_menu_functions()
