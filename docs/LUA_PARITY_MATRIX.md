@@ -141,6 +141,17 @@ hook cannot be registered, the native Action List commands remain available.
 The menu callback and host adapters are still in the compatibility
 translation unit; a green compile is not proof of in-REAPER menu parity.
 
+## Ordered native menu construction
+
+The `hookcustommenu` callback now builds the existing Manager, four Quick
+Actions, and workflow commands from one ordered sequence. It updates existing
+positions when supported by the platform and appends only at the current end,
+rather than computing independent offsets for each action. This retains
+historical menu order and avoids insertion gaps in partially populated menus.
+The callback still lives in the compatibility host pending its dedicated
+native adapter extraction. An installed REAPER smoke test remains necessary,
+especially for customized menus and Quick Action label refresh.
+
 ## Remaining compatibility-host ownership
 
 The legacy translation unit remains compiled as a compatibility host for REAPER
