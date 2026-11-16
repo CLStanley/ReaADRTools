@@ -152,6 +152,16 @@ The callback still lives in the compatibility host pending its dedicated
 native adapter extraction. An installed REAPER smoke test remains necessary,
 especially for customized menus and Quick Action label refresh.
 
+## Native menu planning extraction
+
+The platform-independent `reaadr_reaper/native_menu_plan.hpp` now owns
+update-versus-append decisions and contiguous menu positions. The REAPER
+compatibility callback still supplies command IDs, dynamic Quick Action
+labels, and the host-specific `MENUITEMINFO` operations. Dedicated
+`native_menu_plan_tests` cover fresh, partial, missing-command,
+no-update, and invalid-count cases and run through the extension test target.
+This is a staged extraction, not full retirement of the menu callback.
+
 ## Remaining compatibility-host ownership
 
 The legacy translation unit remains compiled as a compatibility host for REAPER
