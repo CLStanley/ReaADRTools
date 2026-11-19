@@ -92,6 +92,8 @@ constexpr const char* kRefreshOverlayActionLabel = "ReaADR: Refresh Video Overla
 constexpr const char* kNextCueCommandName = "ReaADRNextCueNative";
 constexpr const char* kPreviousCueCommandName = "ReaADRPreviousCueNative";
 constexpr const char* kJumpToCueCommandName = "ReaADRJumpToCueNative";
+constexpr const char* kCueManagerPreviewCommandName = "ReaADROpenCueManagerNativePreview";
+constexpr const char* kCueManagerPreviewActionLabel = "ReaADR: Cue Manager (Native Preview)";
 
 reaper_plugin_info_t* g_plugin = nullptr;
 REAPER_PLUGIN_HINSTANCE g_instance = nullptr;
@@ -116,6 +118,8 @@ int g_previous_cue_command_id = 0;
 gaccel_register_t g_previous_cue_accel = {};
 int g_jump_to_cue_command_id = 0;
 gaccel_register_t g_jump_to_cue_accel = {};
+int g_cue_manager_preview_command_id = 0;
+gaccel_register_t g_cue_manager_preview_accel = {};
 bool g_native_command_hook_registered = false;
 const char kDetectDialogueSegmentsDef[] =
   "bool\0"
@@ -159,6 +163,7 @@ ScriptAction g_refresh_overlay_action = {
 ScriptAction g_next_cue_action = {"Next Cue (Native)", nullptr, 0};
 ScriptAction g_previous_cue_action = {"Previous Cue (Native)", nullptr, 0};
 ScriptAction g_jump_to_cue_action = {"Jump To Cue (Native)", nullptr, 0};
+ScriptAction g_cue_manager_preview_action = {"Cue Manager (Native Preview)", nullptr, 0};
 
 std::vector<ScriptAction> g_legacy_actions = {};
 
@@ -530,8 +535,46 @@ void run_jump_to_cue_action()
   log_line("Native cue navigation jumped to " + result.selection.state.active_overlay_cue_key);
 }
 
+void run_cue_manager_preview_action()
+{
+  reaadr::reaper::ProjectStateStore project_state(
+    nullptr, {GetProjExtState, SetProjExtState});
+  reaadr::core::SessionModelRepository repository(project_state);
+  const auto loaded = repository.load();
+  if (!loaded) {
+    ShowMessageBox(reaadr::core::session_load_error_message(loaded),
+      "ReaADR Cue Manager", 0);
+    return;
+  }
+
+  const auto& model = loaded.model;
+  std::ostringstream summary;
+  summary << "Native Cue Manager — read-only preview\\n\\n";
+  summary << "Cues: " << model.cues.size() << "\\n";
+  summary << "Characters: " << model.characters.size() << "\\n\\n";
+  const std::size_t visible = std::min<std::size_t>(model.cues.size(), 15);
+  for (std::size_t i = 0; i < visible; ++i) {
+    const auto& cue = model.cues[i];
+    const auto field = [&cue](const char* key) -> std::string {
+      const auto it = cue.find(key);
+      return it == cue.end() ? "" : it->second;
+    };
+    summary << (i + 1) << ". " << field("cue_id") << "  "
+            << field("character") << "  " << field("status") << "\\n";
+  }
+  if (model.cues.size() > visible) {
+    summary << "... and " << (model.cues.size() - visible) << " more cues\\n";
+  }
+  summary << "\\nThis preview does not modify the session.";
+  ShowMessageBox(summary.str().c_str(), "ReaADR Cue Manager", 0);
+}
+
 bool hook_native_command(int command, int)
 {
+  if (command == g_cue_manager_preview_command_id && command != 0) {
+    run_cue_manager_preview_action();
+    return true;
+  }
   if (command == g_validate_session_command_id && command != 0) {
     run_validate_session_action();
     return true;
@@ -625,6 +668,8 @@ bool register_native_actions()
     g_previous_cue_command_id, g_previous_cue_accel, g_previous_cue_action);
   register_secondary_action(kJumpToCueCommandName, "ReaADR: Jump To Cue (Native)",
     g_jump_to_cue_command_id, g_jump_to_cue_accel, g_jump_to_cue_action);
+  register_secondary_action(kCueManagerPreviewCommandName, kCueManagerPreviewActionLabel,
+    g_cue_manager_preview_command_id, g_cue_manager_preview_accel, g_cue_manager_preview_action);
   log_line("Registered native action: " + std::string(kValidateSessionActionLabel));
   return true;
 }
@@ -632,6 +677,12 @@ bool register_native_actions()
 void unregister_native_actions()
 {
   if (!g_plugin) return;
+  if (g_cue_manager_preview_command_id) {
+    g_plugin->Register("-gaccel", reinterpret_cast<void*>(&g_cue_manager_preview_accel));
+    g_cue_manager_preview_command_id = 0;
+    g_cue_manager_preview_action.command_id = 0;
+    g_cue_manager_preview_accel = {};
+  }
   if (g_native_command_hook_registered) {
     g_plugin->Register("-hookcommand", reinterpret_cast<void*>(hook_native_command));
     g_native_command_hook_registered = false;
