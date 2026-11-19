@@ -549,9 +549,9 @@ void run_cue_manager_preview_action()
 
   const auto& model = loaded.model;
   std::ostringstream summary;
-  summary << "Native Cue Manager — read-only preview\\n\\n";
-  summary << "Cues: " << model.cues.size() << "\\n";
-  summary << "Characters: " << model.characters.size() << "\\n\\n";
+  summary << "Native Cue Manager — read-only preview\n\n";
+  summary << "Cues: " << model.cues.size() << "\n";
+  summary << "Characters: " << model.characters.size() << "\n\n";
   const std::size_t visible = std::min<std::size_t>(model.cues.size(), 15);
   for (std::size_t i = 0; i < visible; ++i) {
     const auto& cue = model.cues[i];
@@ -560,12 +560,12 @@ void run_cue_manager_preview_action()
       return it == cue.end() ? "" : it->second;
     };
     summary << (i + 1) << ". " << field("cue_id") << "  "
-            << field("character") << "  " << field("status") << "\\n";
+            << field("character") << "  " << field("status") << "\n";
   }
   if (model.cues.size() > visible) {
-    summary << "... and " << (model.cues.size() - visible) << " more cues\\n";
+    summary << "... and " << (model.cues.size() - visible) << " more cues\n";
   }
-  summary << "\\nThis preview does not modify the session.";
+  summary << "\nThis preview does not modify the session.";
   ShowMessageBox(summary.str().c_str(), "ReaADR Cue Manager", 0);
 }
 
