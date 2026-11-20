@@ -548,25 +548,47 @@ void run_cue_manager_preview_action()
   }
 
   const auto& model = loaded.model;
-  std::ostringstream summary;
-  summary << "Native Cue Manager — read-only preview\n\n";
-  summary << "Cues: " << model.cues.size() << "\n";
-  summary << "Characters: " << model.characters.size() << "\n\n";
-  const std::size_t visible = std::min<std::size_t>(model.cues.size(), 15);
-  for (std::size_t i = 0; i < visible; ++i) {
-    const auto& cue = model.cues[i];
-    const auto field = [&cue](const char* key) -> std::string {
-      const auto it = cue.find(key);
-      return it == cue.end() ? "" : it->second;
-    };
-    summary << (i + 1) << ". " << field("cue_id") << "  "
-            << field("character") << "  " << field("status") << "\n";
+  constexpr std::size_t kPageSize = 15;
+  std::size_t page = 0;
+  const std::size_t page_count =
+    (model.cues.size() + kPageSize - 1) / kPageSize;
+  for (;;) {
+    const std::size_t begin = page * kPageSize;
+    const std::size_t end = (std::min)(model.cues.size(), begin + kPageSize);
+    std::ostringstream summary;
+    summary << "Native Cue Manager - read-only preview\n\n";
+    summary << "Cues: " << model.cues.size() << "\n";
+    summary << "Characters: " << model.characters.size() << "\n";
+    summary << "Page: " << (page + 1) << " / " << (std::max)(std::size_t{1}, page_count)
+            << "\n\n";
+    for (std::size_t i = begin; i < end; ++i) {
+      const auto& cue = model.cues[i];
+      const auto field = [&cue](const char* key) -> std::string {
+        const auto it = cue.find(key);
+        return it == cue.end() ? "" : it->second;
+      };
+      summary << (i + 1) << ". " << field("cue_id") << "  "
+              << field("character") << "  " << field("status") << "\n";
+    }
+    if (model.cues.empty()) summary << "No cues in this session.\n";
+    summary << "\nThis preview does not modify the session.";
+    ShowMessageBox(summary.str().c_str(), "ReaADR Cue Manager", 0);
+
+    if (page_count <= 1 || !GetUserInputs) break;
+    std::array<char, 32> input = {};
+    std::snprintf(input.data(), input.size(), "%zu", page + 1);
+    if (!GetUserInputs("ReaADR: Cue Manager Page", 1,
+                       "Page number (Cancel to close):", input.data(),
+                       static_cast<int>(input.size()))) break;
+    char* parsed_end = nullptr;
+    const unsigned long requested = std::strtoul(input.data(), &parsed_end, 10);
+    if (parsed_end == input.data() || *parsed_end != '\0' ||
+        requested == 0 || requested > page_count) {
+      ShowMessageBox("Enter a valid page number.", "ReaADR Cue Manager", 0);
+      continue;
+    }
+    page = static_cast<std::size_t>(requested - 1);
   }
-  if (model.cues.size() > visible) {
-    summary << "... and " << (model.cues.size() - visible) << " more cues\n";
-  }
-  summary << "\nThis preview does not modify the session.";
-  ShowMessageBox(summary.str().c_str(), "ReaADR Cue Manager", 0);
 }
 
 bool hook_native_command(int command, int)
