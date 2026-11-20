@@ -9,12 +9,10 @@
 #define REAPERAPI_WANT_GetAudioAccessorEndTime
 #define REAPERAPI_WANT_GetAudioAccessorSamples
 #define REAPERAPI_WANT_GetAudioAccessorStartTime
-#define REAPERAPI_WANT_GetExtState
 #define REAPERAPI_WANT_GetMediaItemInfo_Value
 #define REAPERAPI_WANT_GetProjExtState
 #define REAPERAPI_WANT_GetRegionOrMarker
 #define REAPERAPI_WANT_GetRegionOrMarkerInfo_Value
-#define REAPERAPI_WANT_GetResourcePath
 #define REAPERAPI_WANT_GetSelectedMediaItem
 #define REAPERAPI_WANT_GetTrack
 #define REAPERAPI_WANT_GetUserInputs
@@ -194,15 +192,6 @@ std::string plugin_directory()
 #endif
 }
 
-std::string resource_directory()
-{
-  if (GetResourcePath) {
-    const char* path = GetResourcePath();
-    if (path && *path) return path;
-  }
-  return parent_path(plugin_directory());
-}
-
 std::string join_path(const std::string& base, const char* relative)
 {
   if (base.empty() || base == ".") return relative;
@@ -258,24 +247,6 @@ void add_menu_item(HMENU menu, int position, const ScriptAction& action)
   item.wID = static_cast<UINT>(action.command_id);
   item.dwTypeData = const_cast<char*>(action.label);
   g_insert_menu_item(menu, position, TRUE, &item);
-}
-
-std::string quick_action_label(int slot)
-{
-  if (!GetExtState) return "Quick Action " + std::to_string(slot);
-
-  const std::string key = "quick_action_" + std::to_string(slot);
-  const char* value = GetExtState("ReaADRTools", key.c_str());
-  const std::string action_key = value ? value : "";
-
-  if (action_key == "import" || (action_key.empty() && slot == 1)) return "Quick Action " + std::to_string(slot) + ": Import Cue Sheet";
-  if (action_key == "cue_manager" || (action_key.empty() && slot == 2)) return "Quick Action " + std::to_string(slot) + ": Open Cue Manager";
-  if (action_key == "export_reports" || (action_key.empty() && slot == 3)) return "Quick Action " + std::to_string(slot) + ": Export Reports";
-  if (action_key == "overlay_settings" || (action_key.empty() && slot == 4)) return "Quick Action " + std::to_string(slot) + ": Video Overlays Tab";
-  if (action_key == "character_filter") return "Quick Action " + std::to_string(slot) + ": Character Filter";
-  if (action_key == "refresh_overlay") return "Quick Action " + std::to_string(slot) + ": Refresh Video Overlay";
-  if (action_key == "validate") return "Quick Action " + std::to_string(slot) + ": Validate Session";
-  return "Quick Action " + std::to_string(slot);
 }
 
 void copy_to_buffer(const std::string& value, char* buffer, int buffer_size)
@@ -1136,19 +1107,6 @@ bool detect_dialogue_segments(double threshold_db,
 
   copy_to_buffer(text, segments_out, segments_out_sz);
   return true;
-}
-
-void add_menu_item_with_label(HMENU menu, int position, const ScriptAction& action, const std::string& label)
-{
-  if (!action.command_id || !g_insert_menu_item) return;
-
-  MENUITEMINFO item = {};
-  item.cbSize = sizeof(item);
-  item.fMask = MIIM_TYPE | MIIM_ID;
-  item.fType = MFT_STRING;
-  item.wID = static_cast<UINT>(action.command_id);
-  item.dwTypeData = const_cast<char*>(label.c_str());
-  g_insert_menu_item(menu, position, TRUE, &item);
 }
 
 void update_menu_item_label(HMENU menu, int position, const ScriptAction& action, const std::string& label)
