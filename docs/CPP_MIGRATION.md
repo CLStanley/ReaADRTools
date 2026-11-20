@@ -188,6 +188,17 @@ cutovers, deferred recording frame/UI wiring, other overlay UI, and in-REAPER
 smoke tests remain. Lua source and packaging payloads have now been removed;
 the native extension is the only installed runtime.
 
+### Stage 4 working-branch progress (native-manager-ui-cutover)
+
+- Added a read-only native Cue Manager preview action that loads the canonical
+  model and displays a bounded cue summary. It does not write session data.
+- Exposed the preview through both the native Action List and ReaADR Tools menu.
+- Removed the startup requirement for `AddRemoveReaScript` and stopped invoking
+  the empty Lua action registration/unregistration paths.
+- This is not a persistent or dockable Cue Manager yet. Native manager window
+  lifecycle, cue editing UI, command parity, build validation, and in-REAPER
+  smoke testing remain pending before a production cutover.
+
 ### Stage 4: native UI and Lua removal
 
 - Replace manager, cue editor, preferences, filter, overlay, and report windows
