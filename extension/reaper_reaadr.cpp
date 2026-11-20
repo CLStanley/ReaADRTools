@@ -1208,6 +1208,7 @@ void hook_custom_menu(const char* menu_id, void* menu, int flag)
     add_menu_item(hmenu, position + 2, g_next_cue_action);
     add_menu_item(hmenu, position + 3, g_previous_cue_action);
     add_menu_item(hmenu, position + 4, g_jump_to_cue_action);
+    add_menu_item(hmenu, position + 5, g_cue_manager_preview_action);
     log_line("Added top-level ReaADR Tools menu.");
     return;
   }
@@ -1254,6 +1255,13 @@ void hook_custom_menu(const char* menu_id, void* menu, int flag)
   } else {
     add_menu_item(hmenu, position + 4, g_jump_to_cue_action);
   }
+  const int manager_position = validation_position + 5;
+  if (manager_position < existing_items) {
+    update_menu_item_label(hmenu, manager_position, g_cue_manager_preview_action,
+      g_cue_manager_preview_action.label);
+  } else {
+    add_menu_item(hmenu, position + 5, g_cue_manager_preview_action);
+  }
   log_line("Updated top-level ReaADR quick-action labels.");
 }
 
@@ -1284,10 +1292,6 @@ bool load(reaper_plugin_info_t* plugin)
     log_line("REAPERAPI_LoadAPI failed.");
     return false;
   }
-  if (!AddRemoveReaScript) {
-    log_line("AddRemoveReaScript API unavailable; cannot register ReaADR scripts.");
-    return false;
-  }
 
   if (AddCustomizableMenu) {
     AddCustomizableMenu(kReaADRMenuId, kReaADRMenuId, nullptr, true);
@@ -1300,8 +1304,10 @@ bool load(reaper_plugin_info_t* plugin)
   plugin->Register("APIdef_ReaADR_ReadXlsxAsTsv", reinterpret_cast<void*>(const_cast<char*>(kReadXlsxAsTsvDef)));
   plugin->Register("API_ReaADR_ValidateSessionModel", reinterpret_cast<void*>(validate_session_model));
   plugin->Register("APIdef_ReaADR_ValidateSessionModel", reinterpret_cast<void*>(const_cast<char*>(kValidateSessionModelDef)));
-  register_native_actions();
-  register_scripts();
+  if (!register_native_actions()) {
+    log_line("Native action registration failed.");
+    return false;
+  }
   load_menu_functions();
   if (AddCustomizableMenu) {
     plugin->Register("hookcustommenu", reinterpret_cast<void*>(hook_custom_menu));
@@ -1322,7 +1328,6 @@ void unload()
     g_plugin->Register("-API_ReaADR_ValidateSessionModel", reinterpret_cast<void*>(validate_session_model));
     g_plugin->Register("-APIdef_ReaADR_ValidateSessionModel", reinterpret_cast<void*>(const_cast<char*>(kValidateSessionModelDef)));
   }
-  unregister_scripts();
   g_plugin = nullptr;
 }
 
