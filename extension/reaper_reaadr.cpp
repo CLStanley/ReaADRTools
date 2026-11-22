@@ -480,31 +480,53 @@ void run_cue_manager_preview_action()
     return;
   }
 
-  const auto& model = loaded.model;
+  // The preview must use the same validated timeline order and stable cue
+  // identity as the native navigation actions, not raw serialized row order.
+  const auto catalog = reaadr::core::build_cue_navigation_catalog(loaded.model);
+  if (!catalog) {
+    ShowMessageBox(catalog.error.c_str(), "ReaADR Cue Manager", 0);
+    return;
+  }
+  reaadr::core::CueSelectionRepository selections(project_state);
+  const auto selected = selections.load();
+  if (!selected) {
+    ShowMessageBox(selected.error.c_str(), "ReaADR Cue Manager", 0);
+    return;
+  }
+
   constexpr std::size_t kPageSize = 15;
-  std::size_t page = 0;
   const std::size_t page_count =
-    (model.cues.size() + kPageSize - 1) / kPageSize;
+    (catalog.cues.size() + kPageSize - 1) / kPageSize;
+  std::size_t page = 0;
+  for (std::size_t i = 0; i < catalog.cues.size(); ++i) {
+    if (catalog.cues[i].cue_key == selected.state.manager_selected_cue_key) {
+      page = i / kPageSize;
+      break;
+    }
+  }
+
   for (;;) {
     const std::size_t begin = page * kPageSize;
-    const std::size_t end = (std::min)(model.cues.size(), begin + kPageSize);
+    const std::size_t end = (std::min)(catalog.cues.size(), begin + kPageSize);
     std::ostringstream summary;
     summary << "Native Cue Manager - read-only preview\n\n";
-    summary << "Cues: " << model.cues.size() << "\n";
-    summary << "Characters: " << model.characters.size() << "\n";
-    summary << "Page: " << (page + 1) << " / " << (std::max)(std::size_t{1}, page_count)
-            << "\n\n";
+    summary << "Cues: " << catalog.cues.size() << "\n";
+    summary << "Characters: " << loaded.model.characters.size() << "\n";
+    summary << "Page: " << (page + 1) << " / "
+            << (std::max)(std::size_t{1}, page_count) << "\n\n";
     for (std::size_t i = begin; i < end; ++i) {
-      const auto& cue = model.cues[i];
-      const auto field = [&cue](const char* key) -> std::string {
-        const auto it = cue.find(key);
-        return it == cue.end() ? "" : it->second;
+      const auto& entry = catalog.cues[i];
+      const auto field = [&entry](const char* key) -> std::string {
+        const auto it = entry.cue.find(key);
+        return it == entry.cue.end() ? "" : it->second;
       };
-      summary << (i + 1) << ". " << field("cue_id") << "  "
-              << field("character") << "  " << field("status") << "\n";
+      const bool active = entry.cue_key == selected.state.manager_selected_cue_key;
+      summary << (active ? "> " : "  ") << (i + 1) << ". "
+              << entry.cue_id << "  " << field("character")
+              << "  " << field("status") << "\n";
     }
-    if (model.cues.empty()) summary << "No cues in this session.\n";
-    summary << "\nThis preview does not modify the session.";
+    if (catalog.cues.empty()) summary << "No cues in this session.\n";
+    summary << "\n> = current manager selection. No changes are saved.";
     ShowMessageBox(summary.str().c_str(), "ReaADR Cue Manager", 0);
 
     if (page_count <= 1 || !GetUserInputs) break;
