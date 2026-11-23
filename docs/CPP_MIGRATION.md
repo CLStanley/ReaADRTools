@@ -190,6 +190,15 @@ the native extension is the only installed runtime.
 
 ### Stage 4 working-branch progress (native-manager-ui-cutover)
 
+- Added a native Set Selected Cue Status action using paired cue selection and
+  the canonical status snapshot/revision/rollback service. This is a prompt-
+  based editing bridge, not the finished native editor window; in-REAPER
+  validation is still required.
+- The read-only preview now uses validated timeline order and highlights the
+  current selected cue rather than iterating raw model records.
+- Preserved the 36 original Lua scripts under `legacy/scripts/` for reference;
+  they are excluded from the active extension build and packaging.
+
 - Added a read-only native Cue Manager preview action that loads the canonical
   model and displays a bounded cue summary. It does not write session data.
 - Exposed the preview through both the native Action List and ReaADR Tools menu.
