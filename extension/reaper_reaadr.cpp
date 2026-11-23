@@ -67,6 +67,7 @@
 #include <reaper_plugin_functions.h>
 
 #include "reaadr_core/session_model.hpp"
+#include "reaadr_core/cue_status.hpp"
 #include "reaadr_core/model_repository.hpp"
 #include "reaadr_reaper/overlay_application_service.hpp"
 #include "reaadr_reaper/overlay_refresh_adapter.hpp"
@@ -89,6 +90,8 @@ constexpr const char* kRefreshOverlayActionLabel = "ReaADR: Refresh Video Overla
 constexpr const char* kNextCueCommandName = "ReaADRNextCueNative";
 constexpr const char* kPreviousCueCommandName = "ReaADRPreviousCueNative";
 constexpr const char* kJumpToCueCommandName = "ReaADRJumpToCueNative";
+constexpr const char* kSetCueStatusCommandName = "ReaADRSetSelectedCueStatusNative";
+constexpr const char* kSetCueStatusActionLabel = "ReaADR: Set Selected Cue Status (Native)";
 constexpr const char* kCueManagerPreviewCommandName = "ReaADROpenCueManagerNativePreview";
 constexpr const char* kCueManagerPreviewActionLabel = "ReaADR: Cue Manager (Native Preview)";
 
@@ -115,6 +118,8 @@ int g_previous_cue_command_id = 0;
 gaccel_register_t g_previous_cue_accel = {};
 int g_jump_to_cue_command_id = 0;
 gaccel_register_t g_jump_to_cue_accel = {};
+int g_set_cue_status_command_id = 0;
+gaccel_register_t g_set_cue_status_accel = {};
 int g_cue_manager_preview_command_id = 0;
 gaccel_register_t g_cue_manager_preview_accel = {};
 bool g_native_command_hook_registered = false;
@@ -158,6 +163,7 @@ ScriptAction g_refresh_overlay_action = {
 ScriptAction g_next_cue_action = {"Next Cue (Native)", nullptr, 0};
 ScriptAction g_previous_cue_action = {"Previous Cue (Native)", nullptr, 0};
 ScriptAction g_jump_to_cue_action = {"Jump To Cue (Native)", nullptr, 0};
+ScriptAction g_set_cue_status_action = {"Set Selected Cue Status (Native)", nullptr, 0};
 ScriptAction g_cue_manager_preview_action = {"Cue Manager (Native Preview)", nullptr, 0};
 
 std::string parent_path(const std::string& path)
@@ -468,6 +474,80 @@ void run_jump_to_cue_action()
   log_line("Native cue navigation jumped to " + result.selection.state.active_overlay_cue_key);
 }
 
+void run_set_selected_cue_status_action()
+{
+  if (!GetUserInputs) {
+    ShowMessageBox("REAPER's input dialog API is unavailable.",
+      "ReaADR Cue Status", 0);
+    return;
+  }
+  reaadr::reaper::ProjectStateStore project_state(
+    nullptr, {GetProjExtState, SetProjExtState});
+  reaadr::core::SessionModelRepository repository(project_state);
+  reaadr::core::CueSelectionRepository selections(project_state);
+  const auto selection = selections.load();
+  if (!selection) {
+    ShowMessageBox(selection.error.c_str(), "ReaADR Cue Status", 0);
+    return;
+  }
+  if (selection.state.manager_selected_cue_key.empty()) {
+    ShowMessageBox("Select a cue with the native navigation actions first.",
+      "ReaADR Cue Status", 0);
+    return;
+  }
+  const auto loaded = repository.load();
+  if (!loaded) {
+    ShowMessageBox(reaadr::core::session_load_error_message(loaded),
+      "ReaADR Cue Status", 0);
+    return;
+  }
+  const auto catalog = reaadr::core::build_cue_navigation_catalog(loaded.model);
+  if (!catalog) {
+    ShowMessageBox(catalog.error.c_str(), "ReaADR Cue Status", 0);
+    return;
+  }
+  const reaadr::core::CueNavigationEntry* target = nullptr;
+  for (const auto& cue : catalog.cues) {
+    if (cue.cue_key == selection.state.manager_selected_cue_key) {
+      target = &cue;
+      break;
+    }
+  }
+  if (!target) {
+    ShowMessageBox("The selected cue no longer exists in this session.",
+      "ReaADR Cue Status", 0);
+    return;
+  }
+  std::array<char, 128> input = {};
+  const auto current = target->cue.find("status");
+  if (current != target->cue.end()) {
+    std::snprintf(input.data(), input.size(), "%s", current->second.c_str());
+  }
+  if (!GetUserInputs("ReaADR: Set Cue Status", 1, "Status:",
+                     input.data(), static_cast<int>(input.size()))) return;
+  if (!input[0]) {
+    ShowMessageBox("Status cannot be empty.", "ReaADR Cue Status", 0);
+    return;
+  }
+  reaadr::core::CueStatusCommitOptions options;
+  options.update.cue_key = target->cue_key;
+  options.update.status = input.data();
+  std::time_t now = std::time(nullptr);
+  if (const std::tm* utc = std::gmtime(&now)) {
+    char timestamp[32] = {};
+    if (std::strftime(timestamp, sizeof(timestamp), "%Y-%m-%dT%H:%M:%SZ", utc)) {
+      options.utc_timestamp = timestamp;
+    }
+  }
+  const auto committed = reaadr::core::commit_cue_status(repository, options);
+  if (!committed) {
+    ShowMessageBox(committed.error.c_str(), "ReaADR Cue Status", 0);
+    return;
+  }
+  log_line("Native cue status " + std::string(committed.update.changed ? "updated" : "unchanged")
+    + ": " + target->cue_id);
+}
+
 void run_cue_manager_preview_action()
 {
   reaadr::reaper::ProjectStateStore project_state(
@@ -548,6 +628,10 @@ void run_cue_manager_preview_action()
 
 bool hook_native_command(int command, int)
 {
+  if (command == g_set_cue_status_command_id && command != 0) {
+    run_set_selected_cue_status_action();
+    return true;
+  }
   if (command == g_cue_manager_preview_command_id && command != 0) {
     run_cue_manager_preview_action();
     return true;
@@ -645,6 +729,8 @@ bool register_native_actions()
     g_previous_cue_command_id, g_previous_cue_accel, g_previous_cue_action);
   register_secondary_action(kJumpToCueCommandName, "ReaADR: Jump To Cue (Native)",
     g_jump_to_cue_command_id, g_jump_to_cue_accel, g_jump_to_cue_action);
+  register_secondary_action(kSetCueStatusCommandName, kSetCueStatusActionLabel,
+    g_set_cue_status_command_id, g_set_cue_status_accel, g_set_cue_status_action);
   register_secondary_action(kCueManagerPreviewCommandName, kCueManagerPreviewActionLabel,
     g_cue_manager_preview_command_id, g_cue_manager_preview_accel, g_cue_manager_preview_action);
   log_line("Registered native action: " + std::string(kValidateSessionActionLabel));
@@ -654,6 +740,12 @@ bool register_native_actions()
 void unregister_native_actions()
 {
   if (!g_plugin) return;
+  if (g_set_cue_status_command_id) {
+    g_plugin->Register("-gaccel", reinterpret_cast<void*>(&g_set_cue_status_accel));
+    g_set_cue_status_command_id = 0;
+    g_set_cue_status_action.command_id = 0;
+    g_set_cue_status_accel = {};
+  }
   if (g_cue_manager_preview_command_id) {
     g_plugin->Register("-gaccel", reinterpret_cast<void*>(&g_cue_manager_preview_accel));
     g_cue_manager_preview_command_id = 0;
@@ -1166,6 +1258,7 @@ void hook_custom_menu(const char* menu_id, void* menu, int flag)
     &g_previous_cue_action,
     &g_jump_to_cue_action,
     &g_cue_manager_preview_action,
+    &g_set_cue_status_action,
   };
   constexpr std::size_t kNativeActionCount =
     sizeof(native_actions) / sizeof(native_actions[0]);
