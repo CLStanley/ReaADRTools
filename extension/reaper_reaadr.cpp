@@ -548,8 +548,153 @@ void run_set_selected_cue_status_action()
     + ": " + target->cue_id);
 }
 
+#ifdef _WIN32
+// Modeless Windows host. Keep REAPER project state at the command boundary;
+// no cue pointers or project handles survive a refresh.
+constexpr char kCueManagerWindowClass[] = "ReaADRNativeCueManager";
+HWND g_cue_manager_window = nullptr;
+HWND g_cue_manager_list = nullptr;
+std::vector<std::string> g_cue_manager_keys;
+constexpr int kManagerList = 1001;
+constexpr int kManagerRefresh = 1002;
+constexpr int kManagerSelect = 1003;
+constexpr int kManagerStatus = 1004;
+
+void refresh_native_manager_window()
+{
+  if (!g_cue_manager_list) return;
+  SendMessageA(g_cue_manager_list, LB_RESETCONTENT, 0, 0);
+  g_cue_manager_keys.clear();
+  reaadr::reaper::ProjectStateStore state(nullptr, {GetProjExtState, SetProjExtState});
+  reaadr::core::SessionModelRepository repository(state);
+  const auto loaded = repository.load();
+  if (!loaded) {
+    SetWindowTextA(g_cue_manager_window, "ReaADR Cue Manager - no readable session");
+    return;
+  }
+  const auto catalog = reaadr::core::build_cue_navigation_catalog(loaded.model);
+  if (!catalog) {
+    SetWindowTextA(g_cue_manager_window, "ReaADR Cue Manager - invalid timeline");
+    return;
+  }
+  reaadr::core::CueSelectionRepository selections(state);
+  const auto selection = selections.load();
+  for (const auto& entry : catalog.cues) {
+    const auto field = [&entry](const char* key) {
+      const auto it = entry.cue.find(key);
+      return it == entry.cue.end() ? std::string{} : it->second;
+    };
+    const std::string label = entry.cue_id + " | " + field("character") +
+      " | " + field("status") + " | " + field("line");
+    const LRESULT index = SendMessageA(g_cue_manager_list, LB_ADDSTRING, 0,
+      reinterpret_cast<LPARAM>(label.c_str()));
+    if (index < 0) continue;
+    g_cue_manager_keys.push_back(entry.cue_key);
+    if (selection && entry.cue_key == selection.state.manager_selected_cue_key)
+      SendMessageA(g_cue_manager_list, LB_SETCURSEL, index, 0);
+  }
+  SetWindowTextA(g_cue_manager_window, "ReaADR Cue Manager");
+}
+
+bool select_native_manager_row()
+{
+  const LRESULT index = SendMessageA(g_cue_manager_list, LB_GETCURSEL, 0, 0);
+  if (index < 0 || static_cast<std::size_t>(index) >= g_cue_manager_keys.size()) return false;
+  reaadr::reaper::ProjectStateStore state(nullptr, {GetProjExtState, SetProjExtState});
+  reaadr::core::SessionModelRepository repository(state);
+  const auto loaded = repository.load();
+  if (!loaded) return false;
+  const auto catalog = reaadr::core::build_cue_navigation_catalog(loaded.model);
+  if (!catalog) return false;
+  // Revalidate the row against the current project before any write.
+  for (const auto& cue : catalog.cues) {
+    if (cue.cue_key != g_cue_manager_keys[static_cast<std::size_t>(index)]) continue;
+    reaadr::core::CueSelectionRepository selections(state);
+    const auto result = selections.save_selected_cue(cue.cue_key);
+    if (!result) {
+      ShowMessageBox(result.error.c_str(), "ReaADR Cue Manager", 0);
+      return false;
+    }
+    if (SetEditCurPos) SetEditCurPos(cue.start_time, true, false);
+    return true;
+  }
+  refresh_native_manager_window();
+  return false;
+}
+
+LRESULT CALLBACK native_manager_window_proc(HWND window, UINT message, WPARAM wp, LPARAM lp)
+{
+  switch (message) {
+    case WM_CREATE:
+      g_cue_manager_window = window;
+      g_cue_manager_list = CreateWindowExA(WS_EX_CLIENTEDGE, "LISTBOX", "",
+        WS_CHILD | WS_VISIBLE | WS_VSCROLL | LBS_NOTIFY | LBS_NOINTEGRALHEIGHT,
+        8, 8, 600, 300, window, reinterpret_cast<HMENU>(kManagerList), g_instance, nullptr);
+      CreateWindowExA(0, "BUTTON", "Refresh", WS_CHILD | WS_VISIBLE,
+        8, 316, 100, 28, window, reinterpret_cast<HMENU>(kManagerRefresh), g_instance, nullptr);
+      CreateWindowExA(0, "BUTTON", "Go to cue", WS_CHILD | WS_VISIBLE,
+        116, 316, 100, 28, window, reinterpret_cast<HMENU>(kManagerSelect), g_instance, nullptr);
+      CreateWindowExA(0, "BUTTON", "Set status", WS_CHILD | WS_VISIBLE,
+        224, 316, 100, 28, window, reinterpret_cast<HMENU>(kManagerStatus), g_instance, nullptr);
+      return g_cue_manager_list ? 0 : -1;
+    case WM_SIZE: {
+      RECT area = {};
+      GetClientRect(window, &area);
+      const int width = (std::max)(0L, area.right - 16);
+      const int height = (std::max)(0L, area.bottom - 52);
+      MoveWindow(g_cue_manager_list, 8, 8, width, height, TRUE);
+      MoveWindow(GetDlgItem(window, kManagerRefresh), 8, height + 16, 100, 28, TRUE);
+      MoveWindow(GetDlgItem(window, kManagerSelect), 116, height + 16, 100, 28, TRUE);
+      MoveWindow(GetDlgItem(window, kManagerStatus), 224, height + 16, 100, 28, TRUE);
+      return 0;
+    }
+    case WM_COMMAND:
+      if (LOWORD(wp) == kManagerRefresh) refresh_native_manager_window();
+      else if (LOWORD(wp) == kManagerSelect ||
+               (LOWORD(wp) == kManagerList && HIWORD(wp) == LBN_DBLCLK)) {
+        select_native_manager_row();
+      } else if (LOWORD(wp) == kManagerStatus && select_native_manager_row()) {
+        run_set_selected_cue_status_action();
+        refresh_native_manager_window();
+      }
+      return 0;
+    case WM_DESTROY:
+      g_cue_manager_window = nullptr;
+      g_cue_manager_list = nullptr;
+      g_cue_manager_keys.clear();
+      return 0;
+  }
+  return DefWindowProcA(window, message, wp, lp);
+}
+
+bool open_native_manager_window()
+{
+  if (!g_cue_manager_window) {
+    WNDCLASSA wc = {};
+    wc.lpfnWndProc = native_manager_window_proc;
+    wc.hInstance = g_instance;
+    wc.hCursor = LoadCursor(nullptr, IDC_ARROW);
+    wc.hbrBackground = reinterpret_cast<HBRUSH>(COLOR_WINDOW + 1);
+    wc.lpszClassName = kCueManagerWindowClass;
+    if (!RegisterClassA(&wc) && GetLastError() != ERROR_CLASS_ALREADY_EXISTS) return false;
+    g_cue_manager_window = CreateWindowExA(WS_EX_TOOLWINDOW, kCueManagerWindowClass,
+      "ReaADR Cue Manager", WS_OVERLAPPEDWINDOW,
+      CW_USEDEFAULT, CW_USEDEFAULT, 760, 480,
+      nullptr, nullptr, g_instance, nullptr);
+    if (!g_cue_manager_window) return false;
+  }
+  refresh_native_manager_window();
+  ShowWindow(g_cue_manager_window, SW_SHOW);
+  SetForegroundWindow(g_cue_manager_window);
+  return true;
+}
+#endif
+
 void run_cue_manager_preview_action()
 {
+#ifdef _WIN32
+  if (open_native_manager_window()) return;
+#endif
   reaadr::reaper::ProjectStateStore project_state(
     nullptr, {GetProjExtState, SetProjExtState});
   reaadr::core::SessionModelRepository repository(project_state);
@@ -1326,6 +1471,10 @@ bool load(reaper_plugin_info_t* plugin)
 void unload()
 {
   log_line("Unloading ReaADR extension.");
+#ifdef _WIN32
+  if (g_cue_manager_window) DestroyWindow(g_cue_manager_window);
+  UnregisterClassA(kCueManagerWindowClass, g_instance);
+#endif
   if (g_plugin) {
     unregister_native_actions();
     g_plugin->Register("-hookcustommenu", reinterpret_cast<void*>(hook_custom_menu));
