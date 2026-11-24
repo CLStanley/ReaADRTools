@@ -10,6 +10,7 @@
 #define REAPERAPI_WANT_GetAudioAccessorSamples
 #define REAPERAPI_WANT_GetAudioAccessorStartTime
 #define REAPERAPI_WANT_GetMediaItemInfo_Value
+#define REAPERAPI_WANT_EnumProjects
 #define REAPERAPI_WANT_GetProjExtState
 #define REAPERAPI_WANT_GetRegionOrMarker
 #define REAPERAPI_WANT_GetRegionOrMarkerInfo_Value
@@ -555,6 +556,8 @@ constexpr char kCueManagerWindowClass[] = "ReaADRNativeCueManager";
 HWND g_cue_manager_window = nullptr;
 HWND g_cue_manager_list = nullptr;
 std::vector<std::string> g_cue_manager_keys;
+ReaProject* g_cue_manager_project = nullptr;
+std::string g_cue_manager_session_id;
 constexpr int kManagerList = 1001;
 constexpr int kManagerRefresh = 1002;
 constexpr int kManagerSelect = 1003;
@@ -565,13 +568,17 @@ void refresh_native_manager_window()
   if (!g_cue_manager_list) return;
   SendMessageA(g_cue_manager_list, LB_RESETCONTENT, 0, 0);
   g_cue_manager_keys.clear();
-  reaadr::reaper::ProjectStateStore state(nullptr, {GetProjExtState, SetProjExtState});
+  g_cue_manager_session_id.clear();
+  g_cue_manager_project = EnumProjects ? EnumProjects(-1, nullptr, 0) : nullptr;
+  if (!g_cue_manager_project) return;
+  reaadr::reaper::ProjectStateStore state(g_cue_manager_project, {GetProjExtState, SetProjExtState});
   reaadr::core::SessionModelRepository repository(state);
   const auto loaded = repository.load();
   if (!loaded) {
     SetWindowTextA(g_cue_manager_window, "ReaADR Cue Manager - no readable session");
     return;
   }
+  g_cue_manager_session_id = loaded.model.session_id();
   const auto catalog = reaadr::core::build_cue_navigation_catalog(loaded.model);
   if (!catalog) {
     SetWindowTextA(g_cue_manager_window, "ReaADR Cue Manager - invalid timeline");
@@ -600,10 +607,17 @@ bool select_native_manager_row()
 {
   const LRESULT index = SendMessageA(g_cue_manager_list, LB_GETCURSEL, 0, 0);
   if (index < 0 || static_cast<std::size_t>(index) >= g_cue_manager_keys.size()) return false;
-  reaadr::reaper::ProjectStateStore state(nullptr, {GetProjExtState, SetProjExtState});
+  if (!EnumProjects || EnumProjects(-1, nullptr, 0) != g_cue_manager_project) {
+    refresh_native_manager_window();
+    return false;
+  }
+  reaadr::reaper::ProjectStateStore state(g_cue_manager_project, {GetProjExtState, SetProjExtState});
   reaadr::core::SessionModelRepository repository(state);
   const auto loaded = repository.load();
-  if (!loaded) return false;
+  if (!loaded || loaded.model.session_id() != g_cue_manager_session_id) {
+    refresh_native_manager_window();
+    return false;
+  }
   const auto catalog = reaadr::core::build_cue_navigation_catalog(loaded.model);
   if (!catalog) return false;
   // Revalidate the row against the current project before any write.
@@ -662,6 +676,8 @@ LRESULT CALLBACK native_manager_window_proc(HWND window, UINT message, WPARAM wp
       g_cue_manager_window = nullptr;
       g_cue_manager_list = nullptr;
       g_cue_manager_keys.clear();
+      g_cue_manager_project = nullptr;
+      g_cue_manager_session_id.clear();
       return 0;
   }
   return DefWindowProcA(window, message, wp, lp);
